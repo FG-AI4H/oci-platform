@@ -5,12 +5,12 @@
   "description": "Croissant / BIOCroissant manifest ingestion worker — SQS consumer, Glue catalog refresh, dataset registration",
   "type": "module",
   "scripts": {
-    "build": "echo \"build stub — phase A1 will wire this up\" && exit 0",
+    "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/main.ts",
     "start:prod": "node dist/main.js",
     "lint": "eslint . --max-warnings=0",
-    "test": "echo \"test stub — phase A1 will wire this up\" && exit 0",
-    "typecheck": "echo \"typecheck stub — phase A1 will wire this up\" && exit 0",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
@@ -24,9 +24,9 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "eslint": "^9.39.4",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
-    "vitest": "^3.2.4",
-    "eslint": "^9.39.4"
+    "vitest": "^3.2.4"
   }
 }
