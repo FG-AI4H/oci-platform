@@ -8,7 +8,7 @@
     "build": "echo \"build stub — phase A1 will wire this up\" && exit 0",
     "dev": "nest start --watch",
     "start:prod": "node dist/main.js",
-    "lint": "echo \"lint stub — Phase A1 will add eslint config\" && exit 0",
+    "lint": "eslint . --max-warnings=0",
     "test": "echo \"test stub — phase A1 will wire this up\" && exit 0",
     "test:watch": "vitest",
     "test:e2e": "echo \"test:e2e stub — phase A1 will wire this up\" && exit 0",
@@ -52,6 +52,7 @@
     "supertest": "^7.1.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.5",
+    "eslint": "^9.39.4"
   }
 }

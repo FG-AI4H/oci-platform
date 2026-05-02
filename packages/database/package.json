@@ -8,7 +8,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.json",
-    "lint": "echo \"lint stub — Phase A1 will add eslint config\" && exit 0",
+    "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .turbo node_modules/.prisma",
     "db:migrate:dev": "prisma migrate dev",
@@ -22,6 +22,7 @@
   "devDependencies": {
     "@types/node": "^25.6.0",
     "prisma": "^6.19.3",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "eslint": "^9.39.4"
   }
 }

@@ -41,7 +41,9 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
   cognito: identity.userPool,
   logGroup: observability.apiLogGroup,
 });
-const web = new WebStack(app, `oci-${envName}-web`, {
+// Side-effect: registers the CloudFront distribution stack with the app.
+// The variable is not referenced again, but the construction wires it in.
+new WebStack(app, `oci-${envName}-web`, {
   env: cfg.env,
   cfg,
   tags,
