@@ -31,5 +31,10 @@
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": ["prettier --write"],
     "*.{md,json,yml,yaml}": ["prettier --write"]
+  },
+  "pnpm": {
+    "overrides": {
+      "fastify": "^5.8.5"
+    }
   }
 }
