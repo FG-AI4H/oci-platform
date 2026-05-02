@@ -2,15 +2,15 @@
   "name": "@oci/worker-ingest",
   "version": "0.0.0",
   "private": true,
-  "description": "Croissant / BIOCroissant manifest ingestion worker \u2014 SQS consumer, Glue catalog refresh, dataset registration",
+  "description": "Croissant / BIOCroissant manifest ingestion worker — SQS consumer, Glue catalog refresh, dataset registration",
   "type": "module",
   "scripts": {
-    "build": "echo \"build stub \u2014 phase A1 will wire this up\" && exit 0",
+    "build": "echo \"build stub — phase A1 will wire this up\" && exit 0",
     "dev": "tsx watch src/main.ts",
     "start:prod": "node dist/main.js",
     "lint": "eslint . --max-warnings=0",
-    "test": "echo \"test stub \u2014 phase A1 will wire this up\" && exit 0",
-    "typecheck": "echo \"typecheck stub \u2014 phase A1 will wire this up\" && exit 0",
+    "test": "echo \"test stub — phase A1 will wire this up\" && exit 0",
+    "typecheck": "echo \"typecheck stub — phase A1 will wire this up\" && exit 0",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {

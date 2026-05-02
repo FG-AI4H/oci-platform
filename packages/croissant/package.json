@@ -2,7 +2,7 @@
   "name": "@oci/croissant",
   "version": "0.0.0",
   "private": true,
-  "description": "BIOCroissant \u2014 Healthcare extension to MLCommons Croissant. Validators, generators, ingestion helpers.",
+  "description": "BIOCroissant — Healthcare extension to MLCommons Croissant. Validators, generators, ingestion helpers.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
