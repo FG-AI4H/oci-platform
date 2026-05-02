@@ -1,20 +1,23 @@
-// OCI Platform — Prisma schema
-// Phase A scaffold: single-schema seed.
-// Phase A1 migration plan:
-//  - Move to Prisma 7 + prisma.config.ts + @prisma/adapter-pg
-//  - Re-introduce multi-schema layout (identity / catalog / annotation /
-//    prediction / evaluation / reporting) once the adapter pattern is proven.
+// OCI Platform — Prisma schema (Prisma 7 + multi-schema).
+//
+// Connection URL is supplied via `prisma.config.ts` (Migrate / Studio) and
+// via `@prisma/adapter-pg` at application runtime (PrismaClient). The
+// schema no longer embeds the `url` field — Prisma 7 dropped that.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  output          = "../src/generated/client"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  schemas  = ["identity", "catalog", "annotation", "prediction", "evaluation", "reporting"]
 }
 
-// ==== identity (DP package, WS-2) =========================================
+// ==========================================================================
+// identity — users, roles, organizations (DP package, WS-2)
+// ==========================================================================
 
 model User {
   id        String   @id @default(uuid()) @db.Uuid
@@ -25,21 +28,25 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("users")
+  @@schema("identity")
 }
 
-// ==== catalog (DAP package, WS-1) =========================================
+// ==========================================================================
+// catalog — datasets, Croissant metadata, data-access requests (DAP, WS-1)
+// ==========================================================================
 
 model Dataset {
   id          String   @id @default(uuid()) @db.Uuid
   name        String
   description String?
-  // Croissant manifest stored alongside structured metadata
+  // BIOCroissant manifest stored alongside structured metadata
   croissant   Json?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("datasets")
+  @@schema("catalog")
 }
 
-// Phase B will port: annotation, prediction, evaluation, reporting models
-// from the legacy annotation-tool / Django EvalAI schemas.
+// Phase B will port full models for: annotation, prediction,
+// evaluation, reporting from the legacy annotation-tool / EvalAI schemas.
