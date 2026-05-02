@@ -4,12 +4,12 @@
   "private": true,
   "description": "OCI Platform Next.js web app — public, operator, and regulator UIs",
   "scripts": {
-    "build": "echo \"build stub — phase A1 will wire this up\" && exit 0",
+    "build": "next build",
     "dev": "next dev --turbopack",
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
-    "test": "echo \"test stub — phase A1 will wire this up\" && exit 0",
-    "typecheck": "echo \"typecheck stub — phase A1 will wire this up\" && exit 0",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit",
     "clean": "rm -rf .next .turbo"
   },
   "dependencies": {
@@ -26,11 +26,12 @@
     "zod": "^4.4.2"
   },
   "devDependencies": {
-    "@next/eslint-plugin-next": "^16.2.4",
+    "@tailwindcss/postcss": "^4.2.4",
+    "@types/node": "^25.6.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.4",
+    "postcss": "^8.5.13",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
     "vitest": "^3.2.4"

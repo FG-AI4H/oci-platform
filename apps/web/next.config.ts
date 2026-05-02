@@ -3,9 +3,7 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
   transpilePackages: ['@oci/ui', '@oci/shared-types', '@oci/auth'],
   async headers() {
     return [
