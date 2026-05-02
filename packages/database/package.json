@@ -10,19 +10,24 @@
     "build": "prisma generate && tsc -p tsconfig.json",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist .turbo node_modules/.prisma",
+    "clean": "rm -rf dist .turbo src/generated node_modules/.prisma",
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset"
   },
   "dependencies": {
-    "@prisma/client": "^6.19.3"
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "dotenv": "^17.4.2",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "prisma": "^6.19.3",
-    "typescript": "^6.0.3",
-    "eslint": "^9.39.4"
+    "@types/pg": "^8.20.0",
+    "eslint": "^9.39.4",
+    "prisma": "^7.8.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
   }
 }
