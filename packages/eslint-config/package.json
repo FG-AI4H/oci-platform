@@ -16,6 +16,6 @@
     "eslint-plugin-security": "^3.0.1"
   },
   "peerDependencies": {
-    "eslint": "^10.0.0"
+    "eslint": "^9.0.0"
   }
 }

@@ -1,8 +1,11 @@
 name: Deploy
 
+# Manual-only until Phase A1 provisions:
+#  - GitHub OIDC roles `gha-oci-deploy-{dev,int,prod}` in AWS account 601883093460
+#  - apps/api/Dockerfile and apps/worker-ingest/Dockerfile
+#  - infra/cdk/lib/bootstrap-oidc-stack.ts deployed to all three envs
+# Once those exist, switch the dev branch back to push-triggered.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       target:
@@ -13,39 +16,17 @@ on:
         options: [dev, int, prod]
 
 permissions:
-  id-token: write   # required for AWS OIDC
+  id-token: write
   contents: read
-  packages: write   # for ECR pushes
+  packages: write
 
 concurrency:
-  group: deploy-${{ github.event.inputs.target || 'dev' }}
+  group: deploy-${{ github.event.inputs.target }}
   cancel-in-progress: false
 
-env:
-  AWS_REGION: eu-central-1
-  AWS_ACCOUNT_ID: '601883093460'
-  ECR_REPO_API: oci-api
-  ECR_REPO_WORKER_INGEST: oci-worker-ingest
-
 jobs:
-  # Branch pushes to main automatically deploy to dev. int/prod require manual dispatch.
-  deploy-dev:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  deploy:
     uses: ./.github/workflows/_deploy-env.yml
     with:
-      environment: dev
-    secrets: inherit
-
-  deploy-int:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'int'
-    uses: ./.github/workflows/_deploy-env.yml
-    with:
-      environment: int
-    secrets: inherit
-
-  deploy-prod:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'prod'
-    uses: ./.github/workflows/_deploy-env.yml
-    with:
-      environment: prod
+      environment: ${{ github.event.inputs.target }}
     secrets: inherit
