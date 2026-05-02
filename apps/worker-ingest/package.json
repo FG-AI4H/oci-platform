@@ -1,0 +1,31 @@
+{
+  "name": "@oci/worker-ingest",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Croissant / BIOCroissant manifest ingestion worker — SQS consumer, Glue catalog refresh, dataset registration",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start:prod": "node dist/main.js",
+    "lint": "eslint \"src/**/*.ts\" --fix",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@aws-sdk/client-glue": "^3.1041.0",
+    "@aws-sdk/client-s3": "^3.1041.0",
+    "@aws-sdk/client-sqs": "^3.1041.0",
+    "@oci/croissant": "workspace:*",
+    "@oci/database": "workspace:*",
+    "pino": "^9.5.0",
+    "zod": "^4.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}

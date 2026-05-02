@@ -1,0 +1,38 @@
+{
+  "name": "@oci/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OCI Platform Next.js web app — public, operator, and regulator UIs",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev --turbopack",
+    "start": "next start",
+    "lint": "next lint --fix",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf .next .turbo"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@oci/auth": "workspace:*",
+    "@oci/shared-types": "workspace:*",
+    "@oci/ui": "workspace:*",
+    "@tanstack/react-query": "^5.100.8",
+    "aws-jwt-verify": "^5.1.1",
+    "next": "^16.2.4",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-hook-form": "^7.75.0",
+    "zod": "^4.4.2"
+  },
+  "devDependencies": {
+    "@next/eslint-plugin-next": "^16.2.4",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^10.3.0",
+    "eslint-config-next": "^16.2.4",
+    "tailwindcss": "^4.2.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}

@@ -1,0 +1,113 @@
+name: _deploy-env
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-central-1
+  AWS_ACCOUNT_ID: '601883093460'
+
+jobs:
+  build-images:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      api-image: ${{ steps.meta.outputs.api }}
+      ingest-image: ${{ steps.meta.outputs.ingest }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.2 }
+      - uses: actions/setup-node@v5
+        with: { node-version-file: '.nvmrc', cache: 'pnpm' }
+
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/gha-oci-deploy-${{ inputs.environment }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Compute image tags
+        id: meta
+        run: |
+          SHA=${GITHUB_SHA::12}
+          REG=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          echo "api=$REG/oci-api:$SHA"      >> "$GITHUB_OUTPUT"
+          echo "ingest=$REG/oci-worker-ingest:$SHA" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push API image
+        run: |
+          docker build -f apps/api/Dockerfile -t "${{ steps.meta.outputs.api }}" .
+          docker push "${{ steps.meta.outputs.api }}"
+
+      - name: Build & push worker-ingest image
+        run: |
+          docker build -f apps/worker-ingest/Dockerfile -t "${{ steps.meta.outputs.ingest }}" .
+          docker push "${{ steps.meta.outputs.ingest }}"
+
+      - name: Trivy image scan (API)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.meta.outputs.api }}
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+
+  cdk-deploy:
+    needs: build-images
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.33.2 }
+      - uses: actions/setup-node@v5
+        with: { node-version-file: '.nvmrc', cache: 'pnpm' }
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm --filter "./packages/**" build && pnpm --filter "./infra/cdk" build
+
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/gha-oci-deploy-${{ inputs.environment }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: cdk diff
+        working-directory: infra/cdk
+        run: pnpm cdk diff --context env=${{ inputs.environment }} --context apiImage=${{ needs.build-images.outputs.api-image }} || true
+
+      - name: cdk deploy
+        working-directory: infra/cdk
+        run: |
+          APPROVAL=never
+          if [[ "${{ inputs.environment }}" == "prod" ]]; then APPROVAL=broadening; fi
+          if [[ "${{ inputs.environment }}" == "int" ]]; then APPROVAL=any-change; fi
+          pnpm cdk deploy --all --require-approval $APPROVAL \
+            --context env=${{ inputs.environment }} \
+            --context apiImage=${{ needs.build-images.outputs.api-image }} \
+            --context ingestImage=${{ needs.build-images.outputs.ingest-image }}
+
+      - name: DB migrate
+        run: |
+          # Run Prisma migrate against the env's database via SSM port-forward or VPC-attached job.
+          # Phase A: implement via a one-shot ECS task launched here.
+          echo "TODO: pnpm --filter @oci/database db:migrate:deploy with VPC tunnel"

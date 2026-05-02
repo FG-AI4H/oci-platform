@@ -1,0 +1,21 @@
+{
+  "name": "@oci/shared-types",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Zod schemas + DTOs shared between API and Web. Single source of truth for validation.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint \"src/**/*.ts\" --fix",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "zod": "^4.4.2"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}
