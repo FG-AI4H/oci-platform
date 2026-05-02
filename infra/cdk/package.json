@@ -2,20 +2,20 @@
   "name": "@oci/cdk",
   "version": "0.0.0",
   "private": true,
-  "description": "AWS CDK app — provisions OCI Platform AWS resources for dev / int / prod environments",
+  "description": "AWS CDK app \u2014 provisions OCI Platform AWS resources for dev / int / prod environments",
   "type": "module",
   "bin": {
     "oci-cdk": "bin/oci.js"
   },
   "scripts": {
-    "build": "echo \"build stub — phase A1 will wire this up\" && exit 0",
+    "build": "echo \"build stub \u2014 phase A1 will wire this up\" && exit 0",
     "synth": "cdk synth",
     "diff": "cdk diff",
     "deploy:dev": "cdk deploy --all --context env=dev --require-approval never",
     "deploy:int": "cdk deploy --all --context env=int --require-approval any-change",
     "deploy:prod": "cdk deploy --all --context env=prod --require-approval broadening",
-    "lint": "echo \"lint stub — Phase A1 will add eslint config\" && exit 0",
-    "typecheck": "echo \"typecheck stub — phase A1 will wire this up\" && exit 0",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "echo \"typecheck stub \u2014 phase A1 will wire this up\" && exit 0",
     "clean": "rm -rf dist cdk.out .turbo"
   },
   "dependencies": {
@@ -27,6 +27,7 @@
     "@types/node": "^25.6.0",
     "aws-cdk": "^2.1120.0",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "eslint": "^9.39.4"
   }
 }

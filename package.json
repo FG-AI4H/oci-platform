@@ -18,15 +18,22 @@
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,md,json,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,md,json,yml,yaml}\"",
+    "lint:root": "eslint . --max-warnings=0",
     "prepare": "husky || true"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@types/node": "^25.6.0",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-security": "^3.0.1",
+    "globals": "^17.6.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "prettier": "^3.8.3",
     "turbo": "^2.9.7",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.1"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
