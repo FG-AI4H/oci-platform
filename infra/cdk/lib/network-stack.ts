@@ -32,7 +32,10 @@ export class NetworkStack extends cdk.Stack {
       ],
       flowLogs: {
         cloudwatch: {
-          trafficType: props.cfg.envName === 'prod' ? ec2.FlowLogTrafficType.ALL : ec2.FlowLogTrafficType.REJECT,
+          trafficType:
+            props.cfg.envName === 'prod'
+              ? ec2.FlowLogTrafficType.ALL
+              : ec2.FlowLogTrafficType.REJECT,
         },
       },
       enableDnsHostnames: true,

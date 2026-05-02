@@ -31,11 +31,11 @@ scripts/          Bootstrap & maintenance
 
 This monorepo replaces three legacy stacks (originally built under the FG-AI4H Focus Group, now under GI-AI4H):
 
-| Legacy | Stack | Status |
-| --- | --- | --- |
-| `fgai4h-evaluation-platform` | Django 2.2, Python 3.9, AngularJS | Production — absorbed Phase C |
-| `annotation-tool` + `annotation-frontend` | Spring Boot 3.2.5 + React/CRA | Maintenance mode since Nov 2024 — absorbed Phase B |
-| `Reporting-Package` | Mixed | Coordination Phase D (Golam) |
+| Legacy                                    | Stack                             | Status                                             |
+| ----------------------------------------- | --------------------------------- | -------------------------------------------------- |
+| `fgai4h-evaluation-platform`              | Django 2.2, Python 3.9, AngularJS | Production — absorbed Phase C                      |
+| `annotation-tool` + `annotation-frontend` | Spring Boot 3.2.5 + React/CRA     | Maintenance mode since Nov 2024 — absorbed Phase B |
+| `Reporting-Package`                       | Mixed                             | Coordination Phase D (Golam)                       |
 
 The plan is a 5-phase strangler-fig migration over 12-18 months. See:
 

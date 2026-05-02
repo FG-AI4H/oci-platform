@@ -4,11 +4,11 @@ All AWS infrastructure for OCI Platform is **defined as code** in [`infra/cdk/`]
 
 ## Environments
 
-| Env  | Domain                | AWS account  | Purpose                                              | Auto-deploy?            |
-| ---- | --------------------- | ------------ | ---------------------------------------------------- | ----------------------- |
-| dev  | dev.oci.aiaudit.org   | 601883093460 | Continuous integration target; ephemeral data        | ✓ on merge to `main`    |
-| int  | int.oci.aiaudit.org   | 601883093460 | Pre-prod / regulator demos / partner UAT             | manual via Actions      |
-| prod | oci.aiaudit.org       | 601883093460 | Production. Approval required, broadening review     | manual + 2 approvers    |
+| Env  | Domain              | AWS account  | Purpose                                          | Auto-deploy?         |
+| ---- | ------------------- | ------------ | ------------------------------------------------ | -------------------- |
+| dev  | dev.oci.aiaudit.org | 601883093460 | Continuous integration target; ephemeral data    | ✓ on merge to `main` |
+| int  | int.oci.aiaudit.org | 601883093460 | Pre-prod / regulator demos / partner UAT         | manual via Actions   |
+| prod | oci.aiaudit.org     | 601883093460 | Production. Approval required, broadening review | manual + 2 approvers |
 
 (Today all 3 envs share one AWS account. **Phase A2 task:** split `prod` into its own account
 under AWS Organizations; control-tower style.)
@@ -24,6 +24,7 @@ arn:aws:iam::601883093460:role/gha-oci-deploy-prod
 ```
 
 Each role's trust policy restricts:
+
 - repo: `FG-AI4H/oci-platform`
 - branch: `main` (dev) or `refs/heads/main` (int/prod via workflow_dispatch)
 - environment: must match `inputs.environment`

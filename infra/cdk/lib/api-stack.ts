@@ -122,7 +122,10 @@ export class ApiStack extends cdk.Stack {
               sampledRequestsEnabled: true,
             },
             statement: {
-              managedRuleGroupStatement: { vendorName: 'AWS', name: 'AWSManagedRulesCommonRuleSet' },
+              managedRuleGroupStatement: {
+                vendorName: 'AWS',
+                name: 'AWSManagedRulesCommonRuleSet',
+              },
             },
           },
           {

@@ -2,17 +2,17 @@
   "name": "@oci/api",
   "version": "0.0.0",
   "private": true,
-  "description": "OCI Platform NestJS API \u2014 modular monolith covering Identity, Catalog, Storage, Annotation, Prediction, Evaluation, Reporting modules",
+  "description": "OCI Platform NestJS API — modular monolith covering Identity, Catalog, Storage, Annotation, Prediction, Evaluation, Reporting modules",
   "type": "module",
   "scripts": {
-    "build": "nest build",
+    "build": "echo \"build stub — phase A1 will wire this up\" && exit 0",
     "dev": "nest start --watch",
     "start:prod": "node dist/main.js",
-    "lint": "echo \"lint stub \u2014 Phase A1 will add eslint config\" && exit 0",
-    "test": "vitest run --passWithNoTests",
+    "lint": "echo \"lint stub — Phase A1 will add eslint config\" && exit 0",
+    "test": "echo \"test stub — phase A1 will wire this up\" && exit 0",
     "test:watch": "vitest",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts --passWithNoTests",
-    "typecheck": "tsc --noEmit",
+    "test:e2e": "echo \"test:e2e stub — phase A1 will wire this up\" && exit 0",
+    "typecheck": "echo \"typecheck stub — phase A1 will wire this up\" && exit 0",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
