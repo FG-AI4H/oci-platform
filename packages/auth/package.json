@@ -1,0 +1,23 @@
+{
+  "name": "@oci/auth",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AWS Cognito helpers + JWT verification shared between API (NestJS) and Web (Next.js)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint \"src/**/*.ts\" --fix",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1041.0",
+    "aws-jwt-verify": "^5.1.1",
+    "jose": "^6.2.3"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,50 @@
+// OCI Platform — Prisma schema
+// One Postgres database, one schema per OCI bounded context.
+// Migrations are environment-specific; CI applies them via `prisma migrate deploy` per env.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema", "tracing"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["identity", "catalog", "annotation", "prediction", "evaluation", "reporting"]
+}
+
+// ==========================================================================
+// identity — users, roles, organizations (DP package, WS-2)
+// ==========================================================================
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  cognitoId String   @unique @map("cognito_id")
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+  @@schema("identity")
+}
+
+// ==========================================================================
+// catalog — datasets, Croissant metadata, data-access requests (DAP, WS-1)
+// ==========================================================================
+
+model Dataset {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  // Croissant manifest stored alongside structured metadata
+  croissant   Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("datasets")
+  @@schema("catalog")
+}
+
+// Phase B will port: annotation, prediction, evaluation, reporting models
+// from the existing annotation-tool/Spring schema and the Django EvalAI schema.

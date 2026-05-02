@@ -1,0 +1,38 @@
+{
+  "app": "npx tsx bin/oci.ts",
+  "watch": {
+    "include": ["**"],
+    "exclude": ["README.md", "cdk*.json", "**/*.d.ts", "**/*.js", "tsconfig.json", "package*.json", "yarn.lock", "node_modules", "test"]
+  },
+  "context": {
+    "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
+    "@aws-cdk/core:checkSecretUsage": true,
+    "@aws-cdk/core:target-partitions": ["aws"],
+    "@aws-cdk/aws-iam:standardizedServicePrincipals": true,
+    "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": true,
+    "@aws-cdk/aws-rds:databaseProxyUniqueResourceName": true,
+    "@aws-cdk/aws-route53-patters:useCertificate": true,
+    "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": true,
+    "@aws-cdk/aws-cloudfront:defaultSecurityPolicyTLSv1.2_2021": true,
+    "envs": {
+      "dev": {
+        "account": "601883093460",
+        "region": "eu-central-1",
+        "domainName": "dev.oci.aiaudit.org",
+        "removalPolicy": "destroy"
+      },
+      "int": {
+        "account": "601883093460",
+        "region": "eu-central-1",
+        "domainName": "int.oci.aiaudit.org",
+        "removalPolicy": "snapshot"
+      },
+      "prod": {
+        "account": "601883093460",
+        "region": "eu-central-1",
+        "domainName": "oci.aiaudit.org",
+        "removalPolicy": "retain"
+      }
+    }
+  }
+}

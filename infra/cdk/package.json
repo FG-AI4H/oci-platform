@@ -1,0 +1,32 @@
+{
+  "name": "@oci/cdk",
+  "version": "0.0.0",
+  "private": true,
+  "description": "AWS CDK app — provisions OCI Platform AWS resources for dev / int / prod environments",
+  "type": "module",
+  "bin": {
+    "oci-cdk": "bin/oci.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy:dev": "cdk deploy --all --context env=dev --require-approval never",
+    "deploy:int": "cdk deploy --all --context env=int --require-approval any-change",
+    "deploy:prod": "cdk deploy --all --context env=prod --require-approval broadening",
+    "lint": "eslint \"lib/**/*.ts\" \"bin/**/*.ts\" --fix",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist cdk.out .turbo"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.252.0",
+    "cdk-nag": "^2.36.0",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "aws-cdk": "^2.1120.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
