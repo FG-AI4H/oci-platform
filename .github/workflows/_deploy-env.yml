@@ -16,7 +16,32 @@ env:
   AWS_ACCOUNT_ID: '601883093460'
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+      actions: read
+    steps:
+      - name: Verify CI passed for ${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Find the most recent 'CI' workflow run for this SHA and require success.
+          STATUS=$(gh api \
+            "repos/$REPO/actions/runs?head_sha=$SHA&status=completed" \
+            --jq '[.workflow_runs[] | select(.name == "CI")][0].conclusion' || echo "")
+          if [[ "$STATUS" != "success" ]]; then
+            echo "::error::CI for $SHA has not completed successfully (status='$STATUS'). Re-run CI before deploying."
+            exit 1
+          fi
+          echo "CI green for $SHA — proceeding."
+
   build-images:
+    needs: preflight
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
@@ -25,10 +50,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
-        with: { version: 10.33.2 }
+      - name: Enable Corepack
+        run: corepack enable
       - uses: actions/setup-node@v5
-        with: { node-version-file: '.nvmrc', cache: 'pnpm' }
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
 
       - name: Configure AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -74,10 +101,12 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
-        with: { version: 10.33.2 }
+      - name: Enable Corepack
+        run: corepack enable
       - uses: actions/setup-node@v5
-        with: { node-version-file: '.nvmrc', cache: 'pnpm' }
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -108,6 +137,6 @@ jobs:
 
       - name: DB migrate
         run: |
-          # Run Prisma migrate against the env's database via SSM port-forward or VPC-attached job.
-          # Phase A: implement via a one-shot ECS task launched here.
-          echo "TODO: pnpm --filter @oci/database db:migrate:deploy with VPC tunnel"
+          # Phase A1: implement Prisma migrate via a one-shot ECS task
+          # launched here (the runner can't reach the VPC-private DB directly).
+          echo "TODO Phase A1: pnpm --filter @oci/database db:migrate:deploy via VPC"
