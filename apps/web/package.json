@@ -2,13 +2,13 @@
   "name": "@oci/web",
   "version": "0.0.0",
   "private": true,
-  "description": "OCI Platform Next.js web app — public, operator, and regulator UIs",
+  "description": "OCI Platform Next.js web app \u2014 public, operator, and regulator UIs",
   "scripts": {
     "build": "next build",
     "dev": "next dev --turbopack",
     "start": "next start",
     "lint": "next lint --fix",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf .next .turbo"
   },
