@@ -10,6 +10,7 @@ import { ApiStack } from '../lib/api-stack.js';
 import { WebStack } from '../lib/web-stack.js';
 import { ObservabilityStack } from '../lib/observability-stack.js';
 import { resolveEnvironment } from '../lib/environments.js';
+import { BootstrapOidcStack } from '../lib/bootstrap-oidc-stack.js';
 
 const app = new cdk.App();
 
@@ -17,6 +18,17 @@ const app = new cdk.App();
 const envName = (app.node.tryGetContext('env') as string) ?? 'dev';
 const cfg = resolveEnvironment(envName, app);
 const tags = { Project: 'OCI', Environment: envName, ManagedBy: 'CDK' };
+
+// Bootstrap stack: OIDC role + ECR repos. Deploy this first per environment;
+// after this exists, the GitHub Actions workflow can assume the role and
+// push images. Skip from default app loop — explicit deploy via:
+//   pnpm --filter @oci/cdk cdk deploy oci-{env}-bootstrap --context env={env}
+new BootstrapOidcStack(app, `oci-${envName}-bootstrap`, {
+  env: cfg.env,
+  cfg,
+  tags,
+  githubRepo: 'FG-AI4H/oci-platform',
+});
 
 // Layered stacks (each layer depends on the previous one)
 const network = new NetworkStack(app, `oci-${envName}-network`, { env: cfg.env, cfg, tags });
