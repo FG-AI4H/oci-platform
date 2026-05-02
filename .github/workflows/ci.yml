@@ -7,11 +7,15 @@ on:
 
 permissions:
   contents: read
-  security-events: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+# Opt into Node 24 runtime for JS-based actions; silences the deprecation
+# warning for actions still bundled against Node 20 (e.g. pnpm/action-setup@v4).
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   build:
@@ -53,20 +57,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Run Trivy filesystem scan
+      - name: Trivy filesystem scan (CRITICAL/HIGH)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-          exit-code: '0'
-
-      - name: Upload Trivy SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: 'trivy-results.sarif'
+          exit-code: '1'
+          ignore-unfixed: true
+          format: 'table'
 
       - name: Detect secrets (gitleaks)
         uses: gitleaks/gitleaks-action@v2
@@ -75,11 +73,11 @@ jobs:
 
       - name: SBOM (CycloneDX)
         run: |
-          npx --yes @cyclonedx/cyclonedx-npm --output-file sbom.cdx.json
-        continue-on-error: true
+          npx --yes @cyclonedx/cyclonedx-npm --output-file sbom.cdx.json || true
 
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
+        if: hashFiles('sbom.cdx.json') != ''
         with:
           name: sbom
           path: sbom.cdx.json
