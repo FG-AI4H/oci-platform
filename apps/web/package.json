@@ -7,7 +7,7 @@
     "build": "echo \"build stub — phase A1 will wire this up\" && exit 0",
     "dev": "next dev --turbopack",
     "start": "next start",
-    "lint": "echo \"lint stub — Phase A1 will add eslint flat config\" && exit 0",
+    "lint": "eslint . --max-warnings=0",
     "test": "echo \"test stub — phase A1 will wire this up\" && exit 0",
     "typecheck": "echo \"typecheck stub — phase A1 will wire this up\" && exit 0",
     "clean": "rm -rf .next .turbo"
