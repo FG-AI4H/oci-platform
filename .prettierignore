@@ -1,0 +1,17 @@
+# Generated / vendored — don't format
+pnpm-lock.yaml
+node_modules/
+dist/
+.next/
+.turbo/
+out/
+build/
+coverage/
+**/cdk.out/
+**/.prisma/
+**/generated/
+
+# Documents
+*.docx
+*.pdf
+*.pptx

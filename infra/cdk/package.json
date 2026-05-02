@@ -8,26 +8,27 @@
     "oci-cdk": "bin/oci.js"
   },
   "scripts": {
-    "build": "echo \"build stub — phase A1 will wire this up\" && exit 0",
+    "build": "tsc -p tsconfig.json",
     "synth": "cdk synth",
     "diff": "cdk diff",
     "deploy:dev": "cdk deploy --all --context env=dev --require-approval never",
     "deploy:int": "cdk deploy --all --context env=int --require-approval any-change",
     "deploy:prod": "cdk deploy --all --context env=prod --require-approval broadening",
     "lint": "eslint . --max-warnings=0",
-    "typecheck": "echo \"typecheck stub — phase A1 will wire this up\" && exit 0",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "clean": "rm -rf dist cdk.out .turbo"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.252.0",
     "cdk-nag": "^2.36.0",
-    "constructs": "^10.4.2"
+    "constructs": "^10.4.2",
+    "source-map-support": "^0.5.21"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
     "aws-cdk": "^2.1120.0",
+    "eslint": "^9.39.4",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.3",
-    "eslint": "^9.39.4"
+    "typescript": "^6.0.3"
   }
 }
