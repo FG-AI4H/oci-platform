@@ -39,7 +39,9 @@ export class ApiStack extends cdk.Stack {
 
     this.cluster = new ecs.Cluster(this, 'Cluster', {
       vpc: props.vpc,
-      containerInsights: props.cfg.enhancedMonitoring,
+      containerInsightsV2: props.cfg.enhancedMonitoring
+        ? ecs.ContainerInsights.ENABLED
+        : ecs.ContainerInsights.DISABLED,
       enableFargateCapacityProviders: true,
     });
 
@@ -68,9 +70,9 @@ export class ApiStack extends cdk.Stack {
         logDriver: ecs.LogDrivers.awsLogs({ streamPrefix: 'api', logGroup: props.logGroup }),
       },
       publicLoadBalancer: true,
-      protocol: elbv2.ApplicationProtocol.HTTPS,
-      redirectHTTP: true,
-      sslPolicy: elbv2.SslPolicy.TLS13_RES,
+      // ALB stays HTTP; CloudFront (WebStack) terminates TLS to viewers.
+      // Phase A2: add ACM cert + custom domain once Route 53 zone is provisioned.
+      protocol: elbv2.ApplicationProtocol.HTTP,
       minHealthyPercent: 100,
       maxHealthyPercent: 200,
     });
@@ -97,9 +99,9 @@ export class ApiStack extends cdk.Stack {
       requestsPerTarget: 1000,
     });
 
-    // DB connectivity
+    // DB connectivity (network only — IAM database auth is wired in Phase A2
+    // via a separate stack to avoid creating a cycle between data + api).
     props.database.connections.allowDefaultPortFrom(fargate.service, 'API → Aurora');
-    props.database.grantConnect(fargate.taskDefinition.taskRole, 'oci_api');
 
     // WAF (managed rules) for int/prod
     if (props.cfg.enableWaf) {
