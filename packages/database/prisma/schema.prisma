@@ -1,21 +1,20 @@
 // OCI Platform — Prisma schema
-// One Postgres database, one schema per OCI bounded context.
-// Migrations are environment-specific; CI applies them via `prisma migrate deploy` per env.
+// Phase A scaffold: single-schema seed.
+// Phase A1 migration plan:
+//  - Move to Prisma 7 + prisma.config.ts + @prisma/adapter-pg
+//  - Re-introduce multi-schema layout (identity / catalog / annotation /
+//    prediction / evaluation / reporting) once the adapter pattern is proven.
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["multiSchema", "tracing"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["identity", "catalog", "annotation", "prediction", "evaluation", "reporting"]
 }
 
-// ==========================================================================
-// identity — users, roles, organizations (DP package, WS-2)
-// ==========================================================================
+// ==== identity (DP package, WS-2) =========================================
 
 model User {
   id        String   @id @default(uuid()) @db.Uuid
@@ -26,12 +25,9 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("users")
-  @@schema("identity")
 }
 
-// ==========================================================================
-// catalog — datasets, Croissant metadata, data-access requests (DAP, WS-1)
-// ==========================================================================
+// ==== catalog (DAP package, WS-1) =========================================
 
 model Dataset {
   id          String   @id @default(uuid()) @db.Uuid
@@ -43,8 +39,7 @@ model Dataset {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("datasets")
-  @@schema("catalog")
 }
 
 // Phase B will port: annotation, prediction, evaluation, reporting models
-// from the existing annotation-tool/Spring schema and the Django EvalAI schema.
+// from the legacy annotation-tool / Django EvalAI schemas.
