@@ -50,10 +50,10 @@ pnpm format              # prettier --write
 
 ## Deploying
 
-| Target | Trigger                                      |
-| ------ | -------------------------------------------- |
-| dev    | merge to `main` (automatic)                  |
-| int    | manual `gh workflow run Deploy -f target=int` |
+| Target | Trigger                                                                                    |
+| ------ | ------------------------------------------------------------------------------------------ |
+| dev    | merge to `main` (automatic)                                                                |
+| int    | manual `gh workflow run Deploy -f target=int`                                              |
 | prod   | manual `gh workflow run Deploy -f target=prod`, requires environment approval (Marc + Eva) |
 
 See [`deployment.md`](./deployment.md) for full details.

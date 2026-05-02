@@ -59,7 +59,9 @@ export class WebStack extends cdk.Stack {
       minimumProtocolVersion: cf.SecurityPolicyProtocol.TLS_V1_2_2021,
       httpVersion: cf.HttpVersion.HTTP2_AND_3,
       priceClass:
-        props.cfg.envName === 'prod' ? cf.PriceClass.PRICE_CLASS_ALL : cf.PriceClass.PRICE_CLASS_100,
+        props.cfg.envName === 'prod'
+          ? cf.PriceClass.PRICE_CLASS_ALL
+          : cf.PriceClass.PRICE_CLASS_100,
       enableLogging: true,
       logIncludesCookies: false,
     });

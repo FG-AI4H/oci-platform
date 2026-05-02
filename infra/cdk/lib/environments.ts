@@ -8,7 +8,12 @@ export interface OciEnvConfig {
   domainName: string;
   removalPolicy: cdk.RemovalPolicy;
   /** Aurora capacity (Aurora Serverless v2 ACUs) */
-  aurora: { minCapacity: number; maxCapacity: number; multiAz: boolean; deletionProtection: boolean };
+  aurora: {
+    minCapacity: number;
+    maxCapacity: number;
+    multiAz: boolean;
+    deletionProtection: boolean;
+  };
   /** ECS Fargate scaling */
   fargate: { minTasks: number; maxTasks: number; cpu: number; memory: number };
   /** Backups & retention */

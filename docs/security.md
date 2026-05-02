@@ -28,6 +28,7 @@ and (over time) federated health data. This page is the operating contract.
 ## Code & supply chain
 
 Every PR runs:
+
 1. **ESLint** with `eslint-plugin-security`
 2. **TypeScript strict mode** (errors, no `any` without explicit suppression)
 3. **Vitest** unit & integration tests
@@ -36,6 +37,7 @@ Every PR runs:
 6. **CycloneDX SBOM** generation, uploaded as artifact
 
 Every Docker image build runs:
+
 - **Trivy image scan** (CRITICAL/HIGH must be 0; build fails otherwise)
 - Distroless Node 20 base image (no shell, no package manager — minimal CVE surface)
 

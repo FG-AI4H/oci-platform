@@ -34,11 +34,11 @@ Remediated multiple AWS Security Hub findings in account 601883093460 (TSB-DEV-F
 
 **Resources changed**:
 
-| Resource | Old VPC | New VPC |
-|---|---|---|
+| Resource                  | Old VPC                 | New VPC                 |
+| ------------------------- | ----------------------- | ----------------------- |
 | EC2 `i-03a2a2197a038716d` | `vpc-03076add1b1efca31` | `vpc-0165820af0626153f` |
-| ECS workers | `vpc-077eab2bbb8eaefb0` | `vpc-0165820af0626153f` |
-| RDS (prod + staging) | Public access ON | Public access OFF |
+| ECS workers               | `vpc-077eab2bbb8eaefb0` | `vpc-0165820af0626153f` |
+| RDS (prod + staging)      | Public access ON        | Public access OFF       |
 
 ---
 
@@ -85,17 +85,17 @@ All unused/outdated ECR repositories were deleted to eliminate the bulk of vulne
 
 All active production images were rebuilt with updated base images and pushed to ECR:
 
-| Repository | Old push date | New push date |
-|---|---|---|
-| `evalai-production-backend` | Aug 2025 | 2 Mar 2026 |
-| `evalai-production-celery` | Aug 2025 | 2 Mar 2026 |
-| `evalai-production-frontend-ai4good` | Jan 2026 | 2 Mar 2026 |
-| `evalai-production-worker-py3.9` | Aug 2025 | 2 Mar 2026 |
-| `evalai-production-worker-py3.8` | Aug 2025 | 2 Mar 2026 |
-| `evalai-production-worker-py3.7` | Aug 2025 | 2 Mar 2026 |
-| `evalai-production-remote-worker` | Aug 2025 | 2 Mar 2026 |
-| `evalai-production-code-upload-worker` | Aug 2025 | 2 Mar 2026 |
-| `evalai-production-worker` | Oct 2025 | 2 Mar 2026 |
+| Repository                             | Old push date | New push date |
+| -------------------------------------- | ------------- | ------------- |
+| `evalai-production-backend`            | Aug 2025      | 2 Mar 2026    |
+| `evalai-production-celery`             | Aug 2025      | 2 Mar 2026    |
+| `evalai-production-frontend-ai4good`   | Jan 2026      | 2 Mar 2026    |
+| `evalai-production-worker-py3.9`       | Aug 2025      | 2 Mar 2026    |
+| `evalai-production-worker-py3.8`       | Aug 2025      | 2 Mar 2026    |
+| `evalai-production-worker-py3.7`       | Aug 2025      | 2 Mar 2026    |
+| `evalai-production-remote-worker`      | Aug 2025      | 2 Mar 2026    |
+| `evalai-production-code-upload-worker` | Aug 2025      | 2 Mar 2026    |
+| `evalai-production-worker`             | Oct 2025      | 2 Mar 2026    |
 
 ### Additional fix
 
