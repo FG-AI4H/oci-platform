@@ -1,0 +1,89 @@
+@startuml oci-dev-runtime
+'
+' OCI Platform — dev environment runtime architecture
+' Render: https://plantuml.com/plantuml or `plantuml docs/diagrams/oci-dev-runtime.puml`
+' Source of truth: infra/cdk/lib/*.ts
+'
+skinparam linetype ortho
+skinparam roundCorner 10
+skinparam shadowing false
+skinparam rectangle {
+  BackgroundColor<<aws>>      #FFF6E5
+  BorderColor<<aws>>          #B26B00
+  BackgroundColor<<vpc>>      #EAF5FF
+  BorderColor<<vpc>>          #2B6CB0
+  BackgroundColor<<subnet>>   #F5FAFF
+  BorderColor<<subnet>>       #4A7FAE
+  BackgroundColor<<service>>  #FFFFFF
+  BorderColor<<service>>      #555555
+  BackgroundColor<<storage>>  #F0FFF4
+  BorderColor<<storage>>      #2F855A
+  BackgroundColor<<security>> #FFF5F5
+  BorderColor<<security>>     #C53030
+}
+
+title OCI Platform — dev environment runtime (eu-central-1)
+
+actor "Viewer" as user
+cloud "Internet" as net
+
+rectangle "AWS account 601883093460 / eu-central-1" <<aws>> {
+
+  rectangle "CloudFront\noci-dev-cdn\nTLS, security headers,\nedge cache" as cf <<service>>
+
+  rectangle "Cognito User Pool\noci-dev\nESSENTIALS plan,\nMFA OPTIONAL,\n7 groups" as cog <<security>>
+
+  rectangle "VPC oci-dev-network\n10.10.0.0/16, 3 AZ" <<vpc>> {
+
+    rectangle "public subnets" <<subnet>> {
+      rectangle "ALB\noci-dev-api-alb\nHTTP :80,\nCFn origin,\naccess logs" as alb <<service>>
+    }
+
+    rectangle "private subnets" <<subnet>> {
+      rectangle "ECS Fargate\noci-api task\nARM64, NestJS 11\nCPU 512 / 1024 MB\n1–2 tasks (dev)" as api <<service>>
+    }
+
+    rectangle "isolated subnets" <<subnet>> {
+      rectangle "Aurora Postgres SLv2\noci-dev-data\nPG 16.4, 0.5–2 ACU,\nKMS, IAM auth" as rds <<storage>>
+    }
+  }
+
+  rectangle "Secrets Manager\nAurora master secret\nrotation in int/prod only" as sec <<security>>
+  rectangle "KMS CMK\nalias/oci/dev/data" as cmk <<security>>
+
+  rectangle "S3 oci-dev-media\nKMS, versioned,\nblock public,\nlogs to AccessLogs/" as media <<storage>>
+  rectangle "S3 oci-dev-artifacts\nKMS, versioned,\nblock public,\nlogs to AccessLogs/" as artif <<storage>>
+  rectangle "S3 oci-dev-access-logs\nS3-managed enc,\nALB + S3 + CDN target,\nlifecycle 30d" as logs <<storage>>
+
+  rectangle "CloudWatch Logs\n/oci/dev/api\n/oci/dev/workers\n1 month retention" as cw <<service>>
+  rectangle "SNS oci-dev-alarms\nTLS-only publish" as sns <<service>>
+
+  rectangle "ECR\noci-api : <sha>\noci-worker-ingest : <sha>\nIMMUTABLE, KMS,\nscan on push" as ecr <<service>>
+}
+
+user --> net : https
+net --> cf : https
+cf --> alb : http
+alb --> api
+api --> rds : tcp 5432\nIAM auth (Phase A2)
+api ..> cog : /oauth2/userInfo, JWKS
+api ..> sec : SDK
+api ..> ecr : pulled by\nECS exec role
+rds ..> cmk
+media ..> cmk
+artif ..> cmk
+api --> cw : pino → awslogs
+alb --> logs : access logs
+cf --> logs : standard logs
+media --> logs : server access logs
+artif --> logs : server access logs
+
+note as N1
+  Solid arrow  = sync data flow on the hot path
+  Dotted arrow = async / metadata / out-of-band
+  Phase A2 follow-ups:
+    • IAM database auth wiring
+    • ACM cert + custom domain
+    • narrow PowerUserAccess on deploy role
+end note
+@enduml
