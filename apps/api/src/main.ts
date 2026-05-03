@@ -16,15 +16,19 @@ async function bootstrap() {
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '2' });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
-  const config = new DocumentBuilder()
-    .setTitle('OCI Platform API')
-    .setDescription(
-      'Open Code Initiative — unified API for GI-AI4H (Global Initiative on AI for Health)',
-    )
-    .setVersion('0.0.1')
-    .addBearerAuth()
-    .build();
-  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
+  // Swagger UI at /docs is exposed in dev / int only — not prod.
+  // OCI_ENV is set by the ECS task definition (api-stack.ts).
+  if (process.env.OCI_ENV !== 'prod') {
+    const config = new DocumentBuilder()
+      .setTitle('OCI Platform API')
+      .setDescription(
+        'Open Code Initiative — unified API for GI-AI4H (Global Initiative on AI for Health)',
+      )
+      .setVersion('0.0.1')
+      .addBearerAuth()
+      .build();
+    SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
+  }
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen({ port, host: '0.0.0.0' });
