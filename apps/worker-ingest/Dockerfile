@@ -32,7 +32,7 @@ RUN pnpm --filter @oci/database build \
  && pnpm --filter @oci/shared-types build \
  && pnpm --filter @oci/croissant build \
  && pnpm --filter @oci/worker-ingest build \
- && pnpm --filter @oci/worker-ingest --prod deploy /out
+ && pnpm --filter @oci/worker-ingest deploy --prod --legacy /out
 
 FROM gcr.io/distroless/nodejs24-debian12:nonroot
 WORKDIR /app
