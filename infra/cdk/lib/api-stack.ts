@@ -6,9 +6,11 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
+import { NagSuppressions } from 'cdk-nag';
 import type { OciEnvConfig } from './environments.js';
 
 export interface ApiStackProps extends cdk.StackProps {
@@ -18,6 +20,8 @@ export interface ApiStackProps extends cdk.StackProps {
   database: rds.DatabaseCluster;
   cognito: cognito.UserPool;
   logGroup: logs.ILogGroup;
+  /** Shared access-logs bucket (from observability stack) used as ALB access log target. */
+  accessLogsBucket: s3.IBucket;
 }
 
 /**
@@ -77,6 +81,7 @@ export class ApiStack extends cdk.Stack {
       maxHealthyPercent: 200,
     });
     this.alb = fargate.loadBalancer;
+    this.alb.logAccessLogs(props.accessLogsBucket, `alb/${props.cfg.envName}`);
 
     fargate.targetGroup.configureHealthCheck({
       path: '/health',
@@ -187,5 +192,37 @@ export class ApiStack extends cdk.Stack {
     }
 
     new cdk.CfnOutput(this, 'ApiUrl', { value: `https://${this.alb.loadBalancerDnsName}` });
+
+    if (!props.cfg.enhancedMonitoring) {
+      NagSuppressions.addResourceSuppressions(this.cluster, [
+        {
+          id: 'AwsSolutions-ECS4',
+          reason:
+            'Container Insights is intentionally OFF in non-prod environments per environments.ts (cost). Enabled in int and prod.',
+        },
+      ]);
+    }
+    NagSuppressions.addResourceSuppressions(
+      fargate.taskDefinition,
+      [
+        {
+          id: 'AwsSolutions-ECS2',
+          reason:
+            'Plaintext envs on the API task are non-secret runtime configuration only (NODE_ENV, OCI_ENV, AWS_REGION, COGNITO_USER_POOL_ID, COGNITO_REGION). Real secrets (DB credentials, Cognito client secrets) are read from Secrets Manager via IAM at runtime, not injected via task env.',
+        },
+      ],
+      true,
+    );
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/ApiService/LB/SecurityGroup/Resource`,
+      [
+        {
+          id: 'AwsSolutions-EC23',
+          reason:
+            'Public ALB intentionally accepts inbound 0.0.0.0/0 on 80 (CloudFront origin) — Web ACL provides L7 filtering in int/prod.',
+        },
+      ],
+    );
   }
 }
