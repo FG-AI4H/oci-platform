@@ -7,7 +7,6 @@ import { NetworkStack } from '../lib/network-stack.js';
 import { DataStack } from '../lib/data-stack.js';
 import { IdentityStack } from '../lib/identity-stack.js';
 import { ApiStack } from '../lib/api-stack.js';
-import { WebStack } from '../lib/web-stack.js';
 import { ObservabilityStack } from '../lib/observability-stack.js';
 import { resolveEnvironment } from '../lib/environments.js';
 import { BootstrapOidcStack } from '../lib/bootstrap-oidc-stack.js';
@@ -23,13 +22,18 @@ const tags = { Project: 'OCI', Environment: envName, ManagedBy: 'CDK' };
 // Locally these are undefined; the stacks fall back to public placeholders.
 const apiImage = app.node.tryGetContext('apiImage') as string | undefined;
 
-// Bootstrap stack: OIDC role + ECR repos. Deploy this first per environment;
-// after this exists, the GitHub Actions workflow can assume the role and
-// push images. Skip from default app loop — explicit deploy via:
-//   pnpm --filter @oci/cdk cdk deploy oci-{env}-bootstrap --context env={env}
+// Route 53 hosted zone for ai4h.net (ADR-0001). Single account-wide zone
+// shared with other FG-AI4H tenants; OCI Platform records all live under
+// the `oci` subdomain. ID is stable so we hardcode rather than lookup
+// (lookup needs `cdk synth` AWS creds; this works offline).
+const HOSTED_ZONE_ID = 'Z09716362NE75KQEXM9N9';
+const HOSTED_ZONE_NAME = 'ai4h.net';
+
+// Bootstrap stack: OIDC role + ECR repos. Deploy this once per environment;
+// CI excludes it from `cdk deploy` (see .github/workflows/deploy.yml).
 //
 // The GitHub OIDC provider is account-wide; pass `--context createOidcProvider=true`
-// on the FIRST bootstrap deploy ever for this AWS account (typically the dev one).
+// on the FIRST bootstrap deploy ever for this AWS account.
 const createOidcProvider = app.node.tryGetContext('createOidcProvider') === 'true';
 new BootstrapOidcStack(app, `oci-${envName}-bootstrap`, {
   env: cfg.env,
@@ -39,9 +43,9 @@ new BootstrapOidcStack(app, `oci-${envName}-bootstrap`, {
   createOidcProvider,
 });
 
-// Layered stacks (each layer depends on the previous one).
-// Observability is created before data/api/web because it owns the shared
-// access-logs bucket consumed downstream for S3 / ALB / CloudFront access logs.
+// Layered runtime stacks. Observability is constructed before data/api so
+// it owns the shared access-logs bucket consumed downstream for S3 + ALB
+// access logging.
 const network = new NetworkStack(app, `oci-${envName}-network`, { env: cfg.env, cfg, tags });
 const identity = new IdentityStack(app, `oci-${envName}-identity`, { env: cfg.env, cfg, tags });
 const observability = new ObservabilityStack(app, `oci-${envName}-observability`, {
@@ -56,7 +60,7 @@ const data = new DataStack(app, `oci-${envName}-data`, {
   vpc: network.vpc,
   accessLogsBucket: observability.accessLogsBucket,
 });
-const api = new ApiStack(app, `oci-${envName}-api`, {
+new ApiStack(app, `oci-${envName}-api`, {
   env: cfg.env,
   cfg,
   tags,
@@ -66,16 +70,11 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
   logGroup: observability.apiLogGroup,
   accessLogsBucket: observability.accessLogsBucket,
   apiImage,
+  hostedZoneId: HOSTED_ZONE_ID,
+  zoneName: HOSTED_ZONE_NAME,
 });
-// Side-effect: registers the CloudFront distribution stack with the app.
-// The variable is not referenced again, but the construction wires it in.
-new WebStack(app, `oci-${envName}-web`, {
-  env: cfg.env,
-  cfg,
-  tags,
-  api: api.alb,
-  accessLogsBucket: observability.accessLogsBucket,
-});
+// CloudFront/web-stack retired in ADR-0001 — ALB now serves clients directly
+// over HTTPS with an ACM cert. Security headers move to NestJS @fastify/helmet.
 
 // Run cdk-nag checks (AWS Solutions ruleset) on all stacks
 Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }));
