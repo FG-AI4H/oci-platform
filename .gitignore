@@ -41,6 +41,9 @@ coverage/
 infra/cdk/cdk.out/
 infra/cdk/cdk.context.json
 
+# Prisma generated client (regenerate with `pnpm --filter @oci/database build`)
+packages/database/src/generated/
+
 # Secrets / local-only
 *.pem
 *.key

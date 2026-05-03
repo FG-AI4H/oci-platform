@@ -19,6 +19,10 @@ const envName = (app.node.tryGetContext('env') as string) ?? 'dev';
 const cfg = resolveEnvironment(envName, app);
 const tags = { Project: 'OCI', Environment: envName, ManagedBy: 'CDK' };
 
+// Container image URIs supplied by the Deploy workflow after build/push.
+// Locally these are undefined; the stacks fall back to public placeholders.
+const apiImage = app.node.tryGetContext('apiImage') as string | undefined;
+
 // Bootstrap stack: OIDC role + ECR repos. Deploy this first per environment;
 // after this exists, the GitHub Actions workflow can assume the role and
 // push images. Skip from default app loop — explicit deploy via:
@@ -35,19 +39,22 @@ new BootstrapOidcStack(app, `oci-${envName}-bootstrap`, {
   createOidcProvider,
 });
 
-// Layered stacks (each layer depends on the previous one)
+// Layered stacks (each layer depends on the previous one).
+// Observability is created before data/api/web because it owns the shared
+// access-logs bucket consumed downstream for S3 / ALB / CloudFront access logs.
 const network = new NetworkStack(app, `oci-${envName}-network`, { env: cfg.env, cfg, tags });
 const identity = new IdentityStack(app, `oci-${envName}-identity`, { env: cfg.env, cfg, tags });
+const observability = new ObservabilityStack(app, `oci-${envName}-observability`, {
+  env: cfg.env,
+  cfg,
+  tags,
+});
 const data = new DataStack(app, `oci-${envName}-data`, {
   env: cfg.env,
   cfg,
   tags,
   vpc: network.vpc,
-});
-const observability = new ObservabilityStack(app, `oci-${envName}-observability`, {
-  env: cfg.env,
-  cfg,
-  tags,
+  accessLogsBucket: observability.accessLogsBucket,
 });
 const api = new ApiStack(app, `oci-${envName}-api`, {
   env: cfg.env,
@@ -57,6 +64,8 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
   database: data.database,
   cognito: identity.userPool,
   logGroup: observability.apiLogGroup,
+  accessLogsBucket: observability.accessLogsBucket,
+  apiImage,
 });
 // Side-effect: registers the CloudFront distribution stack with the app.
 // The variable is not referenced again, but the construction wires it in.
@@ -65,6 +74,7 @@ new WebStack(app, `oci-${envName}-web`, {
   cfg,
   tags,
   api: api.alb,
+  accessLogsBucket: observability.accessLogsBucket,
 });
 
 // Run cdk-nag checks (AWS Solutions ruleset) on all stacks
