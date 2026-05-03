@@ -34,7 +34,7 @@ RUN pnpm --filter @oci/database build \
  && pnpm --filter @oci/auth build \
  && pnpm --filter @oci/croissant build \
  && pnpm --filter @oci/api build \
- && pnpm --filter @oci/api --prod deploy /out
+ && pnpm --filter @oci/api deploy --prod --legacy /out
 
 FROM gcr.io/distroless/nodejs24-debian12:nonroot
 WORKDIR /app
