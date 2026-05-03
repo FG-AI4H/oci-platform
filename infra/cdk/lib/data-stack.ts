@@ -123,13 +123,17 @@ export class DataStack extends cdk.Stack {
       ]);
     }
     if (props.cfg.envName === 'dev') {
-      NagSuppressions.addResourceSuppressions(this.database, [
-        {
-          id: 'AwsSolutions-SMG4',
-          reason:
-            'Dev intentionally skips Secrets Manager rotation to keep the stack thin. int and prod use addRotationSingleUser (30-day cycle).',
-        },
-      ], true);
+      NagSuppressions.addResourceSuppressions(
+        this.database,
+        [
+          {
+            id: 'AwsSolutions-SMG4',
+            reason:
+              'Dev intentionally skips Secrets Manager rotation to keep the stack thin. int and prod use addRotationSingleUser (30-day cycle).',
+          },
+        ],
+        true,
+      );
     }
     // Aurora's enhanced monitoring role (created automatically when monitoringInterval is set).
     if (props.cfg.enhancedMonitoring) {
