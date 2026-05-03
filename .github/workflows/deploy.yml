@@ -140,7 +140,7 @@ jobs:
         # below for rationale. Diff target == deploy target.
         run: |
           ENV='${{ inputs.target }}'
-          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-web"
+          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api"
           pnpm cdk diff $STACKS --context env=$ENV --context apiImage=${{ needs.build-images.outputs.api-image }} || true
 
       - name: cdk deploy
@@ -159,7 +159,7 @@ jobs:
           APPROVAL=never
           if [[ "$ENV" == "prod" ]]; then APPROVAL=broadening; fi
           if [[ "$ENV" == "int" ]]; then APPROVAL=any-change; fi
-          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-web"
+          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api"
           pnpm cdk deploy $STACKS --require-approval $APPROVAL \
             --context env=$ENV \
             --context apiImage=${{ needs.build-images.outputs.api-image }} \

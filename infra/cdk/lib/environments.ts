@@ -31,7 +31,7 @@ const COMMON: Pick<OciEnvConfig, 'env'> = {
 const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
   dev: {
     ...COMMON,
-    domainName: 'dev.oci.aiaudit.org',
+    domainName: 'dev.oci.ai4h.net',
     removalPolicy: cdk.RemovalPolicy.DESTROY,
     aurora: { minCapacity: 0.5, maxCapacity: 2, multiAz: false, deletionProtection: false },
     fargate: { minTasks: 1, maxTasks: 2, cpu: 512, memory: 1024 },
@@ -41,7 +41,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
   },
   int: {
     ...COMMON,
-    domainName: 'int.oci.aiaudit.org',
+    domainName: 'int.oci.ai4h.net',
     removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
     aurora: { minCapacity: 0.5, maxCapacity: 4, multiAz: true, deletionProtection: false },
     fargate: { minTasks: 2, maxTasks: 4, cpu: 1024, memory: 2048 },
@@ -51,7 +51,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
   },
   prod: {
     ...COMMON,
-    domainName: 'oci.aiaudit.org',
+    domainName: 'oci.ai4h.net',
     removalPolicy: cdk.RemovalPolicy.RETAIN,
     aurora: { minCapacity: 1, maxCapacity: 16, multiAz: true, deletionProtection: true },
     fargate: { minTasks: 3, maxTasks: 12, cpu: 2048, memory: 4096 },
