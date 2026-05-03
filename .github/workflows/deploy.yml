@@ -1,10 +1,21 @@
 name: Deploy
 
-# Manual deploy with explicit environment target. The required GitHub
-# Environment must exist on the repo (dev / int / prod) and the AWS
-# OIDC role gha-oci-deploy-{env} must be provisioned via the
-# oci-{env}-bootstrap CDK stack.
+# Triggers:
+#  - push to main (auto-deploys dev only; doc-only changes are skipped via paths-ignore)
+#  - workflow_dispatch (manual; choose dev / int / prod)
+#
+# The required GitHub Environment must exist on the repo (dev / int / prod) and the AWS
+# OIDC role gha-oci-deploy-{env} must be provisioned via the oci-{env}-bootstrap CDK stack.
 on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.prettierignore'
+      - '.trivyignore'
   workflow_dispatch:
     inputs:
       target:
@@ -19,7 +30,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-${{ inputs.target }}
+  group: deploy-${{ inputs.target || 'dev' }}
   cancel-in-progress: false
 
 env:
@@ -57,7 +68,7 @@ jobs:
   build-images:
     needs: preflight
     runs-on: ubuntu-latest
-    environment: ${{ inputs.target }}
+    environment: ${{ inputs.target || 'dev' }}
     outputs:
       api-image: ${{ steps.meta.outputs.api }}
       ingest-image: ${{ steps.meta.outputs.ingest }}
@@ -74,7 +85,7 @@ jobs:
       - name: Configure AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/gha-oci-deploy-${{ inputs.target }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/gha-oci-deploy-${{ inputs.target || 'dev' }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login ECR
@@ -111,7 +122,7 @@ jobs:
   cdk-deploy:
     needs: build-images
     runs-on: ubuntu-latest
-    environment: ${{ inputs.target }}
+    environment: ${{ inputs.target || 'dev' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -131,7 +142,7 @@ jobs:
       - name: Configure AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/gha-oci-deploy-${{ inputs.target }}
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/gha-oci-deploy-${{ inputs.target || 'dev' }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: cdk diff
@@ -139,7 +150,7 @@ jobs:
         # Bootstrap stack is intentionally NOT in this list — see deploy step
         # below for rationale. Diff target == deploy target.
         run: |
-          ENV='${{ inputs.target }}'
+          ENV='${{ inputs.target || 'dev' }}'
           STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api"
           pnpm cdk diff $STACKS --context env=$ENV --context apiImage=${{ needs.build-images.outputs.api-image }} || true
 
@@ -155,7 +166,7 @@ jobs:
         #   AWS_PROFILE=ai4h pnpm --filter @oci/cdk exec cdk deploy \
         #     oci-{env}-bootstrap --context env={env}
         run: |
-          ENV='${{ inputs.target }}'
+          ENV='${{ inputs.target || 'dev' }}'
           APPROVAL=never
           if [[ "$ENV" == "prod" ]]; then APPROVAL=broadening; fi
           if [[ "$ENV" == "int" ]]; then APPROVAL=any-change; fi
