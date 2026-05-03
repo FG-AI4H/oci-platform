@@ -41,7 +41,8 @@ FROM gcr.io/distroless/nodejs24-debian12:nonroot
 WORKDIR /app
 COPY --from=build --chown=nonroot:nonroot /repo/apps/web/.next/standalone /app
 COPY --from=build --chown=nonroot:nonroot /repo/apps/web/.next/static /app/apps/web/.next/static
-COPY --from=build --chown=nonroot:nonroot /repo/apps/web/public /app/apps/web/public
+# (apps/web/public/ is optional — Next.js skips it if it doesn't exist.
+#  Re-add the COPY line when static assets are introduced under public/.)
 USER nonroot
 EXPOSE 3000
 ENV NODE_ENV=production
