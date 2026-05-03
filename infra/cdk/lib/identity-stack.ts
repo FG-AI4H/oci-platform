@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { Construct } from 'constructs';
+import { NagSuppressions } from 'cdk-nag';
 import type { OciEnvConfig } from './environments.js';
 
 export interface IdentityStackProps extends cdk.StackProps {
@@ -86,5 +87,22 @@ export class IdentityStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'UserPoolId', { value: this.userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: this.userPoolClient.userPoolClientId });
     new cdk.CfnOutput(this, 'CognitoDomainUrl', { value: this.userPoolDomain.baseUrl() });
+
+    if (props.cfg.envName !== 'prod') {
+      NagSuppressions.addResourceSuppressions(this.userPool, [
+        {
+          id: 'AwsSolutions-COG8',
+          reason:
+            'PLUS feature plan is enabled only in prod (cost). Non-prod uses ESSENTIALS, which still includes MFA (OTP), token revocation, and password policies. See environments.ts.',
+        },
+      ]);
+    }
+    NagSuppressions.addResourceSuppressions(this.userPool, [
+      {
+        id: 'AwsSolutions-COG2',
+        reason:
+          'MFA is OPTIONAL pool-wide; it is enforced for admin/regulator/supervisor groups via Cognito advanced security in prod (PLUS plan), and per project security policy admins MUST enable MFA. Pool-wide REQUIRED MFA breaks self-service signup for participants.',
+      },
+    ]);
   }
 }

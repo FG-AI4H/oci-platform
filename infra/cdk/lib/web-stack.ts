@@ -2,13 +2,17 @@ import * as cdk from 'aws-cdk-lib';
 import * as cf from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
+import { NagSuppressions } from 'cdk-nag';
 import type { OciEnvConfig } from './environments.js';
 
 export interface WebStackProps extends cdk.StackProps {
   cfg: OciEnvConfig;
   tags: Record<string, string>;
   api: elbv2.ApplicationLoadBalancer;
+  /** Shared access-logs bucket (from observability stack). */
+  accessLogsBucket: s3.IBucket;
 }
 
 /**
@@ -62,10 +66,30 @@ export class WebStack extends cdk.Stack {
         props.cfg.envName === 'prod'
           ? cf.PriceClass.PRICE_CLASS_ALL
           : cf.PriceClass.PRICE_CLASS_100,
-      enableLogging: true,
+      logBucket: props.accessLogsBucket as s3.Bucket,
+      logFilePrefix: `cloudfront/${props.cfg.envName}/`,
       logIncludesCookies: false,
     });
 
     new cdk.CfnOutput(this, 'CdnUrl', { value: `https://${this.distribution.domainName}` });
+
+    // Suppress findings that are intentional or deferred to Phase A2 (custom domain + ACM).
+    NagSuppressions.addResourceSuppressions(this.distribution, [
+      {
+        id: 'AwsSolutions-CFR4',
+        reason:
+          'Distribution uses the default *.cloudfront.net certificate during Phase A1/A2 bootstrap, which forces TLSv1 minimum regardless of the configured policy. Will be replaced with an ACM-issued cert and custom domain in Phase A2 (Route 53 zone provisioning), at which point TLSv1.2_2021 takes effect.',
+      },
+      {
+        id: 'AwsSolutions-CFR1',
+        reason:
+          'OCI Platform serves a global audience under FG-AI4H; geo-restrictions are intentionally not configured. WAF (CFR2) provides L7 protection in prod.',
+      },
+      {
+        id: 'AwsSolutions-CFR2',
+        reason:
+          'WAF on CloudFront is a Phase A2 prod hardening item; for now WAFv2 is attached to the regional ALB (api-stack) in int/prod which sits in the request path.',
+      },
+    ]);
   }
 }
