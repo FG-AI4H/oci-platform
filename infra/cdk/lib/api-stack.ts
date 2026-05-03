@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -7,6 +8,8 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as rds from 'aws-cdk-lib/aws-rds';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
@@ -30,6 +33,9 @@ export interface ApiStackProps extends cdk.StackProps {
    * falls back to a public nginx placeholder so the stack can still synth.
    */
   apiImage?: string;
+  /** Route 53 hosted zone id for the apex (`ai4h.net`). */
+  hostedZoneId: string;
+  zoneName: string;
 }
 
 /**
@@ -48,6 +54,18 @@ export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
     Object.entries(props.tags).forEach(([k, v]) => cdk.Tags.of(this).add(k, v));
+
+    // Hosted zone import — used for both ACM DNS validation and the ALB alias.
+    const zone = route53.HostedZone.fromHostedZoneAttributes(this, 'Zone', {
+      hostedZoneId: props.hostedZoneId,
+      zoneName: props.zoneName,
+    });
+
+    // ACM cert (DNS-validated). Lives in eu-central-1 alongside the ALB.
+    const albCert = new acm.Certificate(this, 'AlbCert', {
+      domainName: props.cfg.domainName,
+      validation: acm.CertificateValidation.fromDns(zone),
+    });
 
     this.cluster = new ecs.Cluster(this, 'Cluster', {
       vpc: props.vpc,
@@ -88,14 +106,27 @@ export class ApiStack extends cdk.Stack {
         logDriver: ecs.LogDrivers.awsLogs({ streamPrefix: 'api', logGroup: props.logGroup }),
       },
       publicLoadBalancer: true,
-      // ALB stays HTTP; CloudFront (WebStack) terminates TLS to viewers.
-      // Phase A2: add ACM cert + custom domain once Route 53 zone is provisioned.
-      protocol: elbv2.ApplicationProtocol.HTTP,
+      // ALB serves HTTPS on 443 with the DNS-validated ACM cert; HTTP on
+      // 80 redirects to 443 (no plaintext path remains).
+      protocol: elbv2.ApplicationProtocol.HTTPS,
+      certificate: albCert,
+      sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
+      redirectHTTP: true,
+      domainZone: zone,
+      domainName: props.cfg.domainName,
       minHealthyPercent: 100,
       maxHealthyPercent: 200,
     });
     this.alb = fargate.loadBalancer;
     this.alb.logAccessLogs(props.accessLogsBucket, `alb/${props.cfg.envName}`);
+
+    // IPv6 alias for the FQDN — `ApplicationLoadBalancedFargateService`
+    // creates the A record from `domainZone` + `domainName`, but not AAAA.
+    new route53.AaaaRecord(this, 'AlbAliasAAAA', {
+      zone,
+      recordName: props.cfg.domainName,
+      target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(this.alb)),
+    });
 
     fargate.targetGroup.configureHealthCheck({
       path: '/health',
@@ -206,7 +237,8 @@ export class ApiStack extends cdk.Stack {
       });
     }
 
-    new cdk.CfnOutput(this, 'ApiUrl', { value: `https://${this.alb.loadBalancerDnsName}` });
+    new cdk.CfnOutput(this, 'ApiUrl', { value: `https://${props.cfg.domainName}` });
+    new cdk.CfnOutput(this, 'AlbDns', { value: this.alb.loadBalancerDnsName });
 
     if (!props.cfg.enhancedMonitoring) {
       NagSuppressions.addResourceSuppressions(this.cluster, [
