@@ -1,10 +1,9 @@
 name: Deploy
 
-# Manual-only until Phase A1 provisions:
-#  - GitHub OIDC roles `gha-oci-deploy-{dev,int,prod}` in AWS account 601883093460
-#  - apps/api/Dockerfile and apps/worker-ingest/Dockerfile
-#  - infra/cdk/lib/bootstrap-oidc-stack.ts deployed to all three envs
-# Once those exist, switch the dev branch back to push-triggered.
+# Manual deploy with explicit environment target. The required GitHub
+# Environment must exist on the repo (dev / int / prod) and the AWS
+# OIDC role gha-oci-deploy-{env} must be provisioned via the
+# oci-{env}-bootstrap CDK stack.
 on:
   workflow_dispatch:
     inputs:
@@ -18,15 +17,136 @@ on:
 permissions:
   id-token: write
   contents: read
-  packages: write
 
 concurrency:
-  group: deploy-${{ github.event.inputs.target }}
+  group: deploy-${{ inputs.target }}
   cancel-in-progress: false
 
+env:
+  AWS_REGION: eu-central-1
+  AWS_ACCOUNT_ID: '601883093460'
+
 jobs:
-  deploy:
-    uses: ./.github/workflows/_deploy-env.yml
-    with:
-      environment: ${{ github.event.inputs.target }}
-    secrets: inherit
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+      actions: read
+    steps:
+      - name: Verify CI passed for ${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          STATUS=$(gh api \
+            "repos/$REPO/actions/runs?head_sha=$SHA&status=completed" \
+            --jq '[.workflow_runs[] | select(.name == "CI")][0].conclusion' || echo "")
+          if [[ "$STATUS" != "success" ]]; then
+            echo "::error::CI for $SHA has not completed successfully (status='$STATUS'). Re-run CI before deploying."
+            exit 1
+          fi
+          echo "CI green for $SHA — proceeding."
+
+  build-images:
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    outputs:
+      api-image: ${{ steps.meta.outputs.api }}
+      ingest-image: ${{ steps.meta.outputs.ingest }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Enable Corepack
+        run: corepack enable
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/gha-oci-deploy-${{ inputs.target }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Compute image tags
+        id: meta
+        run: |
+          SHA=${GITHUB_SHA::12}
+          REG=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          echo "api=$REG/oci-api:$SHA"      >> "$GITHUB_OUTPUT"
+          echo "ingest=$REG/oci-worker-ingest:$SHA" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push API image
+        run: |
+          docker build -f apps/api/Dockerfile -t "${{ steps.meta.outputs.api }}" .
+          docker push "${{ steps.meta.outputs.api }}"
+
+      - name: Build & push worker-ingest image
+        run: |
+          docker build -f apps/worker-ingest/Dockerfile -t "${{ steps.meta.outputs.ingest }}" .
+          docker push "${{ steps.meta.outputs.ingest }}"
+
+      - name: Trivy image scan (API)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.meta.outputs.api }}
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+
+  cdk-deploy:
+    needs: build-images
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Enable Corepack
+        run: corepack enable
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm --filter "./packages/**" build && pnpm --filter "./infra/cdk" build
+
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/gha-oci-deploy-${{ inputs.target }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: cdk diff
+        working-directory: infra/cdk
+        run: pnpm cdk diff --context env=${{ inputs.target }} --context apiImage=${{ needs.build-images.outputs.api-image }} || true
+
+      - name: cdk deploy
+        working-directory: infra/cdk
+        run: |
+          APPROVAL=never
+          if [[ "${{ inputs.target }}" == "prod" ]]; then APPROVAL=broadening; fi
+          if [[ "${{ inputs.target }}" == "int" ]]; then APPROVAL=any-change; fi
+          pnpm cdk deploy --all --require-approval $APPROVAL \
+            --context env=${{ inputs.target }} \
+            --context apiImage=${{ needs.build-images.outputs.api-image }} \
+            --context ingestImage=${{ needs.build-images.outputs.ingest-image }}
+
+      - name: DB migrate
+        run: |
+          # Phase A2 follow-up: run prisma migrate deploy via a one-shot ECS
+          # task launched here (the runner can't reach the VPC-private DB).
+          echo "TODO Phase A2: pnpm --filter @oci/database db:migrate:deploy via VPC"
