@@ -39,6 +39,8 @@ export class SharedBootstrapStack extends cdk.Stack {
       clientIds: ['sts.amazonaws.com'],
     });
 
-    new cdk.CfnOutput(this, 'OidcProviderArn', { value: this.oidcProvider.openIdConnectProviderArn });
+    new cdk.CfnOutput(this, 'OidcProviderArn', {
+      value: this.oidcProvider.openIdConnectProviderArn,
+    });
   }
 }
