@@ -82,24 +82,64 @@ export class BootstrapOidcStack extends cdk.Stack {
       maxSessionDuration: cdk.Duration.hours(1),
     });
 
-    // Permission to deploy CDK stacks (call CloudFormation, push to ECR, etc.)
-    // Phase A1 attaches PowerUser+IAM-passrole. Phase A2 narrows to least-priv.
-    this.deployRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('PowerUserAccess'));
+    // Phase A2 narrowing: replace PowerUserAccess + iam:* with the AWS-
+    // recommended minimal policy for a CDK deploy role. The heavy lifting
+    // (creating IAM roles, RDS, ECS, etc.) is done by the cdk-bootstrap
+    // execution role (`cdk-hnb659fds-cfn-exec-role-*`), which CDK assumes
+    // via the deploy / file-publishing / image-publishing roles. This role
+    // only needs to (a) assume those CDK roles, (b) push to our ECR repos
+    // (the workflow does this directly, before `cdk deploy`), and
+    // (c) read CloudFormation/SSM bootstrap state.
     this.deployRole.addToPolicy(
       new iam.PolicyStatement({
+        sid: 'AssumeCdkBootstrapRoles',
+        actions: ['sts:AssumeRole'],
+        resources: [`arn:aws:iam::${this.account}:role/cdk-hnb659fds-*`],
+      }),
+    );
+    this.deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'EcrAuth',
+        actions: ['ecr:GetAuthorizationToken'],
+        resources: ['*'],
+      }),
+    );
+    this.deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'EcrPushOciRepos',
         actions: [
-          'iam:CreateRole',
-          'iam:DeleteRole',
-          'iam:AttachRolePolicy',
-          'iam:DetachRolePolicy',
-          'iam:PutRolePolicy',
-          'iam:DeleteRolePolicy',
-          'iam:PassRole',
-          'iam:GetRole',
-          'iam:TagRole',
-          'iam:UntagRole',
+          'ecr:BatchCheckLayerAvailability',
+          'ecr:CompleteLayerUpload',
+          'ecr:InitiateLayerUpload',
+          'ecr:PutImage',
+          'ecr:UploadLayerPart',
+          'ecr:BatchGetImage',
+          'ecr:DescribeImages',
+          'ecr:DescribeRepositories',
+          'ecr:GetDownloadUrlForLayer',
+        ],
+        resources: [`arn:aws:ecr:${this.region}:${this.account}:repository/oci-*`],
+      }),
+    );
+    this.deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'CloudFormationRead',
+        actions: [
+          'cloudformation:DescribeStacks',
+          'cloudformation:DescribeStackEvents',
+          'cloudformation:DescribeStackResources',
+          'cloudformation:GetTemplate',
+          'cloudformation:GetTemplateSummary',
+          'cloudformation:ListStacks',
         ],
         resources: ['*'],
+      }),
+    );
+    this.deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'CdkBootstrapSsmRead',
+        actions: ['ssm:GetParameter', 'ssm:GetParameters'],
+        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/cdk-bootstrap/*`],
       }),
     );
 
@@ -130,27 +170,21 @@ export class BootstrapOidcStack extends cdk.Stack {
       this.deployRole,
       [
         {
-          id: 'AwsSolutions-IAM4',
-          reason:
-            'Phase A1 bootstrap deploy role is intentionally PowerUserAccess to deploy all CDK stacks before per-stack policies exist. Narrowed to least-privilege in Phase A2 (issue tracked in docs/migration/strangler-plan.md).',
-          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/PowerUserAccess'],
-        },
-        {
           id: 'AwsSolutions-IAM5',
           reason:
-            'Phase A1 bootstrap role needs broad iam:* on Resource::* so CDK can create/manage roles for downstream stacks (network, data, identity, api, web, observability). Narrowed in Phase A2.',
+            'Path-prefix wildcards are intentional and tightly scoped: cdk-hnb659fds-* matches CDK bootstrap roles (deploy, file-publishing, image-publishing, lookup); oci-* matches our ECR repos (oci-api, oci-worker-ingest); /cdk-bootstrap/* matches CDK bootstrap SSM parameters. ecr:GetAuthorizationToken and cloudformation:Describe*/List*/GetTemplate do not support per-resource scoping (AWS API limitation, account-scope only).',
           appliesTo: [
             'Resource::*',
-            'Action::iam:CreateRole',
-            'Action::iam:DeleteRole',
-            'Action::iam:AttachRolePolicy',
-            'Action::iam:DetachRolePolicy',
-            'Action::iam:PutRolePolicy',
-            'Action::iam:DeleteRolePolicy',
-            'Action::iam:PassRole',
-            'Action::iam:GetRole',
-            'Action::iam:TagRole',
-            'Action::iam:UntagRole',
+            `Resource::arn:aws:iam::${this.account}:role/cdk-hnb659fds-*`,
+            `Resource::arn:aws:ecr:${this.region}:${this.account}:repository/oci-*`,
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/cdk-bootstrap/*`,
+            'Action::ecr:GetAuthorizationToken',
+            'Action::cloudformation:DescribeStacks',
+            'Action::cloudformation:DescribeStackEvents',
+            'Action::cloudformation:DescribeStackResources',
+            'Action::cloudformation:GetTemplate',
+            'Action::cloudformation:GetTemplateSummary',
+            'Action::cloudformation:ListStacks',
           ],
         },
       ],
