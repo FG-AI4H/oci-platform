@@ -41,6 +41,7 @@ export interface BootstrapOidcStackProps extends cdk.StackProps {
 export class BootstrapOidcStack extends cdk.Stack {
   public readonly deployRole: iam.Role;
   public readonly apiRepo: ecr.Repository;
+  public readonly webRepo: ecr.Repository;
   public readonly workerIngestRepo: ecr.Repository;
 
   constructor(scope: Construct, id: string, props: BootstrapOidcStackProps) {
@@ -157,6 +158,11 @@ export class BootstrapOidcStack extends cdk.Stack {
       repositoryName: 'oci-api',
     });
 
+    this.webRepo = new ecr.Repository(this, 'WebRepo', {
+      ...repoDefaults,
+      repositoryName: 'oci-web',
+    });
+
     this.workerIngestRepo = new ecr.Repository(this, 'WorkerIngestRepo', {
       ...repoDefaults,
       repositoryName: 'oci-worker-ingest',
@@ -164,6 +170,7 @@ export class BootstrapOidcStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, 'DeployRoleArn', { value: this.deployRole.roleArn });
     new cdk.CfnOutput(this, 'ApiRepoUri', { value: this.apiRepo.repositoryUri });
+    new cdk.CfnOutput(this, 'WebRepoUri', { value: this.webRepo.repositoryUri });
     new cdk.CfnOutput(this, 'WorkerIngestRepoUri', { value: this.workerIngestRepo.repositoryUri });
 
     NagSuppressions.addResourceSuppressions(

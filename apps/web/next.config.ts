@@ -1,6 +1,11 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // Standalone build = self-contained server.js + minimal node_modules.
+  // Required for the multi-stage Dockerfile runtime layer.
+  output: 'standalone',
+  // Trace workspace deps so they're copied into the standalone bundle.
+  outputFileTracingRoot: '../../',
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,
