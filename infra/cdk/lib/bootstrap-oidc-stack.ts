@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import { Construct } from 'constructs';
+import { NagSuppressions } from 'cdk-nag';
 import type { OciEnvConfig } from './environments.js';
 
 export interface BootstrapOidcStackProps extends cdk.StackProps {
@@ -9,19 +10,32 @@ export interface BootstrapOidcStackProps extends cdk.StackProps {
   tags: Record<string, string>;
   /** GitHub org/repo allowed to assume this role, e.g. `FG-AI4H/oci-platform` */
   githubRepo: string;
+  /**
+   * If true, this stack creates the GitHub Actions OIDC provider in the
+   * AWS account. The provider is account-wide so this should be set on
+   * exactly ONE bootstrap stack — typically the dev one, on first deploy.
+   * Other env bootstraps look it up by ARN.
+   *
+   * On `cdk destroy`, the provider is RETAINed to avoid breaking sibling
+   * env bootstrap stacks that depend on the lookup.
+   */
+  createOidcProvider?: boolean;
 }
 
 /**
  * One-time bootstrap stack per environment. Creates:
  *
- * - The GitHub Actions OIDC provider (one shared instance per AWS account;
- *   we use a `fromOpenIdConnectProviderArn` lookup if it already exists).
  * - The `gha-oci-deploy-{env}` IAM role assumable from `FG-AI4H/oci-platform`
- *   on branch `main` (and optionally a specific GitHub environment).
+ *   when running under GitHub Environment `{env}`.
  * - ECR repositories `oci-api` and `oci-worker-ingest` (image scanning on push).
+ * - Optionally (when `createOidcProvider: true`) the account-wide GitHub
+ *   Actions OIDC provider. This must be created ONCE per AWS account.
  *
  * Deploy order (Phase A1):
- *   cdk deploy oci-{env}-bootstrap --context env={env}
+ *   1. First time per account, deploy dev bootstrap WITH the OIDC provider:
+ *        pnpm cdk deploy oci-dev-bootstrap --context env=dev --context createOidcProvider=true
+ *   2. Subsequently, other envs (and dev re-deploys) use the lookup:
+ *        pnpm cdk deploy oci-{env}-bootstrap --context env={env}
  * The role then exists for the regular Deploy workflow to assume.
  */
 export class BootstrapOidcStack extends cdk.Stack {
@@ -33,22 +47,32 @@ export class BootstrapOidcStack extends cdk.Stack {
     super(scope, id, props);
     Object.entries(props.tags).forEach(([k, v]) => cdk.Tags.of(this).add(k, v));
 
-    // GitHub OIDC provider — shared across envs.
-    // Look up by ARN; if you've never bootstrapped GH OIDC in this account,
-    // create one out-of-band first or uncomment the `OpenIdConnectProvider`
-    // construct below.
+    // GitHub OIDC provider — account-wide singleton.
+    // First-time deploys create it; later deploys (other envs, or re-deploys
+    // of the same env) look it up by ARN.
     const providerArn = `arn:aws:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`;
-    const oidcProvider = iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
-      this,
-      'GhOidc',
-      providerArn,
-    );
+    let oidcProvider: iam.IOpenIdConnectProvider;
+    if (props.createOidcProvider) {
+      // WARNING: this provider is account-wide. Destroying the stack that
+      // owns it will break sibling env bootstraps that look it up by ARN.
+      // Re-create with `--context createOidcProvider=true` if that happens.
+      oidcProvider = new iam.OpenIdConnectProvider(this, 'GhOidc', {
+        url: 'https://token.actions.githubusercontent.com',
+        clientIds: ['sts.amazonaws.com'],
+      });
+    } else {
+      oidcProvider = iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
+        this,
+        'GhOidc',
+        providerArn,
+      );
+    }
 
     const subjectClaim = `repo:${props.githubRepo}:environment:${props.cfg.envName}`;
 
     this.deployRole = new iam.Role(this, 'DeployRole', {
       roleName: `gha-oci-deploy-${props.cfg.envName}`,
-      description: `GitHub Actions deploy role for ${props.githubRepo} → ${props.cfg.envName}`,
+      description: `GitHub Actions deploy role for ${props.githubRepo} -> ${props.cfg.envName}`,
       assumedBy: new iam.OpenIdConnectPrincipal(oidcProvider, {
         StringEquals: {
           'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
@@ -101,5 +125,36 @@ export class BootstrapOidcStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'DeployRoleArn', { value: this.deployRole.roleArn });
     new cdk.CfnOutput(this, 'ApiRepoUri', { value: this.apiRepo.repositoryUri });
     new cdk.CfnOutput(this, 'WorkerIngestRepoUri', { value: this.workerIngestRepo.repositoryUri });
+
+    NagSuppressions.addResourceSuppressions(
+      this.deployRole,
+      [
+        {
+          id: 'AwsSolutions-IAM4',
+          reason:
+            'Phase A1 bootstrap deploy role is intentionally PowerUserAccess to deploy all CDK stacks before per-stack policies exist. Narrowed to least-privilege in Phase A2 (issue tracked in docs/migration/strangler-plan.md).',
+          appliesTo: ['Policy::arn:<AWS::Partition>:iam::aws:policy/PowerUserAccess'],
+        },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'Phase A1 bootstrap role needs broad iam:* on Resource::* so CDK can create/manage roles for downstream stacks (network, data, identity, api, web, observability). Narrowed in Phase A2.',
+          appliesTo: [
+            'Resource::*',
+            'Action::iam:CreateRole',
+            'Action::iam:DeleteRole',
+            'Action::iam:AttachRolePolicy',
+            'Action::iam:DetachRolePolicy',
+            'Action::iam:PutRolePolicy',
+            'Action::iam:DeleteRolePolicy',
+            'Action::iam:PassRole',
+            'Action::iam:GetRole',
+            'Action::iam:TagRole',
+            'Action::iam:UntagRole',
+          ],
+        },
+      ],
+      true,
+    );
   }
 }
