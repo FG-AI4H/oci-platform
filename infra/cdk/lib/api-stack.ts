@@ -195,10 +195,25 @@ export class ApiStack extends cdk.Stack {
       requestsPerTarget: 1000,
     });
 
-    // DB connectivity (network only — IAM database auth is wired in Phase A2
-    // via a separate stack to avoid creating a cycle between data + api).
-    // EC2 SG rule descriptions: a-zA-Z0-9. _-:/()#,@[]+=;{}!$* (no '>' allowed).
-    props.database.connections.allowDefaultPortFrom(this.apiService, 'API to Aurora');
+    // DB connectivity. The ingress rule lives in api-stack (not data-stack)
+    // so the cross-stack reference flows api → data — same direction as the
+    // rest of api's dependency on data. The previous shape (data importing
+    // api's SG) caused a CFN export-in-use deadlock during the manual-ALB
+    // refactor: api's old SG couldn't be deleted while data's old import
+    // still held a reference. Inverting it lets CDK orchestrate the migration
+    // cleanly. EC2 SG rule descriptions: a-zA-Z0-9. _-:/()#,@[]+=;{}!$*.
+    const apiSg = this.apiService.connections.securityGroups[0];
+    const dbSg = props.database.connections.securityGroups[0];
+    if (apiSg && dbSg) {
+      new ec2.CfnSecurityGroupIngress(this, 'AuroraIngressFromApi', {
+        groupId: dbSg.securityGroupId,
+        ipProtocol: 'tcp',
+        fromPort: 5432,
+        toPort: 5432,
+        sourceSecurityGroupId: apiSg.securityGroupId,
+        description: 'API to Aurora',
+      });
+    }
 
     // WAF (managed rules) for int/prod.
     if (props.cfg.enableWaf) {
