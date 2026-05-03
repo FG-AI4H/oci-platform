@@ -49,21 +49,37 @@ jobs:
       checks: read
       actions: read
     steps:
-      - name: Verify CI passed for ${{ github.sha }}
+      - name: Wait for CI to pass on ${{ github.sha }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ github.sha }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          STATUS=$(gh api \
-            "repos/$REPO/actions/runs?head_sha=$SHA&status=completed" \
-            --jq '[.workflow_runs[] | select(.name == "CI")][0].conclusion' || echo "")
-          if [[ "$STATUS" != "success" ]]; then
-            echo "::error::CI for $SHA has not completed successfully (status='$STATUS'). Re-run CI before deploying."
-            exit 1
-          fi
-          echo "CI green for $SHA — proceeding."
+          # Poll up to 15 min for CI on this SHA to reach a terminal state.
+          # On a push, Deploy and CI fire from the same event and CI is
+          # usually still in progress when Deploy's preflight starts.
+          MAX_TRIES=60   # 60 × 15 s = 15 min
+          TRY=0
+          while (( TRY < MAX_TRIES )); do
+            CI=$(gh api "repos/$REPO/actions/runs?head_sha=$SHA" \
+              --jq '[.workflow_runs[] | select(.name == "CI")][0]' || echo '{}')
+            STATUS=$(echo "$CI" | jq -r '.status // ""')
+            CONC=$(echo "$CI" | jq -r '.conclusion // ""')
+            if [[ "$STATUS" == "completed" ]]; then
+              if [[ "$CONC" == "success" ]]; then
+                echo "CI green for $SHA — proceeding."
+                exit 0
+              fi
+              echo "::error::CI for $SHA finished with conclusion='$CONC'."
+              exit 1
+            fi
+            echo "CI status='$STATUS' for $SHA — waiting (try $((TRY + 1))/$MAX_TRIES)..."
+            TRY=$((TRY + 1))
+            sleep 15
+          done
+          echo "::error::CI for $SHA did not complete within 15 min."
+          exit 1
 
   build-images:
     needs: preflight
