@@ -11,6 +11,7 @@ import { WebStack } from '../lib/web-stack.js';
 import { ObservabilityStack } from '../lib/observability-stack.js';
 import { resolveEnvironment } from '../lib/environments.js';
 import { BootstrapOidcStack } from '../lib/bootstrap-oidc-stack.js';
+import { SharedBootstrapStack } from '../lib/shared-bootstrap-stack.js';
 
 const app = new cdk.App();
 
@@ -31,18 +32,22 @@ const webImage = app.node.tryGetContext('webImage') as string | undefined;
 const HOSTED_ZONE_ID = 'Z09716362NE75KQEXM9N9';
 const HOSTED_ZONE_NAME = 'ai4h.net';
 
-// Bootstrap stack: OIDC role + ECR repos. Deploy this once per environment;
-// CI excludes it from `cdk deploy` (see .github/workflows/deploy.yml).
-//
-// The GitHub OIDC provider is account-wide; pass `--context createOidcProvider=true`
-// on the FIRST bootstrap deploy ever for this AWS account.
-const createOidcProvider = app.node.tryGetContext('createOidcProvider') === 'true';
+// Account-wide GitHub Actions OIDC provider. Operator deploy ONCE per AWS
+// account; not part of CI's `cdk deploy` (see .github/workflows/deploy.yml).
+//   pnpm --filter @oci/cdk exec cdk deploy oci-shared-bootstrap
+new SharedBootstrapStack(app, 'oci-shared-bootstrap', {
+  env: { account: '601883093460', region: 'eu-central-1' },
+  tags: { Project: 'OCI', Scope: 'shared', ManagedBy: 'CDK' },
+});
+
+// Per-env bootstrap: the gha-oci-deploy-{env} role + ECR repos. Operator
+// deploy ONCE per environment; not part of CI's `cdk deploy`.
+//   pnpm --filter @oci/cdk exec cdk deploy oci-{env}-bootstrap --context env={env}
 new BootstrapOidcStack(app, `oci-${envName}-bootstrap`, {
   env: cfg.env,
   cfg,
   tags,
   githubRepo: 'FG-AI4H/oci-platform',
-  createOidcProvider,
 });
 
 // Layered runtime stacks. Observability is constructed before data/api so
