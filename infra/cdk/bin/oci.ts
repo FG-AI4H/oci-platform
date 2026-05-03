@@ -19,6 +19,10 @@ const envName = (app.node.tryGetContext('env') as string) ?? 'dev';
 const cfg = resolveEnvironment(envName, app);
 const tags = { Project: 'OCI', Environment: envName, ManagedBy: 'CDK' };
 
+// Container image URIs supplied by the Deploy workflow after build/push.
+// Locally these are undefined; the stacks fall back to public placeholders.
+const apiImage = app.node.tryGetContext('apiImage') as string | undefined;
+
 // Bootstrap stack: OIDC role + ECR repos. Deploy this first per environment;
 // after this exists, the GitHub Actions workflow can assume the role and
 // push images. Skip from default app loop — explicit deploy via:
@@ -61,6 +65,7 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
   cognito: identity.userPool,
   logGroup: observability.apiLogGroup,
   accessLogsBucket: observability.accessLogsBucket,
+  apiImage,
 });
 // Side-effect: registers the CloudFront distribution stack with the app.
 // The variable is not referenced again, but the construction wires it in.

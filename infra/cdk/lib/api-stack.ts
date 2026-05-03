@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -22,6 +23,13 @@ export interface ApiStackProps extends cdk.StackProps {
   logGroup: logs.ILogGroup;
   /** Shared access-logs bucket (from observability stack) used as ALB access log target. */
   accessLogsBucket: s3.IBucket;
+  /**
+   * ECR image URI (`<account>.dkr.ecr.<region>.amazonaws.com/oci-api:<sha>`)
+   * built and pushed by the GitHub Actions Deploy workflow.
+   * When undefined (e.g. local `cdk synth` without `--context apiImage=...`),
+   * falls back to a public nginx placeholder so the stack can still synth.
+   */
+  apiImage?: string;
 }
 
 /**
@@ -60,8 +68,9 @@ export class ApiStack extends cdk.Stack {
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
       },
       taskImageOptions: {
-        // Image is set by the GitHub Actions deploy workflow before `cdk deploy`
-        image: ecs.ContainerImage.fromRegistry('public.ecr.aws/nginx/nginx:alpine'),
+        // ECR image via fromEcrRepository (auto-grants pull on the execution role)
+        // or nginx placeholder for local synth without --context apiImage=...
+        image: this.resolveApiImage(props.apiImage),
         containerName: 'api',
         containerPort: 3000,
         environment: {
@@ -224,5 +233,44 @@ export class ApiStack extends cdk.Stack {
         },
       ],
     );
+    // ECS task execution role default policy: GetAuthorizationToken + ECR read scoped to *
+    // is the standard ECS pattern (ecr:GetAuthorizationToken does not support per-repo
+    // resource scoping). Surface only when an ECR image is supplied.
+    if (props.apiImage) {
+      NagSuppressions.addResourceSuppressionsByPath(
+        this,
+        `/${this.stackName}/ApiService/TaskDef/ExecutionRole/DefaultPolicy/Resource`,
+        [
+          {
+            id: 'AwsSolutions-IAM5',
+            reason:
+              'ecr:GetAuthorizationToken does not support resource scoping; AWS requires Resource::*. Per-repo actions (BatchGetImage, BatchCheckLayerAvailability, GetDownloadUrlForLayer) are scoped by fromEcrRepository to the imported oci-api repo ARN.',
+            appliesTo: ['Resource::*', 'Action::ecr:GetAuthorizationToken'],
+          },
+        ],
+      );
+    }
+  }
+
+  /**
+   * Build the ECS container image. With `apiImage` ("<acct>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>"),
+   * resolves the ECR repo by name so CDK auto-grants pull permissions on the execution role.
+   * Without it (local synth), uses a public nginx placeholder.
+   */
+  private resolveApiImage(apiImage: string | undefined): ecs.ContainerImage {
+    if (!apiImage) {
+      return ecs.ContainerImage.fromRegistry('public.ecr.aws/nginx/nginx:alpine');
+    }
+    const colon = apiImage.lastIndexOf(':');
+    const slash = apiImage.lastIndexOf('/');
+    if (colon <= slash) {
+      throw new Error(
+        `apiImage "${apiImage}" is missing a tag; expected "<account>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>"`,
+      );
+    }
+    const tag = apiImage.slice(colon + 1);
+    const repoName = apiImage.slice(slash + 1, colon);
+    const repo = ecr.Repository.fromRepositoryName(this, 'ApiRepoRef', repoName);
+    return ecs.ContainerImage.fromEcrRepository(repo, tag);
   }
 }
