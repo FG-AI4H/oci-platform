@@ -10,33 +10,28 @@ export interface BootstrapOidcStackProps extends cdk.StackProps {
   tags: Record<string, string>;
   /** GitHub org/repo allowed to assume this role, e.g. `FG-AI4H/oci-platform` */
   githubRepo: string;
-  /**
-   * If true, this stack creates the GitHub Actions OIDC provider in the
-   * AWS account. The provider is account-wide so this should be set on
-   * exactly ONE bootstrap stack — typically the dev one, on first deploy.
-   * Other env bootstraps look it up by ARN.
-   *
-   * On `cdk destroy`, the provider is RETAINed to avoid breaking sibling
-   * env bootstrap stacks that depend on the lookup.
-   */
-  createOidcProvider?: boolean;
 }
 
 /**
- * One-time bootstrap stack per environment. Creates:
+ * Per-environment bootstrap. Creates:
  *
  * - The `gha-oci-deploy-{env}` IAM role assumable from `FG-AI4H/oci-platform`
  *   when running under GitHub Environment `{env}`.
- * - ECR repositories `oci-api` and `oci-worker-ingest` (image scanning on push).
- * - Optionally (when `createOidcProvider: true`) the account-wide GitHub
- *   Actions OIDC provider. This must be created ONCE per AWS account.
+ * - ECR repositories `oci-api`, `oci-web`, `oci-worker-ingest` (image
+ *   scanning on push, IMMUTABLE tags, KMS).
  *
- * Deploy order (Phase A1):
- *   1. First time per account, deploy dev bootstrap WITH the OIDC provider:
- *        pnpm cdk deploy oci-dev-bootstrap --context env=dev --context createOidcProvider=true
- *   2. Subsequently, other envs (and dev re-deploys) use the lookup:
- *        pnpm cdk deploy oci-{env}-bootstrap --context env={env}
- * The role then exists for the regular Deploy workflow to assume.
+ * The OIDC provider this role trusts is account-scoped and lives in
+ * `SharedBootstrapStack`. This stack only LOOKS UP the provider by its
+ * well-known ARN — never creates it. (Until a previous iteration, the
+ * provider lived here behind a `createOidcProvider` context flag; if an
+ * operator forgot the flag on any subsequent deploy, the synth produced
+ * a template without the provider and CFN deleted it. Moving the
+ * provider to its own permanent stack eliminates that footgun.)
+ *
+ * Deploy order:
+ *   1. ONCE per AWS account: oci-shared-bootstrap (creates OIDC provider).
+ *   2. ONCE per env:        oci-{env}-bootstrap (this stack, creates role + ECR repos).
+ *   3. Routine deploys:     CI workflow (excludes both bootstrap stacks).
  */
 export class BootstrapOidcStack extends cdk.Stack {
   public readonly deployRole: iam.Role;
@@ -48,26 +43,16 @@ export class BootstrapOidcStack extends cdk.Stack {
     super(scope, id, props);
     Object.entries(props.tags).forEach(([k, v]) => cdk.Tags.of(this).add(k, v));
 
-    // GitHub OIDC provider — account-wide singleton.
-    // First-time deploys create it; later deploys (other envs, or re-deploys
-    // of the same env) look it up by ARN.
+    // OIDC provider lives in oci-shared-bootstrap. Lookup by well-known ARN
+    // (account-scoped, deterministic). If the lookup ARN points at a missing
+    // provider, the gha-oci-deploy-{env} role won't be assumable — operator
+    // must deploy oci-shared-bootstrap first.
     const providerArn = `arn:aws:iam::${this.account}:oidc-provider/token.actions.githubusercontent.com`;
-    let oidcProvider: iam.IOpenIdConnectProvider;
-    if (props.createOidcProvider) {
-      // WARNING: this provider is account-wide. Destroying the stack that
-      // owns it will break sibling env bootstraps that look it up by ARN.
-      // Re-create with `--context createOidcProvider=true` if that happens.
-      oidcProvider = new iam.OpenIdConnectProvider(this, 'GhOidc', {
-        url: 'https://token.actions.githubusercontent.com',
-        clientIds: ['sts.amazonaws.com'],
-      });
-    } else {
-      oidcProvider = iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
-        this,
-        'GhOidc',
-        providerArn,
-      );
-    }
+    const oidcProvider = iam.OpenIdConnectProvider.fromOpenIdConnectProviderArn(
+      this,
+      'GhOidc',
+      providerArn,
+    );
 
     const subjectClaim = `repo:${props.githubRepo}:environment:${props.cfg.envName}`;
 
