@@ -64,7 +64,12 @@ export class ApiStack extends cdk.Stack {
       desiredCount: props.cfg.fargate.minTasks,
       circuitBreaker: { rollback: true },
       runtimePlatform: {
-        cpuArchitecture: ecs.CpuArchitecture.ARM64,
+        // Phase A1: x86_64 to match the amd64 images produced by the
+        // GitHub Actions ubuntu-latest runner. ARM64 (~20% cost savings)
+        // is a Phase A2 follow-up once the workflow uses docker buildx
+        // with --platform linux/arm64 (and the Dockerfiles cross-compile
+        // cleanly for distroless arm64).
+        cpuArchitecture: ecs.CpuArchitecture.X86_64,
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
       },
       taskImageOptions: {
