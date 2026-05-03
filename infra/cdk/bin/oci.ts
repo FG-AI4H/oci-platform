@@ -7,6 +7,7 @@ import { NetworkStack } from '../lib/network-stack.js';
 import { DataStack } from '../lib/data-stack.js';
 import { IdentityStack } from '../lib/identity-stack.js';
 import { ApiStack } from '../lib/api-stack.js';
+import { WebStack } from '../lib/web-stack.js';
 import { ObservabilityStack } from '../lib/observability-stack.js';
 import { resolveEnvironment } from '../lib/environments.js';
 import { BootstrapOidcStack } from '../lib/bootstrap-oidc-stack.js';
@@ -21,6 +22,7 @@ const tags = { Project: 'OCI', Environment: envName, ManagedBy: 'CDK' };
 // Container image URIs supplied by the Deploy workflow after build/push.
 // Locally these are undefined; the stacks fall back to public placeholders.
 const apiImage = app.node.tryGetContext('apiImage') as string | undefined;
+const webImage = app.node.tryGetContext('webImage') as string | undefined;
 
 // Route 53 hosted zone for ai4h.net (ADR-0001). Single account-wide zone
 // shared with other FG-AI4H tenants; OCI Platform records all live under
@@ -60,7 +62,7 @@ const data = new DataStack(app, `oci-${envName}-data`, {
   vpc: network.vpc,
   accessLogsBucket: observability.accessLogsBucket,
 });
-new ApiStack(app, `oci-${envName}-api`, {
+const api = new ApiStack(app, `oci-${envName}-api`, {
   env: cfg.env,
   cfg,
   tags,
@@ -73,8 +75,20 @@ new ApiStack(app, `oci-${envName}-api`, {
   hostedZoneId: HOSTED_ZONE_ID,
   zoneName: HOSTED_ZONE_NAME,
 });
-// CloudFront/web-stack retired in ADR-0001 — ALB now serves clients directly
-// over HTTPS with an ACM cert. Security headers move to NestJS @fastify/helmet.
+// Web stack — Next.js Fargate service sharing the API's cluster + ALB.
+// Path-based routing on the existing HTTPS listener: ApiStack owns the
+// priority-50 rule for /v2/*, /health, /docs/*; WebStack adds a
+// priority-100 catch-all `/*` for everything else.
+new WebStack(app, `oci-${envName}-web`, {
+  env: cfg.env,
+  cfg,
+  tags,
+  vpc: network.vpc,
+  cluster: api.cluster,
+  httpsListener: api.httpsListener,
+  logGroup: observability.apiLogGroup,
+  webImage,
+});
 
 // Run cdk-nag checks (AWS Solutions ruleset) on all stacks
 Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }));

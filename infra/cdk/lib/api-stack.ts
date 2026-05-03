@@ -3,7 +3,6 @@ import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
@@ -41,15 +40,20 @@ export interface ApiStackProps extends cdk.StackProps {
 /**
  * NestJS API on ECS Fargate behind an ALB.
  *
- * Reliability: ≥3 AZs, ALB health checks, target tracking auto-scaling, deployment circuit breaker.
- * Performance: target tracking on CPU + RPS + memory.
- * Security: HTTPS-only, WAFv2 (managed rules: CommonRuleSet, KnownBadInputs, AnonymousIpList) in int/prod,
- *           Container Insights, ENA-private subnets, IAM task role least-priv.
- * Operational excellence: CloudWatch structured logs, X-Ray tracing in int/prod.
+ * Architecture: this stack owns the cluster, ALB, HTTPS+HTTP listeners,
+ * ACM cert, Route 53 records, the API service, the API target group, and
+ * the listener rule that routes API paths to that target group. The
+ * listener's *default* action is a 503 fixed-response so the listener has
+ * no implicit dependency on either the API or the Web target group.
+ * `WebStack` adds its own catch-all listener rule for everything else,
+ * keeping the api ↔ web stacks free of cross-stack dependency cycles.
  */
 export class ApiStack extends cdk.Stack {
   public readonly alb: elbv2.ApplicationLoadBalancer;
   public readonly cluster: ecs.Cluster;
+  public readonly httpsListener: elbv2.ApplicationListener;
+  public readonly apiTargetGroup: elbv2.ApplicationTargetGroup;
+  public readonly apiService: ecs.FargateService;
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
@@ -67,6 +71,7 @@ export class ApiStack extends cdk.Stack {
       validation: acm.CertificateValidation.fromDns(zone),
     });
 
+    // Cluster.
     this.cluster = new ecs.Cluster(this, 'Cluster', {
       vpc: props.vpc,
       containerInsightsV2: props.cfg.enhancedMonitoring
@@ -75,86 +80,127 @@ export class ApiStack extends cdk.Stack {
       enableFargateCapacityProviders: true,
     });
 
-    const fargate = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'ApiService', {
-      cluster: this.cluster,
-      cpu: props.cfg.fargate.cpu,
-      memoryLimitMiB: props.cfg.fargate.memory,
-      desiredCount: props.cfg.fargate.minTasks,
-      circuitBreaker: { rollback: true },
-      runtimePlatform: {
-        // Phase A1: x86_64 to match the amd64 images produced by the
-        // GitHub Actions ubuntu-latest runner. ARM64 (~20% cost savings)
-        // is a Phase A2 follow-up once the workflow uses docker buildx
-        // with --platform linux/arm64 (and the Dockerfiles cross-compile
-        // cleanly for distroless arm64).
-        cpuArchitecture: ecs.CpuArchitecture.X86_64,
-        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
-      },
-      taskImageOptions: {
-        // ECR image via fromEcrRepository (auto-grants pull on the execution role)
-        // or nginx placeholder for local synth without --context apiImage=...
-        image: this.resolveApiImage(props.apiImage),
-        containerName: 'api',
-        containerPort: 3000,
-        environment: {
-          NODE_ENV: 'production',
-          OCI_ENV: props.cfg.envName,
-          AWS_REGION: this.region,
-          COGNITO_USER_POOL_ID: props.cognito.userPoolId,
-          COGNITO_REGION: this.region,
-        },
-        logDriver: ecs.LogDrivers.awsLogs({ streamPrefix: 'api', logGroup: props.logGroup }),
-      },
-      publicLoadBalancer: true,
-      // ALB serves HTTPS on 443 with the DNS-validated ACM cert; HTTP on
-      // 80 redirects to 443 (no plaintext path remains).
-      protocol: elbv2.ApplicationProtocol.HTTPS,
-      certificate: albCert,
-      sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
-      redirectHTTP: true,
-      domainZone: zone,
-      domainName: props.cfg.domainName,
-      minHealthyPercent: 100,
-      maxHealthyPercent: 200,
+    // Public ALB. Access logs go to the shared bucket from observability.
+    this.alb = new elbv2.ApplicationLoadBalancer(this, 'Alb', {
+      vpc: props.vpc,
+      internetFacing: true,
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      ipAddressType: elbv2.IpAddressType.DUAL_STACK,
     });
-    this.alb = fargate.loadBalancer;
     this.alb.logAccessLogs(props.accessLogsBucket, `alb/${props.cfg.envName}`);
 
-    // IPv6 alias for the FQDN — `ApplicationLoadBalancedFargateService`
-    // creates the A record from `domainZone` + `domainName`, but not AAAA.
+    // HTTPS listener — default 503 fixed response (rules supply the real
+    // routing). HTTP listener redirects everything to HTTPS.
+    this.httpsListener = this.alb.addListener('Https', {
+      port: 443,
+      protocol: elbv2.ApplicationProtocol.HTTPS,
+      certificates: [albCert],
+      sslPolicy: elbv2.SslPolicy.RECOMMENDED_TLS,
+      defaultAction: elbv2.ListenerAction.fixedResponse(503, {
+        contentType: 'text/plain',
+        messageBody: 'No matching route',
+      }),
+    });
+    this.alb.addListener('Http', {
+      port: 80,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      defaultAction: elbv2.ListenerAction.redirect({
+        protocol: 'HTTPS',
+        port: '443',
+        permanent: true,
+      }),
+    });
+
+    // Route 53 alias records for the FQDN (A + AAAA via dual-stack ALB).
+    new route53.ARecord(this, 'AlbAliasA', {
+      zone,
+      recordName: props.cfg.domainName,
+      target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(this.alb)),
+    });
     new route53.AaaaRecord(this, 'AlbAliasAAAA', {
       zone,
       recordName: props.cfg.domainName,
       target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(this.alb)),
     });
 
-    fargate.targetGroup.configureHealthCheck({
-      path: '/health',
-      healthyHttpCodes: '200',
-      interval: cdk.Duration.seconds(15),
-      timeout: cdk.Duration.seconds(5),
-      healthyThresholdCount: 2,
-      unhealthyThresholdCount: 3,
+    // API task + service.
+    const taskDef = new ecs.FargateTaskDefinition(this, 'ApiTaskDef', {
+      cpu: props.cfg.fargate.cpu,
+      memoryLimitMiB: props.cfg.fargate.memory,
+      runtimePlatform: {
+        // x86_64 to match the amd64 images produced by ubuntu-latest. ARM64
+        // (with docker buildx --platform linux/arm64) is a Phase A2 cost
+        // optimization follow-up.
+        cpuArchitecture: ecs.CpuArchitecture.X86_64,
+        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+      },
+    });
+    taskDef.addContainer('api', {
+      image: this.resolveApiImage(props.apiImage),
+      containerName: 'api',
+      portMappings: [{ containerPort: 3000 }],
+      environment: {
+        NODE_ENV: 'production',
+        OCI_ENV: props.cfg.envName,
+        AWS_REGION: this.region,
+        COGNITO_USER_POOL_ID: props.cognito.userPoolId,
+        COGNITO_REGION: this.region,
+      },
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'api', logGroup: props.logGroup }),
     });
 
-    // Auto-scaling
-    const scaling = fargate.service.autoScaleTaskCount({
+    this.apiService = new ecs.FargateService(this, 'ApiService', {
+      cluster: this.cluster,
+      taskDefinition: taskDef,
+      desiredCount: props.cfg.fargate.minTasks,
+      circuitBreaker: { rollback: true },
+      minHealthyPercent: 100,
+      maxHealthyPercent: 200,
+    });
+
+    // API target group + listener rule for API paths.
+    this.apiTargetGroup = new elbv2.ApplicationTargetGroup(this, 'ApiTargetGroup', {
+      vpc: props.vpc,
+      port: 3000,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      targetType: elbv2.TargetType.IP,
+      healthCheck: {
+        path: '/health',
+        healthyHttpCodes: '200',
+        interval: cdk.Duration.seconds(15),
+        timeout: cdk.Duration.seconds(5),
+        healthyThresholdCount: 2,
+        unhealthyThresholdCount: 3,
+      },
+      deregistrationDelay: cdk.Duration.seconds(30),
+    });
+    this.apiService.attachToApplicationTargetGroup(this.apiTargetGroup);
+
+    new elbv2.ApplicationListenerRule(this, 'ApiRoutes', {
+      listener: this.httpsListener,
+      priority: 50,
+      conditions: [elbv2.ListenerCondition.pathPatterns(['/v2/*', '/health', '/docs', '/docs/*'])],
+      action: elbv2.ListenerAction.forward([this.apiTargetGroup]),
+    });
+
+    // Auto-scaling.
+    const scaling = this.apiService.autoScaleTaskCount({
       minCapacity: props.cfg.fargate.minTasks,
       maxCapacity: props.cfg.fargate.maxTasks,
     });
     scaling.scaleOnCpuUtilization('CpuScaling', { targetUtilizationPercent: 60 });
     scaling.scaleOnMemoryUtilization('MemoryScaling', { targetUtilizationPercent: 70 });
     scaling.scaleOnRequestCount('RequestScaling', {
-      targetGroup: fargate.targetGroup,
+      targetGroup: this.apiTargetGroup,
       requestsPerTarget: 1000,
     });
 
     // DB connectivity (network only — IAM database auth is wired in Phase A2
     // via a separate stack to avoid creating a cycle between data + api).
     // EC2 SG rule descriptions: a-zA-Z0-9. _-:/()#,@[]+=;{}!$* (no '>' allowed).
-    props.database.connections.allowDefaultPortFrom(fargate.service, 'API to Aurora');
+    props.database.connections.allowDefaultPortFrom(this.apiService, 'API to Aurora');
 
-    // WAF (managed rules) for int/prod
+    // WAF (managed rules) for int/prod.
     if (props.cfg.enableWaf) {
       const acl = new wafv2.CfnWebACL(this, 'WebAcl', {
         scope: 'REGIONAL',
@@ -221,7 +267,7 @@ export class ApiStack extends cdk.Stack {
       });
     }
 
-    // Alarms
+    // Alarms.
     if (props.cfg.enhancedMonitoring) {
       new cloudwatch.Alarm(this, 'High5xxAlarm', {
         metric: this.alb.metrics.httpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT),
@@ -250,7 +296,7 @@ export class ApiStack extends cdk.Stack {
       ]);
     }
     NagSuppressions.addResourceSuppressions(
-      fargate.taskDefinition,
+      taskDef,
       [
         {
           id: 'AwsSolutions-ECS2',
@@ -262,22 +308,19 @@ export class ApiStack extends cdk.Stack {
     );
     NagSuppressions.addResourceSuppressionsByPath(
       this,
-      `/${this.stackName}/ApiService/LB/SecurityGroup/Resource`,
+      `/${this.stackName}/Alb/SecurityGroup/Resource`,
       [
         {
           id: 'AwsSolutions-EC23',
           reason:
-            'Public ALB intentionally accepts inbound 0.0.0.0/0 on 80 (CloudFront origin) — Web ACL provides L7 filtering in int/prod.',
+            'Public ALB intentionally accepts inbound 0.0.0.0/0 on 80/443 (this IS the public entrypoint for the platform). WAFv2 attaches in int/prod.',
         },
       ],
     );
-    // ECS task execution role default policy: GetAuthorizationToken + ECR read scoped to *
-    // is the standard ECS pattern (ecr:GetAuthorizationToken does not support per-repo
-    // resource scoping). Surface only when an ECR image is supplied.
     if (props.apiImage) {
       NagSuppressions.addResourceSuppressionsByPath(
         this,
-        `/${this.stackName}/ApiService/TaskDef/ExecutionRole/DefaultPolicy/Resource`,
+        `/${this.stackName}/ApiTaskDef/ExecutionRole/DefaultPolicy/Resource`,
         [
           {
             id: 'AwsSolutions-IAM5',

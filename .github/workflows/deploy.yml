@@ -87,6 +87,7 @@ jobs:
     environment: ${{ inputs.target || 'dev' }}
     outputs:
       api-image: ${{ steps.meta.outputs.api }}
+      web-image: ${{ steps.meta.outputs.web }}
       ingest-image: ${{ steps.meta.outputs.ingest }}
     steps:
       - uses: actions/checkout@v5
@@ -113,7 +114,8 @@ jobs:
         run: |
           SHA=${GITHUB_SHA::12}
           REG=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
-          echo "api=$REG/oci-api:$SHA"      >> "$GITHUB_OUTPUT"
+          echo "api=$REG/oci-api:$SHA"              >> "$GITHUB_OUTPUT"
+          echo "web=$REG/oci-web:$SHA"              >> "$GITHUB_OUTPUT"
           echo "ingest=$REG/oci-worker-ingest:$SHA" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
@@ -121,6 +123,11 @@ jobs:
         run: |
           docker build -f apps/api/Dockerfile -t "${{ steps.meta.outputs.api }}" .
           docker push "${{ steps.meta.outputs.api }}"
+
+      - name: Build & push Web image
+        run: |
+          docker build -f apps/web/Dockerfile -t "${{ steps.meta.outputs.web }}" .
+          docker push "${{ steps.meta.outputs.web }}"
 
       - name: Build & push worker-ingest image
         run: |
@@ -131,6 +138,14 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ steps.meta.outputs.api }}
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Trivy image scan (Web)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.meta.outputs.web }}
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           ignore-unfixed: true
@@ -167,8 +182,11 @@ jobs:
         # below for rationale. Diff target == deploy target.
         run: |
           ENV='${{ inputs.target || 'dev' }}'
-          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api"
-          pnpm cdk diff $STACKS --context env=$ENV --context apiImage=${{ needs.build-images.outputs.api-image }} || true
+          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-web"
+          pnpm cdk diff $STACKS \
+            --context env=$ENV \
+            --context apiImage=${{ needs.build-images.outputs.api-image }} \
+            --context webImage=${{ needs.build-images.outputs.web-image }} || true
 
       - name: cdk deploy
         working-directory: infra/cdk
@@ -186,10 +204,11 @@ jobs:
           APPROVAL=never
           if [[ "$ENV" == "prod" ]]; then APPROVAL=broadening; fi
           if [[ "$ENV" == "int" ]]; then APPROVAL=any-change; fi
-          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api"
+          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-web"
           pnpm cdk deploy $STACKS --require-approval $APPROVAL \
             --context env=$ENV \
             --context apiImage=${{ needs.build-images.outputs.api-image }} \
+            --context webImage=${{ needs.build-images.outputs.web-image }} \
             --context ingestImage=${{ needs.build-images.outputs.ingest-image }}
 
       - name: DB migrate
