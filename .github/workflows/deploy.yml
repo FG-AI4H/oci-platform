@@ -136,16 +136,32 @@ jobs:
 
       - name: cdk diff
         working-directory: infra/cdk
-        run: pnpm cdk diff --context env=${{ inputs.target }} --context apiImage=${{ needs.build-images.outputs.api-image }} || true
+        # Bootstrap stack is intentionally NOT in this list — see deploy step
+        # below for rationale. Diff target == deploy target.
+        run: |
+          ENV='${{ inputs.target }}'
+          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-web"
+          pnpm cdk diff $STACKS --context env=$ENV --context apiImage=${{ needs.build-images.outputs.api-image }} || true
 
       - name: cdk deploy
         working-directory: infra/cdk
+        # CI deploys ONLY the per-environment runtime stacks. The bootstrap
+        # stack (OIDC provider, deploy role, ECR repos) is deployed manually
+        # one time per AWS account and excluded here — including it in
+        # `--all` would re-template the OIDC provider every CI run and
+        # toggle it on / off depending on whether `createOidcProvider=true`
+        # was passed (which would otherwise need to be lied about every
+        # run). The bootstrap stack changes rarely; redeploy via:
+        #   AWS_PROFILE=ai4h pnpm --filter @oci/cdk exec cdk deploy \
+        #     oci-{env}-bootstrap --context env={env}
         run: |
+          ENV='${{ inputs.target }}'
           APPROVAL=never
-          if [[ "${{ inputs.target }}" == "prod" ]]; then APPROVAL=broadening; fi
-          if [[ "${{ inputs.target }}" == "int" ]]; then APPROVAL=any-change; fi
-          pnpm cdk deploy --all --require-approval $APPROVAL \
-            --context env=${{ inputs.target }} \
+          if [[ "$ENV" == "prod" ]]; then APPROVAL=broadening; fi
+          if [[ "$ENV" == "int" ]]; then APPROVAL=any-change; fi
+          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-web"
+          pnpm cdk deploy $STACKS --require-approval $APPROVAL \
+            --context env=$ENV \
             --context apiImage=${{ needs.build-images.outputs.api-image }} \
             --context ingestImage=${{ needs.build-images.outputs.ingest-image }}
 
