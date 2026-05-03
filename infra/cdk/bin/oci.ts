@@ -23,11 +23,16 @@ const tags = { Project: 'OCI', Environment: envName, ManagedBy: 'CDK' };
 // after this exists, the GitHub Actions workflow can assume the role and
 // push images. Skip from default app loop — explicit deploy via:
 //   pnpm --filter @oci/cdk cdk deploy oci-{env}-bootstrap --context env={env}
+//
+// The GitHub OIDC provider is account-wide; pass `--context createOidcProvider=true`
+// on the FIRST bootstrap deploy ever for this AWS account (typically the dev one).
+const createOidcProvider = app.node.tryGetContext('createOidcProvider') === 'true';
 new BootstrapOidcStack(app, `oci-${envName}-bootstrap`, {
   env: cfg.env,
   cfg,
   tags,
   githubRepo: 'FG-AI4H/oci-platform',
+  createOidcProvider,
 });
 
 // Layered stacks (each layer depends on the previous one)
