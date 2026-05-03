@@ -1,0 +1,29 @@
+# Trivy CVE allowlist for the OCI Platform image scans.
+#
+# Each entry MUST include:
+#  - CVE ID
+#  - the affected package and current vs. fixed version
+#  - the rationale (why exploitability is low for our workload)
+#  - a tracking note for when to revisit
+#
+# Entries are revisited every 30 days; if a fix has reached our base
+# image we MUST remove the suppression. Open a Phase A2 follow-up
+# issue to refresh the base image when distroless ships the patch.
+
+# -----------------------------------------------------------------------------
+# libssl3 (Debian 12 / distroless gcr.io/distroless/nodejs24-debian12)
+# Installed: 3.0.18-1~deb12u2
+# Fixed:     3.0.19-1~deb12u2 (not yet in the distroless image as of 2026-05-03)
+# Rationale: the NestJS API container only handles inbound HTTP from
+# CloudFront/ALB (TLS terminated upstream) and outbound TLS to AWS
+# service endpoints. It does not validate arbitrary X.509 client
+# certificates, does not implement DANE TLSA, and does not parse
+# CMS payloads. The OpenSSL surface area exposed by these CVEs is
+# not reachable.
+# Mitigation: rebuild and re-deploy as soon as distroless publishes
+# the libssl3 update.
+CVE-2026-31789
+CVE-2026-28387
+CVE-2026-28388
+CVE-2026-28389
+CVE-2026-28390
