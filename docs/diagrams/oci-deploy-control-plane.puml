@@ -1,0 +1,60 @@
+@startuml oci-deploy-control-plane
+'
+' OCI Platform — CI/CD control plane (GitHub Actions → AWS via OIDC)
+' Render: https://plantuml.com/plantuml or `plantuml docs/diagrams/oci-deploy-control-plane.puml`
+' Sources of truth: .github/workflows/{ci,deploy}.yml + infra/cdk/lib/bootstrap-oidc-stack.ts
+'
+skinparam linetype ortho
+skinparam roundCorner 10
+skinparam shadowing false
+skinparam rectangle {
+  BackgroundColor<<aws>>     #FFF6E5
+  BorderColor<<aws>>         #B26B00
+  BackgroundColor<<gh>>      #F2F2F2
+  BorderColor<<gh>>          #444444
+  BackgroundColor<<future>>  #EEEEEE
+  BorderColor<<future>>      #999999
+  FontColor<<future>>        #666666
+  BackgroundColor<<role>>    #FFF5F5
+  BorderColor<<role>>        #C53030
+}
+
+title OCI Platform — deploy control plane
+
+actor "Developer" as dev
+
+rectangle "GitHub  FG-AI4H/oci-platform" <<gh>> {
+  rectangle "main branch" as main
+  rectangle "Workflow: CI\nlint / typecheck / test\ntrivy / gitleaks / sbom" as ci
+  rectangle "Workflow: Deploy\nworkflow_dispatch\ntarget = dev | int | prod" as deploy
+  rectangle "GH Environment 'dev'\nno protection" as envd
+  rectangle "GH Environment 'int'\nreviewers, branch=main\n(not yet created)" as envi <<future>>
+  rectangle "GH Environment 'prod'\nreviewers + wait timer\n(not yet created)" as envp <<future>>
+}
+
+rectangle "AWS account 601883093460 / eu-central-1" <<aws>> {
+  rectangle "OIDC provider\ntoken.actions.\ngithubusercontent.com" as oidc <<role>>
+  rectangle "IAM role\ngha-oci-deploy-dev\nPowerUserAccess + iam:*\n(Phase A1)\nsub: repo:FG-AI4H/oci-platform\n     :environment:dev" as roled <<role>>
+  rectangle "IAM role\ngha-oci-deploy-int\n(not yet provisioned)" as rolei <<future>>
+  rectangle "IAM role\ngha-oci-deploy-prod\n(not yet provisioned)" as rolep <<future>>
+  rectangle "ECR\noci-api\noci-worker-ingest\nIMMUTABLE, KMS,\nscan on push" as ecr
+  rectangle "CloudFormation stacks\noci-dev-bootstrap (deployed)\noci-dev-{network, identity,\n  data, observability,\n  api, web}\n(deploying now)" as cfn
+}
+
+dev --> main : PR + merge
+main --> ci : push trigger
+ci --> deploy : preflight gate\nrequires CI green
+dev --> deploy : workflow_dispatch\n-f target=dev
+deploy --> envd : binds environment
+envd --> oidc : exchange JWT,\nsub claim must match
+oidc --> roled : sts:AssumeRoleWithWebIdentity
+roled --> ecr : docker push\noci-{api, worker-ingest}:<sha>
+roled --> cfn : cdk deploy --all\n--context env=dev\n--context apiImage=...
+deploy ..> envi : (manual; future)
+deploy ..> envp : (manual; future)
+
+note as N1
+  Bootstrap stack oci-dev-bootstrap deployed 2026-05-03
+  (Phase A2 kickoff). int / prod bootstraps still pending.
+end note
+@enduml
