@@ -120,7 +120,7 @@ export class ApiStack extends cdk.Stack {
 
     // DB connectivity (network only — IAM database auth is wired in Phase A2
     // via a separate stack to avoid creating a cycle between data + api).
-    props.database.connections.allowDefaultPortFrom(fargate.service, 'API → Aurora');
+    props.database.connections.allowDefaultPortFrom(fargate.service, 'API -> Aurora');
 
     // WAF (managed rules) for int/prod
     if (props.cfg.enableWaf) {
