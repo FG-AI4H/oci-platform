@@ -16,3 +16,6 @@ coverage/
 *.docx
 *.pdf
 *.pptx
+
+# Tool config files (no parser)
+.trivyignore
