@@ -6,6 +6,7 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
+import { grantGuardDutyAgentEcrPull } from './api-stack.js';
 import type { OciEnvConfig } from './environments.js';
 
 export interface WebStackProps extends cdk.StackProps {
@@ -105,6 +106,9 @@ export class WebStack extends cdk.Stack {
       deregistrationDelay: cdk.Duration.seconds(30),
     });
     this.service.attachToApplicationTargetGroup(this.targetGroup);
+
+    // GuardDuty Runtime Monitoring agent ECR pull permission (cross-account).
+    grantGuardDutyAgentEcrPull(taskDef);
 
     // Catch-all listener rule for everything API paths don't claim. ApiStack
     // owns the priority-50 rule for /v2/*, /health, /docs/*; this priority-100

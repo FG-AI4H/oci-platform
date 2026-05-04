@@ -5,6 +5,7 @@ import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -173,6 +174,13 @@ export class ApiStack extends cdk.Stack {
       });
     }
 
+    // GuardDuty Runtime Monitoring auto-injects an agent sidecar on Fargate
+    // tasks. The agent image lives in a GuardDuty-owned ECR account
+    // (323658145986); the task execution role needs cross-account pull
+    // permission. Without this, the sidecar fails to start (403 Forbidden)
+    // — a non-essential failure but visible noise in the events.
+    grantGuardDutyAgentEcrPull(fargate.taskDefinition);
+
     // WAF (managed rules) for int/prod
     if (props.cfg.enableWaf) {
       const acl = new wafv2.CfnWebACL(this, 'WebAcl', {
@@ -306,6 +314,8 @@ export class ApiStack extends cdk.Stack {
     }
   }
 
+  // (helper exported below the class — `grantGuardDutyAgentEcrPull`)
+
   /**
    * Build the ECS container image. With `apiImage` ("<acct>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>"),
    * resolves the ECR repo by name so CDK auto-grants pull permissions on the execution role.
@@ -326,5 +336,54 @@ export class ApiStack extends cdk.Stack {
     const repoName = apiImage.slice(slash + 1, colon);
     const repo = ecr.Repository.fromRepositoryName(this, 'ApiRepoRef', repoName);
     return ecs.ContainerImage.fromEcrRepository(repo, tag);
+  }
+}
+
+/**
+ * Grant a Fargate task execution role permission to pull the AWS GuardDuty
+ * Runtime Monitoring agent image from its cross-account ECR repository
+ * (323658145986). Required when GuardDuty Runtime Monitoring is enabled
+ * at the account level — ECS injects the agent as a sidecar and the task
+ * execution role needs to pull its image.
+ *
+ * Exported so both api-stack and web-stack can call it.
+ */
+export function grantGuardDutyAgentEcrPull(taskDef: ecs.TaskDefinition): void {
+  taskDef.addToExecutionRolePolicy(
+    new iam.PolicyStatement({
+      sid: 'GuardDutyAgentEcrPull',
+      actions: [
+        'ecr:BatchCheckLayerAvailability',
+        'ecr:GetDownloadUrlForLayer',
+        'ecr:BatchGetImage',
+      ],
+      resources: ['arn:aws:ecr:*:323658145986:repository/aws-guardduty-agent-fargate'],
+    }),
+  );
+  // ecr:GetAuthorizationToken does not support resource-level scoping; account-wide auth.
+  taskDef.addToExecutionRolePolicy(
+    new iam.PolicyStatement({
+      sid: 'GuardDutyAgentEcrAuth',
+      actions: ['ecr:GetAuthorizationToken'],
+      resources: ['*'],
+    }),
+  );
+  if (taskDef.executionRole) {
+    NagSuppressions.addResourceSuppressions(
+      taskDef.executionRole,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'AWS GuardDuty Runtime Monitoring requires the task execution role to pull the agent image from arn:aws:ecr:*:323658145986:repository/aws-guardduty-agent-fargate. ecr:GetAuthorizationToken does not support per-resource scoping.',
+          appliesTo: [
+            'Resource::*',
+            'Resource::arn:aws:ecr:*:323658145986:repository/aws-guardduty-agent-fargate',
+            'Action::ecr:GetAuthorizationToken',
+          ],
+        },
+      ],
+      true,
+    );
   }
 }
