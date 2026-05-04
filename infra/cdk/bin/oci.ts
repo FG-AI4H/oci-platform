@@ -93,6 +93,9 @@ new WebStack(app, `oci-${envName}-web`, {
   cluster: api.cluster,
   httpsListener: api.httpsListener,
   logGroup: observability.apiLogGroup,
+  cognitoUserPool: identity.userPool,
+  cognitoClient: identity.userPoolClient,
+  cognitoClientSecretSm: identity.userPoolClientSecretSm,
   webImage,
 });
 
