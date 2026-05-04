@@ -126,6 +126,34 @@ export class IdentityStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: this.userPoolClient.userPoolClientId });
     new cdk.CfnOutput(this, 'CognitoDomainUrl', { value: this.userPoolDomain.baseUrl() });
 
+    // BRIDGE OUTPUTS — keep the auto-generated cross-stack exports alive for
+    // ONE deploy cycle. After the SSM/Secrets-by-name refactor, api/web no
+    // longer Fn::ImportValue these — but the LIVE identity stack still
+    // publishes them and the LIVE api stack still imports them. Removing
+    // them from identity in the same deploy that removes the imports from
+    // api/web hits "Cannot update export … as it is in use by oci-{env}-api"
+    // because identity deploys first in the dep order. Solution: keep the
+    // exports as orphan outputs for one deploy, then drop them in a
+    // follow-up PR once api/web are live without the imports.
+    //
+    // Names + logical IDs match exactly what CDK previously auto-generated
+    // when api/web took `cognito` / `cognitoClient` / `cognitoClientSecretSm`
+    // props (verified via `cdk synth` of the prior commit). Hard-coded on
+    // purpose: a different name would not match the live export and
+    // wouldn't unblock the deploy.
+    new cdk.CfnOutput(this, 'ExportsOutputRefUserPool6BA7E5F296FD7236', {
+      value: this.userPool.userPoolId,
+      exportName: `${this.stackName}:ExportsOutputRefUserPool6BA7E5F296FD7236`,
+    });
+    new cdk.CfnOutput(this, 'ExportsOutputRefUserPoolWebClient4C9370B02E2C9FF9', {
+      value: this.userPoolClient.userPoolClientId,
+      exportName: `${this.stackName}:ExportsOutputRefUserPoolWebClient4C9370B02E2C9FF9`,
+    });
+    new cdk.CfnOutput(this, 'ExportsOutputRefWebClientCognitoSecret2D02617F948FBBE9', {
+      value: this.userPoolClientSecretSm.secretArn,
+      exportName: `${this.stackName}:ExportsOutputRefWebClientCognitoSecret2D02617F948FBBE9`,
+    });
+
     if (props.cfg.envName !== 'prod') {
       NagSuppressions.addResourceSuppressions(this.userPool, [
         {
