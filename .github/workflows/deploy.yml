@@ -93,6 +93,7 @@ jobs:
       api-image: ${{ steps.resolve.outputs.api }}
       web-image: ${{ steps.resolve.outputs.web }}
       ingest-image: ${{ steps.resolve.outputs.ingest }}
+      migrate-image: ${{ steps.resolve.outputs.migrate }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -159,6 +160,9 @@ jobs:
               - 'package.json'
               - 'pnpm-workspace.yaml'
               - '.nvmrc'
+            migrate:
+              - 'apps/migrate/**'
+              - 'packages/database/prisma/**'
 
       - name: Decide build vs reuse per image
         id: decide
@@ -166,20 +170,22 @@ jobs:
           # workflow_dispatch (manual deploy): rebuild everything,
           # operator's intent. push: rebuild only changed images.
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "api=true"    >> "$GITHUB_OUTPUT"
-            echo "web=true"    >> "$GITHUB_OUTPUT"
-            echo "ingest=true" >> "$GITHUB_OUTPUT"
+            echo "api=true"     >> "$GITHUB_OUTPUT"
+            echo "web=true"     >> "$GITHUB_OUTPUT"
+            echo "ingest=true"  >> "$GITHUB_OUTPUT"
+            echo "migrate=true" >> "$GITHUB_OUTPUT"
           else
-            echo "api=${{ steps.changes.outputs.api }}"       >> "$GITHUB_OUTPUT"
-            echo "web=${{ steps.changes.outputs.web }}"       >> "$GITHUB_OUTPUT"
-            echo "ingest=${{ steps.changes.outputs.ingest }}" >> "$GITHUB_OUTPUT"
+            echo "api=${{ steps.changes.outputs.api }}"         >> "$GITHUB_OUTPUT"
+            echo "web=${{ steps.changes.outputs.web }}"         >> "$GITHUB_OUTPUT"
+            echo "ingest=${{ steps.changes.outputs.ingest }}"   >> "$GITHUB_OUTPUT"
+            echo "migrate=${{ steps.changes.outputs.migrate }}" >> "$GITHUB_OUTPUT"
           fi
 
       # buildx for parity with the previous QEMU-based pipeline (cache
       # support, --push behaviour). On a native ARM64 runner the
       # --platform linux/arm64 build is a no-op architecturally.
       - name: Setup Docker Buildx
-        if: steps.decide.outputs.api == 'true' || steps.decide.outputs.web == 'true' || steps.decide.outputs.ingest == 'true'
+        if: steps.decide.outputs.api == 'true' || steps.decide.outputs.web == 'true' || steps.decide.outputs.ingest == 'true' || steps.decide.outputs.migrate == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Compute image tags for build
@@ -190,6 +196,7 @@ jobs:
           echo "api=$REG/oci-api:$SHA"              >> "$GITHUB_OUTPUT"
           echo "web=$REG/oci-web:$SHA"              >> "$GITHUB_OUTPUT"
           echo "ingest=$REG/oci-worker-ingest:$SHA" >> "$GITHUB_OUTPUT"
+          echo "migrate=$REG/oci-migrate:$SHA"      >> "$GITHUB_OUTPUT"
           echo "registry=$REG"                       >> "$GITHUB_OUTPUT"
 
       - name: Build & push API image (arm64)
@@ -222,6 +229,16 @@ jobs:
             --push \
             .
 
+      - name: Build & push migrate image (arm64)
+        if: steps.decide.outputs.migrate == 'true'
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            -f apps/migrate/Dockerfile \
+            -t "${{ steps.meta.outputs.migrate }}" \
+            --push \
+            .
+
       # Trivy needs an explicit platform now that we publish ARM64-only
       # images (PR #29). Without TRIVY_PLATFORM, Trivy looks for a
       # linux/amd64 child in the manifest and fails.
@@ -245,6 +262,17 @@ jobs:
           TRIVY_PLATFORM: linux/arm64
         with:
           image-ref: ${{ steps.meta.outputs.web }}
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Trivy image scan (Migrate)
+        if: steps.decide.outputs.migrate == 'true'
+        uses: aquasecurity/trivy-action@master
+        env:
+          TRIVY_PLATFORM: linux/arm64
+        with:
+          image-ref: ${{ steps.meta.outputs.migrate }}
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           ignore-unfixed: true
@@ -285,9 +313,28 @@ jobs:
             fi
             echo "$name=$uri" >> "$GITHUB_OUTPUT"
           }
-          resolve api    "${{ steps.decide.outputs.api }}"    "${{ steps.meta.outputs.api }}"    "oci-api"
-          resolve web    "${{ steps.decide.outputs.web }}"    "${{ steps.meta.outputs.web }}"    "oci-web"
-          resolve ingest "${{ steps.decide.outputs.ingest }}" "${{ steps.meta.outputs.ingest }}" "oci-worker-ingest"
+          resolve api     "${{ steps.decide.outputs.api }}"     "${{ steps.meta.outputs.api }}"     "oci-api"
+          resolve web     "${{ steps.decide.outputs.web }}"     "${{ steps.meta.outputs.web }}"     "oci-web"
+          resolve ingest  "${{ steps.decide.outputs.ingest }}"  "${{ steps.meta.outputs.ingest }}"  "oci-worker-ingest"
+          # Migrate image is allowed to be missing on first deploy: the
+          # MigrateTaskDef in api-stack is conditional on a migrateImage
+          # context arg, and we'll just not pass one through if no image
+          # exists yet.
+          if [[ "${{ steps.decide.outputs.migrate }}" == "true" ]]; then
+            echo "migrate=${{ steps.meta.outputs.migrate }}" >> "$GITHUB_OUTPUT"
+          else
+            latest=$(aws ecr describe-images \
+              --repository-name oci-migrate \
+              --query 'sort_by(imageDetails, &imagePushedAt) | [-1].imageTags[0]' \
+              --output text 2>/dev/null || echo "")
+            if [[ -z "$latest" || "$latest" == "None" ]]; then
+              echo "::notice::No oci-migrate image yet; MigrateTaskDef will be omitted from the stack this run." >&2
+              echo "migrate=" >> "$GITHUB_OUTPUT"
+            else
+              echo "migrate=$REG/oci-migrate:$latest" >> "$GITHUB_OUTPUT"
+              echo "::notice::Reusing oci-migrate:$latest (no apps/migrate or prisma changes since last deploy)." >&2
+            fi
+          fi
 
   cdk-deploy:
     needs: build-images
@@ -322,10 +369,15 @@ jobs:
         run: |
           ENV='${{ inputs.target || 'dev' }}'
           STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-web"
+          MIGRATE_CTX=""
+          if [[ -n "${{ needs.build-images.outputs.migrate-image }}" ]]; then
+            MIGRATE_CTX="--context migrateImage=${{ needs.build-images.outputs.migrate-image }}"
+          fi
           pnpm cdk diff $STACKS \
             --context env=$ENV \
             --context apiImage=${{ needs.build-images.outputs.api-image }} \
-            --context webImage=${{ needs.build-images.outputs.web-image }} || true
+            --context webImage=${{ needs.build-images.outputs.web-image }} \
+            $MIGRATE_CTX || true
 
       - name: cdk deploy
         working-directory: infra/cdk
@@ -344,14 +396,79 @@ jobs:
           if [[ "$ENV" == "prod" ]]; then APPROVAL=broadening; fi
           if [[ "$ENV" == "int" ]]; then APPROVAL=any-change; fi
           STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-web"
+          MIGRATE_CTX=""
+          if [[ -n "${{ needs.build-images.outputs.migrate-image }}" ]]; then
+            MIGRATE_CTX="--context migrateImage=${{ needs.build-images.outputs.migrate-image }}"
+          fi
           pnpm cdk deploy $STACKS --require-approval $APPROVAL \
             --context env=$ENV \
             --context apiImage=${{ needs.build-images.outputs.api-image }} \
             --context webImage=${{ needs.build-images.outputs.web-image }} \
-            --context ingestImage=${{ needs.build-images.outputs.ingest-image }}
+            --context ingestImage=${{ needs.build-images.outputs.ingest-image }} \
+            $MIGRATE_CTX
 
       - name: DB migrate
+        # Skip when no migrate image is available (first deploy of a fresh
+        # env, before apps/migrate has ever been built). After the first
+        # build the MigrateTaskDef is in the stack and we always run.
+        if: ${{ needs.build-images.outputs.migrate-image != '' }}
         run: |
-          # Phase A2 follow-up: run prisma migrate deploy via a one-shot ECS
-          # task launched here (the runner can't reach the VPC-private DB).
-          echo "TODO Phase A2: pnpm --filter @oci/database db:migrate:deploy via VPC"
+          set -euo pipefail
+          ENV='${{ inputs.target || 'dev' }}'
+
+          # Pull the aggregated launch spec written by api-stack
+          # (cluster ARN, task definition ARN, private-subnet ids,
+          # API security-group id). Single SSM lookup keeps this step
+          # decoupled from CDK output names.
+          SPEC=$(aws ssm get-parameter \
+            --name "/oci/$ENV/migrate/launch-spec" \
+            --query 'Parameter.Value' --output text)
+
+          CLUSTER=$(echo "$SPEC" | jq -r .cluster)
+          TASKDEF=$(echo "$SPEC" | jq -r .taskDefinition)
+          SUBNETS=$(echo "$SPEC" | jq -r '.subnets | join(",")')
+          SGS=$(echo "$SPEC"     | jq -r '.securityGroups | join(",")')
+
+          echo "Launching migrate task on $CLUSTER ($TASKDEF)"
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --task-definition "$TASKDEF" \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SGS],assignPublicIp=DISABLED}" \
+            --started-by "gha-deploy-${{ github.run_id }}" \
+            --query 'tasks[0].taskArn' --output text)
+
+          if [[ -z "$TASK_ARN" || "$TASK_ARN" == "None" ]]; then
+            echo "::error::run-task did not return a task ARN" >&2
+            exit 1
+          fi
+          echo "Task: $TASK_ARN"
+
+          # Wait for completion. The Aurora-pause-resume on the dev cluster
+          # (auto-pause after 5 min idle) means a cold start can take ~30s
+          # before Prisma can connect. The 'tasks-stopped' waiter polls
+          # every 6s for up to 100 attempts — 10 min total, enough for
+          # cold start + the few seconds of actual migration work.
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"
+
+          # Inspect exit code + stop reason. Anything non-zero from
+          # prisma migrate deploy fails the deploy here so the operator
+          # sees the migration error before assuming the deploy is good.
+          STATUS=$(aws ecs describe-tasks \
+            --cluster "$CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[?name==`migrate`] | [0]' --output json)
+          EXIT=$(echo "$STATUS" | jq -r '.exitCode // "null"')
+          REASON=$(echo "$STATUS" | jq -r '.reason // ""')
+          STOPPED_REASON=$(aws ecs describe-tasks \
+            --cluster "$CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].stoppedReason' --output text)
+
+          echo "Container exit code: $EXIT"
+          echo "Container reason: $REASON"
+          echo "Task stopped reason: $STOPPED_REASON"
+
+          if [[ "$EXIT" != "0" ]]; then
+            echo "::error::Migrate task did not exit zero (exit=$EXIT, reason='$REASON', stopped='$STOPPED_REASON'). Check CloudWatch log group /oci/$ENV/api stream prefix migrate." >&2
+            exit 1
+          fi
+          echo "Migrations applied (or no-op if up to date)."
