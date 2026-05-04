@@ -22,7 +22,7 @@ async function bootstrap() {
     const config = new DocumentBuilder()
       .setTitle('OCI Platform API')
       .setDescription(
-        'Open Code Initiative — unified API for GI-AI4H (Global Initiative on AI for Health)',
+        'Open Code Infrastructure — unified API for GI-AI4H (Global Initiative on AI for Health)',
       )
       .setVersion('0.0.1')
       .addBearerAuth()

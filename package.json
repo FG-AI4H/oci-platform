@@ -2,7 +2,7 @@
   "name": "oci-platform",
   "version": "0.0.0",
   "private": true,
-  "description": "ITU-WHO-WIPO Open Code Initiative — unified TypeScript platform for the GI-AI4H (Global Initiative on AI for Health) evaluation, annotation, and reporting packages",
+  "description": "ITU-WHO-WIPO Open Code Infrastructure — unified TypeScript platform for the GI-AI4H (Global Initiative on AI for Health) evaluation, annotation, and reporting packages",
   "license": "BSD-3-Clause",
   "engines": {
     "node": ">=24.0.0",
