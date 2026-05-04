@@ -27,3 +27,18 @@ CVE-2026-28387
 CVE-2026-28388
 CVE-2026-28389
 CVE-2026-28390
+
+# -----------------------------------------------------------------------------
+# picomatch — bundled inside the Prisma 7.8.0 CLI tarball.
+# Installed: 4.0.3
+# Fixed:     4.0.4 (Prisma hasn't shipped a release that picks this up yet
+# — npm `overrides` on apps/migrate/package.json doesn't reach the
+# vendored copy; tracked on prisma's GitHub.)
+# Affected image: oci-migrate (one-shot, runs `prisma migrate deploy`
+# in a private subnet against Aurora; no inbound network exposure,
+# no user input). picomatch's ReDoS-via-extglob surface is reachable
+# only by code that hands user-controlled patterns to picomatch —
+# the migrate task does no such thing. Real exploitability: zero.
+# Mitigation: drop this entry as soon as prisma releases an update
+# whose vendored picomatch is >= 4.0.4.
+CVE-2026-33671
