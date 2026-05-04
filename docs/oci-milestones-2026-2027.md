@@ -1,6 +1,6 @@
 # OCI Milestones 2026 – 2027
 
-**Initiative:** Open Code Initiative (OCI) — ITU-WHO-WIPO Global Initiative on AI for Health (GI-AI4H)
+**Initiative:** Open Code Infrastructure (OCI) — ITU-WHO-WIPO Global Initiative on AI for Health (GI-AI4H)
 **Author:** Marc Lecoultre (Co-Chair, WG-Data)
 **Date:** 2026-04-21
 **Audience:** Bilel / Program leadership
