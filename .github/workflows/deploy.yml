@@ -90,11 +90,15 @@ jobs:
     runs-on: ubuntu-24.04-arm
     environment: ${{ inputs.target || 'dev' }}
     outputs:
-      api-image: ${{ steps.meta.outputs.api }}
-      web-image: ${{ steps.meta.outputs.web }}
-      ingest-image: ${{ steps.meta.outputs.ingest }}
+      api-image: ${{ steps.resolve.outputs.api }}
+      web-image: ${{ steps.resolve.outputs.web }}
+      ingest-image: ${{ steps.resolve.outputs.ingest }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          # paths-filter needs the previous commit on main to compute
+          # the diff base for `push` events; checkout depth=2 is enough.
+          fetch-depth: 2
 
       - name: Enable Corepack
         run: corepack enable
@@ -119,13 +123,66 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # Per-image source-path filter. If none of an image's source paths
+      # changed since the diff base (previous commit on main for `push`,
+      # always rebuild for manual `workflow_dispatch`), the build +
+      # Trivy steps for that image are skipped and the previous live
+      # ECR tag is reused at cdk-deploy. Saves ~6-8 min for infra-only
+      # PRs. Filters MUST include shared deps (pnpm-lock.yaml,
+      # package.json) and the per-app Dockerfile so any change that
+      # could affect the image triggers a rebuild.
+      - name: Detect per-image source changes
+        id: changes
+        if: github.event_name == 'push'
+        uses: dorny/paths-filter@v3
+        with:
+          base: ${{ github.event.before }}
+          filters: |
+            api:
+              - 'apps/api/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+              - 'pnpm-workspace.yaml'
+              - '.nvmrc'
+            web:
+              - 'apps/web/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+              - 'pnpm-workspace.yaml'
+              - '.nvmrc'
+            ingest:
+              - 'apps/worker-ingest/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+              - 'pnpm-workspace.yaml'
+              - '.nvmrc'
+
+      - name: Decide build vs reuse per image
+        id: decide
+        run: |
+          # workflow_dispatch (manual deploy): rebuild everything,
+          # operator's intent. push: rebuild only changed images.
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "api=true"    >> "$GITHUB_OUTPUT"
+            echo "web=true"    >> "$GITHUB_OUTPUT"
+            echo "ingest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "api=${{ steps.changes.outputs.api }}"       >> "$GITHUB_OUTPUT"
+            echo "web=${{ steps.changes.outputs.web }}"       >> "$GITHUB_OUTPUT"
+            echo "ingest=${{ steps.changes.outputs.ingest }}" >> "$GITHUB_OUTPUT"
+          fi
+
       # buildx for parity with the previous QEMU-based pipeline (cache
       # support, --push behaviour). On a native ARM64 runner the
       # --platform linux/arm64 build is a no-op architecturally.
       - name: Setup Docker Buildx
+        if: steps.decide.outputs.api == 'true' || steps.decide.outputs.web == 'true' || steps.decide.outputs.ingest == 'true'
         uses: docker/setup-buildx-action@v3
 
-      - name: Compute image tags
+      - name: Compute image tags for build
         id: meta
         run: |
           SHA=${GITHUB_SHA::12}
@@ -133,9 +190,10 @@ jobs:
           echo "api=$REG/oci-api:$SHA"              >> "$GITHUB_OUTPUT"
           echo "web=$REG/oci-web:$SHA"              >> "$GITHUB_OUTPUT"
           echo "ingest=$REG/oci-worker-ingest:$SHA" >> "$GITHUB_OUTPUT"
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "registry=$REG"                       >> "$GITHUB_OUTPUT"
 
       - name: Build & push API image (arm64)
+        if: steps.decide.outputs.api == 'true'
         run: |
           docker buildx build \
             --platform linux/arm64 \
@@ -145,6 +203,7 @@ jobs:
             .
 
       - name: Build & push Web image (arm64)
+        if: steps.decide.outputs.web == 'true'
         run: |
           docker buildx build \
             --platform linux/arm64 \
@@ -154,6 +213,7 @@ jobs:
             .
 
       - name: Build & push worker-ingest image (arm64)
+        if: steps.decide.outputs.ingest == 'true'
         run: |
           docker buildx build \
             --platform linux/arm64 \
@@ -165,7 +225,10 @@ jobs:
       # Trivy needs an explicit platform now that we publish ARM64-only
       # images (PR #29). Without TRIVY_PLATFORM, Trivy looks for a
       # linux/amd64 child in the manifest and fails.
+      # Trivy is skipped when the image was reused — it was already
+      # scanned at the prior deploy of the same content.
       - name: Trivy image scan (API)
+        if: steps.decide.outputs.api == 'true'
         uses: aquasecurity/trivy-action@master
         env:
           TRIVY_PLATFORM: linux/arm64
@@ -176,6 +239,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Trivy image scan (Web)
+        if: steps.decide.outputs.web == 'true'
         uses: aquasecurity/trivy-action@master
         env:
           TRIVY_PLATFORM: linux/arm64
@@ -184,6 +248,45 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           ignore-unfixed: true
+
+      # Resolve the URI cdk-deploy will pass to the relevant stack:
+      #   - rebuilt → use the freshly-pushed SHA-tagged URI from `meta`
+      #   - reused  → query ECR for the most recently pushed tag
+      #               (assumed to be the last successful deploy's image,
+      #               which is true for our flow: build-and-push only
+      #               happens inside Deploy and is never abandoned mid-
+      #               step). For dev this is good enough; if we ever
+      #               want stricter "actually-deployed-tag" semantics
+      #               for prod, we can stamp a moving `deployed-{env}`
+      #               tag from cdk-deploy after each successful run.
+      - name: Resolve final image URIs
+        id: resolve
+        run: |
+          set -euo pipefail
+          REG="${{ steps.meta.outputs.registry }}"
+          resolve() {
+            local name="$1" decision="$2" rebuilt="$3" repo="$4"
+            if [[ "$decision" == "true" ]]; then
+              echo "$name=$rebuilt"
+            else
+              local latest
+              latest=$(aws ecr describe-images \
+                --repository-name "$repo" \
+                --query 'sort_by(imageDetails, &imagePushedAt) | [-1].imageTags[0]' \
+                --output text 2>/dev/null || echo "")
+              if [[ -z "$latest" || "$latest" == "None" ]]; then
+                echo "::error::No prior $repo image to reuse and build was skipped." >&2
+                exit 1
+              fi
+              echo "$name=$REG/$repo:$latest"
+              echo "::notice::Reusing $repo:$latest (no source changes since last deploy)."
+            fi
+          }
+          {
+            resolve api    "${{ steps.decide.outputs.api }}"    "${{ steps.meta.outputs.api }}"    "oci-api"
+            resolve web    "${{ steps.decide.outputs.web }}"    "${{ steps.meta.outputs.web }}"    "oci-web"
+            resolve ingest "${{ steps.decide.outputs.ingest }}" "${{ steps.meta.outputs.ingest }}" "oci-worker-ingest"
+          } >> "$GITHUB_OUTPUT"
 
   cdk-deploy:
     needs: build-images
