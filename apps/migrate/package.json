@@ -1,0 +1,10 @@
+{
+  "name": "@oci/migrate",
+  "version": "0.0.0",
+  "private": true,
+  "description": "One-shot container that runs prisma migrate deploy against the environment's Aurora cluster.",
+  "type": "commonjs",
+  "dependencies": {
+    "prisma": "^7.8.0"
+  }
+}

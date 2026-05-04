@@ -21,9 +21,11 @@ const cfg = resolveEnvironment(envName, app);
 const tags = { Project: 'OCI', Environment: envName, ManagedBy: 'CDK' };
 
 // Container image URIs supplied by the Deploy workflow after build/push.
-// Locally these are undefined; the stacks fall back to public placeholders.
+// Locally these are undefined; the stacks fall back to public placeholders
+// (api/web) or omit the corresponding resource (migrate task def).
 const apiImage = app.node.tryGetContext('apiImage') as string | undefined;
 const webImage = app.node.tryGetContext('webImage') as string | undefined;
+const migrateImage = app.node.tryGetContext('migrateImage') as string | undefined;
 
 // Route 53 hosted zone for ai4h.net (ADR-0001). Single account-wide zone
 // shared with other FG-AI4H tenants; OCI Platform records all live under
@@ -76,6 +78,7 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
   logGroup: observability.apiLogGroup,
   accessLogsBucket: observability.accessLogsBucket,
   apiImage,
+  migrateImage,
   hostedZoneId: HOSTED_ZONE_ID,
   zoneName: HOSTED_ZONE_NAME,
 });
