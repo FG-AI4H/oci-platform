@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
@@ -21,6 +22,12 @@ export class IdentityStack extends cdk.Stack {
   public readonly userPool: cognito.UserPool;
   public readonly userPoolClient: cognito.UserPoolClient;
   public readonly userPoolDomain: cognito.UserPoolDomain;
+  /**
+   * Secrets Manager secret holding the Cognito user-pool client secret —
+   * mirrored from `userPoolClient.userPoolClientSecret`. Web reads it by
+   * NAME (`/oci/{env}/cognito/web-client-secret`) at task launch.
+   */
+  public readonly userPoolClientSecretSm: secretsmanager.Secret;
 
   constructor(scope: Construct, id: string, props: IdentityStackProps) {
     super(scope, id, props);
@@ -67,33 +74,18 @@ export class IdentityStack extends cdk.Stack {
 
     this.userPoolClient = this.userPool.addClient('WebClient', {
       userPoolClientName: `oci-${props.cfg.envName}-web`,
-      // PHASE A2 INTERIM: `generateSecret` is intentionally OMITTED here,
-      // not set to `false`. The live CFN template (pre-PR-#33) has no
-      // `GenerateSecret` field on the WebClient at all (it relied on the
-      // default). Setting `generateSecret: false` explicitly causes CDK
-      // to emit `GenerateSecret: false` in the template, which CFN then
-      // treats as a property change requiring REPLACEMENT (per AWS docs:
-      // GenerateSecret update requires Replacement). Replacement creates
-      // a new WebClient with a new id, the auto-generated export value
-      // changes, and CFN trips "Cannot update export … as it is in use
-      // by oci-dev-api." Verified via cloudformation describe-stack-events:
-      //   "Requested update requires the creation of a new physical
-      //    resource; hence creating one."
-      // Omitting the field entirely means CDK emits no GenerateSecret →
-      // the template matches the live one byte-for-byte on this property
-      // → no replacement → bridge outputs stay value-stable.
-      //
-      // Sequence to land confidential mode safely:
-      //   1. THIS PR: omit generateSecret → identity update is a no-op
-      //      for WebClient → api/web update to drop their Fn::ImportValue
-      //      refs cleanly. NextAuth signin is broken for one cycle
-      //      (no client secret).
-      //   2. Follow-up PR: drop the bridge CfnOutputs (api/web no
-      //      longer import; outputs are orphan and safe to remove).
-      //   3. Follow-up PR: set generateSecret: true and re-add the
-      //      Secrets Manager mirror + web's AUTH_COGNITO_SECRET ref.
-      //      Replacement happens, but no exports reference the
-      //      WebClient id any more, so the in-use check passes.
+      // Confidential client (server-side NextAuth code-flow exchange).
+      // Generates a client secret on creation; we mirror it into Secrets
+      // Manager below so ECS can pull it via secretName at task launch.
+      // This change FORCES WebClient replacement (GenerateSecret update
+      // requires Replacement per AWS docs). Safe now because the bridge
+      // CfnOutputs that previously published the WebClient id are also
+      // dropped in this PR — and api/web have already (PR #40 deploy)
+      // moved off Fn::ImportValue onto SSM-by-name. Nothing imports
+      // the WebClient id any more, so the export-in-use check has
+      // nothing to block. SSM `WebClientIdParam` value updates to the
+      // new id; api/web tasks restart with the new env.
+      generateSecret: true,
       authFlows: { userSrp: true },
       oAuth: {
         flows: { authorizationCodeGrant: true },
@@ -112,12 +104,10 @@ export class IdentityStack extends cdk.Stack {
     });
 
     // Cross-stack indirection layer: publish identity primitives in SSM
-    // under deterministic names. Consumer stacks (api, web) reference
-    // these by NAME, not by CFN export — replacing the user pool client
+    // (for IDs) and Secrets Manager (for the client secret) under
+    // deterministic names. Consumer stacks (api, web) reference these
+    // by NAME, not by CFN export — replacing the user pool client
     // doesn't break a CFN-export-in-use deadlock with downstream stacks.
-    // The Cognito client SECRET will be added back in a Phase A2
-    // follow-up once the WebClient can be safely replaced (see comment
-    // on `generateSecret` above).
     new ssm.StringParameter(this, 'UserPoolIdParam', {
       parameterName: `/oci/${props.cfg.envName}/cognito/user-pool-id`,
       stringValue: this.userPool.userPoolId,
@@ -128,6 +118,12 @@ export class IdentityStack extends cdk.Stack {
       stringValue: this.userPoolClient.userPoolClientId,
       description: `Cognito web app-client id for ${props.cfg.envName} (consumed by api/web)`,
     });
+    this.userPoolClientSecretSm = new secretsmanager.Secret(this, 'WebClientCognitoSecret', {
+      secretName: `/oci/${props.cfg.envName}/cognito/web-client-secret`,
+      description: `Cognito user pool client secret for ${props.cfg.envName} web app (NextAuth)`,
+      secretStringValue: this.userPoolClient.userPoolClientSecret,
+      removalPolicy: props.cfg.removalPolicy,
+    });
 
     this.userPoolDomain = this.userPool.addDomain('Domain', {
       cognitoDomain: { domainPrefix: `oci-${props.cfg.envName}` },
@@ -136,40 +132,6 @@ export class IdentityStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'UserPoolId', { value: this.userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: this.userPoolClient.userPoolClientId });
     new cdk.CfnOutput(this, 'CognitoDomainUrl', { value: this.userPoolDomain.baseUrl() });
-
-    // BRIDGE OUTPUTS — keep the auto-generated cross-stack exports alive for
-    // ONE deploy cycle. After the SSM-by-name refactor (PR #37), api/web no
-    // longer Fn::ImportValue these — but the LIVE api stack template (still
-    // pinned at the pre-#37 state because every subsequent deploy has rolled
-    // back) still imports them. Removing them from identity in the same
-    // deploy that removes the imports from api/web hits
-    // "Cannot update export … as it is in use by oci-{env}-api" because
-    // identity deploys first in the dep order. Solution: keep these
-    // exports as orphan outputs for one deploy, then drop them in a
-    // follow-up PR once api/web are live without the imports.
-    //
-    // The third auto-generated export from the prior synth
-    // (`ExportsOutputRefWebClientCognitoSecret...`) is intentionally not
-    // bridged: it was never published to the live stack — every deploy
-    // that introduced it (PR #33 onwards) failed and rolled back, so
-    // there is no live export to preserve.
-    //
-    // Names + logical IDs match exactly what CDK previously auto-generated
-    // when api/web took `cognito` / `cognitoClient` props (verified via
-    // `cdk synth` of the prior commit). Values are Ref tokens that resolve
-    // to the LIVE userPool / userPoolClient ids — and the WebClient is no
-    // longer being replaced (generateSecret kept at false above), so the
-    // export VALUES remain unchanged across the update. Hard-coded on
-    // purpose: a different export name would not match the live one and
-    // wouldn't unblock the deploy.
-    new cdk.CfnOutput(this, 'ExportsOutputRefUserPool6BA7E5F296FD7236', {
-      value: this.userPool.userPoolId,
-      exportName: `${this.stackName}:ExportsOutputRefUserPool6BA7E5F296FD7236`,
-    });
-    new cdk.CfnOutput(this, 'ExportsOutputRefUserPoolWebClient4C9370B02E2C9FF9', {
-      value: this.userPoolClient.userPoolClientId,
-      exportName: `${this.stackName}:ExportsOutputRefUserPoolWebClient4C9370B02E2C9FF9`,
-    });
 
     if (props.cfg.envName !== 'prod') {
       NagSuppressions.addResourceSuppressions(this.userPool, [
@@ -188,12 +150,45 @@ export class IdentityStack extends cdk.Stack {
       },
     ]);
 
-    // The SMG4 suppression for the WebClient secret mirror, and the L1 +
-    // IAM4 suppressions for the CDK-internal custom-resource Lambda that
-    // reads Cognito client attributes at deploy time, are intentionally
-    // dropped here: with `generateSecret: false`, no Secrets Manager
-    // mirror is created and CDK does not synthesize the
-    // DescribeUserPoolClient custom resource. They will be reinstated
-    // alongside `generateSecret: true` in the Phase A2 follow-up.
+    // Cognito user-pool client secret can't be rotated by Secrets Manager
+    // (Cognito doesn't expose a RotateSecret API for app clients). Manual
+    // rotation only — replace the user pool client to roll the secret.
+    NagSuppressions.addResourceSuppressions(this.userPoolClientSecretSm, [
+      {
+        id: 'AwsSolutions-SMG4',
+        reason:
+          'Cognito user-pool app-client secrets are not Secrets-Manager-rotatable (no Cognito API for it). Manual rotation via replacing the user pool client. Acceptable for the lifetime of this client.',
+      },
+    ]);
+
+    // CDK uses an internal Lambda-backed custom resource to read the
+    // Cognito client secret at deploy time (via DescribeUserPoolClient).
+    // We don't own this Lambda — its runtime + AWSLambdaBasicExecutionRole
+    // are managed by aws-cdk-lib.
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/AWS679f53fac002430cb0da5b7982bd2287/Resource`,
+      [
+        {
+          id: 'AwsSolutions-L1',
+          reason:
+            'Custom resource Lambda created by aws-cdk-lib to read Cognito user-pool client attributes. Runtime is managed by CDK; we do not control it.',
+        },
+      ],
+    );
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/AWS679f53fac002430cb0da5b7982bd2287/ServiceRole/Resource`,
+      [
+        {
+          id: 'AwsSolutions-IAM4',
+          reason:
+            'AWSLambdaBasicExecutionRole is the AWS-recommended managed policy for Lambda execution roles; auto-attached by CDK to its internal custom-resource handler.',
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+          ],
+        },
+      ],
+    );
   }
 }
