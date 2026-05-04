@@ -1,9 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
 import { grantGuardDutyAgentEcrPull } from './api-stack.js';
@@ -18,6 +20,12 @@ export interface WebStackProps extends cdk.StackProps {
   httpsListener: elbv2.IApplicationListener;
   /** Shared CloudWatch log group for the web container. */
   logGroup: logs.ILogGroup;
+  /** Cognito user pool — issuer URL for NextAuth. */
+  cognitoUserPool: cognito.IUserPool;
+  /** Cognito user pool client — clientId for NextAuth. */
+  cognitoClient: cognito.IUserPoolClient;
+  /** Cognito client secret mirrored into Secrets Manager — clientSecret for NextAuth. */
+  cognitoClientSecretSm: secretsmanager.ISecret;
   /**
    * ECR image URI (`<account>.dkr.ecr.<region>.amazonaws.com/oci-web:<sha>`)
    * built and pushed by the GitHub Actions Deploy workflow.
@@ -56,6 +64,16 @@ export class WebStack extends cdk.Stack {
       },
     });
 
+    // NextAuth session-encryption secret. Auto-generated; rotated manually.
+    const authSecret = new secretsmanager.Secret(this, 'WebAuthSecret', {
+      description: `NextAuth.js AUTH_SECRET for ${props.cfg.envName} web app`,
+      generateSecretString: {
+        excludePunctuation: true,
+        passwordLength: 64,
+      },
+      removalPolicy: props.cfg.removalPolicy,
+    });
+
     taskDef.addContainer('web', {
       image: this.resolveWebImage(props.webImage),
       containerName: 'web',
@@ -63,9 +81,16 @@ export class WebStack extends cdk.Stack {
       environment: {
         NODE_ENV: 'production',
         OCI_ENV: props.cfg.envName,
-        // Internal HTTPS URL the web app uses to reach the API. Both
-        // services share the same hostname; routing is path-based.
+        // Public URL the web app uses for OAuth callbacks (NextAuth picks
+        // this up as AUTH_URL) and the OCI API base URL.
+        AUTH_URL: `https://${props.cfg.domainName}`,
         NEXT_PUBLIC_API_BASE_URL: `https://${props.cfg.domainName}`,
+        AUTH_COGNITO_ID: props.cognitoClient.userPoolClientId,
+        AUTH_COGNITO_ISSUER: `https://cognito-idp.${this.region}.amazonaws.com/${props.cognitoUserPool.userPoolId}`,
+      },
+      secrets: {
+        AUTH_SECRET: ecs.Secret.fromSecretsManager(authSecret),
+        AUTH_COGNITO_SECRET: ecs.Secret.fromSecretsManager(props.cognitoClientSecretSm),
       },
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'web', logGroup: props.logGroup }),
     });
@@ -130,11 +155,24 @@ export class WebStack extends cdk.Stack {
         {
           id: 'AwsSolutions-ECS2',
           reason:
-            'Plaintext envs on the Web task are non-secret build/runtime configuration only (NODE_ENV, OCI_ENV, NEXT_PUBLIC_API_BASE_URL is a public URL). No secrets injected via task env.',
+            'Plaintext envs on the Web task are non-secret build/runtime configuration only (NODE_ENV, OCI_ENV, NEXT_PUBLIC_API_BASE_URL, AUTH_URL, AUTH_COGNITO_ID, AUTH_COGNITO_ISSUER — all are public URLs / non-secret IDs). The two real secrets, AUTH_SECRET and AUTH_COGNITO_SECRET, are injected via ecs.Secret.fromSecretsManager.',
         },
       ],
       true,
     );
+
+    // NextAuth session secret — rotating it invalidates all active sessions.
+    // Acceptable in dev/int; for prod we'd schedule manual rotation outside
+    // peak hours and accept the user-impact, or use a lambda-managed
+    // rotation that re-issues but keeps the previous secret valid for a
+    // grace window (Phase A2 follow-up).
+    NagSuppressions.addResourceSuppressions(authSecret, [
+      {
+        id: 'AwsSolutions-SMG4',
+        reason:
+          'NextAuth AUTH_SECRET rotation invalidates all active sessions; manual rotation only. Phase A2 follow-up: dual-secret rotation pattern with overlap window.',
+      },
+    ]);
     if (props.webImage) {
       // ECR pull permissions — same shape as ApiStack's suppression.
       NagSuppressions.addResourceSuppressionsByPath(
