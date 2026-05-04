@@ -79,25 +79,30 @@ export class WebStack extends cdk.Stack {
       this,
       `/oci/${props.cfg.envName}/cognito/web-client-id`,
     );
-    // identity-stack creates the secret with an EXPLICIT `secretName` —
-    // so its live ARN has no 6-char suffix
-    // (`secret:/oci/dev/cognito/web-client-secret`). `fromSecretNameV2`
-    // would build an IAM policy ARN with a wildcard suffix
-    // (`...:secret:NAME-??????`) which doesn't match an ARN without
-    // a suffix, leaving the task execution role unable to call
-    // GetSecretValue. Use the complete ARN instead so CDK's auto-grant
-    // produces an exact-match IAM statement. Verified failure mode in
-    // PR #41 deploy: ResourceInitializationError "is not authorized to
-    // perform: secretsmanager:GetSecretValue on resource ...".
+    // Secrets Manager appends a random 6-char suffix to a secret's ARN even
+    // when `secretName` is set explicitly. Verified live: the secret created
+    // by identity-stack has ARN `secret:/oci/dev/cognito/web-client-secret-8k3Wgb`.
+    // Constructing the ARN from the bare name (PR #49) or via `fromSecretNameV2`
+    // produced IAM grants and/or task-def `valueFrom` values that didn't
+    // reference the live ARN, so ECS task launch failed with
+    // `AccessDeniedException` on `GetSecretValue` and the deployment circuit
+    // breaker rolled back.
+    //
+    // identity-stack publishes the full resolved ARN (with suffix) to SSM
+    // under `/oci/{env}/cognito/web-client-secret-arn`. We read it via
+    // `valueForStringParameter` (a CFN dynamic-reference token), then import
+    // the secret via `fromSecretCompleteArn` with that token. CFN substitutes
+    // the literal ARN at deploy time, so both the auto-generated IAM grant
+    // on the task execution role AND the task definition's `valueFrom` end
+    // up referencing the same full ARN as the live secret.
+    const cognitoClientSecretArn = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/oci/${props.cfg.envName}/cognito/web-client-secret-arn`,
+    );
     const cognitoClientSecret = secretsmanager.Secret.fromSecretCompleteArn(
       this,
       'WebClientCognitoSecretLookup',
-      cdk.Stack.of(this).formatArn({
-        service: 'secretsmanager',
-        resource: 'secret',
-        resourceName: `/oci/${props.cfg.envName}/cognito/web-client-secret`,
-        arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
-      }),
+      cognitoClientSecretArn,
     );
 
     taskDef.addContainer('web', {

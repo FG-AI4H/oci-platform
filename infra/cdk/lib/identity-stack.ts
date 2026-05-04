@@ -124,6 +124,23 @@ export class IdentityStack extends cdk.Stack {
       secretStringValue: this.userPoolClient.userPoolClientSecret,
       removalPolicy: props.cfg.removalPolicy,
     });
+    // Secrets Manager appends a random 6-char suffix to the ARN even when
+    // `secretName` is set explicitly (e.g. `secret:NAME-8k3Wgb`). Importing
+    // the secret in web-stack via `fromSecretNameV2` builds an IAM policy
+    // ARN with `-??????` (which matches), but the task definition's
+    // `valueFrom` then has the same wildcard ARN — ECS calls
+    // `GetSecretValue` with that wildcard literally, which doesn't resolve.
+    // `fromSecretCompleteArn(BARE)` produced an exact-no-suffix ARN that
+    // also doesn't match the live ARN. The reliable answer is to publish
+    // the FULL resolved ARN (suffix included) into SSM so consumers can
+    // import via `fromSecretCompleteArn` with that token — CFN resolves
+    // it at deploy time to the literal ARN, and both the IAM grant and
+    // the task def's `valueFrom` reference the same full ARN.
+    new ssm.StringParameter(this, 'WebClientCognitoSecretArnParam', {
+      parameterName: `/oci/${props.cfg.envName}/cognito/web-client-secret-arn`,
+      stringValue: this.userPoolClientSecretSm.secretArn,
+      description: `Cognito web app-client secret ARN for ${props.cfg.envName} (consumed by web)`,
+    });
 
     this.userPoolDomain = this.userPool.addDomain('Domain', {
       cognitoDomain: { domainPrefix: `oci-${props.cfg.envName}` },
