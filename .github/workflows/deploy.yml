@@ -166,20 +166,55 @@ jobs:
 
       - name: Decide build vs reuse per image
         id: decide
+        # Build an image iff `<repo>:<SHA>` doesn't already exist in ECR.
+        # Two motivations to consult ECR rather than only the paths-filter:
+        #   1. workflow_dispatch retries: the previous push run may have
+        #      pushed `oci-api:<SHA>` already; ECR tags are IMMUTABLE
+        #      (per bootstrap-oidc-stack), so a second push on the same
+        #      SHA fails. Reuse instead.
+        #   2. New ECR repo (e.g. oci-migrate, just bootstrapped): the
+        #      paths-filter base for this push is the previous main
+        #      commit, which probably doesn't include any apps/migrate
+        #      changes — yet there's no <SHA> tag in ECR to reuse.
+        #      ECR-existence catches this and forces a build.
+        # paths-filter is still consulted as a fast-path "we know the
+        # source changed" signal, but ECR is the source of truth.
         run: |
-          # workflow_dispatch (manual deploy): rebuild everything,
-          # operator's intent. push: rebuild only changed images.
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "api=true"     >> "$GITHUB_OUTPUT"
-            echo "web=true"     >> "$GITHUB_OUTPUT"
-            echo "ingest=true"  >> "$GITHUB_OUTPUT"
-            echo "migrate=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "api=${{ steps.changes.outputs.api }}"         >> "$GITHUB_OUTPUT"
-            echo "web=${{ steps.changes.outputs.web }}"         >> "$GITHUB_OUTPUT"
-            echo "ingest=${{ steps.changes.outputs.ingest }}"   >> "$GITHUB_OUTPUT"
-            echo "migrate=${{ steps.changes.outputs.migrate }}" >> "$GITHUB_OUTPUT"
-          fi
+          set -euo pipefail
+          SHA=${GITHUB_SHA::12}
+
+          decide() {
+            local name="$1" repo="$2" filter_changed="$3"
+            local image_exists="false"
+            if aws ecr describe-images \
+                --repository-name "$repo" \
+                --image-ids "imageTag=$SHA" \
+                --output json >/dev/null 2>&1; then
+              image_exists="true"
+            fi
+
+            if [[ "$image_exists" == "true" ]]; then
+              echo "$name=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::$repo:$SHA already in ECR — skipping build (immutable tag)." >&2
+            elif [[ "$filter_changed" == "true" ]]; then
+              echo "$name=true" >> "$GITHUB_OUTPUT"
+            elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              # Manual deploy: any image not already at this SHA gets built.
+              echo "$name=true" >> "$GITHUB_OUTPUT"
+            else
+              # push event, paths-filter says unchanged, but the SHA tag
+              # is missing in ECR (new repo, repo just emptied, etc.):
+              # build it. Cheaper than failing at cdk-deploy with a
+              # missing image reference.
+              echo "$name=true" >> "$GITHUB_OUTPUT"
+              echo "::notice::$repo: paths-filter unchanged but $repo:$SHA missing in ECR; building." >&2
+            fi
+          }
+
+          decide api     oci-api            "${{ steps.changes.outputs.api }}"
+          decide web     oci-web            "${{ steps.changes.outputs.web }}"
+          decide ingest  oci-worker-ingest  "${{ steps.changes.outputs.ingest }}"
+          decide migrate oci-migrate        "${{ steps.changes.outputs.migrate }}"
 
       # buildx for parity with the previous QEMU-based pipeline (cache
       # support, --push behaviour). On a native ARM64 runner the
@@ -277,64 +312,21 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
 
-      # Resolve the URI cdk-deploy will pass to the relevant stack:
-      #   - rebuilt → use the freshly-pushed SHA-tagged URI from `meta`
-      #   - reused  → query ECR for the most recently pushed tag
-      #               (assumed to be the last successful deploy's image,
-      #               which is true for our flow: build-and-push only
-      #               happens inside Deploy and is never abandoned mid-
-      #               step). For dev this is good enough; if we ever
-      #               want stricter "actually-deployed-tag" semantics
-      #               for prod, we can stamp a moving `deployed-{env}`
-      #               tag from cdk-deploy after each successful run.
+      # Resolve the URIs cdk-deploy will pass to the relevant stacks.
+      # With ECR-aware decide, the SHA tag is always present after this
+      # job (either because the image was just rebuilt and pushed, or
+      # because the build step skipped because it was already there).
+      # Same SHA = same content, so the per-image URI is simply the
+      # SHA-tagged URI from `meta`.
       - name: Resolve final image URIs
         id: resolve
         run: |
-          set -euo pipefail
-          REG="${{ steps.meta.outputs.registry }}"
-          resolve() {
-            local name="$1" decision="$2" rebuilt="$3" repo="$4"
-            local uri
-            if [[ "$decision" == "true" ]]; then
-              uri="$rebuilt"
-            else
-              local latest
-              latest=$(aws ecr describe-images \
-                --repository-name "$repo" \
-                --query 'sort_by(imageDetails, &imagePushedAt) | [-1].imageTags[0]' \
-                --output text 2>/dev/null || echo "")
-              if [[ -z "$latest" || "$latest" == "None" ]]; then
-                echo "::error::No prior $repo image to reuse and build was skipped." >&2
-                exit 1
-              fi
-              uri="$REG/$repo:$latest"
-              # Log lines must go to stderr so they don't pollute GITHUB_OUTPUT.
-              echo "::notice::Reusing $repo:$latest (no source changes since last deploy)." >&2
-            fi
-            echo "$name=$uri" >> "$GITHUB_OUTPUT"
-          }
-          resolve api     "${{ steps.decide.outputs.api }}"     "${{ steps.meta.outputs.api }}"     "oci-api"
-          resolve web     "${{ steps.decide.outputs.web }}"     "${{ steps.meta.outputs.web }}"     "oci-web"
-          resolve ingest  "${{ steps.decide.outputs.ingest }}"  "${{ steps.meta.outputs.ingest }}"  "oci-worker-ingest"
-          # Migrate image is allowed to be missing on first deploy: the
-          # MigrateTaskDef in api-stack is conditional on a migrateImage
-          # context arg, and we'll just not pass one through if no image
-          # exists yet.
-          if [[ "${{ steps.decide.outputs.migrate }}" == "true" ]]; then
-            echo "migrate=${{ steps.meta.outputs.migrate }}" >> "$GITHUB_OUTPUT"
-          else
-            latest=$(aws ecr describe-images \
-              --repository-name oci-migrate \
-              --query 'sort_by(imageDetails, &imagePushedAt) | [-1].imageTags[0]' \
-              --output text 2>/dev/null || echo "")
-            if [[ -z "$latest" || "$latest" == "None" ]]; then
-              echo "::notice::No oci-migrate image yet; MigrateTaskDef will be omitted from the stack this run." >&2
-              echo "migrate=" >> "$GITHUB_OUTPUT"
-            else
-              echo "migrate=$REG/oci-migrate:$latest" >> "$GITHUB_OUTPUT"
-              echo "::notice::Reusing oci-migrate:$latest (no apps/migrate or prisma changes since last deploy)." >&2
-            fi
-          fi
+          {
+            echo "api=${{ steps.meta.outputs.api }}"
+            echo "web=${{ steps.meta.outputs.web }}"
+            echo "ingest=${{ steps.meta.outputs.ingest }}"
+            echo "migrate=${{ steps.meta.outputs.migrate }}"
+          } >> "$GITHUB_OUTPUT"
 
   cdk-deploy:
     needs: build-images
