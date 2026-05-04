@@ -79,10 +79,25 @@ export class WebStack extends cdk.Stack {
       this,
       `/oci/${props.cfg.envName}/cognito/web-client-id`,
     );
-    const cognitoClientSecret = secretsmanager.Secret.fromSecretNameV2(
+    // identity-stack creates the secret with an EXPLICIT `secretName` —
+    // so its live ARN has no 6-char suffix
+    // (`secret:/oci/dev/cognito/web-client-secret`). `fromSecretNameV2`
+    // would build an IAM policy ARN with a wildcard suffix
+    // (`...:secret:NAME-??????`) which doesn't match an ARN without
+    // a suffix, leaving the task execution role unable to call
+    // GetSecretValue. Use the complete ARN instead so CDK's auto-grant
+    // produces an exact-match IAM statement. Verified failure mode in
+    // PR #41 deploy: ResourceInitializationError "is not authorized to
+    // perform: secretsmanager:GetSecretValue on resource ...".
+    const cognitoClientSecret = secretsmanager.Secret.fromSecretCompleteArn(
       this,
       'WebClientCognitoSecretLookup',
-      `/oci/${props.cfg.envName}/cognito/web-client-secret`,
+      cdk.Stack.of(this).formatArn({
+        service: 'secretsmanager',
+        resource: 'secret',
+        resourceName: `/oci/${props.cfg.envName}/cognito/web-client-secret`,
+        arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
+      }),
     );
 
     taskDef.addContainer('web', {
