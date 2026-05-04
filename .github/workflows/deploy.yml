@@ -109,6 +109,16 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # buildx + QEMU let us cross-build linux/arm64 images on the
+      # x86_64 ubuntu-latest runner. Slower than native (~2-3x) but
+      # the resulting Graviton tasks save ~20% on Fargate cost.
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Compute image tags
         id: meta
         run: |
@@ -119,20 +129,32 @@ jobs:
           echo "ingest=$REG/oci-worker-ingest:$SHA" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Build & push API image
+      - name: Build & push API image (arm64)
         run: |
-          docker build -f apps/api/Dockerfile -t "${{ steps.meta.outputs.api }}" .
-          docker push "${{ steps.meta.outputs.api }}"
+          docker buildx build \
+            --platform linux/arm64 \
+            -f apps/api/Dockerfile \
+            -t "${{ steps.meta.outputs.api }}" \
+            --push \
+            .
 
-      - name: Build & push Web image
+      - name: Build & push Web image (arm64)
         run: |
-          docker build -f apps/web/Dockerfile -t "${{ steps.meta.outputs.web }}" .
-          docker push "${{ steps.meta.outputs.web }}"
+          docker buildx build \
+            --platform linux/arm64 \
+            -f apps/web/Dockerfile \
+            -t "${{ steps.meta.outputs.web }}" \
+            --push \
+            .
 
-      - name: Build & push worker-ingest image
+      - name: Build & push worker-ingest image (arm64)
         run: |
-          docker build -f apps/worker-ingest/Dockerfile -t "${{ steps.meta.outputs.ingest }}" .
-          docker push "${{ steps.meta.outputs.ingest }}"
+          docker buildx build \
+            --platform linux/arm64 \
+            -f apps/worker-ingest/Dockerfile \
+            -t "${{ steps.meta.outputs.ingest }}" \
+            --push \
+            .
 
       - name: Trivy image scan (API)
         uses: aquasecurity/trivy-action@master
