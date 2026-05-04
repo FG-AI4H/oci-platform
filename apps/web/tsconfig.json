@@ -5,6 +5,10 @@
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "noEmit": true,
+    // Next.js app — no .d.ts emission needed; this also silences TS2883
+    // ("inferred type cannot be named") for re-exported library types.
+    "declaration": false,
+    "declarationMap": false,
     "module": "esnext",
     "moduleResolution": "bundler",
     "jsx": "preserve",
