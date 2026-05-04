@@ -7,10 +7,10 @@ import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
@@ -22,11 +22,6 @@ export interface ApiStackProps extends cdk.StackProps {
   tags: Record<string, string>;
   vpc: ec2.IVpc;
   database: rds.DatabaseCluster;
-  cognito: cognito.UserPool;
-  /** Web app's Cognito user-pool client — passed to the API task as
-   * `COGNITO_USER_POOL_CLIENT_ID` so it can verify access tokens issued
-   * to that client. */
-  cognitoClient: cognito.UserPoolClient;
   logGroup: logs.ILogGroup;
   /** Shared access-logs bucket (from observability stack) used as ALB access log target. */
   accessLogsBucket: s3.IBucket;
@@ -109,8 +104,18 @@ export class ApiStack extends cdk.Stack {
           NODE_ENV: 'production',
           OCI_ENV: props.cfg.envName,
           AWS_REGION: this.region,
-          COGNITO_USER_POOL_ID: props.cognito.userPoolId,
-          COGNITO_USER_POOL_CLIENT_ID: props.cognitoClient.userPoolClientId,
+          // Resolved at deploy time via SSM dynamic substitution
+          // (`{{resolve:ssm:...}}`). identity-stack writes these. No CFN
+          // cross-stack export — replacing the user pool client doesn't
+          // deadlock api-stack the way an Fn::ImportValue would.
+          COGNITO_USER_POOL_ID: ssm.StringParameter.valueForStringParameter(
+            this,
+            `/oci/${props.cfg.envName}/cognito/user-pool-id`,
+          ),
+          COGNITO_USER_POOL_CLIENT_ID: ssm.StringParameter.valueForStringParameter(
+            this,
+            `/oci/${props.cfg.envName}/cognito/web-client-id`,
+          ),
           COGNITO_REGION: this.region,
         },
         logDriver: ecs.LogDrivers.awsLogs({ streamPrefix: 'api', logGroup: props.logGroup }),

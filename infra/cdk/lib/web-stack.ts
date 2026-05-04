@@ -1,11 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
-import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
 import { grantGuardDutyAgentEcrPull } from './api-stack.js';
@@ -20,12 +20,6 @@ export interface WebStackProps extends cdk.StackProps {
   httpsListener: elbv2.IApplicationListener;
   /** Shared CloudWatch log group for the web container. */
   logGroup: logs.ILogGroup;
-  /** Cognito user pool — issuer URL for NextAuth. */
-  cognitoUserPool: cognito.IUserPool;
-  /** Cognito user pool client — clientId for NextAuth. */
-  cognitoClient: cognito.IUserPoolClient;
-  /** Cognito client secret mirrored into Secrets Manager — clientSecret for NextAuth. */
-  cognitoClientSecretSm: secretsmanager.ISecret;
   /**
    * ECR image URI (`<account>.dkr.ecr.<region>.amazonaws.com/oci-web:<sha>`)
    * built and pushed by the GitHub Actions Deploy workflow.
@@ -74,6 +68,23 @@ export class WebStack extends cdk.Stack {
       removalPolicy: props.cfg.removalPolicy,
     });
 
+    // Cognito identity primitives via SSM/Secrets-Manager BY NAME (no
+    // cross-stack CFN export from identity-stack — would deadlock when
+    // the user pool client is replaced). identity-stack writes these.
+    const userPoolId = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/oci/${props.cfg.envName}/cognito/user-pool-id`,
+    );
+    const cognitoClientId = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/oci/${props.cfg.envName}/cognito/web-client-id`,
+    );
+    const cognitoClientSecret = secretsmanager.Secret.fromSecretNameV2(
+      this,
+      'WebClientCognitoSecretLookup',
+      `/oci/${props.cfg.envName}/cognito/web-client-secret`,
+    );
+
     taskDef.addContainer('web', {
       image: this.resolveWebImage(props.webImage),
       containerName: 'web',
@@ -85,12 +96,12 @@ export class WebStack extends cdk.Stack {
         // this up as AUTH_URL) and the OCI API base URL.
         AUTH_URL: `https://${props.cfg.domainName}`,
         NEXT_PUBLIC_API_BASE_URL: `https://${props.cfg.domainName}`,
-        AUTH_COGNITO_ID: props.cognitoClient.userPoolClientId,
-        AUTH_COGNITO_ISSUER: `https://cognito-idp.${this.region}.amazonaws.com/${props.cognitoUserPool.userPoolId}`,
+        AUTH_COGNITO_ID: cognitoClientId,
+        AUTH_COGNITO_ISSUER: `https://cognito-idp.${this.region}.amazonaws.com/${userPoolId}`,
       },
       secrets: {
         AUTH_SECRET: ecs.Secret.fromSecretsManager(authSecret),
-        AUTH_COGNITO_SECRET: ecs.Secret.fromSecretsManager(props.cognitoClientSecretSm),
+        AUTH_COGNITO_SECRET: ecs.Secret.fromSecretsManager(cognitoClientSecret),
       },
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'web', logGroup: props.logGroup }),
     });
