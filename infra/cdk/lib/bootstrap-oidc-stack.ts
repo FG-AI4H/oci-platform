@@ -38,6 +38,7 @@ export class BootstrapOidcStack extends cdk.Stack {
   public readonly apiRepo: ecr.Repository;
   public readonly webRepo: ecr.Repository;
   public readonly workerIngestRepo: ecr.Repository;
+  public readonly migrateRepo: ecr.Repository;
 
   constructor(scope: Construct, id: string, props: BootstrapOidcStackProps) {
     super(scope, id, props);
@@ -125,7 +126,40 @@ export class BootstrapOidcStack extends cdk.Stack {
       new iam.PolicyStatement({
         sid: 'CdkBootstrapSsmRead',
         actions: ['ssm:GetParameter', 'ssm:GetParameters'],
-        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/cdk-bootstrap/*`],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/cdk-bootstrap/*`,
+          // Migrate task launch spec (cluster, taskDef, subnets, sg) is
+          // read once per deploy by the workflow's DB migrate step.
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/oci/*/migrate/launch-spec`,
+        ],
+      }),
+    );
+
+    // Run the one-shot Prisma migrate task after `cdk deploy`. Scoped to
+    // the per-env cluster + task-def families produced by api-stack
+    // (`oci-{env}-api/cluster` and the auto-generated MigrateTaskDef
+    // family which inherits the stack's prefix).
+    this.deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'EcsRunMigrateTask',
+        actions: ['ecs:RunTask', 'ecs:DescribeTasks', 'ecs:StopTask'],
+        resources: [
+          `arn:aws:ecs:${this.region}:${this.account}:task-definition/*`,
+          `arn:aws:ecs:${this.region}:${this.account}:task/*`,
+        ],
+      }),
+    );
+    // ECS RunTask requires PassRole on both the execution and task roles
+    // referenced by the task definition. Both are auto-named by CDK with
+    // the stack's prefix, so we scope by that pattern.
+    this.deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'PassRoleToMigrateTask',
+        actions: ['iam:PassRole'],
+        resources: [`arn:aws:iam::${this.account}:role/oci-*-api-MigrateTaskDef*`],
+        conditions: {
+          StringEquals: { 'iam:PassedToService': 'ecs-tasks.amazonaws.com' },
+        },
       }),
     );
 
@@ -153,10 +187,16 @@ export class BootstrapOidcStack extends cdk.Stack {
       repositoryName: 'oci-worker-ingest',
     });
 
+    this.migrateRepo = new ecr.Repository(this, 'MigrateRepo', {
+      ...repoDefaults,
+      repositoryName: 'oci-migrate',
+    });
+
     new cdk.CfnOutput(this, 'DeployRoleArn', { value: this.deployRole.roleArn });
     new cdk.CfnOutput(this, 'ApiRepoUri', { value: this.apiRepo.repositoryUri });
     new cdk.CfnOutput(this, 'WebRepoUri', { value: this.webRepo.repositoryUri });
     new cdk.CfnOutput(this, 'WorkerIngestRepoUri', { value: this.workerIngestRepo.repositoryUri });
+    new cdk.CfnOutput(this, 'MigrateRepoUri', { value: this.migrateRepo.repositoryUri });
 
     NagSuppressions.addResourceSuppressions(
       this.deployRole,
@@ -164,12 +204,16 @@ export class BootstrapOidcStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            'Path-prefix wildcards are intentional and tightly scoped: cdk-hnb659fds-* matches CDK bootstrap roles (deploy, file-publishing, image-publishing, lookup); oci-* matches our ECR repos (oci-api, oci-worker-ingest); /cdk-bootstrap/* matches CDK bootstrap SSM parameters. ecr:GetAuthorizationToken and cloudformation:Describe*/List*/GetTemplate do not support per-resource scoping (AWS API limitation, account-scope only).',
+            'Path-prefix wildcards are intentional and tightly scoped: cdk-hnb659fds-* matches CDK bootstrap roles (deploy, file-publishing, image-publishing, lookup); oci-* matches our ECR repos (oci-api, oci-web, oci-worker-ingest, oci-migrate) and the auto-generated MigrateTaskDef IAM roles in api-stack; /cdk-bootstrap/* matches CDK bootstrap SSM parameters; /oci/*/migrate/launch-spec is the per-env aggregated launch spec for the prisma migrate task; ecs:RunTask / DescribeTasks / StopTask use task-definition/* and task/* because task definition revisions and task ids are not knowable until run-time. ecr:GetAuthorizationToken and cloudformation:Describe*/List*/GetTemplate do not support per-resource scoping (AWS API limitation, account-scope only).',
           appliesTo: [
             'Resource::*',
             `Resource::arn:aws:iam::${this.account}:role/cdk-hnb659fds-*`,
+            `Resource::arn:aws:iam::${this.account}:role/oci-*-api-MigrateTaskDef*`,
             `Resource::arn:aws:ecr:${this.region}:${this.account}:repository/oci-*`,
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/cdk-bootstrap/*`,
+            `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/oci/*/migrate/launch-spec`,
+            `Resource::arn:aws:ecs:${this.region}:${this.account}:task-definition/*`,
+            `Resource::arn:aws:ecs:${this.region}:${this.account}:task/*`,
             'Action::ecr:GetAuthorizationToken',
             'Action::cloudformation:DescribeStacks',
             'Action::cloudformation:DescribeStackEvents',

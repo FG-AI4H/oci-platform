@@ -32,6 +32,15 @@ export interface ApiStackProps extends cdk.StackProps {
    * falls back to a public nginx placeholder so the stack can still synth.
    */
   apiImage?: string;
+  /**
+   * ECR image URI for the one-shot Prisma migrate container
+   * (`<account>.dkr.ecr.<region>.amazonaws.com/oci-migrate:<sha>`). The
+   * task definition is rendered when supplied; CI launches it via
+   * `aws ecs run-task` to apply pending migrations against the
+   * VPC-private Aurora cluster. When undefined (local synth), the
+   * MigrateTaskDef is omitted so the stack still synths offline.
+   */
+  migrateImage?: string;
   /** Route 53 hosted zone id for the apex (`ai4h.net`). */
   hostedZoneId: string;
   zoneName: string;
@@ -56,6 +65,17 @@ export class ApiStack extends cdk.Stack {
   public readonly cluster: ecs.Cluster;
   public readonly httpsListener: elbv2.IApplicationListener;
   public readonly apiTargetGroup: elbv2.ApplicationTargetGroup;
+  /**
+   * One-shot Fargate task definition that runs `prisma migrate deploy`.
+   * Rendered only when `props.migrateImage` is supplied. CI launches it
+   * with `aws ecs run-task` after `cdk deploy`; the task runs in the
+   * private subnets and reaches Aurora through the same SG ingress as
+   * the API service. Outputs publish the task def ARN, cluster ARN,
+   * subnet/SG ids, and an SSM parameter aggregating them all so the
+   * Deploy workflow can launch with a single SSM lookup.
+   */
+  public readonly migrateTaskDefArn?: string;
+  public readonly migrateContainerName: string = 'migrate';
 
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
@@ -190,6 +210,98 @@ export class ApiStack extends cdk.Stack {
     // permission. Without this, the sidecar fails to start (403 Forbidden)
     // — a non-essential failure but visible noise in the events.
     grantGuardDutyAgentEcrPull(fargate.taskDefinition);
+
+    // ----------------------------------------------------------------------
+    // One-shot Prisma migrate task definition. Rendered only when an
+    // explicit migrateImage is supplied (CI passes one; local synth omits).
+    // CI launches it via `aws ecs run-task` after `cdk deploy`. The task
+    // runs in the same private subnets and shares the API service's
+    // security group so the existing Aurora ingress rule covers it.
+    //
+    // DATABASE_URL is composed inside the container (apps/migrate/
+    // entrypoint.sh) from per-field ECS secrets so the password never
+    // appears in the task definition's plaintext env.
+    // ----------------------------------------------------------------------
+    if (props.migrateImage && apiSg && props.database.secret) {
+      const migrateTaskDef = new ecs.FargateTaskDefinition(this, 'MigrateTaskDef', {
+        cpu: 256,
+        memoryLimitMiB: 512,
+        runtimePlatform: {
+          cpuArchitecture: ecs.CpuArchitecture.ARM64,
+          operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+        },
+      });
+
+      const dbSecret = props.database.secret;
+      migrateTaskDef.addContainer('migrate', {
+        image: this.resolveMigrateImage(props.migrateImage),
+        containerName: this.migrateContainerName,
+        essential: true,
+        environment: {
+          NODE_ENV: 'production',
+          OCI_ENV: props.cfg.envName,
+        },
+        secrets: {
+          DB_USERNAME: ecs.Secret.fromSecretsManager(dbSecret, 'username'),
+          DB_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, 'password'),
+          DB_HOST: ecs.Secret.fromSecretsManager(dbSecret, 'host'),
+          DB_PORT: ecs.Secret.fromSecretsManager(dbSecret, 'port'),
+          DB_NAME: ecs.Secret.fromSecretsManager(dbSecret, 'dbname'),
+        },
+        logging: ecs.LogDrivers.awsLogs({
+          streamPrefix: 'migrate',
+          logGroup: props.logGroup,
+        }),
+      });
+
+      // Cross-account ECR pull for the GuardDuty Runtime Monitoring agent.
+      grantGuardDutyAgentEcrPull(migrateTaskDef);
+
+      this.migrateTaskDefArn = migrateTaskDef.taskDefinitionArn;
+
+      // Aggregate the launch parameters into one SSM parameter so the
+      // Deploy workflow can fetch a single string and pass it to
+      // `aws ecs run-task`. Format: JSON `{cluster, taskDefinition,
+      // subnets[], securityGroups[]}`.
+      const launchSpec = JSON.stringify({
+        cluster: this.cluster.clusterArn,
+        taskDefinition: migrateTaskDef.taskDefinitionArn,
+        subnets: props.vpc.privateSubnets.map((s) => s.subnetId),
+        securityGroups: [apiSg.securityGroupId],
+      });
+      new ssm.StringParameter(this, 'MigrateLaunchSpecParam', {
+        parameterName: `/oci/${props.cfg.envName}/migrate/launch-spec`,
+        stringValue: launchSpec,
+        description: `Aggregated run-task params for the prisma migrate one-shot in ${props.cfg.envName}`,
+      });
+
+      new cdk.CfnOutput(this, 'MigrateTaskDefArn', { value: migrateTaskDef.taskDefinitionArn });
+      new cdk.CfnOutput(this, 'MigrateClusterArn', { value: this.cluster.clusterArn });
+
+      NagSuppressions.addResourceSuppressions(
+        migrateTaskDef,
+        [
+          {
+            id: 'AwsSolutions-ECS2',
+            reason:
+              'Plaintext envs on the migrate task are non-secret runtime config (NODE_ENV, OCI_ENV). DB credentials are injected as ECS secrets from Secrets Manager (DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME). DATABASE_URL is composed inside the container by entrypoint.sh so the password is never in the task definition.',
+          },
+        ],
+        true,
+      );
+      NagSuppressions.addResourceSuppressionsByPath(
+        this,
+        `/${this.stackName}/MigrateTaskDef/ExecutionRole/DefaultPolicy/Resource`,
+        [
+          {
+            id: 'AwsSolutions-IAM5',
+            reason:
+              'ecr:GetAuthorizationToken does not support resource scoping; AWS requires Resource::*. Per-repo actions are scoped by fromEcrRepository to the imported oci-migrate repo ARN.',
+            appliesTo: ['Resource::*', 'Action::ecr:GetAuthorizationToken'],
+          },
+        ],
+      );
+    }
 
     // WAF (managed rules) for int/prod
     if (props.cfg.enableWaf) {
@@ -345,6 +457,26 @@ export class ApiStack extends cdk.Stack {
     const tag = apiImage.slice(colon + 1);
     const repoName = apiImage.slice(slash + 1, colon);
     const repo = ecr.Repository.fromRepositoryName(this, 'ApiRepoRef', repoName);
+    return ecs.ContainerImage.fromEcrRepository(repo, tag);
+  }
+
+  /**
+   * Same parsing rule as resolveApiImage; we keep it separate so the
+   * imported ECR repository construct gets a distinct CDK id (ApiRepoRef
+   * vs MigrateRepoRef) — `Repository.fromRepositoryName` errors on
+   * duplicate ids in the same scope.
+   */
+  private resolveMigrateImage(migrateImage: string): ecs.ContainerImage {
+    const colon = migrateImage.lastIndexOf(':');
+    const slash = migrateImage.lastIndexOf('/');
+    if (colon <= slash) {
+      throw new Error(
+        `migrateImage "${migrateImage}" is missing a tag; expected "<account>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>"`,
+      );
+    }
+    const tag = migrateImage.slice(colon + 1);
+    const repoName = migrateImage.slice(slash + 1, colon);
+    const repo = ecr.Repository.fromRepositoryName(this, 'MigrateRepoRef', repoName);
     return ecs.ContainerImage.fromEcrRepository(repo, tag);
   }
 }
