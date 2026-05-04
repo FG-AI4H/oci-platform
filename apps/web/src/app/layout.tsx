@@ -1,5 +1,19 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import { SiteShell } from '../components/site-shell';
 import './globals.css';
+
+/**
+ * Inter Variable — self-hosted via next/font, with global subsets so the
+ * UI renders cleanly across Latin, Cyrillic, and Greek scripts (matches
+ * GI-AI4H's reach). Variable axis lets us request weights without
+ * downloading multiple files.
+ */
+const inter = Inter({
+  subsets: ['latin', 'latin-ext', 'cyrillic', 'cyrillic-ext', 'greek', 'greek-ext', 'vietnamese'],
+  display: 'swap',
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: 'OCI Platform — ITU/WHO/WIPO',
@@ -9,8 +23,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <body>
+        <SiteShell>{children}</SiteShell>
+      </body>
     </html>
   );
 }
