@@ -73,19 +73,24 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
   tags,
   vpc: network.vpc,
   database: data.database,
-  cognito: identity.userPool,
-  cognitoClient: identity.userPoolClient,
   logGroup: observability.apiLogGroup,
   accessLogsBucket: observability.accessLogsBucket,
   apiImage,
   hostedZoneId: HOSTED_ZONE_ID,
   zoneName: HOSTED_ZONE_NAME,
 });
+// api/web read Cognito identity primitives from SSM/Secrets-Manager BY NAME
+// (no CFN export — avoids the cross-stack-export deadlock when the user
+// pool client is replaced). identity-stack writes those parameters, so we
+// declare the deploy-order dep explicitly since CDK can no longer infer
+// it from props.
+api.addDependency(identity);
+
 // Web stack — Next.js Fargate service sharing the API's cluster + ALB.
 // Path-based routing on the existing HTTPS listener: ApiStack owns the
 // priority-50 rule for /v2/*, /health, /docs/*; WebStack adds a
 // priority-100 catch-all `/*` for everything else.
-new WebStack(app, `oci-${envName}-web`, {
+const web = new WebStack(app, `oci-${envName}-web`, {
   env: cfg.env,
   cfg,
   tags,
@@ -93,11 +98,9 @@ new WebStack(app, `oci-${envName}-web`, {
   cluster: api.cluster,
   httpsListener: api.httpsListener,
   logGroup: observability.apiLogGroup,
-  cognitoUserPool: identity.userPool,
-  cognitoClient: identity.userPoolClient,
-  cognitoClientSecretSm: identity.userPoolClientSecretSm,
   webImage,
 });
+web.addDependency(identity);
 
 // Run cdk-nag checks (AWS Solutions ruleset) on all stacks
 Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }));
