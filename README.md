@@ -1,6 +1,6 @@
 # OCI Platform
 
-> Open Code Initiative — unified platform for the **ITU-WHO-WIPO Global Initiative on AI for Health (GI-AI4H)**. Consolidates the GI-AI4H **evaluation**, **annotation**, and **reporting** packages onto a single TypeScript-first stack. Builds on the work of the prior FG-AI4H Focus Group (2018-2023).
+> Open Code Infrastructure — unified platform for the **ITU-WHO-WIPO Global Initiative on AI for Health (GI-AI4H)**. Consolidates the GI-AI4H **evaluation**, **annotation**, and **reporting** packages onto a single TypeScript-first stack. Builds on the work of the prior FG-AI4H Focus Group (2018-2023).
 
 [![CI](https://github.com/FG-AI4H/oci-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/FG-AI4H/oci-platform/actions/workflows/ci.yml)
 [![Project](https://img.shields.io/badge/plan-Project%20%233-blue)](https://github.com/orgs/FG-AI4H/projects/3)
