@@ -74,6 +74,7 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
   vpc: network.vpc,
   database: data.database,
   cognito: identity.userPool,
+  cognitoClient: identity.userPoolClient,
   logGroup: observability.apiLogGroup,
   accessLogsBucket: observability.accessLogsBucket,
   apiImage,

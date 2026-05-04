@@ -23,6 +23,10 @@ export interface ApiStackProps extends cdk.StackProps {
   vpc: ec2.IVpc;
   database: rds.DatabaseCluster;
   cognito: cognito.UserPool;
+  /** Web app's Cognito user-pool client — passed to the API task as
+   * `COGNITO_USER_POOL_CLIENT_ID` so it can verify access tokens issued
+   * to that client. */
+  cognitoClient: cognito.UserPoolClient;
   logGroup: logs.ILogGroup;
   /** Shared access-logs bucket (from observability stack) used as ALB access log target. */
   accessLogsBucket: s3.IBucket;
@@ -106,6 +110,7 @@ export class ApiStack extends cdk.Stack {
           OCI_ENV: props.cfg.envName,
           AWS_REGION: this.region,
           COGNITO_USER_POOL_ID: props.cognito.userPoolId,
+          COGNITO_USER_POOL_CLIENT_ID: props.cognitoClient.userPoolClientId,
           COGNITO_REGION: this.region,
         },
         logDriver: ecs.LogDrivers.awsLogs({ streamPrefix: 'api', logGroup: props.logGroup }),
