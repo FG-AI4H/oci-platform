@@ -98,10 +98,14 @@ jobs:
 
       - name: Enable Corepack
         run: corepack enable
+      # No `cache: 'pnpm'` here — this job doesn't run `pnpm install`, so
+      # there's nothing to cache. With the pnpm cache enabled, the
+      # post-step trips on a missing pnpm store directory on the
+      # ubuntu-24.04-arm runner and fails the whole job. The cdk-deploy
+      # job below DOES install pnpm deps and keeps `cache: 'pnpm'`.
       - uses: actions/setup-node@v5
         with:
           node-version-file: '.nvmrc'
-          cache: 'pnpm'
 
       - name: Configure AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
