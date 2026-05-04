@@ -81,11 +81,13 @@ export class ApiStack extends cdk.Stack {
     });
 
     // Public ALB. Access logs go to the shared bucket from observability.
+    // IPv4-only — the VPC's subnets don't have IPv6 CIDR blocks. Phase A2
+    // follow-up: add IPv6 to the VPC + subnets, then flip ALB to DUAL_STACK
+    // and re-add the AAAA record below.
     this.alb = new elbv2.ApplicationLoadBalancer(this, 'Alb', {
       vpc: props.vpc,
       internetFacing: true,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      ipAddressType: elbv2.IpAddressType.DUAL_STACK,
     });
     this.alb.logAccessLogs(props.accessLogsBucket, `alb/${props.cfg.envName}`);
 
@@ -111,13 +113,9 @@ export class ApiStack extends cdk.Stack {
       }),
     });
 
-    // Route 53 alias records for the FQDN (A + AAAA via dual-stack ALB).
+    // Route 53 A alias for the FQDN. IPv6 (AAAA) is a Phase A2 follow-up
+    // gated on the VPC having IPv6 CIDRs.
     new route53.ARecord(this, 'AlbAliasA', {
-      zone,
-      recordName: props.cfg.domainName,
-      target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(this.alb)),
-    });
-    new route53.AaaaRecord(this, 'AlbAliasAAAA', {
       zone,
       recordName: props.cfg.domainName,
       target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(this.alb)),
