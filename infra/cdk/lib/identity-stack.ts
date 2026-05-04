@@ -67,25 +67,33 @@ export class IdentityStack extends cdk.Stack {
 
     this.userPoolClient = this.userPool.addClient('WebClient', {
       userPoolClientName: `oci-${props.cfg.envName}-web`,
-      // PHASE A2 INTERIM: generateSecret stays FALSE (matches the live
-      // pre-PR-#33 state). Toggling false → true is a CFN-immutable
-      // change that forces WebClient replacement; the new client id
-      // would change the value of the auto-generated cross-stack
-      // export `ExportsOutputRefUserPoolWebClient...` while oci-{env}-api
-      // still imports it (live state pins the OLD api template), and CFN
-      // refuses with "Cannot update export X as it is in use by Y".
+      // PHASE A2 INTERIM: `generateSecret` is intentionally OMITTED here,
+      // not set to `false`. The live CFN template (pre-PR-#33) has no
+      // `GenerateSecret` field on the WebClient at all (it relied on the
+      // default). Setting `generateSecret: false` explicitly causes CDK
+      // to emit `GenerateSecret: false` in the template, which CFN then
+      // treats as a property change requiring REPLACEMENT (per AWS docs:
+      // GenerateSecret update requires Replacement). Replacement creates
+      // a new WebClient with a new id, the auto-generated export value
+      // changes, and CFN trips "Cannot update export … as it is in use
+      // by oci-dev-api." Verified via cloudformation describe-stack-events:
+      //   "Requested update requires the creation of a new physical
+      //    resource; hence creating one."
+      // Omitting the field entirely means CDK emits no GenerateSecret →
+      // the template matches the live one byte-for-byte on this property
+      // → no replacement → bridge outputs stay value-stable.
+      //
       // Sequence to land confidential mode safely:
-      //   1. THIS PR: keep generateSecret=false → identity update is a
-      //      no-op for WebClient → api/web update to drop their
-      //      Fn::ImportValue refs cleanly. NextAuth signin is broken
-      //      for one cycle (no client secret).
+      //   1. THIS PR: omit generateSecret → identity update is a no-op
+      //      for WebClient → api/web update to drop their Fn::ImportValue
+      //      refs cleanly. NextAuth signin is broken for one cycle
+      //      (no client secret).
       //   2. Follow-up PR: drop the bridge CfnOutputs (api/web no
       //      longer import; outputs are orphan and safe to remove).
-      //   3. Follow-up PR: flip generateSecret to true and re-add the
+      //   3. Follow-up PR: set generateSecret: true and re-add the
       //      Secrets Manager mirror + web's AUTH_COGNITO_SECRET ref.
       //      Replacement happens, but no exports reference the
       //      WebClient id any more, so the in-use check passes.
-      generateSecret: false,
       authFlows: { userSrp: true },
       oAuth: {
         flows: { authorizationCodeGrant: true },
