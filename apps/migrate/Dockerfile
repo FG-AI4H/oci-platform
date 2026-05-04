@@ -23,6 +23,7 @@ WORKDIR /app
 #     sync with packages/database/package.json's prisma dependency.
 COPY apps/migrate/package.json ./package.json
 COPY apps/migrate/entrypoint.sh ./entrypoint.sh
+COPY apps/migrate/prisma.config.ts ./prisma.config.ts
 COPY packages/database/prisma ./prisma
 
 # Install only the prisma CLI (no @prisma/client at runtime — we're not
