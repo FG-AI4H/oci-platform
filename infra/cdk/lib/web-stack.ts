@@ -68,19 +68,9 @@ export class WebStack extends cdk.Stack {
       removalPolicy: props.cfg.removalPolicy,
     });
 
-    // Cognito identity primitives via SSM BY NAME (no cross-stack CFN
-    // export from identity-stack — would deadlock when the user pool
-    // client is replaced). identity-stack writes these.
-    //
-    // PHASE A2 INTERIM: AUTH_COGNITO_SECRET is intentionally not wired
-    // here yet. The Cognito client secret can only be created by
-    // toggling `generateSecret: true` on the WebClient — that's a
-    // CFN-immutable change forcing replacement, which a follow-up PR
-    // will land cleanly once the bridge outputs in identity-stack are
-    // dropped (api/web no longer import the WebClient id by then).
-    // Until that follow-up: NextAuth signin will fail at runtime
-    // (the Cognito provider needs a client secret); the rest of the
-    // web app (server-rendered pages, API proxying) works fine.
+    // Cognito identity primitives via SSM/Secrets-Manager BY NAME (no
+    // cross-stack CFN export from identity-stack — would deadlock when
+    // the user pool client is replaced). identity-stack writes these.
     const userPoolId = ssm.StringParameter.valueForStringParameter(
       this,
       `/oci/${props.cfg.envName}/cognito/user-pool-id`,
@@ -88,6 +78,11 @@ export class WebStack extends cdk.Stack {
     const cognitoClientId = ssm.StringParameter.valueForStringParameter(
       this,
       `/oci/${props.cfg.envName}/cognito/web-client-id`,
+    );
+    const cognitoClientSecret = secretsmanager.Secret.fromSecretNameV2(
+      this,
+      'WebClientCognitoSecretLookup',
+      `/oci/${props.cfg.envName}/cognito/web-client-secret`,
     );
 
     taskDef.addContainer('web', {
@@ -106,6 +101,7 @@ export class WebStack extends cdk.Stack {
       },
       secrets: {
         AUTH_SECRET: ecs.Secret.fromSecretsManager(authSecret),
+        AUTH_COGNITO_SECRET: ecs.Secret.fromSecretsManager(cognitoClientSecret),
       },
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'web', logGroup: props.logGroup }),
     });
@@ -170,7 +166,7 @@ export class WebStack extends cdk.Stack {
         {
           id: 'AwsSolutions-ECS2',
           reason:
-            'Plaintext envs on the Web task are non-secret build/runtime configuration only (NODE_ENV, OCI_ENV, NEXT_PUBLIC_API_BASE_URL, AUTH_URL, AUTH_COGNITO_ID, AUTH_COGNITO_ISSUER — all are public URLs / non-secret IDs). The real secret AUTH_SECRET is injected via ecs.Secret.fromSecretsManager. AUTH_COGNITO_SECRET is reintroduced in the Phase A2 follow-up alongside generateSecret: true.',
+            'Plaintext envs on the Web task are non-secret build/runtime configuration only (NODE_ENV, OCI_ENV, NEXT_PUBLIC_API_BASE_URL, AUTH_URL, AUTH_COGNITO_ID, AUTH_COGNITO_ISSUER — all are public URLs / non-secret IDs). The two real secrets, AUTH_SECRET and AUTH_COGNITO_SECRET, are injected via ecs.Secret.fromSecretsManager.',
         },
       ],
       true,
