@@ -266,8 +266,9 @@ jobs:
           REG="${{ steps.meta.outputs.registry }}"
           resolve() {
             local name="$1" decision="$2" rebuilt="$3" repo="$4"
+            local uri
             if [[ "$decision" == "true" ]]; then
-              echo "$name=$rebuilt"
+              uri="$rebuilt"
             else
               local latest
               latest=$(aws ecr describe-images \
@@ -278,15 +279,15 @@ jobs:
                 echo "::error::No prior $repo image to reuse and build was skipped." >&2
                 exit 1
               fi
-              echo "$name=$REG/$repo:$latest"
-              echo "::notice::Reusing $repo:$latest (no source changes since last deploy)."
+              uri="$REG/$repo:$latest"
+              # Log lines must go to stderr so they don't pollute GITHUB_OUTPUT.
+              echo "::notice::Reusing $repo:$latest (no source changes since last deploy)." >&2
             fi
+            echo "$name=$uri" >> "$GITHUB_OUTPUT"
           }
-          {
-            resolve api    "${{ steps.decide.outputs.api }}"    "${{ steps.meta.outputs.api }}"    "oci-api"
-            resolve web    "${{ steps.decide.outputs.web }}"    "${{ steps.meta.outputs.web }}"    "oci-web"
-            resolve ingest "${{ steps.decide.outputs.ingest }}" "${{ steps.meta.outputs.ingest }}" "oci-worker-ingest"
-          } >> "$GITHUB_OUTPUT"
+          resolve api    "${{ steps.decide.outputs.api }}"    "${{ steps.meta.outputs.api }}"    "oci-api"
+          resolve web    "${{ steps.decide.outputs.web }}"    "${{ steps.meta.outputs.web }}"    "oci-web"
+          resolve ingest "${{ steps.decide.outputs.ingest }}" "${{ steps.meta.outputs.ingest }}" "oci-worker-ingest"
 
   cdk-deploy:
     needs: build-images
