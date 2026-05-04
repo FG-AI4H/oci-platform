@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
 import type { OciEnvConfig } from './environments.js';
@@ -95,9 +96,23 @@ export class IdentityStack extends cdk.Stack {
       refreshTokenValidity: cdk.Duration.days(30),
     });
 
-    // Mirror the Cognito client secret into Secrets Manager so the web
-    // task can read it via `ecs.Secret.fromSecretsManager(...)`.
+    // Cross-stack indirection layer: mirror identity primitives into SSM
+    // (for IDs) and Secrets Manager (for the client secret) under
+    // deterministic names. Consumer stacks (api, web) reference these by
+    // NAME, not by CFN export — replacing the user pool client doesn't
+    // break a CFN-export-in-use deadlock with downstream stacks.
+    new ssm.StringParameter(this, 'UserPoolIdParam', {
+      parameterName: `/oci/${props.cfg.envName}/cognito/user-pool-id`,
+      stringValue: this.userPool.userPoolId,
+      description: `Cognito user pool id for ${props.cfg.envName} (consumed by api/web)`,
+    });
+    new ssm.StringParameter(this, 'WebClientIdParam', {
+      parameterName: `/oci/${props.cfg.envName}/cognito/web-client-id`,
+      stringValue: this.userPoolClient.userPoolClientId,
+      description: `Cognito web app-client id for ${props.cfg.envName} (consumed by api/web)`,
+    });
     this.userPoolClientSecretSm = new secretsmanager.Secret(this, 'WebClientCognitoSecret', {
+      secretName: `/oci/${props.cfg.envName}/cognito/web-client-secret`,
       description: `Cognito user pool client secret for ${props.cfg.envName} web app (NextAuth)`,
       secretStringValue: this.userPoolClient.userPoolClientSecret,
       removalPolicy: props.cfg.removalPolicy,
