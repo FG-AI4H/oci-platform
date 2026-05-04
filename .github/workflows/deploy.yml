@@ -156,8 +156,13 @@ jobs:
             --push \
             .
 
+      # Trivy needs an explicit platform now that we publish ARM64-only
+      # images (PR #29). Without TRIVY_PLATFORM, Trivy looks for a
+      # linux/amd64 child in the manifest and fails.
       - name: Trivy image scan (API)
         uses: aquasecurity/trivy-action@master
+        env:
+          TRIVY_PLATFORM: linux/arm64
         with:
           image-ref: ${{ steps.meta.outputs.api }}
           severity: 'CRITICAL,HIGH'
@@ -166,6 +171,8 @@ jobs:
 
       - name: Trivy image scan (Web)
         uses: aquasecurity/trivy-action@master
+        env:
+          TRIVY_PLATFORM: linux/arm64
         with:
           image-ref: ${{ steps.meta.outputs.web }}
           severity: 'CRITICAL,HIGH'
