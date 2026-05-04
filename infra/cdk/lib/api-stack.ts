@@ -88,10 +88,10 @@ export class ApiStack extends cdk.Stack {
       desiredCount: props.cfg.fargate.minTasks,
       circuitBreaker: { rollback: true },
       runtimePlatform: {
-        // x86_64 to match the amd64 images produced by ubuntu-latest. ARM64
-        // (with docker buildx --platform linux/arm64) is a Phase A2 cost
-        // optimization follow-up.
-        cpuArchitecture: ecs.CpuArchitecture.X86_64,
+        // Graviton (ARM64) Fargate — ~20% cheaper than x86_64. Workflow
+        // builds linux/arm64 images via docker buildx + QEMU on the
+        // x86_64 ubuntu-latest runner.
+        cpuArchitecture: ecs.CpuArchitecture.ARM64,
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
       },
       taskImageOptions: {

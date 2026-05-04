@@ -49,7 +49,8 @@ export class WebStack extends cdk.Stack {
       cpu: props.cfg.fargate.cpu,
       memoryLimitMiB: props.cfg.fargate.memory,
       runtimePlatform: {
-        cpuArchitecture: ecs.CpuArchitecture.X86_64,
+        // Graviton (ARM64) — match api-stack. ~20% Fargate cost saving.
+        cpuArchitecture: ecs.CpuArchitecture.ARM64,
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
       },
     });
