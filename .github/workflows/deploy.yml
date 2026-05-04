@@ -83,7 +83,11 @@ jobs:
 
   build-images:
     needs: preflight
-    runs-on: ubuntu-latest
+    # Native ARM64 runner — builds linux/arm64 images directly without
+    # QEMU emulation. Avoids "qemu: uncaught target signal 4 (Illegal
+    # instruction)" crashes that hit Turbopack / SWC native binaries
+    # during `next build` under QEMU. Also ~2-3x faster than QEMU cross.
+    runs-on: ubuntu-24.04-arm
     environment: ${{ inputs.target || 'dev' }}
     outputs:
       api-image: ${{ steps.meta.outputs.api }}
@@ -109,13 +113,9 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # buildx + QEMU let us cross-build linux/arm64 images on the
-      # x86_64 ubuntu-latest runner. Slower than native (~2-3x) but
-      # the resulting Graviton tasks save ~20% on Fargate cost.
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm64
+      # buildx for parity with the previous QEMU-based pipeline (cache
+      # support, --push behaviour). On a native ARM64 runner the
+      # --platform linux/arm64 build is a no-op architecturally.
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
