@@ -56,12 +56,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             roles: { label: 'Roles (comma-sep)', type: 'text', placeholder: 'host,admin' },
           },
           authorize: (raw) => {
-            const userValue = typeof raw?.user === 'string' && raw.user.length > 0
-              ? raw.user
-              : 'local-dev@oci.ai4h.net';
-            const rolesValue = typeof raw?.roles === 'string' && raw.roles.length > 0
-              ? raw.roles
-              : 'host,admin';
+            const userValue =
+              typeof raw?.user === 'string' && raw.user.length > 0
+                ? raw.user
+                : 'local-dev@oci.ai4h.net';
+            const rolesValue =
+              typeof raw?.roles === 'string' && raw.roles.length > 0 ? raw.roles : 'host,admin';
             return {
               id: userValue,
               name: userValue,
