@@ -31,6 +31,8 @@
     "@oci/croissant": "workspace:*",
     "@oci/database": "workspace:*",
     "@oci/shared-types": "workspace:*",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
     "aws-jwt-verify": "^5.1.1",
     "bullmq": "^5.76.4",
     "class-transformer": "^0.5.1",
