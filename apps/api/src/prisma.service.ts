@@ -34,21 +34,20 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   constructor() {
     const connectionString = resolveDatabaseUrl();
     this.client = new PrismaClient({
-      adapter: new PrismaPg({
-        connectionString,
-        // Aurora's RDS root CA isn't in distroless Node's default trust
-        // store. The pg lib defaults to rejectUnauthorized: true even
-        // when the URL says sslmode=require, so the handshake fails with
-        // "unable to get local issuer certificate". Disabling cert
-        // verification is acceptable in this topology — the API talks
-        // to Aurora over a private VPC subnet (no public route), the
-        // SG ingress restricts source to the API's own SG, and the
-        // password is rotated by Secrets Manager. If we ever need
-        // chain-of-custody validation, swap to bundling the RDS root
-        // CA from https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
-        // into the image and pointing `ssl.ca` at it.
-        ssl: { rejectUnauthorized: false },
-      }),
+      // pg-connection-string ignores `ssl: { rejectUnauthorized: false }`
+      // when a connectionString is also passed: pg's
+      // ConnectionParameters does `Object.assign({}, config,
+      // parse(connectionString))`, so the URL-derived ssl wins. Encode
+      // the no-verify intent inside the URL itself via `sslmode=no-verify`,
+      // which pg-connection-string maps directly to `rejectUnauthorized:
+      // false`. Acceptable in this topology — the API talks to Aurora
+      // over a private VPC subnet (no public route), the SG ingress
+      // restricts source to the API's own SG, and the password is
+      // rotated by Secrets Manager. If we ever need chain-of-custody
+      // validation, switch to bundling the RDS root CA from
+      // https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+      // into the image and use `sslmode=verify-full` with `sslrootcert`.
+      adapter: new PrismaPg({ connectionString }),
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
     });
   }
@@ -76,7 +75,7 @@ function resolveDatabaseUrl(): string {
     // URL-encode the password — Aurora-managed rotated secrets can
     // include @ : / ? & = and other reserved characters.
     const encPassword = encodeURIComponent(password);
-    return `postgresql://${username}:${encPassword}@${host}:${port}/${dbname}?schema=public&sslmode=require`;
+    return `postgresql://${username}:${encPassword}@${host}:${port}/${dbname}?schema=public&sslmode=no-verify`;
   }
 
   throw new Error(
