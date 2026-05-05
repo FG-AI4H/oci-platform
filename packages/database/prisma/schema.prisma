@@ -32,19 +32,156 @@ model User {
 }
 
 // ==========================================================================
-// catalog — datasets, Croissant metadata, data-access requests (DAP, WS-1)
+// catalog — datasets, Croissant 1.1 / RAI / BIOCroissant manifests,
+//            versions, distributions, access requests. (DAP package, WS-1.)
 // ==========================================================================
+//
+// `Dataset` is the canonical record. The latest published Croissant manifest
+// lives on `Dataset.croissant` for fast reads; full version history is on
+// `DatasetVersion` (immutable rows once published, addressed by content hash).
+// `Distribution` rows mirror the FileObject/FileSet entries from the manifest
+// so we can resolve them to S3 keys + pre-signed URLs without re-parsing the
+// JSON-LD on every request. `AccessRequest` carries the consent / DPIA /
+// IRB attestations needed to grant a requester access to RESTRICTED data.
+//
+// Cross-schema references (host_id, requester_id, etc. → identity.users) are
+// kept as soft (UUID) references rather than Prisma relations: Prisma's
+// multiSchema preview doesn't model FKs across schemas cleanly, and
+// dataset-host bindings are administrative (host accounts can be deactivated
+// without deleting their datasets). Phase B may revisit if cross-schema
+// FKs prove necessary for cascading.
+
+enum DatasetVisibility {
+  PRIVATE
+  RESTRICTED
+  PUBLIC
+
+  @@schema("catalog")
+}
+
+enum DatasetStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+
+  @@schema("catalog")
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+  REVOKED
+
+  @@schema("catalog")
+}
 
 model Dataset {
-  id          String   @id @default(uuid()) @db.Uuid
-  name        String
-  description String?
-  // BIOCroissant manifest stored alongside structured metadata
-  croissant   Json?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id                 String            @id @default(uuid()) @db.Uuid
+  /// URL-safe identifier, e.g. "rsna-pneumonia-2018-v1". Unique. Used in
+  /// catalog URLs and as the @id base for the Croissant manifest.
+  slug               String            @unique
+  /// Human-readable name; mirrors Croissant `sc:name` on the latest version.
+  name               String
+  description        String?
+  /// Soft FK → identity.users.id. The dataset host (admin / steward).
+  hostId             String            @map("host_id") @db.Uuid
+  visibility         DatasetVisibility @default(PRIVATE)
+  status             DatasetStatus     @default(DRAFT)
+  /// Croissant conformance target of `croissant`, e.g. "1.0", "1.1".
+  /// Derived from `dct:conformsTo` at publish time.
+  conformanceVersion String?           @map("conformance_version")
+  /// Latest published Croissant 1.1 (+ RAI + BIOCroissant) manifest.
+  /// NULL while in DRAFT; populated on transition to PUBLISHED.
+  croissant          Json?
 
+  versions       DatasetVersion[]
+  accessRequests AccessRequest[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([visibility, status])
+  @@index([hostId])
   @@map("datasets")
+  @@schema("catalog")
+}
+
+model DatasetVersion {
+  id            String  @id @default(uuid()) @db.Uuid
+  datasetId     String  @map("dataset_id") @db.Uuid
+  /// Semver per the Croissant spec (MAJOR.MINOR.PATCH). Unique per dataset.
+  version       String
+  croissant     Json
+  /// SHA-256 hex of the canonicalised JSON-LD. Used for integrity checks +
+  /// as the content address when other systems cite a specific version.
+  croissantHash String? @map("croissant_hash")
+  notes         String?
+  /// Soft FK → identity.users.id. Whoever published this version.
+  publishedById String  @map("published_by_id") @db.Uuid
+
+  publishedAt DateTime @default(now()) @map("published_at")
+
+  dataset       Dataset        @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  distributions Distribution[]
+
+  @@unique([datasetId, version])
+  @@index([datasetId, publishedAt])
+  @@map("dataset_versions")
+  @@schema("catalog")
+}
+
+model Distribution {
+  id               String  @id @default(uuid()) @db.Uuid
+  datasetVersionId String  @map("dataset_version_id") @db.Uuid
+  /// `@id` of the FileObject / FileSet inside the Croissant manifest. Stable
+  /// across versions only when the content + filename are stable.
+  croissantId      String  @map("croissant_id")
+  contentUrl       String? @map("content_url")
+  contentType      String  @map("content_type")
+  contentSizeBytes BigInt? @map("content_size_bytes")
+  /// Lower-case hex sha256.
+  contentHash      String? @map("content_hash_sha256")
+  /// True when an AccessRequest must be APPROVED before contentUrl is minted
+  /// (S3 pre-signed) for the requester. Mirrors the dataset's RESTRICTED
+  /// visibility but per-distribution so a dataset can mix public + restricted
+  /// distributions (e.g. metadata-only public, full DICOMs restricted).
+  requiresAccess   Boolean @default(false) @map("requires_access")
+
+  datasetVersion DatasetVersion @relation(fields: [datasetVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([datasetVersionId, croissantId])
+  @@map("distributions")
+  @@schema("catalog")
+}
+
+model AccessRequest {
+  id            String              @id @default(uuid()) @db.Uuid
+  datasetId     String              @map("dataset_id") @db.Uuid
+  /// Soft FK → identity.users.id.
+  requesterId   String              @map("requester_id") @db.Uuid
+  justification String
+  status        AccessRequestStatus @default(PENDING)
+  /// Set when status leaves PENDING.
+  decidedAt     DateTime?           @map("decided_at")
+  /// Soft FK → identity.users.id. Host or admin who APPROVED/DENIED/REVOKED.
+  decidedById   String?             @map("decided_by_id") @db.Uuid
+  decisionNote  String?             @map("decision_note")
+  /// Structured consent / compliance attestations. Shape (Phase B):
+  ///   { irbApproved: boolean, irbApprovalRef?: string,
+  ///     dpiaRef?: string, dataRetentionDays?: number,
+  ///     duoConsent?: string[]  // DUO term IRIs }
+  attestations  Json?
+
+  dataset Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([datasetId, status])
+  @@index([requesterId, status])
+  @@map("access_requests")
   @@schema("catalog")
 }
 

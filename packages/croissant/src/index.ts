@@ -1,45 +1,46 @@
 /**
- * BIOCroissant — Healthcare extension to MLCommons Croissant.
+ * @oci/croissant — Croissant 1.1 / RAI / BIOCroissant validator.
  *
- * WG-Data deliverable mapping:
- * - DAP 2026-Q2: Healthcare Croissant Extension v1.0 ingestion (Phase B)
- * - DAP 2027-Q1: Ontology compatibility layer (Phase E)
+ * Layered design:
+ *   - croissant10/   base 1.0 schema (MLCommons, March 2024). Locked.
+ *   - croissant11/   1.1 deltas (Feb 2026): PROV-O, DUO, ODRL, vocab framework.
+ *   - rai/           Croissant Responsible AI extension (20 properties).
+ *   - biocroissant/  OCI Platform v0.1 health extension (DRAFT — see ADR-0002).
+ *   - validator/     normalize + dispatch + JSON-Pointer error reporting.
  *
- * Spec status: draft. Real schema is published by MLCommons + WG-Data.
- * This package provides:
- *   - Type-safe parsing (Zod)
- *   - JSON Schema validation (Ajv)
- *   - Healthcare-specific extension fields (consent, provenance, FHIR refs)
+ * Single entry point:
  *
- * See docs/architecture.md and docs/links.md for upstream references.
+ *   import { validate } from '@oci/croissant';
+ *   const result = validate(jsonLdManifest);
+ *   if (!result.ok) {
+ *     // result.issues has stable codes + JSON Pointer paths
+ *   }
+ *
+ * The validator accepts both prefixed (`sc:name`, `cr:RecordSet`,
+ * `bio:imagingModality`) and bare key forms — see validator/normalize.ts
+ * for the prefix list it strips. JSON-LD `@context` expansion against
+ * arbitrary user-defined aliases is OUT OF SCOPE for v0.1 (we don't ship
+ * jsonld.js); ~all real-world Croissant manifests use the standard
+ * prefix vocabulary so this is fine in practice. If a manifest with a
+ * custom `@context` ever needs to round-trip, swap normalize() for
+ * jsonld.expand() at this boundary.
  */
 
-import { z } from 'zod';
+export { validate } from './validator/index.js';
+export type {
+  ValidationResult,
+  ValidationIssue,
+  ValidationLevel,
+  Conformance,
+} from './validator/index.js';
 
-export const CroissantManifestSchema = z.object({
-  '@context': z.union([z.string(), z.array(z.string())]).optional(),
-  '@type': z.literal('sc:Dataset').optional(),
-  name: z.string(),
-  description: z.string().optional(),
-  url: z.string().url().optional(),
-  // Placeholder — Phase B will mirror the published schema
-  recordSet: z.array(z.unknown()).optional(),
-  fileObject: z.array(z.unknown()).optional(),
-  fileSet: z.array(z.unknown()).optional(),
-  // BIOCroissant healthcare extensions
-  bioCroissant: z
-    .object({
-      consentBasis: z.string().optional(),
-      ontologies: z.array(z.string()).optional(),
-      modality: z
-        .enum(['imaging', 'genomics', 'ehr', 'clinicalNotes', 'audio', 'video', 'tabular'])
-        .optional(),
-      jurisdiction: z.string().optional(),
-    })
-    .optional(),
-});
-export type CroissantManifest = z.infer<typeof CroissantManifestSchema>;
+export { Croissant10Schema, type Croissant10 } from './croissant10/schema.js';
+export { Croissant11DeltasSchema, type Croissant11Deltas } from './croissant11/schema.js';
+export { RaiExtensionSchema, RAI_PROPERTIES, type RaiExtension } from './rai/schema.js';
+export {
+  BioCroissantSchema,
+  BIOCROISSANT_PROPERTIES,
+  type BioCroissant,
+} from './biocroissant/schema.js';
 
-export function parseManifest(raw: unknown): CroissantManifest {
-  return CroissantManifestSchema.parse(raw);
-}
+export { NS, CONFORMS_TO } from './namespaces/index.js';
