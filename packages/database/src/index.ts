@@ -29,4 +29,29 @@ if (process.env.NODE_ENV === 'production') {
   globalThis.__ociPrisma = undefined;
 }
 
-export type { Prisma } from './generated/client/index.js';
+// Re-export the runtime PrismaClient class for callers that need their
+// own instance (e.g. NestJS DI scopes that want lifecycle hooks). Most
+// code should use `prisma` above; PrismaClient is here as an escape hatch.
+export { PrismaClient } from './generated/client/index.js';
+
+// The `Prisma` namespace carries the typed model interfaces, helpers
+// (Prisma.sql, Prisma.InputJsonValue, …), and runtime errors. Re-export
+// as both type-only and runtime so consumers don't have to know the
+// difference. Model types (Dataset, DatasetVersion, …) are available via
+// `Prisma.Dataset`-style accessors and as named exports below.
+export { Prisma } from './generated/client/index.js';
+
+// Domain model types — convenience re-exports so callers can write
+//   import type { Dataset, DatasetVersion } from '@oci/database';
+// rather than reaching into the generated path. Keep this list in sync
+// with prisma/schema.prisma.
+export type {
+  User,
+  Dataset,
+  DatasetVersion,
+  Distribution,
+  AccessRequest,
+  DatasetVisibility,
+  DatasetStatus,
+  AccessRequestStatus,
+} from './generated/client/index.js';

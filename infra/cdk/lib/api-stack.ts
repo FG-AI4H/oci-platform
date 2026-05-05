@@ -138,6 +138,19 @@ export class ApiStack extends cdk.Stack {
           ),
           COGNITO_REGION: this.region,
         },
+        // Aurora credential secrets — same per-field injection as the
+        // migrate task. The API composes DATABASE_URL at boot from these
+        // (see apps/api/src/prisma.service.ts -> resolveDatabaseUrl).
+        // The container is distroless (no shell), so the composition has
+        // to happen in Node at startup rather than in an entrypoint.sh
+        // like the migrate task does.
+        secrets: {
+          DB_USERNAME: ecs.Secret.fromSecretsManager(props.database.secret!, 'username'),
+          DB_PASSWORD: ecs.Secret.fromSecretsManager(props.database.secret!, 'password'),
+          DB_HOST: ecs.Secret.fromSecretsManager(props.database.secret!, 'host'),
+          DB_PORT: ecs.Secret.fromSecretsManager(props.database.secret!, 'port'),
+          DB_NAME: ecs.Secret.fromSecretsManager(props.database.secret!, 'dbname'),
+        },
         logDriver: ecs.LogDrivers.awsLogs({ streamPrefix: 'api', logGroup: props.logGroup }),
       },
       publicLoadBalancer: true,

@@ -95,6 +95,14 @@ model Dataset {
   /// Latest published Croissant 1.1 (+ RAI + BIOCroissant) manifest.
   /// NULL while in DRAFT; populated on transition to PUBLISHED.
   croissant          Json?
+  /// PostgreSQL `tsvector` GENERATED column (added by migration
+  /// 20260506000001_catalog_search). Drives the
+  /// `GET /v2/catalog/datasets?q=...` full-text search via raw SQL
+  /// (`@oci/database` exposes a typed `searchDatasets()` helper).
+  /// Prisma can't model tsvector natively; we declare it `Unsupported`
+  /// so the migration tracks the column without exposing it on the
+  /// generated client surface (which would force casts everywhere).
+  searchVector       Unsupported("tsvector")? @map("search_vector")
 
   versions       DatasetVersion[]
   accessRequests AccessRequest[]
