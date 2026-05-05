@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TerminusModule } from '@nestjs/terminus';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module.js';
+import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { HealthController } from './health.controller.js';
 import { MeController } from './me/me.controller.js';
 
@@ -12,9 +13,10 @@ import { MeController } from './me/me.controller.js';
     TerminusModule,
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     AuthModule,
-    // Domain modules will be added in Phase B onwards:
-    // IdentityModule, CatalogModule, StorageModule,
-    // AnnotationModule, PredictionModule, EvaluationModule, ReportingModule
+    CatalogModule,
+    // Phase B will continue to add: AnnotationModule
+    // Phase C: PredictionModule, EvaluationModule
+    // Phase D: ReportingModule
   ],
   controllers: [HealthController, MeController],
 })

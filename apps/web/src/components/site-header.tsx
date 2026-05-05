@@ -18,12 +18,22 @@ export async function SiteHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-background)]/85 backdrop-blur supports-[backdrop-filter]:bg-[var(--color-background)]/70">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Link
-          href="/"
-          className="rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
-        >
-          <BrandLockup />
-        </Link>
+        <div className="flex items-center gap-6">
+          <Link
+            href="/"
+            className="rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+          >
+            <BrandLockup />
+          </Link>
+          <nav className="hidden sm:flex items-center gap-4">
+            <Link
+              href="/catalog"
+              className="text-sm font-medium text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
+            >
+              Catalog
+            </Link>
+          </nav>
+        </div>
 
         <div className="flex items-center gap-3">
           {env !== 'prod' && (
