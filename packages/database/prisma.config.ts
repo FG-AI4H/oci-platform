@@ -1,6 +1,10 @@
 // Prisma 7 configuration — owns the connection URL for Migrate / Studio.
 // Application-time PrismaClient gets its connection from the @prisma/adapter-pg
 // instance instead (see src/index.ts).
+//
+// Per @prisma/config@7.8 type defs, the URL must be nested in
+// `datasource: { url }` — `datasourceUrl` (the Prisma 6 spelling) is silently
+// ignored by the Prisma 7 loader.
 
 import 'dotenv/config';
 import path from 'node:path';
@@ -11,5 +15,5 @@ export default defineConfig({
   migrations: {
     path: path.join('prisma', 'migrations'),
   },
-  datasourceUrl: process.env.DATABASE_URL,
+  datasource: { url: process.env.DATABASE_URL },
 });
