@@ -1,3 +1,10 @@
+// Polyfill Reflect.metadata before any @nestjs/* decorator runs so
+// constructor-param types are visible to Nest's DI. NestJS v11 stopped
+// importing this side-effect module implicitly; without it, classes
+// declared with `constructor(private foo: Foo) {}` (no @Inject) get
+// their dependency resolved as `undefined`. Required for both `tsc`
+// builds and `tsx`-based local dev.
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';

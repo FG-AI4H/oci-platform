@@ -1,0 +1,36 @@
+# Local-only stack for `pnpm dev`. Mirrors the dev-env services that the
+# CDK provisions in AWS (Aurora Postgres + ElastiCache-equivalent Redis)
+# at small scale. NOT for prod use. Credentials match the URLs hardcoded
+# in apps/api/.env.example and apps/web/.env.example.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: oci-postgres
+    environment:
+      POSTGRES_USER: oci
+      POSTGRES_PASSWORD: oci
+      POSTGRES_DB: oci_dev
+    ports:
+      - '5432:5432'
+    volumes:
+      - oci-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U oci -d oci_dev']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:8-alpine
+    container_name: oci-redis
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  oci-postgres-data:

@@ -14,9 +14,15 @@ import { COGNITO_VERIFIER, CognitoJwtGuard } from './cognito-jwt.guard.js';
  *   COGNITO_USER_POOL_CLIENT_ID  (Cognito app-client id of @oci/web)
  *   COGNITO_REGION               (eu-central-1)
  *
- * Dev-friendly fallback: if any of these are missing, the verifier
- * provider returns a stub that always throws — so unprotected routes
- * keep working but `@UseGuards(CognitoJwtGuard)` gives a clear 401.
+ * Local-dev: when `OCI_ENV=local`, the verifier provider returns
+ * `undefined` (the guard's `@Optional() @Inject` accepts that) and the
+ * guard short-circuits to its built-in stub. CDK never sets
+ * `OCI_ENV=local`, so the bypass is unreachable in dev/int/prod.
+ *
+ * Dev-friendly fallback in non-local envs: if the Cognito env vars are
+ * missing, the verifier provider returns a stub that always throws —
+ * unprotected routes keep working but `@UseGuards(CognitoJwtGuard)`
+ * gives a clear 401.
  */
 @Module({
   providers: [
@@ -24,6 +30,10 @@ import { COGNITO_VERIFIER, CognitoJwtGuard } from './cognito-jwt.guard.js';
       provide: COGNITO_VERIFIER,
       useFactory: () => {
         const logger = new Logger('CognitoVerifier');
+        if (process.env.OCI_ENV === 'local') {
+          logger.warn('OCI_ENV=local — DEV AUTH STUB ACTIVE; no JWT verification');
+          return undefined;
+        }
         const userPoolId = process.env.COGNITO_USER_POOL_ID;
         const clientId = process.env.COGNITO_USER_POOL_CLIENT_ID;
         if (!userPoolId || !clientId) {
