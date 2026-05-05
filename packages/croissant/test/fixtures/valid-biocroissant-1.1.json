@@ -1,0 +1,115 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "sc": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "odrl": "http://www.w3.org/ns/odrl/2/",
+    "dct": "http://purl.org/dc/terms/",
+    "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
+  },
+  "@type": "sc:Dataset",
+  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
+  "name": "fixture-chest-xray-2026-q2",
+  "description": "Anonymised chest radiograph dataset for pneumonia detection benchmarking. Synthetic fixture for OCI validator tests; not real patient data.",
+  "license": "https://spdx.org/licenses/CDLA-Permissive-2.0",
+  "url": "https://example.org/datasets/fixture-chest-xray-2026-q2",
+  "creator": {
+    "@type": "sc:Organization",
+    "name": "OCI Platform Test Hospital"
+  },
+  "datePublished": "2026-04-01",
+  "version": "1.0.0",
+  "keywords": ["chest", "x-ray", "pneumonia", "deep learning"],
+  "citeAs": "@dataset{oci-fixture-chest-xray, title = {Fixture chest radiograph dataset}, year = {2026}}",
+  "distribution": [
+    {
+      "@type": "sc:FileObject",
+      "@id": "manifest.csv",
+      "name": "manifest.csv",
+      "contentUrl": "https://example.org/datasets/fixture-chest-xray-2026-q2/manifest.csv",
+      "encodingFormat": "text/csv",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "@type": "sc:FileSet",
+      "@id": "images",
+      "containedIn": "manifest.csv",
+      "includes": "*.dcm",
+      "encodingFormat": "application/dicom"
+    }
+  ],
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "studies",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "studies/study_id",
+          "name": "study_id",
+          "dataType": "sc:Text"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "studies/label",
+          "name": "label",
+          "dataType": ["sc:Text", "cr:Label"]
+        }
+      ]
+    }
+  ],
+  "prov:wasAttributedTo": {
+    "@type": "prov:Organization",
+    "name": "OCI Platform Test Hospital"
+  },
+  "rai:dataCollection": "Acquired between 2024-01-01 and 2024-12-31 from a single tertiary care hospital. All studies are de-identified per HIPAA Safe Harbor.",
+  "rai:dataCollectionTimeframe": "2024-01-01/2024-12-31",
+  "rai:dataAnnotationProtocol": "Two board-certified radiologists labelled each study independently; disagreements adjudicated by a third senior radiologist.",
+  "rai:annotationsPerItem": "3",
+  "rai:annotatorDemographics": "Three radiologists: 2 female / 1 male; mean experience 12 years.",
+  "rai:dataBiases": "Single-site cohort skews toward an urban, predominantly Caucasian patient population. Generalisation to other geographies untested.",
+  "rai:dataLimitations": "Frontal projections only; no lateral views. Not suitable for paediatric or veterinary use.",
+  "rai:personalSensitiveInformation": "Age (decade-level), biological sex. No name, address, MRN, or accession.",
+  "bio:imagingModality": {
+    "@type": "sc:DefinedTerm",
+    "name": "Plain Radiography",
+    "termCode": "RID10357",
+    "inDefinedTermSet": "http://radlex.org/RID/"
+  },
+  "bio:bodyRegion": {
+    "@type": "sc:DefinedTerm",
+    "name": "Chest",
+    "termCode": "RID1303",
+    "inDefinedTermSet": "http://radlex.org/RID/"
+  },
+  "bio:diseaseCondition": [
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Pneumonia",
+      "termCode": "CA40",
+      "inDefinedTermSet": "https://icd.who.int/browse/2024-01/mms"
+    }
+  ],
+  "bio:populationCharacteristics": {
+    "ageRange": { "min": 18, "max": 85, "unit": "years" },
+    "sexDistribution": { "female": 4823, "male": 4612, "unknown": 12 },
+    "geographicOrigin": "US"
+  },
+  "bio:dataAcquisitionEquipment": [
+    {
+      "manufacturer": "Siemens Healthineers",
+      "model": "MULTIX Impact",
+      "softwareVersion": "VA20"
+    }
+  ],
+  "bio:irbApproval": {
+    "approvingBody": "Test Hospital IRB",
+    "approvalNumber": "IRB-2023-1142",
+    "approvalDate": "2023-11-15",
+    "approvalDocument": "https://example.org/datasets/fixture-chest-xray-2026-q2/irb.pdf"
+  },
+  "bio:anonymizationLevel": "DEIDENTIFIED",
+  "bio:clinicalTrialId": "NCT12345678"
+}

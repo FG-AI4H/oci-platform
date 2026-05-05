@@ -1,0 +1,9 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/"
+  },
+  "@type": "sc:Dataset",
+  "dct:conformsTo": "http://mlcommons.org/croissant/1.0",
+  "name": "fixture-missing-required",
+  "description": "This manifest is missing license, url, creator, and datePublished — the validator should report all four."
+}

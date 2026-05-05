@@ -1,0 +1,30 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "sc": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/",
+    "dct": "http://purl.org/dc/terms/"
+  },
+  "@type": "sc:Dataset",
+  "dct:conformsTo": "http://mlcommons.org/croissant/1.0",
+  "name": "fixture-minimal-1.0",
+  "description": "Minimal valid Croissant 1.0 manifest used by the validator unit tests.",
+  "license": "https://spdx.org/licenses/CC-BY-4.0",
+  "url": "https://example.org/datasets/fixture-minimal-1.0",
+  "creator": {
+    "@type": "sc:Organization",
+    "name": "OCI Platform"
+  },
+  "datePublished": "2026-05-05",
+  "version": "1.0.0",
+  "distribution": [
+    {
+      "@type": "sc:FileObject",
+      "@id": "fixture.csv",
+      "name": "fixture.csv",
+      "contentUrl": "https://example.org/datasets/fixture-minimal-1.0/fixture.csv",
+      "encodingFormat": "text/csv",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}
