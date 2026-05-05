@@ -132,6 +132,11 @@ export const PublishDatasetVersionRequestSchema = z.object({
     .string()
     .min(1)
     .max(40)
+    // The pre-release/build suffix `(?:[-+][\w.-]+)?` is anchored,
+    // length-capped (z.string().max(40) above), and uses linear-time
+    // character classes only — not ReDoS-prone in practice. The eslint
+    // security plugin flags any optional repeated group as "unsafe".
+    // eslint-disable-next-line security/detect-unsafe-regex
     .regex(/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/, 'expected semver MAJOR.MINOR.PATCH'),
   croissant: z.unknown(), // validated by @oci/croissant before persisting
   notes: z.string().max(4000).nullable().optional(),
