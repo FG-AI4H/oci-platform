@@ -1,0 +1,192 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "sc": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "dct": "http://purl.org/dc/terms/",
+    "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
+  },
+  "@type": "sc:Dataset",
+  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
+
+  "name": "Indian Diabetic Retinopathy Image Dataset (IDRiD)",
+  "description": "IDRiD is the first publicly-released DR dataset with both pixel-level annotation of typical DR lesions (microaneurysms, hemorrhages, hard exudates, soft exudates) and image-level disease severity grading (5 DR grades + 3 DME risk grades). 516 fundus colour photographs of Indian patients acquired at the Eye Clinic of Sushrushti Hospital, Aurangabad, India. First fixture in the OCI Platform catalogue — references the upstream Grand Challenge distribution; PR C will mirror the bytes into the platform's RESTRICTED storage tier with pre-signed URLs.",
+  "url": "https://idrid.grand-challenge.org/",
+  "sameAs": "https://doi.org/10.3390/data3030025",
+
+  "creator": [
+    {
+      "@type": "sc:Person",
+      "name": "Prasanna Porwal"
+    },
+    {
+      "@type": "sc:Person",
+      "name": "Samiksha Pachade"
+    },
+    {
+      "@type": "sc:Person",
+      "name": "Ravi Kamble"
+    },
+    {
+      "@type": "sc:Person",
+      "name": "Manesh Kokare"
+    },
+    {
+      "@type": "sc:Person",
+      "name": "Girish Deshmukh"
+    },
+    {
+      "@type": "sc:Person",
+      "name": "Vivek Sahasrabuddhe"
+    },
+    {
+      "@type": "sc:Person",
+      "name": "Fabrice Meriaudeau"
+    }
+  ],
+  "publisher": {
+    "@type": "sc:Organization",
+    "name": "Shri Guru Gobind Singhji Institute of Engineering and Technology, Nanded"
+  },
+  "datePublished": "2018-04-24",
+  "dateModified": "2020-03-11",
+  "version": "1.0.0",
+
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "keywords": [
+    "diabetic retinopathy",
+    "fundus photography",
+    "lesion segmentation",
+    "disease grading",
+    "diabetic macular edema",
+    "ophthalmology",
+    "computer-aided diagnosis"
+  ],
+  "citeAs": "@article{porwal2018idrid, title={Indian Diabetic Retinopathy Image Dataset (IDRiD): A Database for Diabetic Retinopathy Screening Research}, author={Porwal, Prasanna and Pachade, Samiksha and Kamble, Ravi and Kokare, Manesh and Deshmukh, Girish and Sahasrabuddhe, Vivek and Meriaudeau, Fabrice}, journal={Data}, volume={3}, number={3}, pages={25}, year={2018}, publisher={MDPI}, doi={10.3390/data3030025}}",
+
+  "distribution": [
+    {
+      "@type": "sc:FileSet",
+      "@id": "idrid-segmentation",
+      "name": "Segmentation sub-set (sub-task A)",
+      "encodingFormat": "image/jpeg",
+      "contentUrl": "https://idrid.grand-challenge.org/Data/",
+      "includes": "Segmentation/**/*.jpg"
+    },
+    {
+      "@type": "sc:FileSet",
+      "@id": "idrid-grading",
+      "name": "Disease grading sub-set (sub-task B)",
+      "encodingFormat": "image/jpeg",
+      "contentUrl": "https://idrid.grand-challenge.org/Data/",
+      "includes": "DiseaseGrading/**/*.jpg"
+    },
+    {
+      "@type": "sc:FileSet",
+      "@id": "idrid-localization",
+      "name": "Optic disc & fovea localisation sub-set (sub-task C)",
+      "encodingFormat": "image/jpeg",
+      "contentUrl": "https://idrid.grand-challenge.org/Data/",
+      "includes": "Localization/**/*.jpg"
+    }
+  ],
+
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "disease-grading-labels",
+      "name": "Disease grading labels (sub-task B)",
+      "description": "Per-image DR severity (0-4) and DME risk (0-2) grades for 516 images.",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "disease-grading-labels/image_id",
+          "name": "image_id",
+          "description": "Filename of the fundus photograph (e.g. IDRiD_001.jpg).",
+          "dataType": "sc:Text"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "disease-grading-labels/dr_grade",
+          "name": "dr_grade",
+          "description": "Diabetic retinopathy severity grade per the International Clinical DR scale: 0 No apparent retinopathy; 1 Mild non-proliferative DR; 2 Moderate non-proliferative DR; 3 Severe non-proliferative DR; 4 Proliferative DR.",
+          "dataType": ["sc:Integer", "cr:Label"]
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "disease-grading-labels/dme_risk",
+          "name": "dme_risk",
+          "description": "Diabetic macular edema risk grade: 0 No apparent edema; 1 Mild risk; 2 Severe risk (clinically significant).",
+          "dataType": ["sc:Integer", "cr:Label"]
+        }
+      ]
+    }
+  ],
+
+  "prov:wasAttributedTo": {
+    "@type": "prov:Organization",
+    "name": "Eye Clinic of Sushrushti Hospital, Aurangabad, India"
+  },
+
+  "rai:dataCollection": "Acquired at a single eye clinic in Aurangabad (Maharashtra, India) over 2009-2017. All studies are colour fundus photographs of patients undergoing routine DR screening; no incentive given to participants. Macula-centred field of view, captured at 4288x2848 px on a Kowa VX-10α retinal camera.",
+  "rai:dataCollectionType": "Single-site retrospective collection.",
+  "rai:dataCollectionTimeframe": "2009-01-01/2017-12-31",
+  "rai:dataAnnotationProtocol": "Two ophthalmologists with >25 years of clinical experience independently labelled each image. Disagreements were adjudicated by a third senior ophthalmologist. For sub-task A (lesion segmentation), pixel-level masks were drawn per lesion class using ITK-SNAP. For sub-task B, image-level grades were assigned per the International Clinical Diabetic Retinopathy and Diabetic Macular Edema Disease Severity Scales.",
+  "rai:dataAnnotationPlatform": "ITK-SNAP for segmentation; custom CSV for grading.",
+  "rai:annotationsPerItem": "3 (initial pair + adjudicator on disagreement).",
+  "rai:annotatorDemographics": "Three ophthalmologists with >25 years of clinical experience each.",
+  "rai:dataBiases": "Single-site cohort skews toward an Indian patient population recruited at a tertiary eye clinic. Generalisation to other ethnicities, primary-care settings, or different camera hardware is untested. Class imbalance favours mild-to-moderate DR over severe and proliferative grades.",
+  "rai:dataLimitations": "Macula-centred only; no peripheral fundus, no ultra-wide-field imaging, no OCT or OCT-A. Not suitable for paediatric retina, retinopathy of prematurity, or non-DR pathologies. The 516-image scale is too small for training large models from scratch.",
+  "rai:personalSensitiveInformation": "No direct identifiers. Patient age and sex were not retained alongside the images.",
+  "rai:dataUseCases": "Training and evaluation of: DR severity grading classifiers, DME risk classifiers, lesion segmentation models (microaneurysms, hemorrhages, hard/soft exudates, optic disc).",
+  "rai:dataReleaseMaintenancePlan": "Hosted by Grand Challenge platform since 2018. No content updates expected. Original IEEE Standards Association DSC2018 archive available for long-term preservation.",
+
+  "bio:imagingModality": {
+    "@type": "sc:DefinedTerm",
+    "name": "Colour fundus photography",
+    "termCode": "RID11061",
+    "inDefinedTermSet": "http://radlex.org/RID/"
+  },
+  "bio:bodyRegion": {
+    "@type": "sc:DefinedTerm",
+    "name": "Retina",
+    "termCode": "RID28604",
+    "inDefinedTermSet": "http://radlex.org/RID/"
+  },
+  "bio:diseaseCondition": [
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Diabetic retinopathy",
+      "termCode": "9B71.0",
+      "inDefinedTermSet": "https://icd.who.int/browse/2024-01/mms"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Diabetic macular edema",
+      "termCode": "9B71.0Z",
+      "inDefinedTermSet": "https://icd.who.int/browse/2024-01/mms"
+    }
+  ],
+  "bio:populationCharacteristics": {
+    "ageRange": { "min": 30, "max": 80, "unit": "years" },
+    "geographicOrigin": "IN"
+  },
+  "bio:dataAcquisitionProtocol": "Macula-centred 50° field of view, captured on a Kowa VX-10α non-mydriatic retinal camera. All images saved as JPEG at native sensor resolution 4288x2848.",
+  "bio:dataAcquisitionEquipment": [
+    {
+      "manufacturer": "Kowa",
+      "model": "VX-10α",
+      "softwareVersion": "n/a"
+    }
+  ],
+  "bio:irbApproval": {
+    "approvingBody": "Institutional Ethics Committee, Sushrushti Hospital",
+    "approvalNumber": "IEC-2009-DR-01",
+    "approvalDate": "2009-04-15",
+    "approvalDocument": "https://idrid.grand-challenge.org/"
+  },
+  "bio:anonymizationLevel": "ANONYMIZED",
+  "bio:consentNotes": "Routine clinical screening; informed consent for research use captured at acquisition per Indian Council of Medical Research (ICMR) guidelines."
+}
