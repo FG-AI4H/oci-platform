@@ -34,7 +34,21 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   constructor() {
     const connectionString = resolveDatabaseUrl();
     this.client = new PrismaClient({
-      adapter: new PrismaPg({ connectionString }),
+      adapter: new PrismaPg({
+        connectionString,
+        // Aurora's RDS root CA isn't in distroless Node's default trust
+        // store. The pg lib defaults to rejectUnauthorized: true even
+        // when the URL says sslmode=require, so the handshake fails with
+        // "unable to get local issuer certificate". Disabling cert
+        // verification is acceptable in this topology — the API talks
+        // to Aurora over a private VPC subnet (no public route), the
+        // SG ingress restricts source to the API's own SG, and the
+        // password is rotated by Secrets Manager. If we ever need
+        // chain-of-custody validation, swap to bundling the RDS root
+        // CA from https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+        // into the image and pointing `ssl.ca` at it.
+        ssl: { rejectUnauthorized: false },
+      }),
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
     });
   }
