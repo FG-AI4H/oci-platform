@@ -22,7 +22,13 @@ declare global {
 
 function createClient(): PrismaClient {
   const connectionString = resolveDatabaseUrl();
-  const adapter = new PrismaPg({ connectionString });
+  const adapter = new PrismaPg({
+    connectionString,
+    // Disable TLS cert verification: distroless Node doesn't ship the RDS
+    // root CA. Acceptable — Aurora connections traverse a private VPC
+    // subnet, SG-locked to the API. See PrismaService for the same note.
+    ssl: { rejectUnauthorized: false },
+  });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
