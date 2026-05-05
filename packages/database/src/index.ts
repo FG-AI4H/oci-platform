@@ -22,13 +22,12 @@ declare global {
 
 function createClient(): PrismaClient {
   const connectionString = resolveDatabaseUrl();
-  const adapter = new PrismaPg({
-    connectionString,
-    // Disable TLS cert verification: distroless Node doesn't ship the RDS
-    // root CA. Acceptable — Aurora connections traverse a private VPC
-    // subnet, SG-locked to the API. See PrismaService for the same note.
-    ssl: { rejectUnauthorized: false },
-  });
+  // The URL itself encodes `sslmode=no-verify` (see resolveDatabaseUrl).
+  // Don't pass an `ssl` option here: pg's ConnectionParameters merges
+  // explicit options with parsed URL fields where the URL wins, so an
+  // explicit `ssl: { rejectUnauthorized: false }` is silently overridden.
+  // See PrismaService for the same note.
+  const adapter = new PrismaPg({ connectionString });
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
@@ -52,7 +51,7 @@ function resolveDatabaseUrl(): string {
   const dbname = process.env.DB_NAME;
   if (username && password && host && port && dbname) {
     const encPassword = encodeURIComponent(password);
-    return `postgresql://${username}:${encPassword}@${host}:${port}/${dbname}?schema=public&sslmode=require`;
+    return `postgresql://${username}:${encPassword}@${host}:${port}/${dbname}?schema=public&sslmode=no-verify`;
   }
 
   throw new Error(
