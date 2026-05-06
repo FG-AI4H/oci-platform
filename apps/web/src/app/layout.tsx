@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { SiteShell } from '../components/site-shell';
+import { siteUrl } from '../lib/site-url';
 import './globals.css';
 
 /**
@@ -16,6 +17,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: 'OCI Platform — ITU/WHO/WIPO',
   description:
     'Open Code Infrastructure — unified platform for benchmarking and assessing health AI under the ITU-WHO-WIPO Global Initiative on AI for Health (GI-AI4H).',
