@@ -36,8 +36,7 @@ export function datasetJsonLd(detail: DatasetDetail, baseUrl: string): Record<st
   // helpers below only accept the union types so eslint's
   // object-injection rule is satisfied without disable comments.
   const sc = (key: ScKey): unknown => Reflect.get(m, key) ?? Reflect.get(m, `sc:${key}`);
-  const bio = (key: BioKey): unknown =>
-    Reflect.get(m, `bio:${key}`) ?? Reflect.get(m, key);
+  const bio = (key: BioKey): unknown => Reflect.get(m, `bio:${key}`) ?? Reflect.get(m, key);
 
   const pageUrl = `${baseUrl}/catalog/${detail.slug}`;
   const manifestUrl = `${pageUrl}/croissant`;

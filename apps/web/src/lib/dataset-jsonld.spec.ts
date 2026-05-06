@@ -68,16 +68,21 @@ describe('datasetJsonLd', () => {
 
   it('merges Croissant keywords with BIOCroissant terms (de-duped)', () => {
     const out = datasetJsonLd(baseDetail, 'https://oci.ai4h.net');
-    expect(out.keywords).toEqual(['radiology', 'chest x-ray', 'pneumonia', 'X-ray', 'Chest', 'Pneumonia']);
+    expect(out.keywords).toEqual([
+      'radiology',
+      'chest x-ray',
+      'pneumonia',
+      'X-ray',
+      'Chest',
+      'Pneumonia',
+    ]);
   });
 
   it('appends the Croissant manifest as a distribution[]', () => {
     const out = datasetJsonLd(baseDetail, 'https://oci.ai4h.net');
     const dist = out.distribution as Array<Record<string, unknown>>;
     const manifest = dist.find((d) => d.encodingFormat === 'application/ld+json');
-    expect(manifest?.contentUrl).toBe(
-      'https://oci.ai4h.net/catalog/rsna-pneumonia-2018/croissant',
-    );
+    expect(manifest?.contentUrl).toBe('https://oci.ai4h.net/catalog/rsna-pneumonia-2018/croissant');
   });
 
   it('omits restricted distributions from the public JSON-LD', () => {
