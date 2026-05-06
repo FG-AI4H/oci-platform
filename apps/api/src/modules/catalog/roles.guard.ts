@@ -21,7 +21,13 @@ export const Roles = (...roles: Role[]): MethodDecorator => SetMetadata(ROLES_KE
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  // `Reflector` is stateless. Instantiating it directly (rather than
+  // constructor-inject) sidesteps a Nest 11 DI quirk where guards
+  // referenced via `@UseGuards(RolesGuard)` were occasionally created
+  // before the InternalCoreModule's Reflector singleton was bound,
+  // surfacing as `Cannot read properties of undefined (reading
+  // 'getAllAndOverride')` at the first request.
+  private readonly reflector = new Reflector();
 
   canActivate(ctx: ExecutionContext): boolean {
     const required = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES_KEY, [

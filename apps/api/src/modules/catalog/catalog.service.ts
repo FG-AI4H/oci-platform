@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -33,7 +34,7 @@ import { CatalogRepository } from './catalog.repository.js';
  */
 @Injectable()
 export class CatalogService {
-  constructor(private readonly repo: CatalogRepository) {}
+  constructor(@Inject(CatalogRepository) private readonly repo: CatalogRepository) {}
 
   async list(
     query: ListDatasetsQuery,
