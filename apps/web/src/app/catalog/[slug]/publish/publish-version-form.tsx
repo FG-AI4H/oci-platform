@@ -111,9 +111,7 @@ function ValidationPanel({
         <ul className="space-y-1.5 text-xs">
           {state.issues.map((issue, i) => (
             <li key={i} className="border-l-2 border-[var(--color-danger)]/40 pl-2">
-              {issue.path && issue.path.length > 0 ? (
-                <span className="font-mono">{issue.path.join(' › ')}: </span>
-              ) : null}
+              {issue.path ? <span className="font-mono">{issue.path}: </span> : null}
               <span>{issue.message}</span>
               {issue.severity ? (
                 <span className="ml-1 uppercase opacity-70">[{issue.severity}]</span>

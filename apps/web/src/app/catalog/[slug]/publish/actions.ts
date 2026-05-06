@@ -7,7 +7,12 @@ import { auth } from '../../../../auth';
 import { isHost } from '../../../../lib/groups';
 
 export interface ManifestIssue {
-  path?: string[];
+  /**
+   * JSON-pointer-ish path produced by `@oci/croissant`'s validator
+   * (e.g. `/distribution/0/contentUrl`). Free-form string; surfaced
+   * verbatim in the validation panel.
+   */
+  path?: string;
   message: string;
   severity?: string;
 }
