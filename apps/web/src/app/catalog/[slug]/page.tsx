@@ -16,6 +16,8 @@ import {
 import type { DatasetDetail, DatasetVisibility } from '@oci/shared-types';
 import { auth } from '../../../auth';
 import { apiFetch } from '../../../lib/api';
+import { datasetJsonLd } from '../../../lib/dataset-jsonld';
+import { siteUrl } from '../../../lib/site-url';
 
 const visibilityTone: Record<DatasetVisibility, 'success' | 'info' | 'warning'> = {
   PUBLIC: 'success',
@@ -85,8 +87,28 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
   const diseaseNames = extractTermNames(m['bio:diseaseCondition'] ?? m.diseaseCondition);
   const anonymization = (m['bio:anonymizationLevel'] ?? m.anonymizationLevel) as string | undefined;
 
+  // Google Dataset Search ingestion. Only emit for the slice of datasets
+  // that are actually crawlable: PUBLIC + PUBLISHED. RESTRICTED and
+  // PRIVATE rows are 404 to anonymous callers anyway (catalog.service.ts
+  // filters them out), but skipping the script tag is the belt-and-braces
+  // version — it also dodges accidentally leaking RESTRICTED metadata
+  // into the HTML body when a signed-in user shares the page URL.
+  const indexable = detail.visibility === 'PUBLIC' && detail.status === 'PUBLISHED';
+  const jsonLd = indexable ? datasetJsonLd(detail, siteUrl()) : null;
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 py-12 space-y-8">
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          // JSON.stringify is the safe way to embed JSON in HTML — it
+          // escapes the only sequence that would break out of a script
+          // element ("</") via Unicode escape.
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c'),
+          }}
+        />
+      ) : null}
       <header className="space-y-3">
         <Link
           href="/catalog"
