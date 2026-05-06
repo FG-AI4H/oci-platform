@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   CreateDatasetRequestSchema,
@@ -40,7 +40,11 @@ interface FastifyLikeRequest {
 @ApiTags('catalog')
 @Controller({ path: 'catalog', version: '2' })
 export class CatalogController {
-  constructor(private readonly catalog: CatalogService) {}
+  // Explicit @Inject token: in tsx-based local dev (esbuild transform),
+  // `emitDecoratorMetadata` does not surface constructor parameter types
+  // to Nest's reflector, so type-only injection silently passes
+  // `undefined`. The explicit token works in both tsx and tsc paths.
+  constructor(@Inject(CatalogService) private readonly catalog: CatalogService) {}
 
   @Get('datasets')
   @ApiOperation({ summary: 'List / search datasets (visibility-filtered)' })

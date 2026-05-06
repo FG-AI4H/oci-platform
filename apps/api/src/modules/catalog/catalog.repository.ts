@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@oci/database';
 import type {
   DatasetSummary,
@@ -65,7 +65,7 @@ interface DatasetWithLatest extends DatasetRow {
  */
 @Injectable()
 export class CatalogRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   /**
    * Search + filter datasets. Pagination uses keyset on `(updated_at, id)`
