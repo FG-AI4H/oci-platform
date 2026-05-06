@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Badge } from '@oci/ui';
 import { auth, signOut } from '../auth';
+import { isHost } from '../lib/groups';
 import { BrandLockup } from './brand-mark';
 
 /**
@@ -14,6 +15,7 @@ import { BrandLockup } from './brand-mark';
 export async function SiteHeader() {
   const session = await auth();
   const env = process.env.OCI_ENV ?? 'local';
+  const showHostNav = isHost(session);
 
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-background)]/85 backdrop-blur supports-[backdrop-filter]:bg-[var(--color-background)]/70">
@@ -32,6 +34,14 @@ export async function SiteHeader() {
             >
               Catalog
             </Link>
+            {showHostNav ? (
+              <Link
+                href="/catalog/new"
+                className="text-sm font-medium text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
+              >
+                New dataset
+              </Link>
+            ) : null}
           </nav>
         </div>
 
