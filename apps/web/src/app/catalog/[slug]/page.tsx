@@ -212,8 +212,10 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
           <CardHeader>
             <CardTitle>Distributions</CardTitle>
             <CardDescription>
-              Files in the latest version. Restricted entries require an access request — coming in
-              the next PR.
+              Files in the latest version. Links labelled <em>upstream</em> point at the original
+              host (e.g. Grand Challenge) — the platform references rather than mirrors them.
+              S3-mirrored bytes with pre-signed URLs land in PR C; restricted entries will go
+              through an access request flow at the same time.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -239,14 +241,17 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
                   {d.requiresAccess ? (
                     <Badge tone="warning">requires access</Badge>
                   ) : d.contentUrl ? (
-                    <a
-                      href={d.contentUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-sm font-medium text-[var(--color-primary)] hover:underline"
-                    >
-                      download →
-                    </a>
+                    <>
+                      <Badge tone="neutral">upstream</Badge>
+                      <a
+                        href={d.contentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-medium text-[var(--color-primary)] hover:underline"
+                      >
+                        open ↗
+                      </a>
+                    </>
                   ) : (
                     <Badge tone="neutral">no url</Badge>
                   )}
