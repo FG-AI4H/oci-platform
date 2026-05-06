@@ -70,7 +70,20 @@ export class CatalogService {
     if (!ds) throw new NotFoundException(`dataset "${slug}" not found`);
 
     const groups = (user?.['cognito:groups'] ?? []) as string[];
-    if (!canSee(ds.visibility, ds.status, groups)) {
+
+    // Hosts can always read their own datasets at any visibility/status
+    // (they need this to load the publish workflow on a fresh DRAFT
+    // they just created). The intent was already documented in the
+    // class header; the logic was missing. The repository's findBySlug
+    // doesn't surface hostId on the public DTO, so resolve ownership
+    // via a separate id+host lookup — same helper publishVersion uses.
+    let ownsRow = false;
+    if (user?.sub && groups.includes('host')) {
+      const owner = await this.repo.findIdAndHostBySlug(slug);
+      ownsRow = owner !== null && owner.hostId === cognitoSubAsUuid(user.sub);
+    }
+
+    if (!ownsRow && !canSee(ds.visibility, ds.status, groups)) {
       throw new NotFoundException(`dataset "${slug}" not found`); // do not leak existence
     }
     return ds;

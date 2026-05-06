@@ -67,10 +67,15 @@ export default tseslint.config(
 
   // Test files: relax some rules
   {
-    files: ['**/*.{spec,test}.{ts,tsx,js,jsx}', '**/test/**/*.{ts,tsx}'],
+    files: ['**/*.{spec,test}.{ts,tsx,js,jsx}', '**/test/**/*.{ts,tsx}', '**/e2e/**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       'security/detect-non-literal-fs-filename': 'off',
+      // E2E tests use `new RegExp(\`/catalog/${slug}\`)` patterns where
+      // the slug comes from compile-time literals (Date.now() prefix);
+      // the security plugin can't see that, but the risk is nil in
+      // test code.
+      'security/detect-non-literal-regexp': 'off',
     },
   },
 );
