@@ -36,6 +36,9 @@ pnpm-debug.log*
 # Testing
 coverage/
 .nyc_output/
+test-results/
+playwright-report/
+ux-screenshots/
 
 # CDK
 infra/cdk/cdk.out/

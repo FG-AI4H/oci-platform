@@ -1,4 +1,4 @@
-import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
+import { type CanActivate, type ExecutionContext, Inject, Injectable } from '@nestjs/common';
 import { CognitoJwtGuard } from './cognito-jwt.guard.js';
 
 /**
@@ -18,7 +18,11 @@ import { CognitoJwtGuard } from './cognito-jwt.guard.js';
  */
 @Injectable()
 export class OptionalCognitoJwtGuard implements CanActivate {
-  constructor(private readonly strict: CognitoJwtGuard) {}
+  // Same `@Inject` workaround as the catalog module (#77): tsx's
+  // esbuild transform doesn't preserve constructor-param metadata
+  // for type-based DI, so the explicit token is needed for the dev
+  // path. tsc-built CI/prod accept either form.
+  constructor(@Inject(CognitoJwtGuard) private readonly strict: CognitoJwtGuard) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<{
