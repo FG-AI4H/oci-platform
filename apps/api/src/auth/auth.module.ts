@@ -1,6 +1,7 @@
 import { Logger, Module } from '@nestjs/common';
 import { createAccessTokenVerifier } from '@oci/auth';
 import { COGNITO_VERIFIER, CognitoJwtGuard } from './cognito-jwt.guard.js';
+import { OptionalCognitoJwtGuard } from './optional-cognito-jwt.guard.js';
 
 /**
  * Provides the singleton Cognito access-token verifier (loads JWKS once
@@ -54,7 +55,8 @@ import { COGNITO_VERIFIER, CognitoJwtGuard } from './cognito-jwt.guard.js';
       },
     },
     CognitoJwtGuard,
+    OptionalCognitoJwtGuard,
   ],
-  exports: [COGNITO_VERIFIER, CognitoJwtGuard],
+  exports: [COGNITO_VERIFIER, CognitoJwtGuard, OptionalCognitoJwtGuard],
 })
 export class AuthModule {}

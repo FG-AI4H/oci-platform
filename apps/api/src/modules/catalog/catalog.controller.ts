@@ -12,6 +12,7 @@ import {
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
+import { OptionalCognitoJwtGuard } from '../../auth/optional-cognito-jwt.guard.js';
 import { ZodPipe } from './dto/zod-pipe.js';
 import { Roles, RolesGuard } from './roles.guard.js';
 import { CatalogService } from './catalog.service.js';
@@ -44,6 +45,7 @@ export class CatalogController {
   @Get('datasets')
   @ApiOperation({ summary: 'List / search datasets (visibility-filtered)' })
   @ApiOkResponse({ description: 'Page of dataset summaries with cursor.' })
+  @UseGuards(OptionalCognitoJwtGuard)
   list(
     @Query(new ZodPipe(ListDatasetsQuerySchema)) query: ListDatasetsQuery,
     @Req() req: FastifyLikeRequest,
@@ -54,6 +56,7 @@ export class CatalogController {
   @Get('datasets/:slug')
   @ApiOperation({ summary: 'Get a dataset detail by slug' })
   @ApiOkResponse({ description: 'Dataset detail with versions and distributions.' })
+  @UseGuards(OptionalCognitoJwtGuard)
   detail(
     @Param('slug', new ZodPipe(DatasetSlugSchema)) slug: DatasetSlug,
     @Req() req: FastifyLikeRequest,
@@ -66,6 +69,7 @@ export class CatalogController {
   @ApiOkResponse({
     description: 'JSON-LD manifest. Conformance per `dct:conformsTo` in the body.',
   })
+  @UseGuards(OptionalCognitoJwtGuard)
   manifest(
     @Param('slug', new ZodPipe(DatasetSlugSchema)) slug: DatasetSlug,
     @Req() req: FastifyLikeRequest,

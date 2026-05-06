@@ -149,16 +149,31 @@ export class CatalogService {
     const distributions = extractDistributions(req.croissant);
     const croissantHash = sha256OfJson(req.croissant);
 
-    await this.repo.publishVersion({
-      datasetId: target.id,
-      version: req.version,
-      croissant: req.croissant,
-      croissantHash,
-      notes: req.notes ?? null,
-      publishedById: userId,
-      conformanceVersion,
-      distributions,
-    });
+    try {
+      await this.repo.publishVersion({
+        datasetId: target.id,
+        version: req.version,
+        croissant: req.croissant,
+        croissantHash,
+        notes: req.notes ?? null,
+        publishedById: userId,
+        conformanceVersion,
+        distributions,
+      });
+    } catch (err: unknown) {
+      // Unique constraint on (dataset_id, version) — re-publishing the
+      // same version. Map to 409 so the seed/CLI gets a clear signal
+      // ("bump --version") instead of a generic 500.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        (err as { code?: string }).code === 'P2002'
+      ) {
+        throw new ConflictException(
+          `version "${req.version}" already exists for dataset "${slug}"`,
+        );
+      }
+      throw err;
+    }
 
     const ds = await this.repo.findBySlug(slug);
     if (!ds) throw new Error('inconsistent state — published dataset not found');
