@@ -16,13 +16,33 @@ import {
   SearchIcon,
   Section,
 } from '@oci/ui';
-import type { DatasetSummary, DatasetVisibility, ListDatasetsResponse } from '@oci/shared-types';
+import type {
+  DatasetSource,
+  DatasetSummary,
+  DatasetVisibility,
+  ListDatasetsResponse,
+} from '@oci/shared-types';
 import { auth } from '../../auth';
 import { apiFetch } from '../../lib/api';
 
 interface SearchParams {
   q?: string;
   cursor?: string;
+  source?: string;
+}
+
+const SOURCE_OPTIONS: ReadonlyArray<{ value: DatasetSource; label: string; hint: string }> = [
+  { value: 'local', label: 'Local', hint: 'Datasets published on this platform.' },
+  {
+    value: 'federated',
+    label: 'Federated',
+    hint: 'Mirrors of datasets harvested from peer catalogues.',
+  },
+  { value: 'all', label: 'All', hint: 'Everything — local first, federated to fill the page.' },
+];
+
+function normaliseSource(value: string | undefined): DatasetSource {
+  return value === 'federated' || value === 'all' ? value : 'local';
 }
 
 const visibilityTone: Record<DatasetVisibility, 'success' | 'info' | 'warning'> = {
@@ -56,10 +76,12 @@ export default async function CatalogPage({
 }) {
   const params = await searchParams;
   const session = await auth();
+  const source = normaliseSource(params.source);
 
   const qs = new URLSearchParams();
   if (params.q) qs.set('q', params.q);
   if (params.cursor) qs.set('cursor', params.cursor);
+  qs.set('source', source);
   qs.set('limit', '24');
 
   let response: ListDatasetsResponse | null = null;
@@ -67,6 +89,13 @@ export default async function CatalogPage({
   try {
     response = await apiFetch<ListDatasetsResponse>(`/v2/catalog/datasets?${qs.toString()}`, {
       session,
+      // Disable Next.js data-cache for the list. With the federated
+      // path (PR E.2) a freshly-harvested row should appear on the
+      // very next page render — a 30s revalidation window made the
+      // E2E suite race against it. Cache hit-rate on this endpoint
+      // is anyway low (each visitor's auth → visibility filter
+      // diverges), so there's little value in caching.
+      revalidate: 0,
     });
   } catch (err) {
     error = err instanceof Error ? err.message : 'Unable to reach catalog API';
@@ -102,7 +131,7 @@ export default async function CatalogPage({
           </p>
         </header>
 
-        <form action="/catalog" method="get" role="search" className="mb-8 flex gap-2">
+        <form action="/catalog" method="get" role="search" className="mb-4 flex gap-2">
           <label htmlFor="catalog-search" className="sr-only">
             Search datasets
           </label>
@@ -115,8 +144,12 @@ export default async function CatalogPage({
             leadingIcon={<SearchIcon size={16} />}
             className="flex-1"
           />
+          {/* Preserve the source filter on free-text search submission. */}
+          <input type="hidden" name="source" value={source} />
           <Button type="submit">Search</Button>
         </form>
+
+        <SourceChips active={source} q={params.q} />
 
         {error ? (
           <Alert tone="danger">
@@ -143,6 +176,7 @@ export default async function CatalogPage({
                   <Link
                     href={`/catalog?${new URLSearchParams({
                       ...(params.q ? { q: params.q } : {}),
+                      ...(source !== 'local' ? { source } : {}),
                       cursor: response.nextCursor,
                     }).toString()}`}
                   >
@@ -159,9 +193,24 @@ export default async function CatalogPage({
 }
 
 function DatasetCard({ d }: { d: DatasetSummary }) {
+  // Federated rows aren't addressable as `/catalog/<slug>` (slugs may
+  // collide across peers); deep-link directly to the upstream `@id`.
+  // Open in a new tab so the user keeps their place in our catalog.
+  const isFederated = d.sourceCatalog !== null;
+  const href = isFederated ? (d.originUrl ?? '#') : `/catalog/${d.slug}`;
+  const linkProps = isFederated
+    ? ({ target: '_blank', rel: 'noreferrer noopener' } as const)
+    : ({} as const);
+
   return (
     <Link
-      href={`/catalog/${d.slug}`}
+      href={href}
+      {...linkProps}
+      aria-label={
+        isFederated
+          ? `${d.name} — opens upstream on ${d.sourceCatalog?.name} in a new tab`
+          : undefined
+      }
       className="group block h-full rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
     >
       <Card accent={visibilityAccent[d.visibility]} interactive="hover" className="h-full">
@@ -170,7 +219,11 @@ function DatasetCard({ d }: { d: DatasetSummary }) {
             <CardTitle className="line-clamp-2 group-hover:text-[var(--color-primary)] transition-colors">
               {d.name}
             </CardTitle>
-            <Badge tone={visibilityTone[d.visibility]}>{visibilityLabel[d.visibility]}</Badge>
+            {isFederated ? (
+              <Badge tone="accent">federated</Badge>
+            ) : (
+              <Badge tone={visibilityTone[d.visibility]}>{visibilityLabel[d.visibility]}</Badge>
+            )}
           </div>
           <CardDescription className="line-clamp-3 min-h-[3.5rem]">
             {d.description ?? <em>No description provided.</em>}
@@ -178,7 +231,9 @@ function DatasetCard({ d }: { d: DatasetSummary }) {
         </CardHeader>
         <CardContent className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-4 text-xs text-[var(--color-muted-foreground)]">
           <span className="font-mono truncate">{d.slug}</span>
-          {d.latestVersion ? (
+          {isFederated ? (
+            <Badge tone="neutral">from {d.sourceCatalog?.name}</Badge>
+          ) : d.latestVersion ? (
             <Badge tone="primary">v{d.latestVersion}</Badge>
           ) : (
             <Badge tone="neutral">no version</Badge>
@@ -186,6 +241,43 @@ function DatasetCard({ d }: { d: DatasetSummary }) {
         </CardContent>
       </Card>
     </Link>
+  );
+}
+
+/**
+ * Source-filter chips for the catalog list. Server component — each
+ * chip is just a styled `Link` that re-issues the GET with a
+ * different `?source=`. We preserve the active free-text search but
+ * intentionally drop the cursor (paginating into a different scope
+ * with the wrong cursor would be undefined).
+ */
+function SourceChips({ active, q }: { active: DatasetSource; q?: string }) {
+  return (
+    <nav aria-label="Source filter" className="mb-8 flex flex-wrap gap-2">
+      {SOURCE_OPTIONS.map((opt) => {
+        const isActive = opt.value === active;
+        const qs = new URLSearchParams();
+        if (q) qs.set('q', q);
+        if (opt.value !== 'local') qs.set('source', opt.value);
+        const href = qs.toString().length > 0 ? `/catalog?${qs.toString()}` : '/catalog';
+        return (
+          <Link
+            key={opt.value}
+            href={href}
+            aria-current={isActive ? 'page' : undefined}
+            title={opt.hint}
+            className={
+              'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
+              (isActive
+                ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)]/40 text-[var(--color-foreground)]'
+                : 'border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]')
+            }
+          >
+            {opt.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 

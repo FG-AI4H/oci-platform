@@ -46,6 +46,8 @@ const baseDetail: DatasetDetail = {
       requiresAccess: false,
     },
   ],
+  sourceCatalog: null,
+  originUrl: null,
 };
 
 describe('datasetJsonLd', () => {
