@@ -36,6 +36,16 @@ import { CatalogRepository } from './catalog.repository.js';
 export class CatalogService {
   constructor(@Inject(CatalogRepository) private readonly repo: CatalogRepository) {}
 
+  /**
+   * Internal lookup used by sibling modules (access-request) that need
+   * to know who hosts a dataset before applying their own authz. No
+   * visibility filter — callers must NOT surface this directly to
+   * un-authenticated readers.
+   */
+  async findOwnerBySlug(slug: DatasetSlug): Promise<{ id: string; hostId: string } | null> {
+    return this.repo.findIdAndHostBySlug(slug);
+  }
+
   async list(
     query: ListDatasetsQuery,
     user?: CognitoAccessTokenPayload,

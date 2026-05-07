@@ -38,6 +38,7 @@ export async function SiteHeader() {
           <nav aria-label="Primary" className="hidden sm:flex items-center gap-5">
             <NavLink href="/catalog">Catalog</NavLink>
             {showHostNav ? <NavLink href="/catalog/new">New dataset</NavLink> : null}
+            {showHostNav ? <NavLink href="/dashboard/host/access-requests">Inbox</NavLink> : null}
             {showAdminNav ? <NavLink href="/catalog/remotes">Remotes</NavLink> : null}
           </nav>
         </div>
