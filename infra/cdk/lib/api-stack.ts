@@ -41,6 +41,14 @@ export interface ApiStackProps extends cdk.StackProps {
    * MigrateTaskDef is omitted so the stack still synths offline.
    */
   migrateImage?: string;
+  /**
+   * ECR image URI for the federation harvest worker
+   * (`<account>.dkr.ecr.<region>.amazonaws.com/oci-worker-ingest:<sha>`).
+   * Long-running Fargate service in the same cluster as the API, sharing
+   * the API's security group + Aurora ingress. Omitted at local synth
+   * time so the stack still synths offline.
+   */
+  workerIngestImage?: string;
   /** Route 53 hosted zone id for the apex (`ai4h.net`). */
   hostedZoneId: string;
   zoneName: string;
@@ -316,6 +324,95 @@ export class ApiStack extends cdk.Stack {
       );
     }
 
+    // ----------------------------------------------------------------------
+    // Federation harvest worker (PR E.3). Long-running Fargate service in
+    // the same cluster as the API; shares the API's SG so the existing
+    // Aurora ingress rule covers it. No load balancer — the worker is a
+    // background process driven by its internal loop (LOOP_INTERVAL_MS).
+    //
+    // desiredCount=1 in dev/int (single harvester is enough for the peer
+    // count we expect at this phase). prod can scale via the env config
+    // when peer count grows; runOneHarvestCycle's optimistic claim makes
+    // multiple workers safe to coexist.
+    // ----------------------------------------------------------------------
+    if (props.workerIngestImage && apiSg && props.database.secret) {
+      const workerTaskDef = new ecs.FargateTaskDefinition(this, 'WorkerIngestTaskDef', {
+        cpu: 256,
+        memoryLimitMiB: 512,
+        runtimePlatform: {
+          cpuArchitecture: ecs.CpuArchitecture.ARM64,
+          operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+        },
+      });
+
+      const dbSecret = props.database.secret;
+      workerTaskDef.addContainer('worker-ingest', {
+        image: this.resolveWorkerIngestImage(props.workerIngestImage),
+        containerName: 'worker-ingest',
+        essential: true,
+        environment: {
+          NODE_ENV: 'production',
+          OCI_ENV: props.cfg.envName,
+          // Tunables. The image's defaults are fine for dev/int; prod
+          // can override via task-def env if peer count grows.
+          LOOP_INTERVAL_MS: '60000',
+          HARVEST_INTERVAL_MINUTES: '30',
+          FETCH_TIMEOUT_MS: '30000',
+        },
+        secrets: {
+          DB_USERNAME: ecs.Secret.fromSecretsManager(dbSecret, 'username'),
+          DB_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, 'password'),
+          DB_HOST: ecs.Secret.fromSecretsManager(dbSecret, 'host'),
+          DB_PORT: ecs.Secret.fromSecretsManager(dbSecret, 'port'),
+          DB_NAME: ecs.Secret.fromSecretsManager(dbSecret, 'dbname'),
+        },
+        logging: ecs.LogDrivers.awsLogs({
+          streamPrefix: 'worker-ingest',
+          logGroup: props.logGroup,
+        }),
+      });
+
+      const workerService = new ecs.FargateService(this, 'WorkerIngestService', {
+        cluster: this.cluster,
+        taskDefinition: workerTaskDef,
+        // Reuse the API service's security group so the existing Aurora
+        // ingress rule covers the worker too. No new ingress rule needed.
+        securityGroups: [apiSg],
+        desiredCount: 1,
+        minHealthyPercent: 0,
+        maxHealthyPercent: 200,
+        circuitBreaker: { rollback: true },
+      });
+
+      grantGuardDutyAgentEcrPull(workerTaskDef);
+
+      new cdk.CfnOutput(this, 'WorkerIngestServiceArn', { value: workerService.serviceArn });
+
+      NagSuppressions.addResourceSuppressions(
+        workerTaskDef,
+        [
+          {
+            id: 'AwsSolutions-ECS2',
+            reason:
+              'Plaintext envs on the worker task are non-secret runtime config (NODE_ENV, OCI_ENV, LOOP_INTERVAL_MS, HARVEST_INTERVAL_MINUTES, FETCH_TIMEOUT_MS). DB credentials are injected as ECS secrets from Secrets Manager — DATABASE_URL is composed inside the container by @oci/database at startup.',
+          },
+        ],
+        true,
+      );
+      NagSuppressions.addResourceSuppressionsByPath(
+        this,
+        `/${this.stackName}/WorkerIngestTaskDef/ExecutionRole/DefaultPolicy/Resource`,
+        [
+          {
+            id: 'AwsSolutions-IAM5',
+            reason:
+              'ecr:GetAuthorizationToken does not support resource scoping; AWS requires Resource::*. Per-repo actions are scoped by fromEcrRepository to the imported oci-worker-ingest repo ARN.',
+            appliesTo: ['Resource::*', 'Action::ecr:GetAuthorizationToken'],
+          },
+        ],
+      );
+    }
+
     // WAF (managed rules) for int/prod
     if (props.cfg.enableWaf) {
       const acl = new wafv2.CfnWebACL(this, 'WebAcl', {
@@ -490,6 +587,21 @@ export class ApiStack extends cdk.Stack {
     const tag = migrateImage.slice(colon + 1);
     const repoName = migrateImage.slice(slash + 1, colon);
     const repo = ecr.Repository.fromRepositoryName(this, 'MigrateRepoRef', repoName);
+    return ecs.ContainerImage.fromEcrRepository(repo, tag);
+  }
+
+  /** Same parsing as resolveApiImage; distinct CDK id for the ECR ref. */
+  private resolveWorkerIngestImage(image: string): ecs.ContainerImage {
+    const colon = image.lastIndexOf(':');
+    const slash = image.lastIndexOf('/');
+    if (colon <= slash) {
+      throw new Error(
+        `workerIngestImage "${image}" is missing a tag; expected "<account>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>"`,
+      );
+    }
+    const tag = image.slice(colon + 1);
+    const repoName = image.slice(slash + 1, colon);
+    const repo = ecr.Repository.fromRepositoryName(this, 'WorkerIngestRepoRef', repoName);
     return ecs.ContainerImage.fromEcrRepository(repo, tag);
   }
 }
