@@ -17,6 +17,9 @@ const reuseExisting = process.env.CI ? false : true;
 
 export default defineConfig({
   testDir: './e2e',
+  // Wipes test-pattern rows from the dev Postgres so the suite starts
+  // from a known state. Skip with PW_NO_RESET=1.
+  globalSetup: './e2e/global-setup.ts',
   fullyParallel: false, // shared local state — keep tests serial
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
