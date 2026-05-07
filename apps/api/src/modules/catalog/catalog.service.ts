@@ -43,26 +43,56 @@ export class CatalogService {
     const groups = (user?.['cognito:groups'] ?? []) as string[];
     const visibilities = visibilitiesFor(groups);
 
-    const after = query.cursor ? decodeCursor(query.cursor) : undefined;
+    // PR E.2 federation filter:
+    //   - source=local      → only local rows (default; backwards-compat with PRs C/D)
+    //   - source=federated  → only RemoteDataset mirrors (no cursor — list is bounded
+    //                          by `limit` per call; pagination across the merged set
+    //                          arrives in a follow-up if scale demands it)
+    //   - source=all        → local first (with cursor), then federated to fill the
+    //                          remaining slots up to `limit`. The cursor still keys
+    //                          on the local table so pages stay deterministic; once
+    //                          locals run out, federated rows are appended in
+    //                          harvested-at order.
+    if (query.source === 'federated') {
+      const { rows, totalEstimate } = await this.repo.searchFederated({
+        q: query.q,
+        limit: query.limit,
+      });
+      return { items: rows, nextCursor: null, totalEstimate };
+    }
 
-    const { rows, totalEstimate } = await this.repo.search({
+    const after = query.cursor ? decodeCursor(query.cursor) : undefined;
+    const { rows: localRows, totalEstimate: localTotal } = await this.repo.search({
       q: query.q,
       visibilities,
       statuses: query.status ? [query.status] : undefined,
       hostId: query.hostId,
       after,
-      limit: query.limit + 1, // fetch one extra to know if there's another page
+      limit: query.limit + 1, // one extra to detect the next page
     });
 
     let nextCursor: string | null = null;
-    let items = rows;
-    if (rows.length > query.limit) {
-      items = rows.slice(0, query.limit);
+    let items = localRows;
+    if (localRows.length > query.limit) {
+      items = localRows.slice(0, query.limit);
       const last = items[items.length - 1]!;
       nextCursor = encodeCursor({ updatedAt: new Date(last.updatedAt), id: last.id });
     }
 
-    return { items, nextCursor, totalEstimate };
+    if (query.source === 'all' && nextCursor === null && items.length < query.limit) {
+      const fedSlots = query.limit - items.length;
+      const { rows: fedRows, totalEstimate: fedTotal } = await this.repo.searchFederated({
+        q: query.q,
+        limit: fedSlots,
+      });
+      return {
+        items: [...items, ...fedRows],
+        nextCursor: null,
+        totalEstimate: localTotal + fedTotal,
+      };
+    }
+
+    return { items, nextCursor, totalEstimate: localTotal };
   }
 
   async detail(slug: DatasetSlug, user?: CognitoAccessTokenPayload): Promise<DatasetDetail> {

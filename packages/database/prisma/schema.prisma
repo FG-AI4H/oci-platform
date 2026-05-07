@@ -237,8 +237,62 @@ model RemoteCatalog {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  datasets RemoteDataset[]
+
   @@index([harvestStatus])
   @@map("remote_catalogs")
+  @@schema("catalog")
+}
+
+/// Mirror of a dataset harvested from a `RemoteCatalog`. PR E.2 ships
+/// this model + the read-path (`?source=federated|all`); the harvest
+/// worker that actually populates the rows lands in PR E.3.
+///
+/// Why a separate table from `Dataset`:
+///   - Federated rows have no local host or version history; the
+///     authoritative copy is upstream. Conflating them with locally
+///     published datasets would force every consumer query to know
+///     which rows are "real" vs. mirrored.
+///   - Slugs may collide across peers (HuggingFace + OpenML can both
+///     have `imdb-reviews`); the unique key is `(sourceCatalogId,
+///     originUrl)` not `slug`.
+///   - Detail is read upstream (the card click follows `originUrl`);
+///     no need to mirror version + distribution history locally.
+///
+/// `croissant` carries the full JSON-LD manifest as harvested. The
+/// worker validates it via `@oci/croissant` before writing, so any
+/// row that lands here is at minimum Croissant 1.0/1.1 conformant.
+model RemoteDataset {
+  id              String  @id @default(uuid()) @db.Uuid
+  sourceCatalogId String  @map("source_catalog_id") @db.Uuid
+
+  /// The peer's `@id` for this dataset. Used as the upsert key
+  /// alongside sourceCatalogId. Stable across re-harvests.
+  originUrl       String  @map("origin_url")
+
+  /// Denormalised from the manifest. Not unique globally — a peer
+  /// might publish the same slug as us or as another peer.
+  slug               String
+  name               String
+  description        String?
+  /// "1.0", "1.1", or "unknown" (matches Dataset.conformanceVersion).
+  conformanceVersion String? @map("conformance_version")
+  /// Manifest version string (sc:version), if present.
+  version            String?
+
+  /// Full JSON-LD manifest as harvested. Kept verbatim so the upstream
+  /// host's signature / formatting isn't mangled.
+  croissant          Json
+
+  harvestedAt DateTime @default(now()) @map("harvested_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  sourceCatalog RemoteCatalog @relation(fields: [sourceCatalogId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceCatalogId, originUrl])
+  @@index([sourceCatalogId, harvestedAt])
+  @@map("remote_datasets")
   @@schema("catalog")
 }
 
