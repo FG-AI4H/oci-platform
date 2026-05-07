@@ -54,6 +54,11 @@ export function isHost(session: Session | null | undefined): boolean {
   return groups.includes('host') || groups.includes('admin');
 }
 
+/** True when the caller belongs to the `admin` Cognito group. */
+export function isAdmin(session: Session | null | undefined): boolean {
+  return userGroups(session).includes('admin');
+}
+
 /**
  * Server-side guard for host-only routes. Redirects unauthenticated
  * callers to the home page (sign-in CTA) and authenticated non-hosts
@@ -70,6 +75,17 @@ export function requireHost(session: Session | null | undefined): Session {
     redirect('/');
   }
   if (!isHost(session)) {
+    redirect('/dashboard');
+  }
+  return session;
+}
+
+/** Server-side guard for admin-only routes (e.g. /catalog/remotes). */
+export function requireAdmin(session: Session | null | undefined): Session {
+  if (!session?.user) {
+    redirect('/');
+  }
+  if (!isAdmin(session)) {
     redirect('/dashboard');
   }
   return session;

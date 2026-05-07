@@ -16,8 +16,11 @@ const ROLES_KEY = 'oci:requiredRoles';
  * Reads the user's `cognito:groups` claim and 403s if none of the
  * required roles match. Use AFTER `CognitoJwtGuard` in the guard chain
  * so the request has been authenticated.
+ *
+ * Works as both a method and class decorator (Nest's reflector reads
+ * up the chain via `getAllAndOverride([handler, class])`).
  */
-export const Roles = (...roles: Role[]): MethodDecorator => SetMetadata(ROLES_KEY, roles);
+export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 
 @Injectable()
 export class RolesGuard implements CanActivate {

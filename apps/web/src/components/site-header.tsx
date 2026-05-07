@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Badge, Button } from '@oci/ui';
 import { auth, signOut } from '../auth';
-import { isHost } from '../lib/groups';
+import { isAdmin, isHost } from '../lib/groups';
 import { BrandLockup } from './brand-mark';
 
 function envTone(env: string): 'info' | 'warning' | 'neutral' {
@@ -22,6 +22,7 @@ export async function SiteHeader() {
   const session = await auth();
   const env = process.env.OCI_ENV ?? 'local';
   const showHostNav = isHost(session);
+  const showAdminNav = isAdmin(session);
   const showEnvBadge = env !== 'prod';
 
   return (
@@ -37,6 +38,7 @@ export async function SiteHeader() {
           <nav aria-label="Primary" className="hidden sm:flex items-center gap-5">
             <NavLink href="/catalog">Catalog</NavLink>
             {showHostNav ? <NavLink href="/catalog/new">New dataset</NavLink> : null}
+            {showAdminNav ? <NavLink href="/catalog/remotes">Remotes</NavLink> : null}
           </nav>
         </div>
 
