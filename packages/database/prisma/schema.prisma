@@ -193,5 +193,54 @@ model AccessRequest {
   @@schema("catalog")
 }
 
+// ---------------------------------------------------------------------------
+// Federation (Phase E down-payment, PR E.1)
+//
+// `RemoteCatalog` rows are admin-managed peer Croissant catalogues we
+// federate from. The harvest job (apps/worker-ingest, scheduled in PR
+// E.3) iterates over these rows, fetches the peer's
+// `.well-known/croissant-catalog.json`, and upserts the manifests it
+// finds into a `RemoteDataset` table (added in PR E.2 alongside the
+// `?source=federated` filter on `/v2/catalog/datasets`).
+//
+// PR E.1 ships only the admin surface for managing these rows — see
+// `apps/api/src/modules/remote-catalog/`. Until PR E.3 lands the
+// worker, every row's `lastHarvestedAt` stays null and `harvestStatus`
+// stays IDLE.
+// ---------------------------------------------------------------------------
+
+enum HarvestStatus {
+  IDLE
+  RUNNING
+  SUCCEEDED
+  FAILED
+
+  @@schema("catalog")
+}
+
+model RemoteCatalog {
+  id          String  @id @default(uuid()) @db.Uuid
+  /// URL-safe identifier (e.g. "huggingface", "gi-ai4h-thailand").
+  slug        String  @unique
+  name        String
+  /// Base URL of the peer's catalog. The harvester appends
+  /// `/.well-known/croissant-catalog.json` to enumerate datasets.
+  endpointUrl String  @map("endpoint_url")
+  description String?
+
+  harvestStatus   HarvestStatus @default(IDLE) @map("harvest_status")
+  /// Set by the worker on each run; null until the worker has run.
+  lastHarvestedAt DateTime?     @map("last_harvested_at")
+  /// Last error message from a FAILED run.
+  lastError       String?       @map("last_error")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([harvestStatus])
+  @@map("remote_catalogs")
+  @@schema("catalog")
+}
+
 // Phase B will port full models for: annotation, prediction,
 // evaluation, reporting from the legacy annotation-tool / EvalAI schemas.

@@ -143,9 +143,90 @@ export const PublishDatasetVersionRequestSchema = z.object({
 });
 export type PublishDatasetVersionRequest = z.infer<typeof PublishDatasetVersionRequestSchema>;
 
+// ==== Catalog federation (DAP package, Phase E down-payment) =============
+//
+// `RemoteCatalog` rows configure peer Croissant catalogues we harvest
+// from. The harvester (apps/worker-ingest, Phase E) iterates over the
+// rows here, fetches each peer's `.well-known/croissant-catalog.json`,
+// and upserts the dataset rows it finds into a `RemoteDataset` table
+// (added in PR E.2 alongside the source-filter on /v2/catalog/datasets).
+//
+// PR E.1 ships only the admin surface for managing the rows; no
+// harvest activity yet — `lastHarvestedAt` will stay null until the
+// worker lands. Treat the model as the seed for federation, not the
+// federation itself.
+
+/**
+ * URL-safe identifier for a remote catalog (e.g. "huggingface",
+ * "openml", "gi-ai4h-thailand"). Same shape rules as DatasetSlug for
+ * URL ergonomics.
+ */
+export const RemoteCatalogSlugSchema = z
+  .string()
+  .min(2)
+  .max(64)
+  .regex(
+    /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9]))*$/,
+    'slug must be lower-case alphanumerics with single hyphens, 2-64 chars',
+  );
+export type RemoteCatalogSlug = z.infer<typeof RemoteCatalogSlugSchema>;
+
+/**
+ * Status of the harvest job for a remote catalog. PR E.1 only writes
+ * `IDLE` (set on insert); PR E.3's worker will transition through the
+ * other states.
+ */
+export const HarvestStatusSchema = z.enum(['IDLE', 'RUNNING', 'SUCCEEDED', 'FAILED']);
+export type HarvestStatus = z.infer<typeof HarvestStatusSchema>;
+
+/** Summary row returned in list responses. */
+export interface RemoteCatalogSummary {
+  id: string;
+  slug: RemoteCatalogSlug;
+  name: string;
+  endpointUrl: string;
+  description: string | null;
+  harvestStatus: HarvestStatus;
+  /** ISO 8601; null until the worker has run at least once. */
+  lastHarvestedAt: string | null;
+  /** Last error message from a FAILED run; null otherwise. */
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Detail returned by `GET /v2/catalog/remotes/:id`. Same shape as the summary
+ * for now; future iterations may add harvested-row counts etc. */
+export type RemoteCatalogDetail = RemoteCatalogSummary;
+
+export const ListRemoteCatalogsResponseSchema = z.object({
+  items: z.array(z.unknown()), // shape pinned at the API layer; here we just
+  totalEstimate: z.number().int(), // need the response envelope.
+});
+
+/** `POST /v2/catalog/remotes` — admin registers a peer. */
+export const CreateRemoteCatalogRequestSchema = z.object({
+  slug: RemoteCatalogSlugSchema,
+  name: z.string().min(1).max(120),
+  /**
+   * Base URL of the peer's Croissant catalog endpoint. The harvester
+   * will GET `<endpointUrl>/.well-known/croissant-catalog.json` to
+   * enumerate its datasets. Must be https in non-local env (enforced
+   * at the API; the schema only checks URL syntax).
+   */
+  endpointUrl: z
+    .string()
+    .url()
+    .max(500)
+    .refine((u) => /^https?:\/\//i.test(u), { message: 'endpointUrl must be http(s)' }),
+  description: z.string().max(2000).nullable().optional(),
+});
+export type CreateRemoteCatalogRequest = z.infer<typeof CreateRemoteCatalogRequestSchema>;
+
 export const tokens = {
   /** Phase B will add: Campaign, Task, Sample, Annotation, AnnotationTool */
   /** Phase C will add: Challenge, Submission, Phase, Leaderboard */
   /** Phase D will add: Report, ReportTemplate, AuditEvent */
   /** Phase E will add: DMXP transaction envelope, FederatedConnector */
+  /** PR E.2 will add: RemoteDataset, ListDatasetsQuery.source */
 };

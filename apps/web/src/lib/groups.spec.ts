@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from 'next-auth';
-import { isHost, userGroups } from './groups';
+import { isAdmin, isHost, userGroups } from './groups';
 
 function s(accessToken?: string): Session | null {
   if (!accessToken) return null;
@@ -73,5 +73,17 @@ describe('isHost', () => {
   });
   it('false when no token', () => {
     expect(isHost(null)).toBe(false);
+  });
+});
+
+describe('isAdmin', () => {
+  it('true only for the admin group', () => {
+    expect(isAdmin(s('dev:alice:admin'))).toBe(true);
+  });
+  it('false for host (admin is the strict superset)', () => {
+    expect(isAdmin(s('dev:alice:host'))).toBe(false);
+  });
+  it('false for unauthenticated', () => {
+    expect(isAdmin(null)).toBe(false);
   });
 });
