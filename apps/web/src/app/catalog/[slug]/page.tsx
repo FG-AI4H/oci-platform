@@ -150,10 +150,28 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
               ) : null}
             </div>
           </div>
-          <p className="mt-4 inline-flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
-            <ShieldIcon size={12} />
-            <span>{visibilityCopy[detail.visibility]}</span>
-          </p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <p className="inline-flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
+              <ShieldIcon size={12} />
+              <span>{visibilityCopy[detail.visibility]}</span>
+            </p>
+            {/*
+             * "Request access" CTA for RESTRICTED + PUBLISHED datasets.
+             * The form lives at /catalog/<slug>/request-access; the page
+             * itself bounces anonymous callers through /signin first
+             * (PR F, #75). Don't render the CTA on PRIVATE drafts (only
+             * the host should see those) or on local datasets the caller
+             * doesn't actually need to request access to.
+             */}
+            {detail.visibility === 'RESTRICTED' && detail.status === 'PUBLISHED' ? (
+              <Link
+                href={`/catalog/${detail.slug}/request-access`}
+                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-[var(--color-primary-foreground)] shadow-[var(--shadow-sm)] hover:bg-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+              >
+                Request access
+              </Link>
+            ) : null}
+          </div>
         </Container>
       </Section>
 

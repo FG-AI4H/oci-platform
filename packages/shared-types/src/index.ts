@@ -186,6 +186,85 @@ export const PublishDatasetVersionRequestSchema = z.object({
 });
 export type PublishDatasetVersionRequest = z.infer<typeof PublishDatasetVersionRequestSchema>;
 
+// ==== Access requests (DAP package, Phase B) ============================
+//
+// Participants request access to RESTRICTED datasets; dataset hosts (or
+// admins) approve/deny. The Prisma `AccessRequest` model has lived in
+// `packages/database` since PR A — PR F (this slice) wires the HTTP +
+// UI surfaces. The actual S3 pre-signed URL minting on approval is a
+// separate follow-up; PR F lands the request lifecycle.
+
+export const AccessRequestStatusSchema = z.enum(['PENDING', 'APPROVED', 'DENIED', 'REVOKED']);
+export type AccessRequestStatus = z.infer<typeof AccessRequestStatusSchema>;
+
+/**
+ * Structured attestations the requester signs off when asking for
+ * access. Free-text DUO IRIs for now (per #75); the ontology-aware
+ * selector is a follow-up. Stored verbatim on `AccessRequest.attestations`.
+ */
+export const AccessRequestAttestationsSchema = z.object({
+  /** Has the requester's institutional review board approved this study? */
+  irbApproved: z.boolean(),
+  /** Optional reference to the IRB approval document / number. */
+  irbApprovalRef: z.string().max(500).nullable().optional(),
+  /** Optional reference to the data-protection impact assessment. */
+  dpiaRef: z.string().max(500).nullable().optional(),
+  /** How long the data will be retained, in days. Capped at 10 years. */
+  dataRetentionDays: z.number().int().min(1).max(3650).nullable().optional(),
+  /**
+   * DUO (Data Use Ontology) term IRIs the requester acknowledges.
+   * Free-text in PR F — a future PR adds the ontology-aware selector.
+   * Each entry is a URI; max 50 to bound payload size.
+   */
+  duoConsent: z.array(z.string().url().max(500)).max(50).optional(),
+});
+export type AccessRequestAttestations = z.infer<typeof AccessRequestAttestationsSchema>;
+
+/**
+ * Public-facing summary of an `AccessRequest`. Used in both the
+ * requester's "my requests" list and the host's inbox; the two
+ * pages render the same shape with different action affordances.
+ */
+export interface AccessRequestSummary {
+  id: string;
+  /** Snapshot of the dataset metadata at request time. */
+  dataset: { id: string; slug: DatasetSlug; name: string };
+  /** Requester identity — sub from Cognito (UUID-shaped). */
+  requesterId: string;
+  /** Optional: requester's display name (email or username). Null when not surfaced. */
+  requesterDisplayName: string | null;
+  justification: string;
+  attestations: AccessRequestAttestations;
+  status: AccessRequestStatus;
+  /** Set when status leaves PENDING. */
+  decidedAt: string | null;
+  /** Cognito sub of the host/admin who decided. */
+  decidedById: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** `POST /v2/catalog/datasets/:slug/access-requests` */
+export const CreateAccessRequestRequestSchema = z.object({
+  justification: z.string().min(20).max(4000),
+  attestations: AccessRequestAttestationsSchema,
+});
+export type CreateAccessRequestRequest = z.infer<typeof CreateAccessRequestRequestSchema>;
+
+/** `POST /v2/catalog/access-requests/:id/decision` */
+export const AccessRequestDecisionSchema = z.object({
+  /** Only host/admin-driven decisions; PENDING is not a target state here. */
+  status: z.enum(['APPROVED', 'DENIED', 'REVOKED']),
+  decisionNote: z.string().max(4000).nullable().optional(),
+});
+export type AccessRequestDecision = z.infer<typeof AccessRequestDecisionSchema>;
+
+export interface ListAccessRequestsResponse {
+  items: AccessRequestSummary[];
+  totalEstimate: number;
+}
+
 // ==== Catalog federation (DAP package, Phase E down-payment) =============
 //
 // `RemoteCatalog` rows configure peer Croissant catalogues we harvest
