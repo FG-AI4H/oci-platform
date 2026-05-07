@@ -1,5 +1,12 @@
 @import 'tailwindcss';
 
+/* Tell Tailwind v4 to scan the @oci/ui workspace package for class
+ * names. Without this, responsive arbitrary values like
+ * `sm:grid-cols-[9rem_1fr]` declared inside packages/ui/src/components
+ * silently fail to compile because the auto-detector only walks
+ * apps/web/src by default. The path is relative to this CSS file. */
+@source "../../../../packages/ui/src/**/*.{ts,tsx,js,jsx}";
+
 /*
  * OCI Design System — design tokens
  *
@@ -13,8 +20,8 @@
  * step rather than a jump.
  *
  * Light mode is the default; dark mode is opt-in via `prefers-color-scheme`
- * and overrides the same custom properties below. Component styles only
- * reference token names, never literal colors.
+ * and overrides the same custom properties further down. Component
+ * styles only reference token names, never literal colors.
  */
 
 @theme {
@@ -24,6 +31,16 @@
     ui-monospace, SFMono-Regular, 'JetBrains Mono', Menlo, Monaco, Consolas, 'Liberation Mono',
     'Courier New', monospace;
 
+  /* Type scale — fluid via clamp() so display sizes settle at small
+     viewports without burning through line-height budgets. The scale is
+     intentionally narrow: the catalog is dense, not editorial. */
+  --text-display: clamp(2.5rem, 4vw + 1rem, 3.75rem);
+  --text-display--line-height: 1.05;
+  --text-display--letter-spacing: -0.022em;
+  --text-h1: clamp(1.875rem, 1.5vw + 1rem, 2.25rem);
+  --text-h1--line-height: 1.15;
+  --text-h1--letter-spacing: -0.018em;
+
   /* Surfaces */
   --color-background: oklch(0.99 0.003 230);
   --color-foreground: oklch(0.22 0.02 240);
@@ -32,9 +49,11 @@
   --color-muted: oklch(0.96 0.005 230);
   --color-muted-foreground: oklch(0.5 0.02 240);
   --color-subtle: oklch(0.97 0.004 230);
+  --color-elevated: oklch(1 0 0);
 
   /* Borders & focus */
   --color-border: oklch(0.91 0.008 230);
+  --color-border-strong: oklch(0.85 0.01 230);
   --color-input: oklch(0.91 0.008 230);
   --color-ring: oklch(0.55 0.12 220);
 
@@ -44,6 +63,7 @@
   --color-primary-foreground: oklch(0.99 0.003 230);
   --color-primary-hover: oklch(0.43 0.11 220);
   --color-primary-soft: oklch(0.95 0.02 220);
+  --color-primary-emphasis: oklch(0.55 0.13 220);
 
   /* Accent — brighter cyan-teal. Reserved for AI/data-signal moments
      (highlights, active states), not large surfaces. */
@@ -51,25 +71,38 @@
   --color-accent-foreground: oklch(0.18 0.04 220);
   --color-accent-soft: oklch(0.95 0.04 200);
 
-  /* Semantic — restrained, not alarming. */
-  --color-success: oklch(0.55 0.12 155);
+  /* Semantic — restrained, not alarming. The "base" hue is also used as
+     the text colour in our soft-tinted Badge primitive (e.g. green
+     text on pale green pill), so it has to clear WCAG AA 4.5:1
+     against the `-soft` companion. */
+  --color-success: oklch(0.48 0.13 155);
   --color-success-foreground: oklch(0.99 0.005 155);
   --color-success-soft: oklch(0.95 0.04 155);
   --color-warning: oklch(0.72 0.14 75);
   --color-warning-foreground: oklch(0.2 0.04 75);
   --color-warning-soft: oklch(0.96 0.05 85);
-  --color-danger: oklch(0.55 0.18 25);
+  --color-danger: oklch(0.5 0.18 25);
   --color-danger-foreground: oklch(0.99 0.005 25);
   --color-danger-soft: oklch(0.96 0.04 25);
-  --color-info: oklch(0.6 0.12 240);
+  --color-info: oklch(0.5 0.13 240);
   --color-info-foreground: oklch(0.99 0.005 240);
   --color-info-soft: oklch(0.95 0.03 240);
+
+  /* Phase palette — used to colour-code GI-AI4H workstream phases on
+     the homepage feature grid and in dataset metadata. Kept distinct
+     from semantic colours so a "warning" phase badge can't be misread
+     as a real warning. */
+  --color-phase-a: oklch(0.55 0.12 220); /* catalog → primary teal */
+  --color-phase-b: oklch(0.6 0.13 285); /* annotation → indigo */
+  --color-phase-c: oklch(0.62 0.12 175); /* evaluation → mint */
+  --color-phase-d: oklch(0.62 0.14 80); /* reporting → ochre */
 
   /* Radii — subtle, not pill. */
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
 
   /* Shadows — layered, low-contrast. Tints toward the background hue. */
   --shadow-xs: 0 1px 1px oklch(0.22 0.02 240 / 0.04);
@@ -78,15 +111,21 @@
     0 4px 8px -2px oklch(0.22 0.02 240 / 0.06), 0 2px 4px -1px oklch(0.22 0.02 240 / 0.04);
   --shadow-lg:
     0 12px 24px -6px oklch(0.22 0.02 240 / 0.08), 0 4px 8px -2px oklch(0.22 0.02 240 / 0.05);
+  --shadow-glow: 0 0 0 1px oklch(0.55 0.12 220 / 0.18), 0 8px 24px -8px oklch(0.48 0.11 220 / 0.3);
 }
 
 /*
  * Dark mode — the same token names, retuned for a low-glare display.
- * Backgrounds lean toward a deep desaturated navy rather than pure black,
- * mirroring the cool brand hue.
+ *
+ * Tailwind v4's @theme is a compile-time directive — putting it inside
+ * a @media block does NOT scope tokens to the media query; declarations
+ * are hoisted to a single :root block and source order wins. To keep
+ * the tokens dynamic we override the same custom properties via a plain
+ * :root rule inside @media. The names match @theme above so all utility
+ * classes and `var(--…)` references resolve correctly at runtime.
  */
 @media (prefers-color-scheme: dark) {
-  @theme {
+  :root {
     --color-background: oklch(0.18 0.025 240);
     --color-foreground: oklch(0.95 0.005 230);
     --color-card: oklch(0.22 0.025 240);
@@ -94,8 +133,10 @@
     --color-muted: oklch(0.25 0.02 240);
     --color-muted-foreground: oklch(0.7 0.015 230);
     --color-subtle: oklch(0.24 0.022 240);
+    --color-elevated: oklch(0.26 0.025 240);
 
     --color-border: oklch(0.3 0.02 240);
+    --color-border-strong: oklch(0.38 0.02 240);
     --color-input: oklch(0.3 0.02 240);
     --color-ring: oklch(0.7 0.13 200);
 
@@ -103,18 +144,41 @@
     --color-primary-foreground: oklch(0.18 0.025 240);
     --color-primary-hover: oklch(0.75 0.12 215);
     --color-primary-soft: oklch(0.32 0.05 220);
+    --color-primary-emphasis: oklch(0.78 0.13 215);
 
     --color-accent: oklch(0.78 0.13 195);
     --color-accent-foreground: oklch(0.18 0.025 240);
     --color-accent-soft: oklch(0.3 0.05 200);
 
+    /* Semantic foregrounds need to be lighter against the dark soft
+       tunings — light-mode mid-tone hues fail WCAG 4.5:1 here. */
+    --color-success: oklch(0.82 0.14 155);
     --color-success-soft: oklch(0.3 0.05 155);
+    --color-warning: oklch(0.85 0.14 80);
+    --color-warning-foreground: oklch(0.95 0.005 230);
     --color-warning-soft: oklch(0.32 0.07 75);
+    --color-danger: oklch(0.78 0.16 25);
     --color-danger-soft: oklch(0.32 0.08 25);
+    --color-info: oklch(0.78 0.13 240);
     --color-info-soft: oklch(0.3 0.05 240);
+
+    --color-phase-a: oklch(0.78 0.13 220);
+    --color-phase-b: oklch(0.78 0.13 285);
+    --color-phase-c: oklch(0.78 0.13 175);
+    --color-phase-d: oklch(0.82 0.14 80);
+
+    --shadow-glow:
+      0 0 0 1px oklch(0.7 0.12 215 / 0.25), 0 8px 24px -8px oklch(0.7 0.12 215 / 0.2);
   }
 }
 
+/*
+ * Subtle hero motif — a low-contrast radial wash that anchors hero
+ * sections without pulling visual weight from the headline. Reused
+ * by `.hero-surface` below. We render it with `mask-image` so the
+ * underlying token-driven `--color-background` shows through on the
+ * edges and the wash blends into the page.
+ */
 @layer base {
   *,
   *::before,
@@ -159,5 +223,51 @@
   ::selection {
     background: var(--color-accent-soft);
     color: var(--color-accent-foreground);
+  }
+}
+
+@layer utilities {
+  /* Hero surface: layered radial washes in primary + accent. Restrained
+     enough that body copy on top stays comfortable to read; calibrated
+     differently for light/dark to keep the same perceived weight. */
+  .hero-surface {
+    background-image:
+      radial-gradient(
+        60% 60% at 20% 0%,
+        oklch(from var(--color-primary) l c h / 0.08),
+        transparent 70%
+      ),
+      radial-gradient(
+        50% 50% at 80% 0%,
+        oklch(from var(--color-accent) l c h / 0.08),
+        transparent 70%
+      );
+  }
+
+  /* Subtle dotted rule — reads as a hairline separator, used in
+     metadata strips and footer divisions to feel less heavy than a
+     solid border. */
+  .rule-dotted {
+    background-image: linear-gradient(
+      to right,
+      var(--color-border-strong) 50%,
+      transparent 50%
+    );
+    background-size: 6px 1px;
+    background-repeat: repeat-x;
+    background-position: 0 50%;
+  }
+
+  /* Visually-hidden but available to screen readers. */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
   }
 }

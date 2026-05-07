@@ -10,6 +10,7 @@
 export { cn } from './lib/cn.js';
 
 export { Button, buttonVariants, type ButtonProps } from './components/button.js';
+export { IconButton, type IconButtonProps } from './components/icon-button.js';
 export {
   Card,
   CardHeader,
@@ -17,6 +18,7 @@ export {
   CardDescription,
   CardContent,
   CardFooter,
+  type CardProps,
 } from './components/card.js';
 export { Badge, type BadgeProps } from './components/badge.js';
 export { Alert, AlertTitle, AlertDescription, type AlertProps } from './components/alert.js';
@@ -26,3 +28,31 @@ export {
   DefinitionItem,
   type DefinitionItemProps,
 } from './components/definition-list.js';
+export { Input, Textarea, type InputProps, type TextareaProps } from './components/input.js';
+export { Field, type FieldProps } from './components/field.js';
+export {
+  Container,
+  Section,
+  type ContainerProps,
+  type SectionProps,
+} from './components/container.js';
+export { Stat, type StatProps } from './components/stat.js';
+export {
+  SearchIcon,
+  ArrowRightIcon,
+  ArrowLeftIcon,
+  ExternalLinkIcon,
+  CheckIcon,
+  InfoIcon,
+  AlertIcon,
+  DatabaseIcon,
+  ShieldIcon,
+  SparkIcon,
+  FlowIcon,
+  ChartIcon,
+  FileTextIcon,
+  UserIcon,
+  KeyIcon,
+  GlobeIcon,
+  ClockIcon,
+} from './components/icon.js';

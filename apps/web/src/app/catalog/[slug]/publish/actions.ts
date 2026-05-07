@@ -17,14 +17,26 @@ export interface ManifestIssue {
   severity?: string;
 }
 
+export interface PublishVersionValues {
+  version: string;
+  notes: string;
+  manifest: string;
+}
+
 export type PublishVersionState =
   | { status: 'idle' }
-  | { status: 'error'; message: string; fieldErrors?: ReadonlyMap<string, string> }
+  | {
+      status: 'error';
+      message: string;
+      fieldErrors?: ReadonlyMap<string, string>;
+      values?: PublishVersionValues;
+    }
   | {
       status: 'invalid-manifest';
       message: string;
       conformance: string;
       issues: ManifestIssue[];
+      values?: PublishVersionValues;
     };
 
 const FormSchema = z.object({
@@ -61,6 +73,11 @@ export async function publishVersionAction(
     notes: String(formData.get('notes') ?? ''),
     manifest: String(formData.get('manifest') ?? ''),
   };
+  const echoed: PublishVersionValues = {
+    version: raw.version,
+    notes: raw.notes,
+    manifest: raw.manifest,
+  };
 
   const parsed = FormSchema.safeParse(raw);
   if (!parsed.success) {
@@ -69,7 +86,12 @@ export async function publishVersionAction(
       const k = String(issue.path[0] ?? '');
       if (k && !fieldErrors.has(k)) fieldErrors.set(k, issue.message);
     }
-    return { status: 'error', message: 'Please correct the errors below.', fieldErrors };
+    return {
+      status: 'error',
+      message: 'Please correct the errors below.',
+      fieldErrors,
+      values: echoed,
+    };
   }
 
   let croissant: unknown;
@@ -80,6 +102,7 @@ export async function publishVersionAction(
       status: 'error',
       message: 'Manifest is not valid JSON.',
       fieldErrors: new Map([['manifest', err instanceof Error ? err.message : 'parse error']]),
+      values: echoed,
     };
   }
 
@@ -112,6 +135,7 @@ export async function publishVersionAction(
         message: typeof body.message === 'string' ? body.message : 'Manifest validation failed.',
         conformance: typeof body.conformance === 'string' ? body.conformance : 'unknown',
         issues: body.issues as ManifestIssue[],
+        values: echoed,
       };
     }
     return {
@@ -120,6 +144,7 @@ export async function publishVersionAction(
         typeof body?.message === 'string'
           ? body.message
           : `API 400: ${JSON.stringify(body).slice(0, 300)}`,
+      values: echoed,
     };
   }
   if (!res.ok) {
@@ -127,6 +152,7 @@ export async function publishVersionAction(
     return {
       status: 'error',
       message: `API ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
+      values: echoed,
     };
   }
 
