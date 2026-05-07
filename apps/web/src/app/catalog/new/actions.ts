@@ -10,9 +10,21 @@ import {
 import { auth } from '../../../auth';
 import { isHost } from '../../../lib/groups';
 
+export interface CreateDatasetValues {
+  slug: string;
+  name: string;
+  description: string;
+  visibility: string;
+}
+
 export type CreateDatasetState =
   | { status: 'idle' }
-  | { status: 'error'; message: string; fieldErrors?: ReadonlyMap<string, string> };
+  | {
+      status: 'error';
+      message: string;
+      fieldErrors?: ReadonlyMap<string, string>;
+      values?: CreateDatasetValues;
+    };
 
 const FormSchema = CreateDatasetRequestSchema.extend({
   // FormData entries arrive as strings; coerce blanks to undefined so
@@ -54,7 +66,12 @@ export async function createDatasetAction(
       const k = String(issue.path[0] ?? '');
       if (k && !fieldErrors.has(k)) fieldErrors.set(k, issue.message);
     }
-    return { status: 'error', message: 'Please correct the errors below.', fieldErrors };
+    return {
+      status: 'error',
+      message: 'Please correct the errors below.',
+      fieldErrors,
+      values: raw,
+    };
   }
 
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -76,6 +93,7 @@ export async function createDatasetAction(
       status: 'error',
       message: `Slug "${parsed.data.slug}" is already taken.`,
       fieldErrors: new Map([['slug', 'taken']]),
+      values: raw,
     };
   }
   if (!res.ok) {
@@ -83,6 +101,7 @@ export async function createDatasetAction(
     return {
       status: 'error',
       message: `API ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
+      values: raw,
     };
   }
 

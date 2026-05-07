@@ -4,12 +4,15 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
+  ArrowLeftIcon,
   Badge,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  Container,
+  Section,
 } from '@oci/ui';
 import type { DatasetDetail } from '@oci/shared-types';
 import { auth } from '../../../../auth';
@@ -44,14 +47,16 @@ export default async function PublishVersionPage({ params }: PageProps) {
 
   if (error) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-12">
-        <Alert tone="danger">
-          <AlertTitle>Catalog unavailable</AlertTitle>
-          <AlertDescription>
-            <pre className="mt-1 whitespace-pre-wrap text-xs font-mono">{error}</pre>
-          </AlertDescription>
-        </Alert>
-      </div>
+      <Container size="md">
+        <Section spacing="md">
+          <Alert tone="danger">
+            <AlertTitle>Catalog unavailable</AlertTitle>
+            <AlertDescription>
+              <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
+            </AlertDescription>
+          </Alert>
+        </Section>
+      </Container>
     );
   }
   if (!detail) notFound();
@@ -59,47 +64,71 @@ export default async function PublishVersionPage({ params }: PageProps) {
   const nextVersion = bumpPatch(detail.latestVersion ?? '0.1.0');
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 sm:px-6 py-12 space-y-6">
-      <header className="space-y-2">
-        <Link
-          href={`/catalog/${detail.slug}`}
-          className="text-sm text-[var(--color-muted-foreground)] hover:underline"
-        >
-          ← {detail.name}
-        </Link>
-        <h1 className="text-3xl font-semibold tracking-tight">Publish a new version</h1>
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          Paste or upload a Croissant&nbsp;1.1 manifest. We&apos;ll validate it against Croissant +
-          RAI + BIOCroissant before mirroring its distributions to the catalog.
-        </p>
-      </header>
+    <Container size="lg">
+      <Section spacing="md">
+        <header className="mb-6 space-y-3">
+          <Link
+            href={`/catalog/${detail.slug}`}
+            className="inline-flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
+          >
+            <ArrowLeftIcon size={14} />
+            <span>{detail.name}</span>
+          </Link>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
+            Host workflow
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+            Publish a new version
+          </h1>
+          <p className="max-w-prose text-[var(--color-muted-foreground)]">
+            Paste or upload a Croissant&nbsp;1.1 manifest. We&apos;ll validate it against Croissant
+            + RAI + BIOCroissant before mirroring its distributions to the catalog.
+          </p>
+        </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Current state</CardTitle>
-          <CardDescription>
-            <span className="font-mono">{detail.slug}</span> · status&nbsp;
-            <Badge tone="neutral">{detail.status}</Badge> · visibility&nbsp;
-            <Badge tone="neutral">{detail.visibility}</Badge>
-            {detail.latestVersion ? (
-              <>
-                {' · latest '}
-                <Badge tone="primary">v{detail.latestVersion}</Badge>
-              </>
-            ) : null}
-          </CardDescription>
-        </CardHeader>
-      </Card>
+        <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
+          <Card>
+            <CardHeader>
+              <CardTitle>New version</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <PublishVersionForm slug={detail.slug} suggestedVersion={nextVersion} />
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>New version</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PublishVersionForm slug={detail.slug} suggestedVersion={nextVersion} />
-        </CardContent>
-      </Card>
-    </div>
+          <Card tone="subtle" className="h-fit lg:sticky lg:top-20">
+            <CardHeader>
+              <CardTitle>Current state</CardTitle>
+              <CardDescription>The dataset row this version will attach to.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[var(--color-muted-foreground)]">Slug</span>
+                <span className="font-mono text-xs">{detail.slug}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[var(--color-muted-foreground)]">Status</span>
+                <Badge tone="neutral">{detail.status}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[var(--color-muted-foreground)]">Visibility</span>
+                <Badge tone="neutral">{detail.visibility}</Badge>
+              </div>
+              {detail.latestVersion ? (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[var(--color-muted-foreground)]">Latest</span>
+                  <Badge tone="primary">v{detail.latestVersion}</Badge>
+                </div>
+              ) : null}
+              <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-3">
+                <span className="text-[var(--color-muted-foreground)]">Suggested next</span>
+                <Badge tone="accent">v{nextVersion}</Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </Section>
+    </Container>
   );
 }
 

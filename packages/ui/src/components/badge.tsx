@@ -12,7 +12,7 @@ const badge = cva(
         primary:
           'bg-[var(--color-primary-soft)] text-[var(--color-primary)] ring-[var(--color-primary)]/20',
         accent:
-          'bg-[var(--color-accent-soft)] text-[var(--color-accent-foreground)] ring-[var(--color-accent)]/30',
+          'bg-[var(--color-accent-soft)] text-[var(--color-foreground)] ring-[var(--color-accent)]/40',
         success:
           'bg-[var(--color-success-soft)] text-[var(--color-success)] ring-[var(--color-success)]/30',
         warning:
