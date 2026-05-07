@@ -286,8 +286,7 @@ function extractManifestFields(manifest: unknown, originUrl: string): ManifestFi
   // a literal-typed key to silence the rule (same pattern as
   // dataset-jsonld in the web app).
   type ManifestKey = 'alternateName' | 'name' | 'description' | 'version';
-  const get = (key: ManifestKey): unknown =>
-    Reflect.get(m, key) ?? Reflect.get(m, `sc:${key}`);
+  const get = (key: ManifestKey): unknown => Reflect.get(m, key) ?? Reflect.get(m, `sc:${key}`);
   const altName = get('alternateName');
   const slugBase =
     typeof altName === 'string' && altName.length > 0 ? altName : urlTail || '_unknown';
