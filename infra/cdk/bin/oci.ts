@@ -26,6 +26,7 @@ const tags = { Project: 'OCI', Environment: envName, ManagedBy: 'CDK' };
 const apiImage = app.node.tryGetContext('apiImage') as string | undefined;
 const webImage = app.node.tryGetContext('webImage') as string | undefined;
 const migrateImage = app.node.tryGetContext('migrateImage') as string | undefined;
+const workerIngestImage = app.node.tryGetContext('workerIngestImage') as string | undefined;
 
 // Route 53 hosted zone for ai4h.net (ADR-0001). Single account-wide zone
 // shared with other FG-AI4H tenants; OCI Platform records all live under
@@ -79,6 +80,7 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
   accessLogsBucket: observability.accessLogsBucket,
   apiImage,
   migrateImage,
+  workerIngestImage,
   hostedZoneId: HOSTED_ZONE_ID,
   zoneName: HOSTED_ZONE_NAME,
 });
