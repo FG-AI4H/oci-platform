@@ -17,10 +17,10 @@ mkdirSync(OUT_DIR, { recursive: true });
 const shot = (name: string) => resolvePath(OUT_DIR, name);
 
 async function signIn(page: Page, user: string, roles: string) {
-  await page.goto('/api/auth/signin?callbackUrl=%2Fdashboard');
+  await page.goto('/signin?callbackUrl=%2Fdashboard');
   await page.getByLabel('User').fill(user);
-  await page.getByLabel('Roles', { exact: false }).fill(roles);
-  await page.getByRole('button', { name: /sign in/i }).click();
+  await page.getByLabel('Roles').fill(roles);
+  await page.getByRole('button', { name: /sign in.*local dev/i }).click();
   await page.waitForURL(/\/(dashboard)?$/);
 }
 
@@ -35,8 +35,8 @@ test.describe('UX captures', () => {
     await page.screenshot({ path: shot('02-catalog-list.png'), fullPage: true });
   });
 
-  test('nextauth signin form', async ({ page }) => {
-    await page.goto('/api/auth/signin');
+  test('signin form (branded)', async ({ page }) => {
+    await page.goto('/signin');
     await page.screenshot({ path: shot('03-signin-form.png'), fullPage: true });
   });
 

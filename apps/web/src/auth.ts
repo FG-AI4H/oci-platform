@@ -101,6 +101,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
   },
+  // Route NextAuth UI to our own branded page (apps/web/src/app/signin).
+  // The default NextAuth-generated form is unstyled (#79) and breaks
+  // the dark-mode flow. `signOut` keeps NextAuth's default — we handle
+  // it via a server action in site-header anyway.
+  pages: {
+    signIn: '/signin',
+  },
   // Trust the X-Forwarded-* headers from the ALB (we sit behind one).
   trustHost: true,
 });

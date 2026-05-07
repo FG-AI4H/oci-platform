@@ -34,18 +34,13 @@ function readManifest(): string {
 }
 
 async function signInAs(page: Page, user: string, roles: string) {
-  // Navigate directly to NextAuth's Credentials sign-in page. The
-  // homepage "Sign in with Cognito" button calls `signIn('cognito')`
-  // server-side without a form, which (in local mode) silently logs
-  // in with the auth.ts defaults — bypassing our role selection.
-  // The form at /api/auth/signin is the only path that lets us pick.
-  await page.goto('/api/auth/signin?callbackUrl=%2Fdashboard');
+  // Branded /signin page (PR H, #79). NextAuth's `pages.signIn`
+  // routes here; the form posts to a server action that hands off
+  // to NextAuth's credentials flow, then redirects to callbackUrl.
+  await page.goto('/signin?callbackUrl=%2Fdashboard');
   await page.getByLabel('User').fill(user);
-  await page.getByLabel('Roles', { exact: false }).fill(roles);
-  await page.getByRole('button', { name: /sign in/i }).click();
-  // The form posts to /api/auth/callback/cognito which redirects to
-  // the callbackUrl on success. In some NextAuth v5 setups it lands
-  // on `/` first, so allow either as an authenticated state.
+  await page.getByLabel('Roles').fill(roles);
+  await page.getByRole('button', { name: /sign in.*local dev/i }).click();
   await expect(page).toHaveURL(/\/(dashboard)?$/);
 }
 

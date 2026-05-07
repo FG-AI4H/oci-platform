@@ -18,7 +18,15 @@ import {
   Stat,
 } from '@oci/ui';
 import type { ListDatasetsResponse } from '@oci/shared-types';
-import { auth, signIn } from '../auth';
+import { auth } from '../auth';
+
+// Label varies per env so the CTA matches reality. NextAuth's
+// `pages.signIn = '/signin'` (auth.ts) routes both flows through
+// the same branded page; this is just the link text.
+const signInLabel =
+  process.env.OCI_ENV === 'local' || process.env.NEXT_PUBLIC_OCI_ENV === 'local'
+    ? 'Sign in (local dev)'
+    : 'Sign in with Cognito';
 import { apiFetch } from '../lib/api';
 
 interface PhaseCard {
@@ -142,16 +150,17 @@ export default async function HomePage() {
                 </>
               ) : (
                 <>
-                  <form
-                    action={async () => {
-                      'use server';
-                      await signIn('cognito', { redirectTo: '/dashboard' });
-                    }}
-                  >
-                    <Button type="submit" size="lg">
-                      Sign in with Cognito
-                    </Button>
-                  </form>
+                  {/*
+                   * Anchor sign-in to the branded /signin page rather
+                   * than calling `signIn('cognito')` directly. The
+                   * latter silently auto-signed users in as
+                   * `local-dev@oci.ai4h.net` + `host,admin` in local
+                   * mode (#79) — there was no path to the credentials
+                   * picker. /signin handles both env modes uniformly.
+                   */}
+                  <Button asChild size="lg">
+                    <Link href="/signin?callbackUrl=%2Fdashboard">{signInLabel}</Link>
+                  </Button>
                   <Button asChild variant="outline" size="lg">
                     <Link href="/catalog">Browse catalog</Link>
                   </Button>
@@ -273,14 +282,9 @@ export default async function HomePage() {
                     <Link href="/catalog/new">Create a dataset</Link>
                   </Button>
                 ) : (
-                  <form
-                    action={async () => {
-                      'use server';
-                      await signIn('cognito', { redirectTo: '/catalog/new' });
-                    }}
-                  >
-                    <Button type="submit">Sign in to publish</Button>
-                  </form>
+                  <Button asChild>
+                    <Link href="/signin?callbackUrl=%2Fcatalog%2Fnew">Sign in to publish</Link>
+                  </Button>
                 )}
                 <Link
                   href="/catalog"
