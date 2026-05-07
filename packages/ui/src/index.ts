@@ -19,9 +19,16 @@ export {
   CardContent,
   CardFooter,
   type CardProps,
+  type CardTitleProps,
 } from './components/card.js';
 export { Badge, type BadgeProps } from './components/badge.js';
-export { Alert, AlertTitle, AlertDescription, type AlertProps } from './components/alert.js';
+export {
+  Alert,
+  AlertTitle,
+  AlertDescription,
+  type AlertProps,
+  type AlertTitleProps,
+} from './components/alert.js';
 export { Separator, type SeparatorProps } from './components/separator.js';
 export {
   DefinitionList,

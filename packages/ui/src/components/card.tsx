@@ -52,9 +52,21 @@ export const CardHeader = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivEleme
 );
 CardHeader.displayName = 'CardHeader';
 
-export const CardTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
-  ({ className, ...props }, ref) => (
-    <h3
+type CardTitleHeadingLevel = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
+
+export interface CardTitleProps extends HTMLAttributes<HTMLHeadingElement> {
+  /**
+   * Heading level. Defaults to `h3` to preserve existing usage; bump
+   * up when the Card is the most prominent surface on the screen
+   * (e.g. /signin uses `h1`) so we don't skip levels and trip WCAG
+   * 1.3.1 / 2.4.6.
+   */
+  as?: CardTitleHeadingLevel;
+}
+
+export const CardTitle = forwardRef<HTMLHeadingElement, CardTitleProps>(
+  ({ as: As = 'h3', className, ...props }, ref) => (
+    <As
       ref={ref}
       className={cn('text-lg font-semibold leading-tight tracking-tight', className)}
       {...props}
