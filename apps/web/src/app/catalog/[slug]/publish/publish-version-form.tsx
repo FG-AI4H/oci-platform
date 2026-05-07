@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useRef, type ChangeEvent } from 'react';
+import { useActionState, useEffect, useRef, type ChangeEvent } from 'react';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Input, Textarea } from '@oci/ui';
 import { publishVersionAction, type PublishVersionState } from './actions';
 
@@ -14,6 +14,7 @@ interface Props {
 export function PublishVersionForm({ slug, suggestedVersion }: Props) {
   const [state, action, pending] = useActionState(publishVersionAction, initial);
   const manifestRef = useRef<HTMLTextAreaElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
   const echoed =
     state.status === 'error' || state.status === 'invalid-manifest' ? state.values : undefined;
 
@@ -24,6 +25,21 @@ export function PublishVersionForm({ slug, suggestedVersion }: Props) {
       if (manifestRef.current) manifestRef.current.value = text;
     });
   }
+
+  // After a failed server round-trip, scroll the error panel into
+  // view. Without this the user has to scroll back up to read what
+  // went wrong, then back down to the textarea (#79). `block: 'start'`
+  // matches the reading order; `behavior: 'smooth'` keeps the jump
+  // unobtrusive.
+  useEffect(() => {
+    if (state.status === 'error' || state.status === 'invalid-manifest') {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Pull focus into the panel so screen-readers announce it. The
+      // panel is `role=alert`; some readers handle that automatically,
+      // but explicit focus is more reliable across browsers.
+      errorRef.current?.focus();
+    }
+  }, [state.status]);
 
   // Re-mount the form after a server round-trip so `defaultValue`
   // settings on the manifest textarea are honoured (React only reads
@@ -39,12 +55,16 @@ export function PublishVersionForm({ slug, suggestedVersion }: Props) {
       <input type="hidden" name="slug" value={slug} />
 
       {state.status === 'invalid-manifest' ? (
-        <ValidationPanel state={state} />
+        <div ref={errorRef} tabIndex={-1}>
+          <ValidationPanel state={state} />
+        </div>
       ) : state.status === 'error' ? (
-        <Alert tone="danger">
-          <AlertTitle>Could not publish</AlertTitle>
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
+        <div ref={errorRef} tabIndex={-1}>
+          <Alert tone="danger">
+            <AlertTitle as="h2">Could not publish</AlertTitle>
+            <AlertDescription>{state.message}</AlertDescription>
+          </Alert>
+        </div>
       ) : null}
 
       <Field
@@ -136,7 +156,7 @@ function ValidationPanel({
 }) {
   return (
     <Alert tone="danger">
-      <AlertTitle>Manifest validation failed ({state.conformance})</AlertTitle>
+      <AlertTitle as="h2">Manifest validation failed ({state.conformance})</AlertTitle>
       <AlertDescription>
         <p className="mb-2">{state.message}</p>
         <ul className="space-y-1.5 text-xs">
