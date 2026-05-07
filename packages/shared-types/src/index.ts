@@ -51,6 +51,18 @@ export const DatasetSlugSchema = z
   );
 export type DatasetSlug = z.infer<typeof DatasetSlugSchema>;
 
+/**
+ * Compact reference to the peer catalogue a federated row was
+ * harvested from. Null on locally-published rows. Drives the
+ * "From <peer>" attribution badge on `/catalog` cards (PR E.2).
+ */
+export const SourceCatalogRefSchema = z.object({
+  id: z.string().uuid(),
+  slug: z.string(),
+  name: z.string(),
+});
+export type SourceCatalogRef = z.infer<typeof SourceCatalogRefSchema>;
+
 /** Summary row returned in list / search responses. Cheap to render. */
 export const DatasetSummarySchema = z.object({
   id: z.string().uuid(),
@@ -64,6 +76,19 @@ export const DatasetSummarySchema = z.object({
   latestVersion: z.string().nullable(),
   createdAt: z.string(), // ISO 8601
   updatedAt: z.string(),
+  /**
+   * Peer catalogue this row was harvested from. Null for
+   * locally-published rows. Federated rows are always PUBLIC +
+   * PUBLISHED (we only mirror what peers expose publicly).
+   */
+  sourceCatalog: SourceCatalogRefSchema.nullable().default(null),
+  /**
+   * The peer's `@id` for this dataset. Null for local rows. The web
+   * UI uses this to deep-link the card to the upstream host since
+   * federated rows aren't addressable as `/catalog/<slug>` (slugs
+   * may collide across peers).
+   */
+  originUrl: z.string().nullable().default(null),
 });
 export type DatasetSummary = z.infer<typeof DatasetSummarySchema>;
 
@@ -96,12 +121,30 @@ export const DatasetDetailSchema = DatasetSummarySchema.extend({
 });
 export type DatasetDetail = z.infer<typeof DatasetDetailSchema>;
 
+/**
+ * Source filter for `GET /v2/catalog/datasets?source=…`.
+ *
+ *   - `local`     (default): rows published on this platform.
+ *   - `federated`: rows harvested from peer catalogues
+ *                  (RemoteDataset). Empty until PR E.3's worker runs.
+ *   - `all`:       union of both, sorted by their respective
+ *                  `updatedAt` / `harvestedAt`.
+ *
+ * Default is `local` for backwards-compat with PRs C/D — clients that
+ * don't pass `source` see the same shape they did before. Federated
+ * rows are PUBLIC + PUBLISHED only (the worker only mirrors public
+ * datasets), so visibility/status filters interact additively.
+ */
+export const DatasetSourceSchema = z.enum(['local', 'federated', 'all']);
+export type DatasetSource = z.infer<typeof DatasetSourceSchema>;
+
 /** Query params for `GET /v2/catalog/datasets`. */
 export const ListDatasetsQuerySchema = z.object({
   q: z.string().min(1).max(200).optional(),
   visibility: DatasetVisibilitySchema.optional(),
   status: DatasetStatusSchema.optional(),
   hostId: z.string().uuid().optional(),
+  source: DatasetSourceSchema.default('local'),
   /** Cursor: opaque base64 of the prior page's last `(updatedAt, id)`. */
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),

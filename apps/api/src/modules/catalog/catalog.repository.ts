@@ -203,6 +203,10 @@ export class CatalogRepository {
       latestVersion: latest?.version ?? null,
       createdAt: ds.createdAt.toISOString(),
       updatedAt: ds.updatedAt.toISOString(),
+      // findBySlug only returns LOCAL rows — federated rows are
+      // addressed by id, not slug, and reach via repo.searchFederated.
+      sourceCatalog: null,
+      originUrl: null,
       croissant: ds.croissant ?? null,
       versions: ds.versions.map((v: DatasetVersionRow) => ({
         id: v.id,
@@ -323,6 +327,77 @@ export class CatalogRepository {
       take: 500,
     })) as DatasetWithLatest[];
   }
+
+  /**
+   * Federated rows — mirrors of datasets harvested from peer
+   * catalogues (`RemoteDataset`). Optional `q` does a case-insensitive
+   * `ILIKE` search on name/slug/description; the local table's
+   * tsvector machinery isn't replicated here because federated rows
+   * are append-only mirrors and the row count stays modest until PR
+   * E.3 scales the worker. Sorted by `harvested_at DESC` so
+   * recently-refreshed peers surface first.
+   */
+  async searchFederated(args: {
+    q?: string;
+    limit: number;
+  }): Promise<{ rows: DatasetSummary[]; totalEstimate: number }> {
+    const { q, limit } = args;
+    const where: Prisma.RemoteDatasetWhereInput = q
+      ? {
+          OR: [
+            { name: { contains: q, mode: 'insensitive' } },
+            { slug: { contains: q, mode: 'insensitive' } },
+            { description: { contains: q, mode: 'insensitive' } },
+          ],
+        }
+      : {};
+
+    const [rows, totalEstimate] = await Promise.all([
+      this.prisma.client.remoteDataset.findMany({
+        where,
+        include: {
+          sourceCatalog: { select: { id: true, slug: true, name: true } },
+        },
+        orderBy: [{ harvestedAt: 'desc' }, { id: 'desc' }],
+        take: limit,
+      }),
+      this.prisma.client.remoteDataset.count({ where }),
+    ]);
+
+    return {
+      rows: (
+        rows as Array<{
+          id: string;
+          slug: string;
+          name: string;
+          description: string | null;
+          conformanceVersion: string | null;
+          version: string | null;
+          originUrl: string;
+          harvestedAt: Date;
+          createdAt: Date;
+          updatedAt: Date;
+          sourceCatalog: { id: string; slug: string; name: string };
+        }>
+      ).map((r) => ({
+        id: r.id,
+        slug: r.slug,
+        name: r.name,
+        description: r.description,
+        // Federated rows are PUBLIC + PUBLISHED by definition (the
+        // worker only mirrors what peers expose publicly).
+        visibility: 'PUBLIC' as const,
+        status: 'PUBLISHED' as const,
+        conformanceVersion: r.conformanceVersion,
+        latestVersion: r.version,
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.harvestedAt.toISOString(),
+        sourceCatalog: r.sourceCatalog,
+        originUrl: r.originUrl,
+      })),
+      totalEstimate,
+    };
+  }
 }
 
 function rowToSummary(r: {
@@ -348,5 +423,7 @@ function rowToSummary(r: {
     latestVersion: r.latest_version,
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
+    sourceCatalog: null,
+    originUrl: null,
   };
 }
