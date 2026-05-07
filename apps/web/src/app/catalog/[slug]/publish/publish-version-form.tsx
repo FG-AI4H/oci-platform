@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useRef, type ChangeEvent } from 'react';
-import { Alert, AlertDescription, AlertTitle, Button } from '@oci/ui';
+import { Alert, AlertDescription, AlertTitle, Button, Field, Input, Textarea } from '@oci/ui';
 import { publishVersionAction, type PublishVersionState } from './actions';
 
 const initial: PublishVersionState = { status: 'idle' };
@@ -14,6 +14,8 @@ interface Props {
 export function PublishVersionForm({ slug, suggestedVersion }: Props) {
   const [state, action, pending] = useActionState(publishVersionAction, initial);
   const manifestRef = useRef<HTMLTextAreaElement>(null);
+  const echoed =
+    state.status === 'error' || state.status === 'invalid-manifest' ? state.values : undefined;
 
   function onPickFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -23,8 +25,17 @@ export function PublishVersionForm({ slug, suggestedVersion }: Props) {
     });
   }
 
+  // Re-mount the form after a server round-trip so `defaultValue`
+  // settings on the manifest textarea are honoured (React only reads
+  // defaultValue on mount).
+  const formKey = `${state.status}-${'values' in state && state.values ? state.values.version : ''}`;
+
+  const versionError = fieldError(state, 'version');
+  const notesError = fieldError(state, 'notes');
+  const manifestError = fieldError(state, 'manifest');
+
   return (
-    <form action={action} className="space-y-4">
+    <form action={action} className="space-y-5" aria-busy={pending || undefined} key={formKey}>
       <input type="hidden" name="slug" value={slug} />
 
       {state.status === 'invalid-manifest' ? (
@@ -38,54 +49,74 @@ export function PublishVersionForm({ slug, suggestedVersion }: Props) {
 
       <Field
         label="Version"
-        name="version"
-        defaultValue={suggestedVersion}
-        hint="Semver MAJOR.MINOR.PATCH (e.g. 1.0.0). Pre-release suffixes allowed."
+        htmlFor="field-version"
         required
-        pattern="^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$"
-        maxLength={40}
-        error={fieldError(state, 'version')}
-      />
+        hint="Semver MAJOR.MINOR.PATCH (e.g. 1.0.0). Pre-release suffixes allowed."
+        error={versionError}
+      >
+        <Input
+          id="field-version"
+          name="version"
+          required
+          defaultValue={echoed?.version ?? suggestedVersion}
+          invalid={!!versionError}
+          aria-describedby={versionError ? 'field-version-err' : undefined}
+          pattern="^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$"
+          maxLength={40}
+        />
+      </Field>
 
       <Field
         label="Notes"
-        name="notes"
-        as="textarea"
-        rows={3}
+        htmlFor="field-notes"
         hint="Optional. What changed since the previous version?"
-        maxLength={4000}
-        error={fieldError(state, 'notes')}
-      />
+        error={notesError}
+      >
+        <Textarea
+          id="field-notes"
+          name="notes"
+          rows={3}
+          maxLength={4000}
+          defaultValue={echoed?.notes}
+          invalid={!!notesError}
+          aria-describedby={notesError ? 'field-notes-err' : undefined}
+        />
+      </Field>
 
       <div className="space-y-1.5">
-        <label htmlFor="manifest" className="text-sm font-medium">
-          Croissant manifest <span className="text-[var(--color-danger)]">*</span>
+        <label htmlFor="manifest" className="block text-sm font-medium">
+          Croissant manifest
+          <span aria-hidden="true" className="ms-0.5 text-[var(--color-danger)]">
+            *
+          </span>
+          <span className="sr-only"> required</span>
         </label>
         <p className="text-xs text-[var(--color-muted-foreground)]">
           Paste the JSON-LD here, or upload a <code>.json</code> file to populate the field.
         </p>
         <input
           type="file"
+          aria-label="Upload manifest from .json file"
           accept="application/json,application/ld+json,.json"
           onChange={onPickFile}
-          className="block text-xs file:mr-3 file:rounded-md file:border-0 file:bg-[var(--color-subtle)] file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-[var(--color-muted)]"
+          className="block text-xs file:me-3 file:rounded-md file:border-0 file:bg-[var(--color-subtle)] file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-[var(--color-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
         />
-        <textarea
+        <Textarea
           id="manifest"
           name="manifest"
           ref={manifestRef}
           required
           rows={14}
-          className={
-            'w-full rounded-md border bg-[var(--color-card)] px-3 py-2 text-xs font-mono focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
-            (fieldError(state, 'manifest')
-              ? 'border-[var(--color-danger)]'
-              : 'border-[var(--color-border)]')
-          }
+          mono
+          defaultValue={echoed?.manifest}
+          invalid={!!manifestError}
+          aria-describedby={manifestError ? 'manifest-err' : undefined}
           placeholder='{"@context":"https://schema.org/","@type":"sc:Dataset","conformsTo":"http://mlcommons.org/croissant/1.1",...}'
         />
-        {fieldError(state, 'manifest') ? (
-          <p className="text-xs text-[var(--color-danger)]">{fieldError(state, 'manifest')}</p>
+        {manifestError ? (
+          <p id="manifest-err" className="text-xs text-[var(--color-danger)]">
+            {manifestError}
+          </p>
         ) : null}
       </div>
 
@@ -110,11 +141,11 @@ function ValidationPanel({
         <p className="mb-2">{state.message}</p>
         <ul className="space-y-1.5 text-xs">
           {state.issues.map((issue, i) => (
-            <li key={i} className="border-l-2 border-[var(--color-danger)]/40 pl-2">
+            <li key={i} className="border-s-2 border-[var(--color-danger)]/40 ps-2">
               {issue.path ? <span className="font-mono">{issue.path}: </span> : null}
               <span>{issue.message}</span>
               {issue.severity ? (
-                <span className="ml-1 uppercase opacity-70">[{issue.severity}]</span>
+                <span className="ms-1 uppercase opacity-70">[{issue.severity}]</span>
               ) : null}
             </li>
           ))}
@@ -127,60 +158,4 @@ function ValidationPanel({
 function fieldError(state: PublishVersionState, name: string): string | undefined {
   if (state.status !== 'error') return undefined;
   return state.fieldErrors?.get(name);
-}
-
-interface FieldProps {
-  label: string;
-  name: string;
-  hint?: string;
-  required?: boolean;
-  error?: string;
-  defaultValue?: string;
-  as?: 'input' | 'textarea';
-  rows?: number;
-  maxLength?: number;
-  pattern?: string;
-}
-
-function Field({ label, name, hint, required, error, as = 'input', ...rest }: FieldProps) {
-  const id = `field-${name}`;
-  const errId = error ? `${id}-err` : undefined;
-  const inputClass =
-    'w-full h-10 rounded-md border bg-[var(--color-card)] px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
-    (error ? 'border-[var(--color-danger)]' : 'border-[var(--color-border)]');
-  return (
-    <div className="space-y-1.5">
-      <label htmlFor={id} className="text-sm font-medium">
-        {label}
-        {required ? <span className="text-[var(--color-danger)]"> *</span> : null}
-      </label>
-      {as === 'textarea' ? (
-        <textarea
-          id={id}
-          name={name}
-          required={required}
-          aria-describedby={errId}
-          className={inputClass + ' h-auto py-2'}
-          {...rest}
-        />
-      ) : (
-        <input
-          id={id}
-          name={name}
-          required={required}
-          aria-describedby={errId}
-          className={inputClass}
-          {...rest}
-        />
-      )}
-      {hint && !error ? (
-        <p className="text-xs text-[var(--color-muted-foreground)]">{hint}</p>
-      ) : null}
-      {error ? (
-        <p id={errId} className="text-xs text-[var(--color-danger)]">
-          {error}
-        </p>
-      ) : null}
-    </div>
-  );
 }

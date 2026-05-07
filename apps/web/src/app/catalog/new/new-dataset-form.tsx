@@ -1,16 +1,37 @@
 'use client';
 
 import { useActionState } from 'react';
-import { Alert, AlertDescription, AlertTitle, Button } from '@oci/ui';
+import { Alert, AlertDescription, AlertTitle, Button, Field, Input, Textarea } from '@oci/ui';
 import { createDatasetAction, type CreateDatasetState } from './actions';
 
 const initial: CreateDatasetState = { status: 'idle' };
 
+type Visibility = 'PRIVATE' | 'RESTRICTED' | 'PUBLIC';
+
+const VISIBILITY_OPTIONS: ReadonlyArray<{ value: Visibility; title: string; hint: string }> = [
+  { value: 'PRIVATE', title: 'Private', hint: 'Only you and admins can see this draft.' },
+  {
+    value: 'RESTRICTED',
+    title: 'Restricted',
+    hint: 'Visible after an access request is approved.',
+  },
+  { value: 'PUBLIC', title: 'Public', hint: 'Listed in the catalog and crawlable.' },
+];
+
 export function NewDatasetForm() {
   const [state, action, pending] = useActionState(createDatasetAction, initial);
+  const echoed = state.status === 'error' ? state.values : undefined;
+  const visibilityDefault: Visibility =
+    echoed?.visibility === 'RESTRICTED' || echoed?.visibility === 'PUBLIC'
+      ? echoed.visibility
+      : 'PRIVATE';
+
+  const slugError = fieldError(state, 'slug');
+  const nameError = fieldError(state, 'name');
+  const descError = fieldError(state, 'description');
 
   return (
-    <form action={action} className="space-y-4">
+    <form action={action} className="space-y-5" aria-busy={pending || undefined}>
       {state.status === 'error' ? (
         <Alert tone="danger">
           <AlertTitle>Could not create dataset</AlertTitle>
@@ -20,49 +41,83 @@ export function NewDatasetForm() {
 
       <Field
         label="Slug"
-        name="slug"
-        hint="lower-case, hyphenated, 3–80 chars (e.g. rsna-pneumonia-2018)"
+        htmlFor="field-slug"
         required
-        error={fieldError(state, 'slug')}
-        autoComplete="off"
-        spellCheck={false}
-        pattern="^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9]))*$"
-        minLength={3}
-        maxLength={80}
-      />
+        hint="lower-case, hyphenated, 3–80 chars (e.g. rsna-pneumonia-2018)"
+        error={slugError}
+      >
+        <Input
+          id="field-slug"
+          name="slug"
+          required
+          defaultValue={echoed?.slug}
+          invalid={!!slugError}
+          aria-describedby={slugError ? 'field-slug-err' : undefined}
+          autoComplete="off"
+          spellCheck={false}
+          pattern="^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9]))*$"
+          minLength={3}
+          maxLength={80}
+        />
+      </Field>
 
       <Field
         label="Name"
-        name="name"
-        hint="Human-readable title shown in catalog cards and Schema.org Dataset.name."
+        htmlFor="field-name"
         required
-        error={fieldError(state, 'name')}
-        maxLength={200}
-      />
+        hint="Human-readable title shown in catalog cards and Schema.org Dataset.name."
+        error={nameError}
+      >
+        <Input
+          id="field-name"
+          name="name"
+          required
+          defaultValue={echoed?.name}
+          invalid={!!nameError}
+          aria-describedby={nameError ? 'field-name-err' : undefined}
+          maxLength={200}
+        />
+      </Field>
 
       <Field
         label="Description"
-        name="description"
-        as="textarea"
+        htmlFor="field-description"
         hint="Optional. Markdown isn't parsed yet — plain text only."
-        rows={4}
-        maxLength={2000}
-        error={fieldError(state, 'description')}
-      />
+        error={descError}
+      >
+        <Textarea
+          id="field-description"
+          name="description"
+          rows={4}
+          maxLength={2000}
+          defaultValue={echoed?.description}
+          invalid={!!descError}
+          aria-describedby={descError ? 'field-description-err' : undefined}
+        />
+      </Field>
 
-      <fieldset className="space-y-1.5">
+      <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Initial visibility</legend>
         <p className="text-xs text-[var(--color-muted-foreground)]">
-          Drafts are PRIVATE by default. Change later from the dataset page.
+          Drafts default to private. Change later from the dataset page.
         </p>
         <div className="grid gap-2 sm:grid-cols-3">
-          {(['PRIVATE', 'RESTRICTED', 'PUBLIC'] as const).map((v) => (
+          {VISIBILITY_OPTIONS.map((opt) => (
             <label
-              key={v}
-              className="flex items-center gap-2 rounded-md border border-[var(--color-border)] px-3 py-2 text-sm cursor-pointer has-[:checked]:border-[var(--color-primary)] has-[:checked]:bg-[var(--color-subtle)]"
+              key={opt.value}
+              className="flex flex-col gap-0.5 rounded-md border border-[var(--color-border)] p-3 text-sm cursor-pointer transition-colors has-[:checked]:border-[var(--color-primary)] has-[:checked]:bg-[var(--color-primary-soft)]/40 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--color-ring)]"
             >
-              <input type="radio" name="visibility" value={v} defaultChecked={v === 'PRIVATE'} />
-              <span>{v}</span>
+              <span className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="visibility"
+                  value={opt.value}
+                  defaultChecked={opt.value === visibilityDefault}
+                  className="accent-[var(--color-primary)]"
+                />
+                <span className="font-medium">{opt.title}</span>
+              </span>
+              <span className="text-xs text-[var(--color-muted-foreground)] ps-6">{opt.hint}</span>
             </label>
           ))}
         </div>
@@ -79,62 +134,4 @@ export function NewDatasetForm() {
 
 function fieldError(state: CreateDatasetState, name: string): string | undefined {
   return state.status === 'error' ? state.fieldErrors?.get(name) : undefined;
-}
-
-interface FieldProps {
-  label: string;
-  name: string;
-  hint?: string;
-  required?: boolean;
-  error?: string;
-  as?: 'input' | 'textarea';
-  rows?: number;
-  maxLength?: number;
-  minLength?: number;
-  pattern?: string;
-  autoComplete?: string;
-  spellCheck?: boolean;
-}
-
-function Field({ label, name, hint, required, error, as = 'input', ...rest }: FieldProps) {
-  const id = `field-${name}`;
-  const errId = error ? `${id}-err` : undefined;
-  const inputClass =
-    'w-full h-10 rounded-md border bg-[var(--color-card)] px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
-    (error ? 'border-[var(--color-danger)]' : 'border-[var(--color-border)]');
-  return (
-    <div className="space-y-1.5">
-      <label htmlFor={id} className="text-sm font-medium">
-        {label}
-        {required ? <span className="text-[var(--color-danger)]"> *</span> : null}
-      </label>
-      {as === 'textarea' ? (
-        <textarea
-          id={id}
-          name={name}
-          required={required}
-          aria-describedby={errId}
-          className={inputClass + ' h-auto py-2 font-mono'}
-          {...rest}
-        />
-      ) : (
-        <input
-          id={id}
-          name={name}
-          required={required}
-          aria-describedby={errId}
-          className={inputClass}
-          {...rest}
-        />
-      )}
-      {hint && !error ? (
-        <p className="text-xs text-[var(--color-muted-foreground)]">{hint}</p>
-      ) : null}
-      {error ? (
-        <p id={errId} className="text-xs text-[var(--color-danger)]">
-          {error}
-        </p>
-      ) : null}
-    </div>
-  );
 }

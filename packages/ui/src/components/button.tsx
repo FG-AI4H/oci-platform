@@ -1,5 +1,5 @@
-import { forwardRef } from 'react';
-import type { ButtonHTMLAttributes } from 'react';
+import { Children, cloneElement, forwardRef, isValidElement } from 'react';
+import type { ButtonHTMLAttributes, ReactElement } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/cn.js';
 
@@ -31,13 +31,34 @@ const button = cva(
 );
 
 export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof button> {}
+  extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof button> {
+  /** Render the child element with button styling instead of wrapping
+   *  it in a `<button>`. Useful for next/link `<Link>` so the link is
+   *  the focusable element (correct semantics + keyboard behaviour). */
+  asChild?: boolean;
+}
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => (
-    <button ref={ref} className={cn(button({ variant, size }), className)} {...props} />
-  ),
-);
-Button.displayName = 'Button';
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { asChild, className, variant, size, children, ...props },
+  ref,
+) {
+  const classes = cn(button({ variant, size }), className);
+
+  if (asChild && isValidElement(children)) {
+    const child = Children.only(children) as ReactElement<{ className?: string }>;
+    return cloneElement(child, {
+      ...props,
+      className: cn(classes, child.props.className),
+      // ref forwarding to the child is best-effort — most consumers
+      // (next/link) accept ref via plain attribute merging.
+      ...({ ref } as object),
+    });
+  }
+  return (
+    <button ref={ref} className={classes} {...props}>
+      {children}
+    </button>
+  );
+});
 
 export { button as buttonVariants };

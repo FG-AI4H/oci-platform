@@ -3,10 +3,13 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
+  ArrowLeftIcon,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  Container,
+  Section,
 } from '@oci/ui';
 import { auth } from '../../../auth';
 import { requireHost } from '../../../lib/groups';
@@ -24,37 +27,43 @@ export default async function NewDatasetPage() {
   requireHost(session);
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 sm:px-6 py-12 space-y-6">
-      <header className="space-y-2">
-        <Link
-          href="/catalog"
-          className="text-sm text-[var(--color-muted-foreground)] hover:underline"
-        >
-          ← Catalog
-        </Link>
-        <h1 className="text-3xl font-semibold tracking-tight">New dataset</h1>
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          Create a draft. After this step you&apos;ll attach a Croissant&nbsp;1.1 manifest to
-          publish your first version.
-        </p>
-      </header>
+    <Container size="md">
+      <Section spacing="md">
+        <header className="mb-6 space-y-3">
+          <Link
+            href="/catalog"
+            className="inline-flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
+          >
+            <ArrowLeftIcon size={14} />
+            <span>Catalog</span>
+          </Link>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
+            Host workflow
+          </p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">New dataset</h1>
+          <p className="max-w-prose text-[var(--color-muted-foreground)]">
+            Create a draft. After this step you&apos;ll attach a Croissant&nbsp;1.1 manifest to
+            publish your first version.
+          </p>
+        </header>
 
-      <Alert>
-        <AlertTitle>Slug is permanent</AlertTitle>
-        <AlertDescription>
-          The slug becomes part of your catalog URL and the Croissant <code>@id</code>. Choose
-          deliberately — slugs cannot be renamed once published.
-        </AlertDescription>
-      </Alert>
+        <Alert tone="info" className="mb-6">
+          <AlertTitle>Slug is permanent</AlertTitle>
+          <AlertDescription>
+            The slug becomes part of your catalog URL and the Croissant <code>@id</code>. Choose
+            deliberately — slugs cannot be renamed once published.
+          </AlertDescription>
+        </Alert>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Draft details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <NewDatasetForm />
-        </CardContent>
-      </Card>
-    </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Draft details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <NewDatasetForm />
+          </CardContent>
+        </Card>
+      </Section>
+    </Container>
   );
 }

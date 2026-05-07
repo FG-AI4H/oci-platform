@@ -4,14 +4,20 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
+  ArrowLeftIcon,
   Badge,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  Container,
   DefinitionItem,
   DefinitionList,
+  ExternalLinkIcon,
+  Section,
+  Separator,
+  ShieldIcon,
 } from '@oci/ui';
 import type { DatasetDetail, DatasetVisibility } from '@oci/shared-types';
 import { auth } from '../../../auth';
@@ -25,6 +31,12 @@ const visibilityTone: Record<DatasetVisibility, 'success' | 'info' | 'warning'> 
   PRIVATE: 'info',
 };
 
+const visibilityCopy: Record<DatasetVisibility, string> = {
+  PUBLIC: 'Listed and crawlable',
+  RESTRICTED: 'Access on request',
+  PRIVATE: 'Hosts and admins only',
+};
+
 interface CroissantPreview {
   conformsTo?: string;
   license?: unknown;
@@ -36,6 +48,8 @@ interface CroissantPreview {
   diseaseCondition?: unknown;
   anonymizationLevel?: string;
 }
+
+const PUBLISH_DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' });
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -58,20 +72,20 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
 
   if (error) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-12">
-        <Alert tone="danger">
-          <AlertTitle>Catalog unavailable</AlertTitle>
-          <AlertDescription>
-            <pre className="mt-1 whitespace-pre-wrap text-xs font-mono">{error}</pre>
-          </AlertDescription>
-        </Alert>
-      </div>
+      <Container size="md">
+        <Section spacing="md">
+          <Alert tone="danger">
+            <AlertTitle>Catalog unavailable</AlertTitle>
+            <AlertDescription>
+              <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
+            </AlertDescription>
+          </Alert>
+        </Section>
+      </Container>
     );
   }
 
-  if (!detail) {
-    notFound();
-  }
+  if (!detail) notFound();
 
   const m = (detail.croissant ?? {}) as Record<string, unknown> & CroissantPreview;
   const conformsTo =
@@ -88,225 +102,269 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
   const anonymization = (m['bio:anonymizationLevel'] ?? m.anonymizationLevel) as string | undefined;
 
   // Google Dataset Search ingestion. Only emit for the slice of datasets
-  // that are actually crawlable: PUBLIC + PUBLISHED. RESTRICTED and
-  // PRIVATE rows are 404 to anonymous callers anyway (catalog.service.ts
-  // filters them out), but skipping the script tag is the belt-and-braces
-  // version — it also dodges accidentally leaking RESTRICTED metadata
-  // into the HTML body when a signed-in user shares the page URL.
+  // that are actually crawlable: PUBLIC + PUBLISHED.
   const indexable = detail.visibility === 'PUBLIC' && detail.status === 'PUBLISHED';
   const jsonLd = indexable ? datasetJsonLd(detail, siteUrl()) : null;
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 sm:px-6 py-12 space-y-8">
+    <>
       {jsonLd ? (
         <script
           type="application/ld+json"
-          // JSON.stringify is the safe way to embed JSON in HTML — it
-          // escapes the only sequence that would break out of a script
-          // element ("</") via Unicode escape.
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c'),
           }}
         />
       ) : null}
-      <header className="space-y-3">
-        <Link
-          href="/catalog"
-          className="text-sm text-[var(--color-muted-foreground)] hover:underline"
-        >
-          ← Catalog
-        </Link>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">{detail.name}</h1>
-            <p className="mt-1 text-sm font-mono text-[var(--color-muted-foreground)]">
-              {detail.slug}
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-1.5">
-            <Badge tone={visibilityTone[detail.visibility]}>
-              {detail.visibility.toLowerCase()}
-            </Badge>
-            {detail.latestVersion ? <Badge tone="primary">v{detail.latestVersion}</Badge> : null}
-            {detail.conformanceVersion ? (
-              <Badge tone="accent">Croissant {detail.conformanceVersion}</Badge>
-            ) : null}
-          </div>
-        </div>
-        {detail.description ? (
-          <p className="text-[var(--color-foreground)]">{detail.description}</p>
-        ) : null}
-      </header>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Manifest</CardTitle>
-          <CardDescription>
-            Selected fields from the Croissant {detail.conformanceVersion ?? ''} manifest. Full
-            JSON-LD:{' '}
-            <Link className="underline" href={`/catalog/${detail.slug}/croissant`}>
-              download
+      <Section spacing="md" surface="hero">
+        <Container size="xl">
+          <Link
+            href="/catalog"
+            className="inline-flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
+          >
+            <ArrowLeftIcon size={14} />
+            <span>Catalog</span>
+          </Link>
+          <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-xs text-[var(--color-muted-foreground)]">
+                {detail.slug}
+              </p>
+              <h1 className="mt-2 text-3xl sm:text-4xl font-semibold tracking-tight text-[var(--color-foreground)]">
+                {detail.name}
+              </h1>
+              {detail.description ? (
+                <p className="mt-4 max-w-2xl text-[var(--color-muted-foreground)]">
+                  {detail.description}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-row flex-wrap items-start gap-2 lg:flex-col lg:items-end">
+              <Badge tone={visibilityTone[detail.visibility]}>
+                {detail.visibility.toLowerCase()}
+              </Badge>
+              {detail.latestVersion ? <Badge tone="primary">v{detail.latestVersion}</Badge> : null}
+              {detail.conformanceVersion ? (
+                <Badge tone="accent">Croissant {detail.conformanceVersion}</Badge>
+              ) : null}
+            </div>
+          </div>
+          <p className="mt-4 inline-flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
+            <ShieldIcon size={12} />
+            <span>{visibilityCopy[detail.visibility]}</span>
+          </p>
+        </Container>
+      </Section>
+
+      <Container size="xl">
+        <Section spacing="md" className="space-y-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Manifest</CardTitle>
+              <CardDescription>
+                Selected fields from the Croissant {detail.conformanceVersion ?? ''} manifest. Full
+                JSON-LD:{' '}
+                <Link
+                  className="font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)]"
+                  href={`/catalog/${detail.slug}/croissant`}
+                >
+                  download
+                </Link>
+                .
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <DefinitionList>
+                {conformsTo ? (
+                  <DefinitionItem term="Conforms to" mono>
+                    {conformsTo}
+                  </DefinitionItem>
+                ) : null}
+                {license ? (
+                  <DefinitionItem term="License">
+                    <span className="font-mono">{stringifyLicense(license)}</span>
+                  </DefinitionItem>
+                ) : null}
+                {homepage ? (
+                  <DefinitionItem term="Homepage">
+                    <a
+                      className="inline-flex items-center gap-1 text-[var(--color-primary)] underline underline-offset-2 break-all hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
+                      href={String(homepage)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <span>{String(homepage)}</span>
+                      <ExternalLinkIcon size={14} />
+                    </a>
+                  </DefinitionItem>
+                ) : null}
+                {keywords && keywords.length > 0 ? (
+                  <DefinitionItem term="Keywords">
+                    <span className="flex flex-wrap gap-1.5">
+                      {keywords.map((k) => (
+                        <Badge key={k} tone="neutral">
+                          {k}
+                        </Badge>
+                      ))}
+                    </span>
+                  </DefinitionItem>
+                ) : null}
+                {modalityNames.length > 0 ? (
+                  <DefinitionItem term="Modality">
+                    <span className="flex flex-wrap gap-1.5">
+                      {modalityNames.map((n) => (
+                        <Badge key={n} tone="info">
+                          {n}
+                        </Badge>
+                      ))}
+                    </span>
+                  </DefinitionItem>
+                ) : null}
+                {bodyRegionNames.length > 0 ? (
+                  <DefinitionItem term="Body region">
+                    <span className="flex flex-wrap gap-1.5">
+                      {bodyRegionNames.map((n) => (
+                        <Badge key={n} tone="info">
+                          {n}
+                        </Badge>
+                      ))}
+                    </span>
+                  </DefinitionItem>
+                ) : null}
+                {diseaseNames.length > 0 ? (
+                  <DefinitionItem term="Conditions">
+                    <span className="flex flex-wrap gap-1.5">
+                      {diseaseNames.map((n) => (
+                        <Badge key={n} tone="warning">
+                          {n}
+                        </Badge>
+                      ))}
+                    </span>
+                  </DefinitionItem>
+                ) : null}
+                {anonymization ? (
+                  <DefinitionItem term="Anonymization">
+                    <Badge tone={anonymization === 'IDENTIFIED' ? 'danger' : 'success'}>
+                      {anonymization}
+                    </Badge>
+                  </DefinitionItem>
+                ) : null}
+                {citeAs ? (
+                  <DefinitionItem term="Cite as">
+                    <pre className="whitespace-pre-wrap break-words text-xs font-mono leading-relaxed text-[var(--color-foreground)]/85">
+                      {String(citeAs)}
+                    </pre>
+                  </DefinitionItem>
+                ) : null}
+              </DefinitionList>
+            </CardContent>
+          </Card>
+
+          {detail.distributions.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Distributions</CardTitle>
+                <CardDescription>
+                  Files in the latest version. Links labelled <em>upstream</em> point at the
+                  original host (e.g. Grand Challenge) — the platform references rather than mirrors
+                  them. S3-mirrored bytes with pre-signed URLs land in PR C; restricted entries will
+                  go through an access request flow at the same time.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {detail.distributions.map((d, i) => (
+                  <div
+                    key={d.id}
+                    className={
+                      'flex flex-col gap-3 rounded-md p-3 sm:flex-row sm:items-center sm:justify-between' +
+                      (i % 2 === 0 ? ' bg-[var(--color-subtle)]' : '')
+                    }
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <p className="font-medium font-mono text-sm break-words">{d.croissantId}</p>
+                      <p className="text-xs text-[var(--color-muted-foreground)]">
+                        {d.contentType}
+                        {d.contentSizeBytes !== null
+                          ? ` · ${formatBytes(d.contentSizeBytes)}`
+                          : null}
+                        {d.contentHash ? (
+                          <>
+                            {' · '}
+                            <span className="font-mono">sha256:{d.contentHash.slice(0, 12)}…</span>
+                          </>
+                        ) : null}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {d.requiresAccess ? (
+                        <Badge tone="warning">requires access</Badge>
+                      ) : d.contentUrl ? (
+                        <>
+                          <Badge tone="neutral">upstream</Badge>
+                          <a
+                            href={d.contentUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`Open ${d.croissantId} on upstream host (opens in new tab)`}
+                            className="inline-flex items-center gap-1 rounded text-sm font-medium text-[var(--color-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+                          >
+                            <span>open</span>
+                            <ExternalLinkIcon size={14} />
+                          </a>
+                        </>
+                      ) : (
+                        <Badge tone="neutral">no url</Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {detail.versions.length > 1 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Version history</CardTitle>
+                <CardDescription>
+                  Each published version is immutable — manifest hashes anchor downstream evaluation
+                  reports.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ol className="divide-y divide-[var(--color-border)] text-sm">
+                  {detail.versions.map((v) => (
+                    <li
+                      key={v.id}
+                      className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                    >
+                      <span className="font-mono text-[var(--color-foreground)]">v{v.version}</span>
+                      <time
+                        dateTime={v.publishedAt}
+                        className="text-xs text-[var(--color-muted-foreground)]"
+                      >
+                        {PUBLISH_DATE_FORMATTER.format(new Date(v.publishedAt))}
+                      </time>
+                    </li>
+                  ))}
+                </ol>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Separator />
+
+          <p className="text-center text-xs text-[var(--color-muted-foreground)]">
+            Manifest mirrored from upstream host.{' '}
+            <Link href="/catalog" className="underline hover:text-[var(--color-foreground)]">
+              Back to catalog
             </Link>
             .
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DefinitionList>
-            {conformsTo ? (
-              <DefinitionItem term="Conforms to" mono>
-                {conformsTo}
-              </DefinitionItem>
-            ) : null}
-            {license ? (
-              <DefinitionItem term="License">
-                <span className="font-mono">{stringifyLicense(license)}</span>
-              </DefinitionItem>
-            ) : null}
-            {homepage ? (
-              <DefinitionItem term="Homepage">
-                <a className="underline" href={String(homepage)} target="_blank" rel="noreferrer">
-                  {String(homepage)}
-                </a>
-              </DefinitionItem>
-            ) : null}
-            {keywords && keywords.length > 0 ? (
-              <DefinitionItem term="Keywords">
-                <span className="flex flex-wrap gap-1.5">
-                  {keywords.map((k) => (
-                    <Badge key={k} tone="neutral">
-                      {k}
-                    </Badge>
-                  ))}
-                </span>
-              </DefinitionItem>
-            ) : null}
-            {modalityNames.length > 0 ? (
-              <DefinitionItem term="Modality">
-                <span className="flex flex-wrap gap-1.5">
-                  {modalityNames.map((n) => (
-                    <Badge key={n} tone="info">
-                      {n}
-                    </Badge>
-                  ))}
-                </span>
-              </DefinitionItem>
-            ) : null}
-            {bodyRegionNames.length > 0 ? (
-              <DefinitionItem term="Body region">
-                <span className="flex flex-wrap gap-1.5">
-                  {bodyRegionNames.map((n) => (
-                    <Badge key={n} tone="info">
-                      {n}
-                    </Badge>
-                  ))}
-                </span>
-              </DefinitionItem>
-            ) : null}
-            {diseaseNames.length > 0 ? (
-              <DefinitionItem term="Conditions">
-                <span className="flex flex-wrap gap-1.5">
-                  {diseaseNames.map((n) => (
-                    <Badge key={n} tone="warning">
-                      {n}
-                    </Badge>
-                  ))}
-                </span>
-              </DefinitionItem>
-            ) : null}
-            {anonymization ? (
-              <DefinitionItem term="Anonymization">
-                <Badge tone={anonymization === 'IDENTIFIED' ? 'danger' : 'success'}>
-                  {anonymization}
-                </Badge>
-              </DefinitionItem>
-            ) : null}
-            {citeAs ? (
-              <DefinitionItem term="Cite as">
-                <pre className="whitespace-pre-wrap text-xs font-mono">{String(citeAs)}</pre>
-              </DefinitionItem>
-            ) : null}
-          </DefinitionList>
-        </CardContent>
-      </Card>
-
-      {detail.distributions.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Distributions</CardTitle>
-            <CardDescription>
-              Files in the latest version. Links labelled <em>upstream</em> point at the original
-              host (e.g. Grand Challenge) — the platform references rather than mirrors them.
-              S3-mirrored bytes with pre-signed URLs land in PR C; restricted entries will go
-              through an access request flow at the same time.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {detail.distributions.map((d) => (
-              <div
-                key={d.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-md border border-[var(--color-border)] p-3"
-              >
-                <div className="space-y-1">
-                  <p className="font-medium font-mono text-sm">{d.croissantId}</p>
-                  <p className="text-xs text-[var(--color-muted-foreground)]">
-                    {d.contentType}
-                    {d.contentSizeBytes !== null ? ` · ${formatBytes(d.contentSizeBytes)}` : null}
-                    {d.contentHash ? (
-                      <>
-                        {' · '}
-                        <span className="font-mono">sha256:{d.contentHash.slice(0, 12)}…</span>
-                      </>
-                    ) : null}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {d.requiresAccess ? (
-                    <Badge tone="warning">requires access</Badge>
-                  ) : d.contentUrl ? (
-                    <>
-                      <Badge tone="neutral">upstream</Badge>
-                      <a
-                        href={d.contentUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm font-medium text-[var(--color-primary)] hover:underline"
-                      >
-                        open ↗
-                      </a>
-                    </>
-                  ) : (
-                    <Badge tone="neutral">no url</Badge>
-                  )}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {detail.versions.length > 1 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Version history</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2 text-sm">
-              {detail.versions.map((v) => (
-                <li
-                  key={v.id}
-                  className="flex items-center justify-between border-t border-[var(--color-border)] py-2 first:border-t-0 first:pt-0"
-                >
-                  <span className="font-mono">v{v.version}</span>
-                  <span className="text-xs text-[var(--color-muted-foreground)]">
-                    {new Date(v.publishedAt).toLocaleDateString()}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      ) : null}
-    </div>
+          </p>
+        </Section>
+      </Container>
+    </>
   );
 }
 
