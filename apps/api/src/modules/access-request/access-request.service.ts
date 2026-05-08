@@ -12,11 +12,13 @@ import type {
   AccessRequestSummary,
   CreateAccessRequestRequest,
   DatasetSlug,
+  RequesterIdentityScore,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CatalogService } from '../catalog/catalog.service.js';
 import { AccessRequestRepository } from './access-request.repository.js';
 import { matchDuoIntent } from './duo-matcher.js';
+import { buildRequesterIdentityContext, extractRequesterEmail } from './identity-context.js';
 
 /**
  * Access-request lifecycle (PR F).
@@ -50,7 +52,11 @@ export class AccessRequestService {
     slug: DatasetSlug,
     body: CreateAccessRequestRequest,
     user: CognitoAccessTokenPayload,
-  ): Promise<{ id: string; matchStatus: 'MATCHED' | 'CONFLICT' | 'UNCLEAR' }> {
+  ): Promise<{
+    id: string;
+    matchStatus: 'MATCHED' | 'CONFLICT' | 'UNCLEAR';
+    requesterIdentityScore: RequesterIdentityScore;
+  }> {
     requireUser(user);
     const target = await this.catalog.findOwnerBySlug(slug);
     if (!target) throw new NotFoundException(`dataset "${slug}" not found`);
@@ -63,25 +69,48 @@ export class AccessRequestService {
       throw new BadRequestException("you can't request access to a dataset you host");
     }
 
+    // Compute the normalised requester identity context (#115). Today
+    // this consumes the email-domain classifier (#116); future PRs add
+    // ORCID, quiz-pass, click-wrap, and Passport visa inputs to the
+    // same shape.
+    const identityContext = buildRequesterIdentityContext({
+      email: extractRequesterEmail(user as unknown as { sub?: string; email?: string }),
+      datasetEmailDomainAllowlist: target.emailDomainAllowlist,
+    });
+
     // Auto-match the requester's intended use against the dataset's
     // DUO permission terms (PR J.1, #93). Persisted on the row so the
-    // host inbox renders a badge + explanations.
-    const match = matchDuoIntent(target.duoTerms, body.attestations);
+    // host inbox renders a badge + explanations. Now also factors the
+    // dataset's accessTier vs. the requester's identityScore (#115),
+    // surfacing tier-mismatch as a CONFLICT explanation.
+    const match = matchDuoIntent(target.duoTerms, body.attestations, {
+      accessTier: target.accessTier,
+      requesterIdentityScore: identityContext.identityScore,
+    });
 
     // Mirror the project description into the legacy `justification`
     // column so old code paths (and the regulator audit export when
-    // it lands) keep working without a schema migration.
+    // it lands) keep working without a schema migration. Also write
+    // it into the new `iduStatement` field (#115) which will become
+    // the canonical free-text rationale once readers migrate.
     const justification = body.attestations.projectDescription;
+    const iduStatement = body.attestations.projectDescription;
 
     const created = await this.repo.create({
       datasetId: target.id,
       requesterId,
       justification,
+      iduStatement,
       attestations: body.attestations,
       matchStatus: match.status,
       matchExplanations: match.explanations,
+      requesterIdentityScore: identityContext.identityScore,
     });
-    return { ...created, matchStatus: match.status };
+    return {
+      ...created,
+      matchStatus: match.status,
+      requesterIdentityScore: identityContext.identityScore,
+    };
   }
 
   async listOwn(user: CognitoAccessTokenPayload): Promise<AccessRequestSummary[]> {

@@ -90,3 +90,59 @@ describe('matchDuoIntent', () => {
     expect(r.status).toBe('UNCLEAR');
   });
 });
+
+describe('matchDuoIntent — tier check (#115)', () => {
+  it('CONFLICT when accessTier requires a higher score than the requester demonstrated', () => {
+    const r = matchDuoIntent(['DUO_0000042'], attestations(), {
+      accessTier: 'CONTROLLED',
+      requesterIdentityScore: 'EMAIL_ONLY',
+    });
+    expect(r.status).toBe('CONFLICT');
+    expect(r.explanations.some((e) => /CONTROLLED tier.*QUIZ_PASSED.*EMAIL_ONLY/.test(e))).toBe(
+      true,
+    );
+  });
+
+  it('MATCHED when score equals the tier requirement', () => {
+    const r = matchDuoIntent(['DUO_0000042'], attestations(), {
+      accessTier: 'REGISTERED',
+      requesterIdentityScore: 'EMAIL_DOMAIN_VERIFIED',
+    });
+    expect(r.status).toBe('MATCHED');
+  });
+
+  it('MATCHED when score exceeds the tier requirement', () => {
+    const r = matchDuoIntent(['DUO_0000042'], attestations(), {
+      accessTier: 'OPEN',
+      requesterIdentityScore: 'PASSPORT_VERIFIED',
+    });
+    expect(r.status).toBe('MATCHED');
+  });
+
+  it('tier conflict surfaces alongside DUO conflicts (combined CONFLICT)', () => {
+    const r = matchDuoIntent(
+      ['DUO_0000042', 'DUO_0000046'],
+      attestations({ intendedUseCategory: 'COMMERCIAL_RESEARCH' }),
+      { accessTier: 'CONTROLLED', requesterIdentityScore: 'EMAIL_ONLY' },
+    );
+    expect(r.status).toBe('CONFLICT');
+    // Both the commercial-vs-NCU conflict AND the tier mismatch should be reported.
+    expect(r.explanations.some((e) => /commercial use prohibited/.test(e))).toBe(true);
+    expect(r.explanations.some((e) => /CONTROLLED tier/.test(e))).toBe(true);
+  });
+
+  it('tier conflict survives the no-DUO-terms early branch (CONFLICT, not UNCLEAR)', () => {
+    const r = matchDuoIntent([], attestations(), {
+      accessTier: 'SENSITIVE',
+      requesterIdentityScore: 'EMAIL_ONLY',
+    });
+    expect(r.status).toBe('CONFLICT');
+    expect(r.explanations[0]).toMatch(/SENSITIVE tier.*PASSPORT_VERIFIED.*EMAIL_ONLY/);
+  });
+
+  it('tier check is skipped when no tier inputs supplied (legacy callers)', () => {
+    // No `tier` argument → matcher behaves exactly as pre-PR-115.
+    const r = matchDuoIntent(['DUO_0000042'], attestations());
+    expect(r.status).toBe('MATCHED');
+  });
+});

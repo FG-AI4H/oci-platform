@@ -225,4 +225,54 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await expect(inboxRow.first().getByText(/auto-match: conflict/i)).toBeVisible();
     await expect(inboxRow.first().getByText(/commercial use prohibited/i)).toBeVisible();
   });
+
+  test('disposable-email guard: throwaway domain is rejected at the form layer (#116)', async ({
+    page,
+  }) => {
+    const slug = `restricted-disposable-${Date.now()}`;
+    await signInAs(page, HOST, 'host');
+    await page.goto('/catalog/new');
+    await page.getByLabel('Slug').fill(slug);
+    await page.getByLabel('Name').fill(`Restricted disposable ${slug}`);
+    await page.getByRole('radio', { name: 'Restricted' }).check();
+    await page.getByRole('button', { name: /create draft/i }).click();
+    await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/publish$`));
+    await page.getByRole('button', { name: 'I already have a manifest' }).click();
+    await page
+      .getByLabel('Croissant manifest')
+      .fill(manifestWithConsent(['DUO_0000042', 'DUO_0000021']));
+    await page.getByRole('button', { name: /validate.*publish/i }).click();
+    await expect(page).toHaveURL(new RegExp(`/catalog/${slug}$`));
+    await signOut(page);
+
+    // Sign in with a disposable-domain email — the local-dev provider
+    // mirrors the user-string into session.user.email when it contains
+    // an `@`, so the server action's classifyEmailDomain check sees it.
+    await signInAs(page, 'throwaway-test@mailinator.com', 'participant');
+    await page.goto(`/catalog/${slug}/request-access`);
+
+    // Minimal valid form. The disposable guard runs BEFORE the Zod
+    // parse so even a malformed payload would surface the disposable
+    // error first; we fill validly to prove the guard is the rejector.
+    await page.getByLabel('Project title').fill(`Disposable attempt ${slug}`);
+    await page
+      .getByLabel('Project description')
+      .fill(
+        'A submission from a throwaway address. The form should refuse this before reaching the API.',
+      );
+    await page.locator('#field-institution').fill('Throwaway Co.');
+    await page.getByRole('radio', { name: /^Non-commercial research/i }).check();
+    await page.getByLabel(/General research use/i).check();
+    await page.locator('input[name="irbApproved"]').check();
+    await page.getByLabel('Data retention (days)').fill('365');
+    await page.getByLabel('Redistribution intent').selectOption('NONE');
+    await page.getByLabel('Output type').selectOption('PUBLICATION');
+    await page.getByRole('button', { name: /submit request/i }).click();
+
+    // Stays on the request-access page; the disposable-email error is
+    // surfaced as a top-level form error mentioning the rejected domain.
+    await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/request-access`));
+    await expect(page.getByText(/disposable email/i)).toBeVisible();
+    await expect(page.getByText(/mailinator\.com/i)).toBeVisible();
+  });
 });

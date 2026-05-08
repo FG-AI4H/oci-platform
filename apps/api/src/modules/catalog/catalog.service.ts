@@ -10,6 +10,7 @@ import {
 import { Prisma } from '@oci/database';
 import { validate as validateCroissant, extractDuoTerms } from '@oci/croissant';
 import type {
+  AccessTier,
   CreateDatasetRequest,
   DatasetDetail,
   DatasetSlug,
@@ -47,6 +48,8 @@ export class CatalogService {
     hostId: string;
     visibility: 'PRIVATE' | 'RESTRICTED' | 'PUBLIC';
     duoTerms: string[];
+    accessTier: AccessTier;
+    emailDomainAllowlist: string[];
   } | null> {
     return this.repo.findIdAndHostBySlug(slug);
   }

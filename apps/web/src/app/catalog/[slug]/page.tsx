@@ -19,7 +19,12 @@ import {
   Separator,
   ShieldIcon,
 } from '@oci/ui';
-import type { AccessRequestSummary, DatasetDetail, DatasetVisibility } from '@oci/shared-types';
+import type {
+  AccessRequestSummary,
+  AccessTier,
+  DatasetDetail,
+  DatasetVisibility,
+} from '@oci/shared-types';
 import { lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../../auth';
 import { apiFetch } from '../../../lib/api';
@@ -42,6 +47,26 @@ const visibilityCopy: Record<DatasetVisibility, string> = {
   PUBLIC: 'Listed and crawlable',
   RESTRICTED: 'Access on request',
   PRIVATE: 'Hosts and admins only',
+};
+
+/**
+ * Access-tier (#115) → badge tone. `OPEN` keeps a neutral/info tone so it
+ * doesn't dominate the header; the higher tiers escalate visually because
+ * they carry real consequences for the requester (will need a quiz pass /
+ * passport / countersign before download will work).
+ */
+const accessTierTone: Record<AccessTier, 'info' | 'warning' | 'danger' | 'neutral'> = {
+  OPEN: 'neutral',
+  REGISTERED: 'info',
+  CONTROLLED: 'warning',
+  SENSITIVE: 'danger',
+};
+
+const accessTierLabel: Record<AccessTier, string> = {
+  OPEN: 'Open access',
+  REGISTERED: 'Registered',
+  CONTROLLED: 'Controlled',
+  SENSITIVE: 'Sensitive',
 };
 
 interface CroissantPreview {
@@ -171,6 +196,14 @@ export default async function DatasetDetailPage({
               <Badge tone={visibilityTone[detail.visibility]}>
                 {detail.visibility.toLowerCase()}
               </Badge>
+              {/* Access tier (#115). Hidden for OPEN to avoid badge clutter
+                  on the most common case; visible from REGISTERED upward
+                  so requesters know what assurance they'll need. */}
+              {detail.accessTier !== 'OPEN' ? (
+                <Badge tone={accessTierTone[detail.accessTier]}>
+                  {accessTierLabel[detail.accessTier]}
+                </Badge>
+              ) : null}
               {detail.latestVersion ? <Badge tone="primary">v{detail.latestVersion}</Badge> : null}
               {detail.conformanceVersion ? (
                 <Badge tone="accent">Croissant {detail.conformanceVersion}</Badge>

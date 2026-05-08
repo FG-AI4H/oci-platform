@@ -1,4 +1,18 @@
 import { z } from 'zod';
+import type { EmailDomainCategory } from './email-domain.js';
+
+export {
+  classifyEmailDomain,
+  safeClassifyEmailDomain,
+  EmailDomainCategorySchema,
+  EmailDomainAllowlistEntrySchema,
+} from './email-domain.js';
+export type {
+  EmailDomainCategory,
+  EmailDomainClassification,
+  ClassifyEmailDomainOptions,
+  EmailDomainAllowlistEntry,
+} from './email-domain.js';
 
 // ==== Identity ============================================================
 
@@ -35,6 +49,138 @@ export type DatasetVisibility = z.infer<typeof DatasetVisibilitySchema>;
 
 export const DatasetStatusSchema = z.enum(['DRAFT', 'REVIEW', 'PUBLISHED', 'ARCHIVED']);
 export type DatasetStatus = z.infer<typeof DatasetStatusSchema>;
+
+/**
+ * Access-control tier (#115, ADR-0003 Decision 1). Decoupled from
+ * `visibility` (which controls who can *see* a dataset card) — `accessTier`
+ * controls *what identity assurance* a viewer must demonstrate before
+ * download is granted.
+ *
+ *   - `OPEN`        any signed-in caller; click-wrap only.
+ *   - `REGISTERED`  domain-verified email (institutional/corporate);
+ *                   public webmail rejected.
+ *   - `CONTROLLED`  certification quiz passed (#117) + click-wrap; host
+ *                   approval per-request.
+ *   - `SENSITIVE`   GA4GH Passport-verified researcher status, DUA via
+ *                   QES, OCI ACT review.
+ *
+ * Default `OPEN` so existing rows stay permissive; hosts opt up as they
+ * publish more sensitive material. Tier-vs-score mismatches surface as a
+ * CONFLICT explanation in the DUO matcher (PR #115).
+ */
+export const AccessTierSchema = z.enum(['OPEN', 'REGISTERED', 'CONTROLLED', 'SENSITIVE']);
+export type AccessTier = z.infer<typeof AccessTierSchema>;
+
+/**
+ * Requester identity assurance score (#115, ADR-0003 Decision 2). Computed
+ * by the API at access-request creation time from whatever the requester
+ * brought (email category, ORCID link, quiz pass, GA4GH Passport visas).
+ * Persisted on `AccessRequest.requesterIdentityScore` so the host inbox
+ * can see "this requester demonstrated X" without recomputing.
+ *
+ *   - `EMAIL_ONLY`              baseline; just verified the email at signup.
+ *   - `EMAIL_DOMAIN_VERIFIED`   email is in an institutional/corporate domain
+ *                               (or matches the dataset's allowlist, #116).
+ *   - `ORCID_LINKED`            requester linked an ORCID iD with employment
+ *                               claim. (Wiring lands with #117 follow-up.)
+ *   - `QUIZ_PASSED`             passed the OCI certification quiz, valid 1y
+ *                               (#117).
+ *   - `PI_COUNTERSIGNED`        Principal Investigator countersigned the
+ *                               request (DUA-tier flow, future PR).
+ *   - `PASSPORT_VERIFIED`       GA4GH Passport with verified `ResearcherStatus`
+ *                               + `AffiliationAndRole` Visas (future PR).
+ *
+ * Order matters — `REQUESTER_IDENTITY_SCORE_RANK` reflects the strict
+ * progression. Higher rank ⇒ more trust. Tier requirements use the rank.
+ */
+export const RequesterIdentityScoreSchema = z.enum([
+  'EMAIL_ONLY',
+  'EMAIL_DOMAIN_VERIFIED',
+  'ORCID_LINKED',
+  'QUIZ_PASSED',
+  'PI_COUNTERSIGNED',
+  'PASSPORT_VERIFIED',
+]);
+export type RequesterIdentityScore = z.infer<typeof RequesterIdentityScoreSchema>;
+
+/** Numeric ranks for `RequesterIdentityScore`; higher is more trusted. */
+export const REQUESTER_IDENTITY_SCORE_RANK: Readonly<Record<RequesterIdentityScore, number>> =
+  Object.freeze({
+    EMAIL_ONLY: 0,
+    EMAIL_DOMAIN_VERIFIED: 1,
+    ORCID_LINKED: 2,
+    QUIZ_PASSED: 3,
+    PI_COUNTERSIGNED: 4,
+    PASSPORT_VERIFIED: 5,
+  });
+
+/**
+ * Minimum identity score the platform requires for each access tier.
+ * The DUO matcher (#115) compares the requester's score against this
+ * map and surfaces a CONFLICT explanation when the requester is below.
+ *
+ * The host can still approve a CONFLICT (the matcher is advisory) — but
+ * doing so is now a deliberate override against a structured warning
+ * rather than an unflagged decision.
+ */
+export const ACCESS_TIER_MIN_SCORE: Readonly<Record<AccessTier, RequesterIdentityScore>> =
+  Object.freeze({
+    OPEN: 'EMAIL_ONLY',
+    REGISTERED: 'EMAIL_DOMAIN_VERIFIED',
+    CONTROLLED: 'QUIZ_PASSED',
+    SENSITIVE: 'PASSPORT_VERIFIED',
+  });
+
+/**
+ * Lightweight summary of one GA4GH Passport Visa surfaced on the
+ * `RequesterIdentityContext`. Future PRs (Passport ingestion) will add
+ * the full Visa shape; this stub records the type + provenance so the
+ * host inbox can already render "ResearcherStatus from ELIXIR AAI".
+ */
+export interface GA4GHVisaSummary {
+  /** Visa type (e.g. `ResearcherStatus`, `AffiliationAndRole`, `AcceptedTermsAndPolicies`). */
+  type: string;
+  /** Issuer URL (e.g. `https://login.elixir-czech.org/oidc/`). */
+  source: string;
+  /** ISO-8601 timestamp the issuer asserted at. */
+  asserted: string;
+}
+
+/**
+ * Affiliation evidence on the `RequesterIdentityContext`. `source`
+ * records *how* we know — `self` is the requester typed it, `orcid`
+ * came from a linked ORCID iD's employment record, `edugain` from an
+ * eduGAIN R&S bundle, `passport` from a verified GA4GH Visa.
+ */
+export interface RequesterAffiliation {
+  institution: string;
+  role: string;
+  source: 'self' | 'orcid' | 'edugain' | 'passport';
+}
+
+/**
+ * Normalised requester identity bundle (#115, ADR-0003 Decision 2).
+ * Computed every authorize-decision time. Heterogeneous inputs (Cognito
+ * email, ORCID claim, GA4GH Visa, eduGAIN bundle) collapse into this
+ * single shape so downstream policy can reason about *what we know*
+ * without caring how we know it.
+ *
+ * For PR #115 only `identityScore` + `emailDomainCategory` are populated.
+ * The rest are stubs whose populating PRs are queued (#117 quiz adds
+ * `acceptedPolicies` entries; ORCID linkage and Passport ingestion fill
+ * `affiliation` and `visas` in later iterations).
+ */
+export interface RequesterIdentityContext {
+  identityScore: RequesterIdentityScore;
+  /** Verified GA4GH Visas (both ingested from external IdPs and OCI-issued). Empty until Passport work lands. */
+  visas: GA4GHVisaSummary[];
+  /** Best-known affiliation. `null` when nothing higher than self-declared is available. */
+  affiliation: RequesterAffiliation | null;
+  /** Email-domain category (#116). Drives the EMAIL_DOMAIN_VERIFIED lift. */
+  emailDomainCategory: EmailDomainCategory;
+  /** Click-wrap policy acceptances (#118). Empty until that PR lands. */
+  acceptedPolicies: { policyUrl: string; sha256: string; iat: number }[];
+}
 
 /**
  * Slug rules: lower-case alphanumerics, hyphens; 3–80 chars; no leading
@@ -89,6 +235,11 @@ export const DatasetSummarySchema = z.object({
    * may collide across peers).
    */
   originUrl: z.string().nullable().default(null),
+  /**
+   * Identity assurance tier (#115). `OPEN` by default — see
+   * `AccessTierSchema` for the semantics. Decoupled from `visibility`.
+   */
+  accessTier: AccessTierSchema.default('OPEN'),
 });
 export type DatasetSummary = z.infer<typeof DatasetSummarySchema>;
 
@@ -573,6 +724,33 @@ export const AccessRequestAttestationsSchema = z.object({
 export type AccessRequestAttestations = z.infer<typeof AccessRequestAttestationsSchema>;
 
 /**
+ * AI-tool disclosure (#115). Optional structured declaration of which
+ * AI / ML tools the requester used (or will use) in the project. Drives
+ * the "AI tool transparency" badge in the host inbox and a future
+ * audit-trail surfacing requirement (LMIC regulatory fits often demand
+ * such a declaration). Empty `tools[]` is the default; populating UI
+ * lands with #120 (builder/researcher form variants).
+ */
+export const AiToolDisclosureSchema = z
+  .object({
+    tools: z
+      .array(
+        z.object({
+          /** Tool name, e.g. "GPT-4", "GitHub Copilot", "Claude Sonnet". */
+          name: z.string().min(1).max(200),
+          /** How the tool was used — analysis, code generation, drafting, etc. */
+          usage: z.string().min(1).max(1000),
+        }),
+      )
+      .max(20)
+      .default([]),
+    /** Free-text addendum to capture context the structured fields don't. */
+    notes: z.string().max(4000).nullable().optional(),
+  })
+  .strict();
+export type AiToolDisclosure = z.infer<typeof AiToolDisclosureSchema>;
+
+/**
  * Public-facing summary of an `AccessRequest`. Used in both the
  * requester's "my requests" list and the host's inbox; the two
  * pages render the same shape with different action affordances.
@@ -584,9 +762,16 @@ export interface AccessRequestSummary {
    * the dataset's DUO permission terms at the moment the request was
    * created — captured here so the host inbox can reason about the
    * decision even if the host re-publishes with different terms
-   * later.
+   * later. `accessTier` (#115) is also snapshotted so a tier upgrade
+   * by the host doesn't invalidate the matcher's reasoning.
    */
-  dataset: { id: string; slug: DatasetSlug; name: string; duoTerms: DuoTermId[] };
+  dataset: {
+    id: string;
+    slug: DatasetSlug;
+    name: string;
+    duoTerms: DuoTermId[];
+    accessTier: AccessTier;
+  };
   /** Requester identity — sub from Cognito (UUID-shaped). */
   requesterId: string;
   /** Optional: requester's display name (email or username). Null when not surfaced. */
@@ -595,9 +780,42 @@ export interface AccessRequestSummary {
    * Free-text justification. Retained for backwards-compat with the
    * v0 form; v1 mirrors `attestations.projectDescription` here so
    * legacy code paths keep rendering. New consumers should read from
-   * `attestations`.
+   * `iduStatement` (#115) or `attestations`.
    */
   justification: string;
+  /**
+   * Intended Data Use statement (#115, ADR-0003 Decision 2). Replaces
+   * `justification` as the canonical free-text rationale; populated on
+   * write by the API (mirrored from `attestations.projectDescription`
+   * during the transition). Backfilled from `justification` on
+   * existing rows.
+   */
+  iduStatement: string | null;
+  /**
+   * Optional AI-tool transparency declaration (#115). `null` until #120
+   * adds the form input; populated rows describe which tools the
+   * project relies on so the host can flag policy concerns up front.
+   */
+  aiToolDisclosure: AiToolDisclosure | null;
+  /**
+   * Email of the Signing Official / PI who must countersign the request
+   * (CONTROLLED+ tiers, future PR). `null` when the tier doesn't require
+   * countersign.
+   */
+  signingOfficialEmail: string | null;
+  /**
+   * Timestamp when the requester accepted the data-use pledge / click-wrap
+   * (#118). `null` until that PR ships and the form starts capturing it.
+   */
+  pledgeAcceptedAt: string | null;
+  /**
+   * Computed identity-assurance score (#115). Reflects what the platform
+   * could verify about the requester at create time (email-domain category,
+   * later: ORCID, quiz pass, Passport visas). Persisted on the row so
+   * the host inbox surfaces "what we know about this person" without a
+   * recomputation per render.
+   */
+  requesterIdentityScore: RequesterIdentityScore;
   attestations: AccessRequestAttestations;
   status: AccessRequestStatus;
   /**

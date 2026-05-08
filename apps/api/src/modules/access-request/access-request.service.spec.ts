@@ -93,7 +93,13 @@ describe('AccessRequestService.create', () => {
   });
 
   it('rejects a host self-requesting access on their own dataset', async () => {
-    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB, duoTerms: [] });
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: [],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
+    });
     await expect(service.create('mine', validBody, user(HOST_SUB, 'host'))).rejects.toBeInstanceOf(
       BadRequestException,
     );
@@ -104,16 +110,23 @@ describe('AccessRequestService.create', () => {
       id: DATASET_ID,
       hostId: HOST_SUB,
       duoTerms: ['DUO_0000042'],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
     });
     repo.create.mockResolvedValue({ id: REQUEST_ID });
     const out = await service.create('rsna', validBody, user(REQUESTER_SUB));
-    expect(out).toEqual({ id: REQUEST_ID, matchStatus: 'MATCHED' });
+    expect(out).toEqual({
+      id: REQUEST_ID,
+      matchStatus: 'MATCHED',
+      requesterIdentityScore: 'EMAIL_ONLY',
+    });
     expect(repo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         datasetId: DATASET_ID,
         requesterId: REQUESTER_SUB,
         attestations: validBody.attestations,
         matchStatus: 'MATCHED',
+        requesterIdentityScore: 'EMAIL_ONLY',
       }),
     );
   });
@@ -124,6 +137,8 @@ describe('AccessRequestService.create', () => {
       hostId: HOST_SUB,
       // GRU permission + NCU restriction (non-commercial use only)
       duoTerms: ['DUO_0000042', 'DUO_0000046'],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
     });
     repo.create.mockResolvedValue({ id: REQUEST_ID });
     const body = {
@@ -140,6 +155,8 @@ describe('AccessRequestService.create', () => {
       hostId: HOST_SUB,
       // GRU + IRB modifier
       duoTerms: ['DUO_0000042', 'DUO_0000021'],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
     });
     repo.create.mockResolvedValue({ id: REQUEST_ID });
     const body = {
@@ -155,30 +172,88 @@ describe('AccessRequestService.create', () => {
       hostId: HOST_SUB,
       // GRU + RTN (return derived data) — needs a DUA, J.2 territory.
       duoTerms: ['DUO_0000042', 'DUO_0000029'],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
     });
     repo.create.mockResolvedValue({ id: REQUEST_ID });
     const out = await service.create('rsna', validBody, user(REQUESTER_SUB));
     expect(out.matchStatus).toBe('UNCLEAR');
   });
+
+  it('matches CONFLICT when dataset accessTier exceeds requester identity score (#115)', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: ['DUO_0000042'],
+      accessTier: 'CONTROLLED', // requires QUIZ_PASSED
+      emailDomainAllowlist: [],
+    });
+    repo.create.mockResolvedValue({ id: REQUEST_ID });
+    const out = await service.create('rsna', validBody, user(REQUESTER_SUB));
+    expect(out.matchStatus).toBe('CONFLICT');
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        matchStatus: 'CONFLICT',
+        matchExplanations: expect.arrayContaining([
+          expect.stringMatching(/CONTROLLED tier.*QUIZ_PASSED.*EMAIL_ONLY/),
+        ]),
+      }),
+    );
+  });
+
+  it('lifts requester score to EMAIL_DOMAIN_VERIFIED for an institutional email (#115/#116)', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: ['DUO_0000042'],
+      accessTier: 'REGISTERED', // requires EMAIL_DOMAIN_VERIFIED
+      emailDomainAllowlist: [],
+    });
+    repo.create.mockResolvedValue({ id: REQUEST_ID });
+    // The local-dev path uses an email-shaped sub; extractRequesterEmail
+    // mirrors that into the identity-context input. An institutional
+    // email lifts the score so REGISTERED tier matches.
+    const out = await service.create('rsna', validBody, user('researcher@stanford.edu'));
+    expect(out.matchStatus).toBe('MATCHED');
+    expect(out.requesterIdentityScore).toBe('EMAIL_DOMAIN_VERIFIED');
+  });
 });
 
 describe('AccessRequestService.listForDataset', () => {
   it('forbids a participant', async () => {
-    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB, duoTerms: [] });
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: [],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
+    });
     await expect(
       service.listForDataset('rsna', user(REQUESTER_SUB, 'participant')),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('lets the dataset host list', async () => {
-    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB, duoTerms: [] });
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: [],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
+    });
     repo.listForDataset.mockResolvedValue([]);
     await service.listForDataset('rsna', user(HOST_SUB, 'host'));
     expect(repo.listForDataset).toHaveBeenCalledWith(DATASET_ID);
   });
 
   it('lets an admin list (regardless of host id)', async () => {
-    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB, duoTerms: [] });
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: [],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
+    });
     repo.listForDataset.mockResolvedValue([]);
     await service.listForDataset('rsna', user(ADMIN_SUB, 'admin'));
     expect(repo.listForDataset).toHaveBeenCalledWith(DATASET_ID);
