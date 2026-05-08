@@ -72,6 +72,28 @@ export const AccessTierSchema = z.enum(['OPEN', 'REGISTERED', 'CONTROLLED', 'SEN
 export type AccessTier = z.infer<typeof AccessTierSchema>;
 
 /**
+ * Commercial-use terms (#119, ADR-0003 Decision 9). Source of truth for
+ * the matcher's commercial-vs-NCU decision. Three bands:
+ *
+ *   - `OK`                  host has explicitly granted commercial use
+ *                           (optionally with `commercialClauses` text).
+ *                           Matcher: no commercial conflict.
+ *   - `NON_COMMERCIAL_ONLY` typically paired with `DUO_0000046` (NCU)
+ *                           in the manifest. Matcher: CONFLICT for any
+ *                           commercial intent.
+ *   - `CASE_BY_CASE`        host reviews each commercial request
+ *                           bilaterally. Matcher: UNCLEAR for commercial
+ *                           intent — host must judge.
+ *
+ * `CASE_BY_CASE` is the conservative default for newly-published
+ * datasets. The migration backfills existing rows that already declare
+ * NCU as `NON_COMMERCIAL_ONLY` so the matcher stays consistent across
+ * the upgrade. GI-AI4H curated datasets are explicitly seeded as `OK`.
+ */
+export const CommercialUseTermsSchema = z.enum(['OK', 'NON_COMMERCIAL_ONLY', 'CASE_BY_CASE']);
+export type CommercialUseTerms = z.infer<typeof CommercialUseTermsSchema>;
+
+/**
  * Requester identity assurance score (#115, ADR-0003 Decision 2). Computed
  * by the API at access-request creation time from whatever the requester
  * brought (email category, ORCID link, quiz pass, GA4GH Passport visas).
@@ -240,6 +262,12 @@ export const DatasetSummarySchema = z.object({
    * `AccessTierSchema` for the semantics. Decoupled from `visibility`.
    */
   accessTier: AccessTierSchema.default('OPEN'),
+  /**
+   * Commercial-use terms (#119). The catalog list shows a small badge
+   * derived from this so AI builders can scan for compatible datasets
+   * at a glance. `CASE_BY_CASE` is the conservative default.
+   */
+  commercialUseTerms: CommercialUseTermsSchema.default('CASE_BY_CASE'),
 });
 export type DatasetSummary = z.infer<typeof DatasetSummarySchema>;
 
@@ -290,6 +318,13 @@ export const DatasetDetailSchema = DatasetSummarySchema.extend({
    * onto `identity.users.id`.
    */
   hostId: z.string().uuid(),
+  /**
+   * Optional host-specified commercial-use clauses (#119). Surfaced on
+   * the detail page when commercial terms need nuance (e.g. "OK with
+   * royalty-free LMIC public-sector deployment"). `null` when the
+   * `commercialUseTerms` band is sufficient.
+   */
+  commercialClauses: z.string().nullable().default(null),
 });
 export type DatasetDetail = z.infer<typeof DatasetDetailSchema>;
 
@@ -365,6 +400,12 @@ export const ListDatasetsQuerySchema = z.object({
    * dataset matches if ANY of its `duoTerms` is in the requested set.
    */
   duoTerms: z.union([DuoTermIdSchema, z.array(DuoTermIdSchema)]).optional(),
+  /**
+   * Commercial-use facet (#119). Single-value enum filter — matches
+   * `Dataset.commercialUseTerms`. Drives the "Commercial use" filter
+   * on `/catalog` so AI builders can scan to fitting datasets.
+   */
+  commercialUseTerms: CommercialUseTermsSchema.optional(),
 
   sort: ListDatasetsSortSchema.default('recent'),
 
@@ -399,6 +440,16 @@ export const CreateDatasetRequestSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).nullable().optional(),
   visibility: DatasetVisibilitySchema.default('PRIVATE'),
+  /**
+   * Optional commercial-use band (#119). Defaults at the DB level to
+   * `CASE_BY_CASE`. Set explicitly when the host knows up-front (the
+   * GI-AI4H curated-dataset seeder passes `OK`). Hosts can also adjust
+   * later via the publish-page form (host-config UI lands as a
+   * follow-up on top of this PR).
+   */
+  commercialUseTerms: CommercialUseTermsSchema.optional(),
+  /** Optional commercial-clauses free-text (#119). Surfaced verbatim on the detail page. */
+  commercialClauses: z.string().max(4000).nullable().optional(),
 });
 export type CreateDatasetRequest = z.infer<typeof CreateDatasetRequestSchema>;
 

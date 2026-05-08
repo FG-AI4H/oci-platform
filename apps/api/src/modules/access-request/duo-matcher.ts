@@ -31,6 +31,7 @@ import {
   type AccessRequestAttestations,
   type AccessRequestMatchStatus,
   type AccessTier,
+  type CommercialUseTerms,
   type IntendedUseCategory,
   type RequesterIdentityScore,
 } from '@oci/shared-types';
@@ -41,14 +42,22 @@ export interface MatchResult {
 }
 
 /**
- * Optional tier inputs (#115). Existing callers that only have DUO
- * terms + attestations can omit these — the matcher then skips the
- * tier check and behaves exactly as it did pre-PR-115. Net-new callers
- * pass both so tier-mismatch surfaces as a CONFLICT explanation.
+ * Optional tier + commercial-terms inputs. Existing callers that only
+ * pass DUO terms + attestations can omit these — the matcher then
+ * behaves exactly as it did pre-PR-115/119.
+ *
+ * - `accessTier` + `requesterIdentityScore` (#115): tier-mismatch
+ *   surfaces as a CONFLICT explanation.
+ * - `commercialUseTerms` (#119): when present, becomes the source of
+ *   truth for the commercial-vs-NCU decision — `OK` permits commercial
+ *   intent regardless of any DUO_0000046 in the term list,
+ *   `NON_COMMERCIAL_ONLY` rejects, `CASE_BY_CASE` flags UNCLEAR for
+ *   host review. Absent ⇒ infer from the DUO registry as before.
  */
 export interface MatchTierInput {
   accessTier: AccessTier;
   requesterIdentityScore: RequesterIdentityScore;
+  commercialUseTerms?: CommercialUseTerms;
 }
 
 export function matchDuoIntent(
@@ -107,13 +116,38 @@ export function matchDuoIntent(
   // conflicts a single host can review together).
   if (tierConflict) conflicts.push(tierConflict);
 
-  // Commercial-use check.
+  // Commercial-use check (#119). When `commercialUseTerms` is supplied
+  // it is the source of truth — it can override any DUO_0000046 (NCU)
+  // in the term list (`OK`), or stand in for one when none is declared
+  // (`NON_COMMERCIAL_ONLY`, `CASE_BY_CASE`). Absent ⇒ fall back to the
+  // pre-#119 inference from the DUO registry.
   const commercial = isCommercialIntent(attestations.intendedUseCategory);
-  for (const t of datasetTerms) {
-    if (t.commercialUseAllowed === false && commercial) {
-      conflicts.push(
-        `Dataset is "${t.code} (${t.label})" — commercial use prohibited. Requester declared "${attestations.intendedUseCategory}".`,
-      );
+  if (commercial) {
+    if (tier?.commercialUseTerms) {
+      switch (tier.commercialUseTerms) {
+        case 'NON_COMMERCIAL_ONLY':
+          conflicts.push(
+            `Dataset declares "non-commercial only" — commercial use is not permitted. Requester declared "${attestations.intendedUseCategory}".`,
+          );
+          break;
+        case 'CASE_BY_CASE':
+          unclear.push(
+            `Dataset uses case-by-case commercial review. Host must judge whether "${attestations.intendedUseCategory}" fits the negotiated terms.`,
+          );
+          break;
+        case 'OK':
+          // Explicit OK overrides any NCU DUO term — no conflict.
+          break;
+      }
+    } else {
+      // Pre-#119 fallback: infer from DUO_0000046 (NCU) in the registry.
+      for (const t of datasetTerms) {
+        if (t.commercialUseAllowed === false) {
+          conflicts.push(
+            `Dataset is "${t.code} (${t.label})" — commercial use prohibited. Requester declared "${attestations.intendedUseCategory}".`,
+          );
+        }
+      }
     }
   }
 

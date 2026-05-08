@@ -22,6 +22,7 @@ import {
 import type {
   AccessRequestSummary,
   AccessTier,
+  CommercialUseTerms,
   DatasetDetail,
   DatasetVisibility,
 } from '@oci/shared-types';
@@ -67,6 +68,24 @@ const accessTierLabel: Record<AccessTier, string> = {
   REGISTERED: 'Registered',
   CONTROLLED: 'Controlled',
   SENSITIVE: 'Sensitive',
+};
+
+/**
+ * Commercial-use band → badge tone (#119). `OK` is the affirmative
+ * "this dataset welcomes commercial use" — green/success. Non-commercial
+ * is a hard no for builders — flagged in warning. `CASE_BY_CASE` is
+ * the talk-to-the-host band — neutral so it doesn't read as a refusal.
+ */
+const commercialTone: Record<CommercialUseTerms, 'success' | 'warning' | 'neutral'> = {
+  OK: 'success',
+  NON_COMMERCIAL_ONLY: 'warning',
+  CASE_BY_CASE: 'neutral',
+};
+
+const commercialLabel: Record<CommercialUseTerms, string> = {
+  OK: 'Commercial OK',
+  NON_COMMERCIAL_ONLY: 'Non-commercial only',
+  CASE_BY_CASE: 'Commercial: case-by-case',
 };
 
 interface CroissantPreview {
@@ -204,6 +223,12 @@ export default async function DatasetDetailPage({
                   {accessTierLabel[detail.accessTier]}
                 </Badge>
               ) : null}
+              {/* Commercial-use band (#119). Always shown — even
+                  CASE_BY_CASE — because builders need to know whether
+                  to negotiate before investing in a deployment. */}
+              <Badge tone={commercialTone[detail.commercialUseTerms]}>
+                {commercialLabel[detail.commercialUseTerms]}
+              </Badge>
               {detail.latestVersion ? <Badge tone="primary">v{detail.latestVersion}</Badge> : null}
               {detail.conformanceVersion ? (
                 <Badge tone="accent">Croissant {detail.conformanceVersion}</Badge>
@@ -334,6 +359,21 @@ export default async function DatasetDetailPage({
                         </Badge>
                       </DefinitionItem>
                     ) : null}
+                    {/* Commercial-use disclosure (#119). Show the band
+                        + any host-specified clauses verbatim so AI
+                        builders can scan terms before investing in a
+                        deployment. The badge in the header gives the
+                        at-a-glance band; this shows the rationale. */}
+                    <DefinitionItem term="Commercial use">
+                      <div className="space-y-1 text-sm">
+                        <p className="font-medium">{commercialLabel[detail.commercialUseTerms]}</p>
+                        {detail.commercialClauses ? (
+                          <p className="whitespace-pre-wrap text-[var(--color-muted-foreground)]">
+                            {detail.commercialClauses}
+                          </p>
+                        ) : null}
+                      </div>
+                    </DefinitionItem>
                     {detail.duoTerms.length > 0 ? (
                       <DefinitionItem term="Permitted use (DUO)">
                         <ul className="space-y-1.5 text-sm">

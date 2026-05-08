@@ -3,6 +3,7 @@ import {
   ACCESS_TIER_MIN_SCORE,
   AccessTierSchema,
   AiToolDisclosureSchema,
+  CommercialUseTermsSchema,
   REQUESTER_IDENTITY_SCORE_RANK,
   RequesterIdentityScoreSchema,
   type AccessTier,
@@ -110,5 +111,18 @@ describe('AiToolDisclosureSchema (#115)', () => {
       usage: 'usage description',
     }));
     expect(() => AiToolDisclosureSchema.parse({ tools })).toThrow();
+  });
+});
+
+describe('CommercialUseTermsSchema (#119)', () => {
+  it('accepts the three canonical bands', () => {
+    expect(CommercialUseTermsSchema.parse('OK')).toBe('OK');
+    expect(CommercialUseTermsSchema.parse('NON_COMMERCIAL_ONLY')).toBe('NON_COMMERCIAL_ONLY');
+    expect(CommercialUseTermsSchema.parse('CASE_BY_CASE')).toBe('CASE_BY_CASE');
+  });
+
+  it('rejects unknown band values', () => {
+    expect(() => CommercialUseTermsSchema.parse('FREE')).toThrow();
+    expect(() => CommercialUseTermsSchema.parse('NCU')).toThrow();
   });
 });

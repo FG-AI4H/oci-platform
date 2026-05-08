@@ -104,6 +104,20 @@ enum AccessTier {
   @@schema("catalog")
 }
 
+/// Commercial-use terms on a dataset (#119, ADR-0003 Decision 9). Drives
+/// the `/catalog` "Commercial use" filter + badge and the matcher's
+/// commercial-vs-NCU verdict. `CASE_BY_CASE` is the conservative default
+/// for newly-published datasets; the migration backfills existing rows
+/// from any NCU DUO term they declared. GI-AI4H curated datasets are
+/// explicitly set to `OK` by the seed script.
+enum CommercialUseTerms {
+  OK
+  NON_COMMERCIAL_ONLY
+  CASE_BY_CASE
+
+  @@schema("catalog")
+}
+
 /// Computed identity-assurance score for a requester at access-request
 /// creation time (#115, ADR-0003 Decision 2). Persisted on `AccessRequest`
 /// so the host inbox can show "what we know about this person" without
@@ -190,6 +204,22 @@ model Dataset {
   /// surfaces a CONFLICT explanation when the requester's identity score
   /// is below this tier's minimum (`ACCESS_TIER_MIN_SCORE`).
   accessTier AccessTier @default(OPEN) @map("access_tier")
+
+  /// Commercial-use terms (#119, ADR-0003 Decision 9). The matcher reads
+  /// this as the source of truth for the commercial-vs-NCU decision —
+  /// `OK` permits commercial requests, `NON_COMMERCIAL_ONLY` rejects
+  /// them, `CASE_BY_CASE` flags UNCLEAR for host review. Default
+  /// `CASE_BY_CASE` is conservative for newly-published datasets; the
+  /// migration backfills existing rows from any NCU DUO term they
+  /// declared.
+  commercialUseTerms CommercialUseTerms @default(CASE_BY_CASE) @map("commercial_use_terms")
+
+  /// Optional host-specified commercial-use clauses (#119). Plain text;
+  /// surfaced verbatim on the dataset detail page when commercial terms
+  /// require nuance (e.g. "OK with royalty-free LMIC public-sector
+  /// deployment"). Null when the host has nothing to add beyond the
+  /// `commercialUseTerms` band.
+  commercialClauses String? @map("commercial_clauses")
 
   versions       DatasetVersion[]
   accessRequests AccessRequest[]
