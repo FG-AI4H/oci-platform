@@ -65,9 +65,7 @@ const DUO_OBO_PREFIX = 'http://purl.obolibrary.org/obo/';
  * the wild use either form — we normalise to the OBO id internally.
  */
 export function lookupDuoTerm(iriOrId: string): DuoTerm | null {
-  const id = iriOrId.startsWith(DUO_OBO_PREFIX)
-    ? iriOrId.slice(DUO_OBO_PREFIX.length)
-    : iriOrId;
+  const id = iriOrId.startsWith(DUO_OBO_PREFIX) ? iriOrId.slice(DUO_OBO_PREFIX.length) : iriOrId;
   return DUO_REGISTRY.find((t) => t.id === id) ?? null;
 }
 
@@ -78,9 +76,7 @@ export function isKnownDuoTerm(iriOrId: string): boolean {
 
 /** Canonicalise to OBO short id; pass through unrecognised inputs. */
 export function normaliseDuoId(iriOrId: string): string {
-  return iriOrId.startsWith(DUO_OBO_PREFIX)
-    ? iriOrId.slice(DUO_OBO_PREFIX.length)
-    : iriOrId;
+  return iriOrId.startsWith(DUO_OBO_PREFIX) ? iriOrId.slice(DUO_OBO_PREFIX.length) : iriOrId;
 }
 
 export const DUO_REGISTRY: readonly DuoTerm[] = [

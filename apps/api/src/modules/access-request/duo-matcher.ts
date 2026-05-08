@@ -51,9 +51,7 @@ export function matchDuoIntent(
     };
   }
 
-  const datasetTerms = datasetTermIds
-    .map(lookupDuoTerm)
-    .filter((t): t is DuoTerm => t !== null);
+  const datasetTerms = datasetTermIds.map(lookupDuoTerm).filter((t): t is DuoTerm => t !== null);
 
   // Some manifest term wasn't in our registry. Don't pretend to know
   // — flag UNCLEAR so the host sees the unknown term and decides.

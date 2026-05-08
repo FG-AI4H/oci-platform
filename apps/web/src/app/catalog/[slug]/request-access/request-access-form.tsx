@@ -1,7 +1,16 @@
 'use client';
 
 import { useActionState } from 'react';
-import { Alert, AlertDescription, AlertTitle, Badge, Button, Field, Input, Textarea } from '@oci/ui';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Badge,
+  Button,
+  Field,
+  Input,
+  Textarea,
+} from '@oci/ui';
 import { DUO_REGISTRY, lookupDuoTerm } from '@oci/croissant';
 import { requestAccessAction, type RequestAccessState } from './actions';
 
@@ -57,9 +66,14 @@ const OUTPUT_TYPES: Array<{ id: string; label: string }> = [
 // deliberately omit dataset-side restrictions (NCU, GSO) and modifiers
 // the requester can't unilaterally satisfy (US, PS, IS, MOR).
 const REQUESTER_DUO_OPTIONS = DUO_REGISTRY.filter((t) =>
-  ['DUO_0000042', 'DUO_0000006', 'DUO_0000007', 'DUO_0000045', 'DUO_0000019', 'DUO_0000020'].includes(
-    t.id,
-  ),
+  [
+    'DUO_0000042',
+    'DUO_0000006',
+    'DUO_0000007',
+    'DUO_0000045',
+    'DUO_0000019',
+    'DUO_0000020',
+  ].includes(t.id),
 );
 
 export function RequestAccessForm({ slug, datasetDuoTerms }: Props) {

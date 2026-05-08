@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { AccessRequestAttestations } from '@oci/shared-types';
 import { matchDuoIntent } from './duo-matcher.js';
 
-function attestations(overrides: Partial<AccessRequestAttestations> = {}): AccessRequestAttestations {
+function attestations(
+  overrides: Partial<AccessRequestAttestations> = {},
+): AccessRequestAttestations {
   return {
     v: 1,
     projectTitle: 'Replication of pneumonia detection benchmark',
@@ -56,10 +58,7 @@ describe('matchDuoIntent', () => {
   });
 
   it('CONFLICT when IRB-required dataset gets a non-IRB request', () => {
-    const r = matchDuoIntent(
-      ['DUO_0000042', 'DUO_0000021'],
-      attestations({ irbApproved: false }),
-    );
+    const r = matchDuoIntent(['DUO_0000042', 'DUO_0000021'], attestations({ irbApproved: false }));
     expect(r.status).toBe('CONFLICT');
     expect(r.explanations.join(' ')).toMatch(/IRB.*ethics/);
   });
@@ -79,10 +78,7 @@ describe('matchDuoIntent', () => {
   });
 
   it('CONFLICT on HMB for education intent (out of scope)', () => {
-    const r = matchDuoIntent(
-      ['DUO_0000006'],
-      attestations({ intendedUseCategory: 'EDUCATION' }),
-    );
+    const r = matchDuoIntent(['DUO_0000006'], attestations({ intendedUseCategory: 'EDUCATION' }));
     expect(r.status).toBe('CONFLICT');
   });
 

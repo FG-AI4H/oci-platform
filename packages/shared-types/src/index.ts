@@ -338,11 +338,7 @@ export const IntendedUseCategorySchema = z.enum([
 export type IntendedUseCategory = z.infer<typeof IntendedUseCategorySchema>;
 
 /** What gets done with derived outputs. Drives `RTN`/`PUB`-related modifiers. */
-export const RedistributionIntentSchema = z.enum([
-  'NONE',
-  'DERIVATIVES_ONLY',
-  'WITH_PERMISSION',
-]);
+export const RedistributionIntentSchema = z.enum(['NONE', 'DERIVATIVES_ONLY', 'WITH_PERMISSION']);
 export type RedistributionIntent = z.infer<typeof RedistributionIntentSchema>;
 
 export const OutputTypeSchema = z.enum([

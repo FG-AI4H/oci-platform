@@ -131,9 +131,7 @@ describe('AccessRequestService.create', () => {
     };
     const out = await service.create('rsna', body, user(REQUESTER_SUB));
     expect(out.matchStatus).toBe('CONFLICT');
-    expect(repo.create).toHaveBeenCalledWith(
-      expect.objectContaining({ matchStatus: 'CONFLICT' }),
-    );
+    expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ matchStatus: 'CONFLICT' }));
   });
 
   it('matches CONFLICT when IRB-required dataset receives a non-IRB request', async () => {
