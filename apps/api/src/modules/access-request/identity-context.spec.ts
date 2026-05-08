@@ -40,6 +40,31 @@ describe('buildRequesterIdentityContext — score lift', () => {
     expect(ctx.emailDomainCategory).toBe('institutional');
     expect(ctx.identityScore).toBe('EMAIL_DOMAIN_VERIFIED');
   });
+
+  it('active certification lifts EMAIL_ONLY → QUIZ_PASSED (#117 follow-up)', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: 'someone@gmail.com', // public webmail → EMAIL_ONLY baseline
+      hasActiveCertification: true,
+    });
+    expect(ctx.emailDomainCategory).toBe('public');
+    expect(ctx.identityScore).toBe('QUIZ_PASSED');
+  });
+
+  it('active certification lifts EMAIL_DOMAIN_VERIFIED → QUIZ_PASSED', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: 'researcher@stanford.edu',
+      hasActiveCertification: true,
+    });
+    expect(ctx.identityScore).toBe('QUIZ_PASSED');
+  });
+
+  it('inactive certification is a no-op (score stays at the email-derived value)', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: 'researcher@stanford.edu',
+      hasActiveCertification: false,
+    });
+    expect(ctx.identityScore).toBe('EMAIL_DOMAIN_VERIFIED');
+  });
 });
 
 describe('buildRequesterIdentityContext — empty / future-PR slots', () => {

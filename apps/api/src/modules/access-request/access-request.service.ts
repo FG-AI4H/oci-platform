@@ -18,6 +18,8 @@ import {
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CatalogService } from '../catalog/catalog.service.js';
+import { CertificationService } from '../certification/certification.service.js';
+import { ACTIVE_QUIZ_TYPE } from '../certification/quiz-bank.js';
 import { AccessRequestRepository } from './access-request.repository.js';
 import { matchDuoIntent } from './duo-matcher.js';
 import { buildRequesterIdentityContext, extractRequesterEmail } from './identity-context.js';
@@ -48,6 +50,7 @@ export class AccessRequestService {
   constructor(
     @Inject(AccessRequestRepository) private readonly repo: AccessRequestRepository,
     @Inject(CatalogService) private readonly catalog: CatalogService,
+    @Inject(CertificationService) private readonly certification: CertificationService,
   ) {}
 
   async create(
@@ -73,12 +76,23 @@ export class AccessRequestService {
     }
 
     // Compute the normalised requester identity context (#115). Today
-    // this consumes the email-domain classifier (#116); future PRs add
-    // ORCID, quiz-pass, click-wrap, and Passport visa inputs to the
-    // same shape.
+    // this consumes the email-domain classifier (#116) and the
+    // certification quiz (#117); future PRs add ORCID, click-wrap,
+    // and Passport visa inputs to the same shape.
+    //
+    // The cert lookup is best-effort — a failure here shouldn't block
+    // the access-request creation, just keep the score conservative.
+    let hasActiveCertification = false;
+    try {
+      const certStatus = await this.certification.listOwnStatus(user, ACTIVE_QUIZ_TYPE);
+      hasActiveCertification = certStatus.active;
+    } catch {
+      // swallow; conservative default already in place
+    }
     const identityContext = buildRequesterIdentityContext({
       email: extractRequesterEmail(user as unknown as { sub?: string; email?: string }),
       datasetEmailDomainAllowlist: target.emailDomainAllowlist,
+      hasActiveCertification,
     });
 
     // Auto-match the requester's intended use against the dataset's

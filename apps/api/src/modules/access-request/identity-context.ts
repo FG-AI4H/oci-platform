@@ -21,6 +21,7 @@
  */
 
 import {
+  REQUESTER_IDENTITY_SCORE_RANK,
   safeClassifyEmailDomain,
   type EmailDomainCategory,
   type RequesterIdentityContext,
@@ -43,6 +44,13 @@ export interface BuildRequesterIdentityContextInput {
    * domain matches.
    */
   datasetEmailDomainAllowlist?: readonly string[] | null;
+  /**
+   * Active certification (#117 quiz). When `true`, the score lifts to
+   * `QUIZ_PASSED` if the email-derived score didn't already reach it.
+   * The access-request service queries the certification module and
+   * passes the result here; the normalizer remains pure.
+   */
+  hasActiveCertification?: boolean;
 }
 
 /**
@@ -78,7 +86,20 @@ export function buildRequesterIdentityContext(
   const classification = input.email ? safeClassifyEmailDomain(input.email, { allowlist }) : null;
 
   const emailDomainCategory: EmailDomainCategory = classification?.category ?? 'public';
-  const identityScore: RequesterIdentityScore = scoreFromCategory(emailDomainCategory);
+  let identityScore: RequesterIdentityScore = scoreFromCategory(emailDomainCategory);
+
+  // Quiz lift (#117). An active certification raises the score to
+  // QUIZ_PASSED — but only if it wouldn't *demote*. PI_COUNTERSIGNED
+  // and PASSPORT_VERIFIED already exceed QUIZ_PASSED in rank; if a
+  // future translator stamps one of those before this branch runs,
+  // we don't undo it.
+  if (input.hasActiveCertification) {
+    // eslint-disable-next-line security/detect-object-injection -- typed enum keys
+    const have = REQUESTER_IDENTITY_SCORE_RANK[identityScore];
+    if (have < REQUESTER_IDENTITY_SCORE_RANK.QUIZ_PASSED) {
+      identityScore = 'QUIZ_PASSED';
+    }
+  }
 
   return {
     identityScore,
