@@ -69,7 +69,7 @@ jobs:
           npx --yes @cyclonedx/cyclonedx-npm --output-file sbom.cdx.json || true
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         if: hashFiles('sbom.cdx.json') != ''
         with:
           name: sbom

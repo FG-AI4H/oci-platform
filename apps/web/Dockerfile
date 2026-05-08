@@ -30,6 +30,7 @@ COPY tsconfig.base.json ./
 COPY packages packages
 COPY apps/web apps/web
 RUN pnpm --filter @oci/shared-types build \
+ && pnpm --filter @oci/croissant build \
  && pnpm --filter @oci/auth build \
  && pnpm --filter @oci/ui build \
  && pnpm --filter @oci/web build
