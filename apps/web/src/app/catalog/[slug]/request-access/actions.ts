@@ -1,7 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { CreateAccessRequestRequestSchema } from '@oci/shared-types';
+import { CreateAccessRequestRequestSchema, safeClassifyEmailDomain } from '@oci/shared-types';
 import { auth } from '../../../../auth';
 
 export interface RequestAccessValues {
@@ -42,6 +42,22 @@ export async function requestAccessAction(
   const session = await auth();
   if (!session?.accessToken) {
     return { status: 'error', message: 'Sign in required.' };
+  }
+
+  // Disposable-email guard (#116). Form-side rejection so requesters
+  // get an immediate, specific error instead of a generic API 4xx.
+  // The API will land its own copy of this check in #115 (tier
+  // scoring) where the User-table email lookup is added; this is
+  // defense-in-depth, not the only line.
+  const requesterEmail = typeof session.user?.email === 'string' ? session.user.email : null;
+  if (requesterEmail) {
+    const classification = safeClassifyEmailDomain(requesterEmail);
+    if (classification?.category === 'disposable') {
+      return {
+        status: 'error',
+        message: `Requests from disposable email providers are not accepted (${classification.domain}). Please use an institutional or organisational address.`,
+      };
+    }
   }
 
   const raw: RequestAccessValues = {
