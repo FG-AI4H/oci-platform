@@ -15,6 +15,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@oci/shared-types": "workspace:*",
     "zod": "^4.4.2"
   },
   "devDependencies": {

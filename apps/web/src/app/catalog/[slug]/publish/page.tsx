@@ -19,7 +19,7 @@ import { auth } from '../../../../auth';
 import { apiFetch } from '../../../../lib/api';
 import { requireHost } from '../../../../lib/groups';
 import { FileUploader } from './file-uploader';
-import { PublishVersionForm } from './publish-version-form';
+import { PublishMode } from './publish-mode';
 
 export const metadata = {
   title: 'Publish version — OCI Catalog',
@@ -92,9 +92,17 @@ export default async function PublishVersionPage({ params }: PageProps) {
             <Card>
               <CardHeader>
                 <CardTitle>New version</CardTitle>
+                <CardDescription>
+                  Use the wizard for a guided form, or switch to the paste form if you already have
+                  a Croissant manifest. Both produce the same machine-readable output.
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <PublishVersionForm slug={detail.slug} suggestedVersion={nextVersion} />
+                <PublishMode
+                  slug={detail.slug}
+                  suggestedVersion={nextVersion}
+                  visibility={detail.visibility}
+                />
               </CardContent>
             </Card>
 

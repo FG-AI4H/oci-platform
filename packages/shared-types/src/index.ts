@@ -199,6 +199,119 @@ export const PublishDatasetVersionRequestSchema = z.object({
 });
 export type PublishDatasetVersionRequest = z.infer<typeof PublishDatasetVersionRequestSchema>;
 
+// ==== Manifest wizard (PR K, #90) =========================================
+//
+// Hosts who don't want to write JSON-LD by hand fill a stepped form; the
+// platform generates a Croissant 1.1 manifest from their structured input
+// and submits it through the same `PublishDatasetVersionRequest` flow as
+// hand-written manifests. The wizard is the default path for new dataset
+// versions; the paste-form escape hatch stays for power users with their
+// own manifest tooling.
+//
+// `ManifestWizardInputSchema` is the wizard's contract. `@oci/croissant`
+// exposes `manifestWizardInputToCroissant(input)` — a pure function that
+// maps the input to the JSON-LD shape the validator accepts. The web
+// side validates with this schema on each step transition; the API
+// never sees the wizard payload (it sees the generated manifest).
+
+export const ManifestCroissantConformsToSchema = z.enum([
+  'http://mlcommons.org/croissant/1.1',
+  'http://mlcommons.org/croissant/1.0',
+]);
+export type ManifestCroissantConformsTo = z.infer<typeof ManifestCroissantConformsToSchema>;
+
+export const ManifestWizardCreatorSchema = z.object({
+  type: z.enum(['Person', 'Organization']),
+  name: z.string().min(1).max(200),
+});
+export type ManifestWizardCreator = z.infer<typeof ManifestWizardCreatorSchema>;
+
+/**
+ * Anonymisation level (BioCroissant). Mirrors the small canonical set
+ * the validator recognises today; the wizard is intentionally narrower
+ * than what a hand-written manifest can carry.
+ */
+export const ManifestWizardAnonymizationLevelSchema = z.enum([
+  'ANONYMIZED',
+  'PSEUDONYMIZED',
+  'IDENTIFIED',
+]);
+export type ManifestWizardAnonymizationLevel = z.infer<
+  typeof ManifestWizardAnonymizationLevelSchema
+>;
+
+/**
+ * One distribution (a file) in the wizard's flat shape. The Croissant
+ * builder turns this into a `sc:FileObject` with the right `@id` and
+ * `contentUrl`. The host can later upload bytes via the publish page's
+ * Upload card and paste the resulting platform-hosted contentUrl here.
+ */
+export const ManifestWizardDistributionSchema = z.object({
+  /** Croissant `@id` of the FileObject. URL-safe; stable across versions when content is stable. */
+  croissantId: z.string().min(1).max(200),
+  name: z.string().min(1).max(500),
+  /** MIME type; Croissant `encodingFormat`. */
+  encodingFormat: z.string().min(1).max(200),
+  /**
+   * Either an upstream URL or a platform-hosted relative path
+   * (`/v2/catalog/datasets/<slug>/distributions/<id>/download`). Both
+   * are accepted; the catalog publish flow detects + adopts the
+   * platform-hosted shape.
+   */
+  contentUrl: z.string().min(1).max(2000),
+});
+export type ManifestWizardDistribution = z.infer<typeof ManifestWizardDistributionSchema>;
+
+/**
+ * Step 1–5 + review shape. The form's React state matches this 1:1 so
+ * `safeParse` on each step boundary returns issues keyed to the
+ * offending field. ML semantics (RecordSets / Fields) are deliberately
+ * out of scope — power users with that level of detail use the
+ * paste-form escape hatch.
+ */
+export const ManifestWizardInputSchema = z.object({
+  conformsTo: ManifestCroissantConformsToSchema.default('http://mlcommons.org/croissant/1.1'),
+
+  // Step 1 — Identification
+  name: z.string().min(1).max(200),
+  description: z.string().min(1).max(4000),
+  /** SPDX URL or licence name. The validator accepts strings; a future iteration will pin to SPDX. */
+  license: z.string().min(1).max(500),
+  /** Homepage URL. Croissant 1.0 makes this required at the top level. */
+  homepage: z.string().min(1).max(2000),
+  citeAs: z.string().max(2000).optional(),
+  version: z
+    .string()
+    .min(1)
+    .max(40)
+    // Same regex the publish endpoint enforces server-side.
+    // eslint-disable-next-line security/detect-unsafe-regex
+    .regex(/^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/, 'expected semver MAJOR.MINOR.PATCH'),
+  datePublished: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'expected ISO date YYYY-MM-DD'),
+
+  // Step 2 — Creators (at least one)
+  creators: z.array(ManifestWizardCreatorSchema).min(1).max(50),
+
+  // Step 3 — Biomedical context (BioCroissant) — all optional
+  imagingModality: z.array(z.string().min(1).max(200)).max(20).default([]),
+  bodyRegion: z.array(z.string().min(1).max(200)).max(20).default([]),
+  diseaseCondition: z.array(z.string().min(1).max(200)).max(20).default([]),
+  anonymizationLevel: ManifestWizardAnonymizationLevelSchema.optional(),
+
+  // Step 4 — Data use (DUO) — required for non-PUBLIC datasets per
+  // publish-time fail-closed (J.1 decision #2). The wizard nudges the
+  // host to pick at least one for every visibility level except PUBLIC.
+  duoTerms: z.array(DuoTermIdSchema).max(20).default([]),
+
+  // Step 5 — Distributions
+  distributions: z.array(ManifestWizardDistributionSchema).max(100).default([]),
+
+  // Notes — pass-through to the publish action's `notes` field; not
+  // serialised into the manifest.
+  notes: z.string().max(4000).optional(),
+});
+export type ManifestWizardInput = z.infer<typeof ManifestWizardInputSchema>;
+
 // ==== Self-hosted distributions / uploads (DAP, PR I, #87) ===============
 //
 // Multipart upload protocol (browser → our S3, mediated by the API):
