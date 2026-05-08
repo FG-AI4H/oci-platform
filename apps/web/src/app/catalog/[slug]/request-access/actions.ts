@@ -1,7 +1,11 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { CreateAccessRequestRequestSchema, safeClassifyEmailDomain } from '@oci/shared-types';
+import {
+  CreateAccessRequestRequestSchema,
+  audienceFromIntendedUse,
+  safeClassifyEmailDomain,
+} from '@oci/shared-types';
 import { auth } from '../../../../auth';
 
 export interface RequestAccessValues {
@@ -16,6 +20,15 @@ export interface RequestAccessValues {
   dataRetentionDays: string;
   redistributionIntent: string;
   outputType: string;
+  // Builder-only fields (#120). Empty strings when audience=RESEARCHER.
+  legalEntityName: string;
+  legalEntityCountry: string;
+  deploymentCountries: string;
+  regulatoryPathway: string;
+  whoPriorityAlignment: string;
+  accreditations: string;
+  royaltyPlan: string;
+  postMarketDataFlow: string;
 }
 
 export type RequestAccessState =
@@ -74,7 +87,50 @@ export async function requestAccessAction(
     dataRetentionDays: String(formData.get('dataRetentionDays') ?? ''),
     redistributionIntent: String(formData.get('redistributionIntent') ?? ''),
     outputType: String(formData.get('outputType') ?? ''),
+    legalEntityName: String(formData.get('legalEntityName') ?? ''),
+    legalEntityCountry: String(formData.get('legalEntityCountry') ?? ''),
+    deploymentCountries: String(formData.get('deploymentCountries') ?? ''),
+    regulatoryPathway: String(formData.get('regulatoryPathway') ?? ''),
+    whoPriorityAlignment: String(formData.get('whoPriorityAlignment') ?? ''),
+    accreditations: String(formData.get('accreditations') ?? ''),
+    royaltyPlan: String(formData.get('royaltyPlan') ?? ''),
+    postMarketDataFlow: String(formData.get('postMarketDataFlow') ?? ''),
   };
+
+  // Audience derivation (#120). Determines whether builderContext is
+  // required (BUILDER) or forbidden (RESEARCHER). The `audienceFromIntendedUse`
+  // helper is shared with the API so the two layers can't drift.
+  const intendedUseTyped =
+    raw.intendedUseCategory === 'NON_COMMERCIAL_RESEARCH' ||
+    raw.intendedUseCategory === 'COMMERCIAL_RESEARCH' ||
+    raw.intendedUseCategory === 'CLINICAL_CARE' ||
+    raw.intendedUseCategory === 'EDUCATION'
+      ? raw.intendedUseCategory
+      : null;
+  const audience =
+    intendedUseTyped !== null ? audienceFromIntendedUse(intendedUseTyped) : 'RESEARCHER';
+  const isBuilder = audience === 'BUILDER';
+
+  const builderContext = isBuilder
+    ? {
+        legalEntity: {
+          name: raw.legalEntityName,
+          jurisdictionCountry: raw.legalEntityCountry.toUpperCase(),
+        },
+        deploymentCountries: raw.deploymentCountries
+          .split(/[,\s]+/)
+          .map((c) => c.trim().toUpperCase())
+          .filter((c) => c.length > 0),
+        regulatoryPathway: raw.regulatoryPathway,
+        whoPriorityAlignment: raw.whoPriorityAlignment.length > 0 ? raw.whoPriorityAlignment : null,
+        accreditations: raw.accreditations
+          .split('\n')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0),
+        royaltyPlan: raw.royaltyPlan.length > 0 ? raw.royaltyPlan : null,
+        postMarketDataFlow: raw.postMarketDataFlow,
+      }
+    : null;
 
   const candidate = {
     attestations: {
@@ -92,6 +148,7 @@ export async function requestAccessAction(
       redistributionIntent: raw.redistributionIntent,
       outputType: raw.outputType,
     },
+    builderContext,
   };
 
   const parsed = CreateAccessRequestRequestSchema.safeParse(candidate);
