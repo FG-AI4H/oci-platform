@@ -4,7 +4,7 @@
 
 The OCI's access-control surface is built on three composable layers — codified in [ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md):
 
-1. **Identity tier** — *who you are*. Email-only → verified institutional email → ORCID-linked → Quiz-passed → PI-countersigned → GA4GH-Passport-verified. Stronger identity unlocks more sensitive datasets.
+1. **Identity tier** — _who you are_. Email-only → verified institutional email → ORCID-linked → Quiz-passed → PI-countersigned → GA4GH-Passport-verified. Stronger identity unlocks more sensitive datasets.
 2. **DUO (Data Use Ontology)** — machine-readable expressions of what a dataset _permits_ and what a requester _intends_. GA4GH-approved technical standard. **Live today (PR J.1).**
 3. **DUA (Data Use Agreement)** — the formal contractual artefact, signed at one of three eIDAS levels (SES → AdES → QES). **Phase 2 (DocuSeal AdES) and Phase 3 (Skribble QES).**
 
@@ -63,7 +63,7 @@ When the DUA layer ships, the platform will:
 2. **Capture countersigning** at the eIDAS level the dataset's tier requires:
    - **CONTROLLED tier → AdES** via [DocuSeal](https://www.docuseal.com/), an open-source e-signature service self-hosted in our existing AWS Fargate cluster. Identity-verified, tamper-evident, free beyond infra (~$15/mo Fargate task).
    - **SENSITIVE tier → QES** via [Yousign](https://yousign.com/), an EU Qualified Trust Service Provider on the EU Trust List, procured through **AWS Marketplace** so the QES bill consolidates onto our existing AWS account. Pay-per-signature (~€1–2 each, no minimum). Equivalent to a handwritten signature under eIDAS Article 25.
-3. **Require an institutional Signing Official / PI** for CONTROLLED+ tiers — someone other than the requester at their institution who countersigns. (Synapse's policy verbatim: *"you cannot serve as your own signing official"*.)
+3. **Require an institutional Signing Official / PI** for CONTROLLED+ tiers — someone other than the requester at their institution who countersigns. (Synapse's policy verbatim: _"you cannot serve as your own signing official"_.)
 4. **Persist** the signed DUA + signature certificate as an immutable artefact tied to the access-request row.
 5. **Optionally route** to OCI ACT (the platform-level Access & Compliance Team — an ITU/WHO-appointed body) when the dataset is SENSITIVE tier or when DUO terms require multi-member review.
 6. **Surface** to regulators in the audit trail (read-only).

@@ -4,14 +4,14 @@ You're responsible for assuring that the OCI's operation is consistent with your
 
 The OCI is **not** a single-jurisdiction product. Compliance posture is configurable per deployment so that an EU member-state instance, a WHO regional-office instance, and an academic instance can all coexist within the global federation.
 
-| Topic                                     | Read when                                                                                                    |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Topic                                                            | Read when                                                                                                                               |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | [Access governance — overview](../overview/access-governance.md) | You want the plain-English explainer of identity tiers, DUO, DUA, e-signature levels (eIDAS), and GA4GH Passports. **Read this first.** |
-| [Data sovereignty](./data-sovereignty.md) | Your jurisdiction has data-residency requirements; you need to know what stays where.                        |
-| [Compliance posture](./compliance.md)     | You need to map the OCI's controls to GDPR / HIPAA / PIPL / equivalents.                                     |
-| [DUO and DUA framework](./duo-and-dua.md) | You need to understand how the platform expresses, matches, and (eventually) formalises data-use agreements. |
-| [Audit and transparency](./audit.md)      | You need to confirm what's recorded, who can read it, and how to subpoena it.                                |
-| [Risk register](./risks.md)               | You need a structured view of platform risks and their mitigations.                                          |
+| [Data sovereignty](./data-sovereignty.md)                        | Your jurisdiction has data-residency requirements; you need to know what stays where.                                                   |
+| [Compliance posture](./compliance.md)                            | You need to map the OCI's controls to GDPR / HIPAA / PIPL / equivalents.                                                                |
+| [DUO and DUA framework](./duo-and-dua.md)                        | You need to understand how the platform expresses, matches, and (eventually) formalises data-use agreements.                            |
+| [Audit and transparency](./audit.md)                             | You need to confirm what's recorded, who can read it, and how to subpoena it.                                                           |
+| [Risk register](./risks.md)                                      | You need a structured view of platform risks and their mitigations.                                                                     |
 
 ## What the OCI promises
 

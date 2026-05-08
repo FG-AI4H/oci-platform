@@ -17,8 +17,14 @@
   "sameAs": [],
 
   "creator": [
-    { "@type": "sc:Organization", "name": "University Hospital Zürich (UHZ) — Department of Cardiology" },
-    { "@type": "sc:Organization", "name": "University Hospital Zürich (UHZ) — Institute of Diagnostic and Interventional Radiology" },
+    {
+      "@type": "sc:Organization",
+      "name": "University Hospital Zürich (UHZ) — Department of Cardiology"
+    },
+    {
+      "@type": "sc:Organization",
+      "name": "University Hospital Zürich (UHZ) — Institute of Diagnostic and Interventional Radiology"
+    },
     { "@type": "sc:Person", "name": "Prof. Dr. Felix C. Tanner" },
     { "@type": "sc:Person", "name": "PD Dr. Robert Manka" },
     { "@type": "sc:Person", "name": "Dr. Anna-Sophie Kaeppeli" }
@@ -275,9 +281,21 @@
   },
   "bio:dataAcquisitionProtocol": "Cine bSSFP short-axis stack (10-12 slices, 25 phases, 8 mm slice thickness, 2 mm gap). LGE acquired 10-15 minutes post 0.15 mmol/kg gadobutrol (Gadovist) bolus, 2D segmented inversion-recovery, slice-matched to cine. ECG-gated breath-hold acquisitions; in-plane resolution 1.5×1.5 mm. Three Siemens scanners (Aera 1.5T, Sola 1.5T, Vida 3T).",
   "bio:dataAcquisitionEquipment": [
-    { "manufacturer": "Siemens Healthineers", "model": "MAGNETOM Aera 1.5T", "softwareVersion": "syngo MR XA20" },
-    { "manufacturer": "Siemens Healthineers", "model": "MAGNETOM Sola 1.5T", "softwareVersion": "syngo MR XA50" },
-    { "manufacturer": "Siemens Healthineers", "model": "MAGNETOM Vida 3T", "softwareVersion": "syngo MR XA31" }
+    {
+      "manufacturer": "Siemens Healthineers",
+      "model": "MAGNETOM Aera 1.5T",
+      "softwareVersion": "syngo MR XA20"
+    },
+    {
+      "manufacturer": "Siemens Healthineers",
+      "model": "MAGNETOM Sola 1.5T",
+      "softwareVersion": "syngo MR XA50"
+    },
+    {
+      "manufacturer": "Siemens Healthineers",
+      "model": "MAGNETOM Vida 3T",
+      "softwareVersion": "syngo MR XA31"
+    }
   ],
   "bio:irbApproval": {
     "approvingBody": "Kantonale Ethikkommission Zürich (KEK-ZH)",
