@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Steering Committee process
+    url: https://github.com/FG-AI4H/oci-platform/blob/main/docs/for-strategy/README.md
+    about: Strategy / mandate questions; route via the GI-AI4H Joint Secretariat
+  - name: Documentation question
+    url: https://github.com/FG-AI4H/oci-platform/tree/main/docs
+    about: Audience-organised docs (researchers, AI builders, hosts, governance, strategy, operators, developers)
+  - name: GA4GH WG-Data discussions
+    url: https://www.ga4gh.org/work_stream/data-use-and-researcher-identity/
+    about: Standards-track conversations on DUO, Passports, and the platform's federation surface
