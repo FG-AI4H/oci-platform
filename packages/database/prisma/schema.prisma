@@ -46,6 +46,53 @@ model UserPreferences {
   @@schema("identity")
 }
 
+/// Certification quiz attempt (#117, ADR-0003 Phase 1). One row per
+/// attempt. An attempt is a unit of: requester opens the quiz, picks
+/// answers, submits. We store every attempt — including failed ones —
+/// for the audit trail; an "active certification" is the most recent
+/// passed attempt within the last year (per
+/// `OCI_QUIZ_VALIDITY_DAYS`, default 365).
+///
+/// `userId` is a soft FK → identity.users.id (UUIDv5 from Cognito sub
+/// via subToUuid; same convention as other identity-schema rows).
+///
+/// `certificationType` is a versioned slug (`data_ethics_v1`,
+/// `data_ethics_v2`, …). New versions get a new slug; old passes keep
+/// their type so a cert under v1 still proves "the user passed v1".
+/// The active-certification check matches against the *current* type
+/// from the questions file, so bumping the version invalidates older
+/// passes.
+///
+/// `answers` carries the raw responses for audit; never surfaced to
+/// the requester after submission (we don't reveal which answers were
+/// wrong since the question pool is small and re-attempts would game
+/// quickly). Schema: `[{ questionId, choiceIndex }]`.
+model QuizAttempt {
+  id                String    @id @default(uuid()) @db.Uuid
+  /// Soft FK → identity.users.id.
+  userId            String    @map("user_id") @db.Uuid
+  /// Versioned quiz type slug — see schema docs.
+  certificationType String    @map("certification_type")
+  /// Server-side timestamp the attempt began.
+  startedAt         DateTime  @default(now()) @map("started_at")
+  /// `null` until the attempt is submitted (or abandoned). The audit
+  /// trail keeps even abandoned attempts so we can detect grinding.
+  submittedAt       DateTime? @map("submitted_at")
+  /// 0–100. `null` until submission.
+  score             Int?
+  /// `null` until submission. After: pass-mark is per quiz definition;
+  /// a passed attempt within `OCI_QUIZ_VALIDITY_DAYS` is the active
+  /// certification.
+  passed            Boolean?
+  /// `[{ questionId: string, choiceIndex: number }, ...]`. Stored
+  /// verbatim from the request body; the service grades on submission.
+  answers           Json?
+
+  @@index([userId, certificationType, submittedAt(sort: Desc)])
+  @@map("quiz_attempts")
+  @@schema("identity")
+}
+
 // ==========================================================================
 // catalog — datasets, Croissant 1.1 / RAI / BIOCroissant manifests,
 //            versions, distributions, access requests. (DAP package, WS-1.)
