@@ -118,6 +118,19 @@ enum CommercialUseTerms {
   @@schema("catalog")
 }
 
+/// Audience classification for an access request (#120, ADR-0003 Decision 8).
+/// `RESEARCHER` flows assume publication-as-output; `BUILDER` flows assume
+/// product-as-output (FDA / EU MDR / national-equivalent regulatory pathway).
+/// Both share the same back-end approval state machine + Visa issuance; the
+/// difference is in the form template the requester filled and the
+/// `builderContext` payload populated for BUILDER rows.
+enum AccessRequestAudience {
+  RESEARCHER
+  BUILDER
+
+  @@schema("catalog")
+}
+
 /// Computed identity-assurance score for a requester at access-request
 /// creation time (#115, ADR-0003 Decision 2). Persisted on `AccessRequest`
 /// so the host inbox can show "what we know about this person" without
@@ -351,6 +364,23 @@ model AccessRequest {
   /// `PI_COUNTERSIGNED` (DUA flow), and `PASSPORT_VERIFIED` (Passport
   /// ingestion).
   requesterIdentityScore RequesterIdentityScore @default(EMAIL_ONLY) @map("requester_identity_score")
+
+  /// Audience classification (#120, ADR-0003 Decision 8). Derived at
+  /// create time from `attestations.intendedUseCategory` —
+  /// `COMMERCIAL_RESEARCH` and `CLINICAL_CARE` route to `BUILDER`,
+  /// everything else routes to `RESEARCHER`. The host inbox uses this
+  /// to pick the right reviewer template; both flows share the same
+  /// state machine (PENDING → APPROVED | DENIED | REVOKED).
+  audience AccessRequestAudience @default(RESEARCHER) @map("audience")
+
+  /// AI-builder-specific context (#120). Populated only when
+  /// `audience=BUILDER`. Schema (see `BuilderContextSchema` in
+  /// `@oci/shared-types`):
+  ///   { legalEntity, deploymentCountries[], regulatoryPathway,
+  ///     whoPriorityAlignment?, accreditations[], royaltyPlan?,
+  ///     postMarketDataFlow }
+  /// Null for RESEARCHER rows.
+  builderContext Json? @map("builder_context")
 
   /// Intended Data Use statement (#115). Replaces `justification` as
   /// the canonical free-text rationale. Backfilled from `justification`

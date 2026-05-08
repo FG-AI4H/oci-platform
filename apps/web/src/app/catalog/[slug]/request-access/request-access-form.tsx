@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import {
   Alert,
   AlertDescription,
@@ -12,6 +12,7 @@ import {
   Textarea,
 } from '@oci/ui';
 import { DUO_REGISTRY, lookupDuoTerm } from '@oci/croissant';
+import { audienceFromIntendedUse } from '@oci/shared-types';
 import { requestAccessAction, type RequestAccessState } from './actions';
 
 const initial: RequestAccessState = { status: 'idle' };
@@ -80,6 +81,29 @@ export function RequestAccessForm({ slug, datasetDuoTerms }: Props) {
   const boundAction = requestAccessAction.bind(null, slug);
   const [state, action, pending] = useActionState(boundAction, initial);
   const echoed = state.status === 'error' ? state.values : undefined;
+
+  // Audience-driven form variant (#120). The radio's onChange flips
+  // `intent`, which controls whether the builder-only fields below
+  // are rendered. The shared `audienceFromIntendedUse` helper means
+  // the form's classification can't drift from the API's.
+  const initialIntent =
+    typeof echoed?.intendedUseCategory === 'string' && echoed.intendedUseCategory.length > 0
+      ? echoed.intendedUseCategory
+      : '';
+  const [intent, setIntent] = useState<string>(initialIntent);
+  const isBuilder =
+    intent === 'COMMERCIAL_RESEARCH' ||
+    intent === 'CLINICAL_CARE' ||
+    intent === 'NON_COMMERCIAL_RESEARCH' ||
+    intent === 'EDUCATION'
+      ? audienceFromIntendedUse(
+          intent as
+            | 'COMMERCIAL_RESEARCH'
+            | 'CLINICAL_CARE'
+            | 'NON_COMMERCIAL_RESEARCH'
+            | 'EDUCATION',
+        ) === 'BUILDER'
+      : false;
 
   const titleErr = fieldError(state, 'projectTitle');
   const descErr = fieldError(state, 'projectDescription');
@@ -209,6 +233,7 @@ export function RequestAccessForm({ slug, datasetDuoTerms }: Props) {
                 value={opt.id}
                 defaultChecked={echoed?.intendedUseCategory === opt.id}
                 required
+                onChange={(e) => setIntent(e.currentTarget.value)}
                 className="mt-0.5 accent-[var(--color-primary)]"
               />
               <span>
@@ -378,6 +403,147 @@ export function RequestAccessForm({ slug, datasetDuoTerms }: Props) {
           </select>
         </Field>
       </fieldset>
+
+      {/* AI-builder context (#120). Only rendered when the requester
+          picks COMMERCIAL_RESEARCH or CLINICAL_CARE. The fields are
+          required by the API's Zod schema for those audiences;
+          forbidden for RESEARCHER intent. */}
+      {isBuilder ? (
+        <fieldset className="space-y-4 rounded-md border border-[var(--color-border)] bg-[var(--color-subtle)] p-4">
+          <legend className="px-2 text-sm font-semibold">
+            AI-builder context
+            <Badge tone="info" className="ml-2">
+              required for builder audience
+            </Badge>
+          </legend>
+          <p className="text-xs text-[var(--color-muted-foreground)]">
+            For commercial / clinical-care intent we ask deployment-track questions so hosts can
+            judge whether the proposed product fits their dataset's licensing posture.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Legal entity name" htmlFor="field-legal-name" required>
+              <Input
+                id="field-legal-name"
+                name="legalEntityName"
+                defaultValue={echoed?.legalEntityName ?? ''}
+                placeholder="e.g. Acme Health Inc."
+                required
+              />
+            </Field>
+            <Field
+              label="Jurisdiction (ISO-2)"
+              htmlFor="field-legal-country"
+              required
+              hint="e.g. US, GB, CH, KE"
+            >
+              <Input
+                id="field-legal-country"
+                name="legalEntityCountry"
+                defaultValue={echoed?.legalEntityCountry ?? ''}
+                pattern="[A-Za-z]{2}"
+                maxLength={2}
+                required
+              />
+            </Field>
+          </div>
+
+          <Field
+            label="Deployment countries (ISO-2, comma-separated)"
+            htmlFor="field-deploy-countries"
+            required
+            hint="e.g. KE, NG, ZA"
+          >
+            <Input
+              id="field-deploy-countries"
+              name="deploymentCountries"
+              defaultValue={echoed?.deploymentCountries ?? ''}
+              required
+            />
+          </Field>
+
+          <Field label="Regulatory pathway" htmlFor="field-reg-pathway" required>
+            <select
+              id="field-reg-pathway"
+              name="regulatoryPathway"
+              required
+              defaultValue={echoed?.regulatoryPathway ?? ''}
+              className="block w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+            >
+              <option value="" disabled>
+                Choose…
+              </option>
+              <option value="FDA_510K">FDA 510(k)</option>
+              <option value="FDA_DE_NOVO">FDA De Novo</option>
+              <option value="FDA_PMA">FDA PMA</option>
+              <option value="EU_MDR_CLASS_I">EU MDR Class I</option>
+              <option value="EU_MDR_CLASS_IIA">EU MDR Class IIa</option>
+              <option value="EU_MDR_CLASS_IIB">EU MDR Class IIb</option>
+              <option value="EU_MDR_CLASS_III">EU MDR Class III</option>
+              <option value="EU_IVDR">EU IVDR</option>
+              <option value="NATIONAL_LMIC">National (LMIC)</option>
+              <option value="NONE_RESEARCH_ONLY">None (research only)</option>
+              <option value="OTHER">Other / not yet decided</option>
+            </select>
+          </Field>
+
+          <Field
+            label="WHO priority alignment (optional)"
+            htmlFor="field-who-priority"
+            hint="e.g. tuberculosis, maternal health, AMR. Leave blank if not applicable."
+          >
+            <Input
+              id="field-who-priority"
+              name="whoPriorityAlignment"
+              defaultValue={echoed?.whoPriorityAlignment ?? ''}
+            />
+          </Field>
+
+          <Field
+            label="Accreditations (one per line, optional)"
+            htmlFor="field-accreditations"
+            hint="e.g. WHO Innovation Hub, ISO 13485, IEC 62304, national MoH endorsement"
+          >
+            <Textarea
+              id="field-accreditations"
+              name="accreditations"
+              rows={3}
+              defaultValue={echoed?.accreditations ?? ''}
+            />
+          </Field>
+
+          <Field
+            label="Royalty / commercialisation plan (optional)"
+            htmlFor="field-royalty-plan"
+            hint="LMIC public-sector terms welcome — hosts can negotiate clauses bilaterally."
+          >
+            <Textarea
+              id="field-royalty-plan"
+              name="royaltyPlan"
+              rows={3}
+              defaultValue={echoed?.royaltyPlan ?? ''}
+            />
+          </Field>
+
+          <Field label="Post-market data flow" htmlFor="field-post-market" required>
+            <select
+              id="field-post-market"
+              name="postMarketDataFlow"
+              required
+              defaultValue={echoed?.postMarketDataFlow ?? ''}
+              className="block w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+            >
+              <option value="" disabled>
+                Choose…
+              </option>
+              <option value="NO_PERSISTENCE">Inference-only — nothing retained</option>
+              <option value="AGGREGATE_STATS">Aggregate statistics retained</option>
+              <option value="PSEUDONYMISED_RETAINED">Pseudonymised individual rows retained</option>
+              <option value="IDENTIFIED_RETAINED">Identifiable rows retained</option>
+            </select>
+          </Field>
+        </fieldset>
+      ) : null}
 
       <div className="flex items-center justify-end gap-2 pt-2">
         <Button type="submit" disabled={pending}>

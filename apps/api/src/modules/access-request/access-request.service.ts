@@ -7,12 +7,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type {
-  AccessRequestDecision,
-  AccessRequestSummary,
-  CreateAccessRequestRequest,
-  DatasetSlug,
-  RequesterIdentityScore,
+import {
+  audienceFromIntendedUse,
+  type AccessRequestAudience,
+  type AccessRequestDecision,
+  type AccessRequestSummary,
+  type CreateAccessRequestRequest,
+  type DatasetSlug,
+  type RequesterIdentityScore,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CatalogService } from '../catalog/catalog.service.js';
@@ -56,6 +58,7 @@ export class AccessRequestService {
     id: string;
     matchStatus: 'MATCHED' | 'CONFLICT' | 'UNCLEAR';
     requesterIdentityScore: RequesterIdentityScore;
+    audience: AccessRequestAudience;
   }> {
     requireUser(user);
     const target = await this.catalog.findOwnerBySlug(slug);
@@ -97,6 +100,12 @@ export class AccessRequestService {
     const justification = body.attestations.projectDescription;
     const iduStatement = body.attestations.projectDescription;
 
+    // Audience derivation (#120). The Zod superRefine on
+    // `CreateAccessRequestRequestSchema` already enforced "BUILDER
+    // intent ⇒ builderContext present". Here we just compute the
+    // persisted enum from intent.
+    const audience = audienceFromIntendedUse(body.attestations.intendedUseCategory);
+
     const created = await this.repo.create({
       datasetId: target.id,
       requesterId,
@@ -106,11 +115,14 @@ export class AccessRequestService {
       matchStatus: match.status,
       matchExplanations: match.explanations,
       requesterIdentityScore: identityContext.identityScore,
+      audience,
+      builderContext: body.builderContext ?? null,
     });
     return {
       ...created,
       matchStatus: match.status,
       requesterIdentityScore: identityContext.identityScore,
+      audience,
     };
   }
 

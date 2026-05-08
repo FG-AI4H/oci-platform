@@ -119,6 +119,7 @@ describe('AccessRequestService.create', () => {
       id: REQUEST_ID,
       matchStatus: 'MATCHED',
       requesterIdentityScore: 'EMAIL_ONLY',
+      audience: 'RESEARCHER',
     });
     expect(repo.create).toHaveBeenCalledWith(
       expect.objectContaining({

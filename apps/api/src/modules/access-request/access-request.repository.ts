@@ -1,11 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   AccessRequestAttestations,
+  AccessRequestAudience,
   AccessRequestMatchStatus,
   AccessRequestStatus,
   AccessRequestSummary,
   AccessTier,
   AiToolDisclosure,
+  BuilderContext,
   DatasetSlug,
   DuoTermId,
   RequesterIdentityScore,
@@ -37,6 +39,8 @@ export class AccessRequestRepository {
     matchStatus: AccessRequestMatchStatus;
     matchExplanations: string[];
     requesterIdentityScore: RequesterIdentityScore;
+    audience: AccessRequestAudience;
+    builderContext: BuilderContext | null;
   }): Promise<{ id: string }> {
     const row = (await this.prisma.client.accessRequest.create({
       data: {
@@ -51,6 +55,10 @@ export class AccessRequestRepository {
         matchStatus: input.matchStatus,
         matchExplanations: input.matchExplanations,
         requesterIdentityScore: input.requesterIdentityScore,
+        audience: input.audience,
+        ...(input.builderContext != null
+          ? { builderContext: input.builderContext as unknown as object }
+          : {}),
       },
       select: { id: true },
     })) as { id: string };
@@ -171,6 +179,8 @@ interface DbRow {
   signingOfficialEmail: string | null;
   pledgeAcceptedAt: Date | null;
   requesterIdentityScore: RequesterIdentityScore;
+  audience: AccessRequestAudience;
+  builderContext: unknown;
   attestations: unknown;
   status: AccessRequestStatus;
   matchStatus: AccessRequestMatchStatus | null;
@@ -201,6 +211,8 @@ function toSummary(row: DbRow): AccessRequestSummary {
     signingOfficialEmail: row.signingOfficialEmail,
     pledgeAcceptedAt: row.pledgeAcceptedAt ? row.pledgeAcceptedAt.toISOString() : null,
     requesterIdentityScore: row.requesterIdentityScore,
+    audience: row.audience,
+    builderContext: (row.builderContext ?? null) as BuilderContext | null,
     attestations: row.attestations as AccessRequestAttestations,
     status: row.status,
     matchStatus: row.matchStatus,
