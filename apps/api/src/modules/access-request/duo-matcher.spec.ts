@@ -146,3 +146,44 @@ describe('matchDuoIntent — tier check (#115)', () => {
     expect(r.status).toBe('MATCHED');
   });
 });
+
+describe('matchDuoIntent — commercialUseTerms (#119)', () => {
+  const tier = (commercialUseTerms?: 'OK' | 'NON_COMMERCIAL_ONLY' | 'CASE_BY_CASE') => ({
+    accessTier: 'OPEN' as const,
+    requesterIdentityScore: 'EMAIL_ONLY' as const,
+    ...(commercialUseTerms ? { commercialUseTerms } : {}),
+  });
+  const commercial = attestations({ intendedUseCategory: 'COMMERCIAL_RESEARCH' });
+
+  it('OK overrides DUO_0000046 (NCU) — commercial intent is permitted', () => {
+    // Without commercialUseTerms the matcher would flag CONFLICT on NCU.
+    // OK explicitly granted by the host wins.
+    const r = matchDuoIntent(['DUO_0000042', 'DUO_0000046'], commercial, tier('OK'));
+    expect(r.status).toBe('MATCHED');
+  });
+
+  it('NON_COMMERCIAL_ONLY rejects commercial intent even without DUO_0000046', () => {
+    // The host might declare non-commercial-only without adding the
+    // DUO term to the manifest. The matcher honours the dataset field.
+    const r = matchDuoIntent(['DUO_0000042'], commercial, tier('NON_COMMERCIAL_ONLY'));
+    expect(r.status).toBe('CONFLICT');
+    expect(r.explanations.some((e) => /non-commercial only/i.test(e))).toBe(true);
+  });
+
+  it('CASE_BY_CASE flags UNCLEAR for commercial intent', () => {
+    const r = matchDuoIntent(['DUO_0000042'], commercial, tier('CASE_BY_CASE'));
+    expect(r.status).toBe('UNCLEAR');
+    expect(r.explanations.some((e) => /case-by-case/i.test(e))).toBe(true);
+  });
+
+  it('non-commercial intent is unaffected by commercialUseTerms', () => {
+    const r = matchDuoIntent(['DUO_0000042'], attestations(), tier('NON_COMMERCIAL_ONLY'));
+    expect(r.status).toBe('MATCHED');
+  });
+
+  it('falls back to DUO_0000046 inference when commercialUseTerms is omitted', () => {
+    const r = matchDuoIntent(['DUO_0000042', 'DUO_0000046'], commercial, tier());
+    expect(r.status).toBe('CONFLICT');
+    expect(r.explanations.some((e) => /commercial use prohibited/i.test(e))).toBe(true);
+  });
+});

@@ -51,6 +51,8 @@ const baseDetail: DatasetDetail = {
   duoTerms: [],
   hostId: '00000000-0000-0000-0000-0000000000aa',
   accessTier: 'OPEN',
+  commercialUseTerms: 'CASE_BY_CASE',
+  commercialClauses: null,
 };
 
 describe('datasetJsonLd', () => {

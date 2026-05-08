@@ -11,6 +11,7 @@ import { Prisma } from '@oci/database';
 import { validate as validateCroissant, extractDuoTerms } from '@oci/croissant';
 import type {
   AccessTier,
+  CommercialUseTerms,
   CreateDatasetRequest,
   DatasetDetail,
   DatasetSlug,
@@ -50,6 +51,8 @@ export class CatalogService {
     duoTerms: string[];
     accessTier: AccessTier;
     emailDomainAllowlist: string[];
+    commercialUseTerms: CommercialUseTerms;
+    commercialClauses: string | null;
   } | null> {
     return this.repo.findIdAndHostBySlug(slug);
   }
@@ -109,6 +112,7 @@ export class CatalogService {
       anonymizationLevel: query.anonymizationLevel,
       license: toArray(query.license),
       duoTerms: toArray(query.duoTerms),
+      commercialUseTerms: query.commercialUseTerms,
       sort: query.sort,
       offset,
       limit: usePage ? query.limit : query.limit + 1, // cursor mode peeks 1 extra
@@ -200,6 +204,8 @@ export class CatalogService {
         description: req.description ?? null,
         hostId,
         visibility: req.visibility,
+        commercialUseTerms: req.commercialUseTerms,
+        commercialClauses: req.commercialClauses ?? null,
       });
     } catch (err: unknown) {
       if (

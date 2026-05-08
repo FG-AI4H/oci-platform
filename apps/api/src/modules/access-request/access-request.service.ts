@@ -86,6 +86,7 @@ export class AccessRequestService {
     const match = matchDuoIntent(target.duoTerms, body.attestations, {
       accessTier: target.accessTier,
       requesterIdentityScore: identityContext.identityScore,
+      commercialUseTerms: target.commercialUseTerms,
     });
 
     // Mirror the project description into the legacy `justification`

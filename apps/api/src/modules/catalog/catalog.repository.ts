@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@oci/database';
 import type {
   AccessTier,
+  CommercialUseTerms,
   DatasetSummary,
   DatasetDetail,
   DatasetSlug,
@@ -30,6 +31,8 @@ interface DatasetRow {
   croissant: unknown;
   duoTerms: string[];
   accessTier: AccessTier;
+  commercialUseTerms: CommercialUseTerms;
+  commercialClauses: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -97,6 +100,8 @@ export class CatalogRepository {
     anonymizationLevel?: 'ANONYMIZED' | 'PSEUDONYMIZED' | 'IDENTIFIED';
     license?: string[];
     duoTerms?: string[];
+    /** Commercial-use facet (#119). Single-value enum. */
+    commercialUseTerms?: CommercialUseTerms;
     /** Sort order. `recent` (default) | `name` | `oldest`. */
     sort?: 'recent' | 'name' | 'oldest';
     /** Offset alternative to cursor. Cursor wins when both are passed. */
@@ -115,6 +120,7 @@ export class CatalogRepository {
       anonymizationLevel,
       license,
       duoTerms,
+      commercialUseTerms,
       sort = 'recent',
       offset,
       limit,
@@ -183,6 +189,13 @@ export class CatalogRepository {
       duoTerms && duoTerms.length > 0
         ? Prisma.sql`AND d.duo_terms && ${duoTerms}::text[]`
         : Prisma.sql``;
+    // Commercial-use facet (#119). Single-value enum equality. The
+    // CASE_BY_CASE filter explicitly matches the conservative-default
+    // bucket — useful for builders looking for "things to negotiate"
+    // rather than ready-to-deploy.
+    const commercialClause = commercialUseTerms
+      ? Prisma.sql`AND d.commercial_use_terms = ${commercialUseTerms}::"catalog"."CommercialUseTerms"`
+      : Prisma.sql``;
 
     // Sort. FTS rank still wins when `q` is set; secondary sort is
     // controlled by the `sort` arg.
@@ -210,6 +223,7 @@ export class CatalogRepository {
       created_at: Date;
       updated_at: Date;
       access_tier: AccessTier;
+      commercial_use_terms: CommercialUseTerms;
     };
 
     const rows = await this.prisma.client.$queryRaw<Row[]>(Prisma.sql`
@@ -222,6 +236,7 @@ export class CatalogRepository {
         d.status,
         d.conformance_version,
         d.access_tier,
+        d.commercial_use_terms,
         (
           SELECT v.version
           FROM "catalog"."dataset_versions" v
@@ -243,6 +258,7 @@ export class CatalogRepository {
         ${anonClause}
         ${licenseClause}
         ${duoClause}
+        ${commercialClause}
         ${cursorClause}
       ORDER BY ${rankClause} ${orderClause}
       LIMIT ${limit} ${offsetClause}
@@ -265,6 +281,7 @@ export class CatalogRepository {
         ${anonClause}
         ${licenseClause}
         ${duoClause}
+        ${commercialClause}
     `);
     const totalEstimate = Number(totalRow[0]?.count ?? 0n);
 
@@ -328,6 +345,8 @@ export class CatalogRepository {
       duoTerms: ds.duoTerms ?? [],
       hostId: ds.hostId,
       accessTier: ds.accessTier as AccessTier,
+      commercialUseTerms: ds.commercialUseTerms as CommercialUseTerms,
+      commercialClauses: ds.commercialClauses,
     };
   }
 
@@ -337,6 +356,8 @@ export class CatalogRepository {
     description?: string | null;
     hostId: string;
     visibility: DatasetVisibility;
+    commercialUseTerms?: CommercialUseTerms;
+    commercialClauses?: string | null;
   }): Promise<DatasetRow> {
     return (await this.prisma.client.dataset.create({
       data: {
@@ -346,6 +367,10 @@ export class CatalogRepository {
         hostId: data.hostId,
         visibility: data.visibility,
         status: 'DRAFT',
+        ...(data.commercialUseTerms ? { commercialUseTerms: data.commercialUseTerms } : {}),
+        ...(data.commercialClauses !== undefined
+          ? { commercialClauses: data.commercialClauses }
+          : {}),
       },
     })) as DatasetRow;
   }
@@ -357,6 +382,8 @@ export class CatalogRepository {
     duoTerms: string[];
     accessTier: AccessTier;
     emailDomainAllowlist: string[];
+    commercialUseTerms: CommercialUseTerms;
+    commercialClauses: string | null;
   } | null> {
     const ds = await this.prisma.client.dataset.findUnique({
       where: { slug },
@@ -367,6 +394,8 @@ export class CatalogRepository {
         duoTerms: true,
         accessTier: true,
         emailDomainAllowlist: true,
+        commercialUseTerms: true,
+        commercialClauses: true,
       },
     });
     if (!ds) return null;
@@ -377,6 +406,8 @@ export class CatalogRepository {
       duoTerms: ds.duoTerms ?? [],
       accessTier: ds.accessTier as AccessTier,
       emailDomainAllowlist: ds.emailDomainAllowlist ?? [],
+      commercialUseTerms: ds.commercialUseTerms as CommercialUseTerms,
+      commercialClauses: ds.commercialClauses,
     };
   }
 
@@ -583,6 +614,11 @@ export class CatalogRepository {
         // own tier policy. Default to OPEN so the catalog list renders;
         // any per-distribution `requiresAccess` still gates download.
         accessTier: 'OPEN' as const,
+        // Same logic for commercial-use terms — we don't know the peer's
+        // bands, so render `CASE_BY_CASE` (the conservative default the
+        // catalog UI treats as "ask before assuming"). Hosts on the peer
+        // surface the real terms via `originUrl`.
+        commercialUseTerms: 'CASE_BY_CASE' as const,
       })),
       totalEstimate,
     };
@@ -601,6 +637,7 @@ function rowToSummary(r: {
   created_at: Date;
   updated_at: Date;
   access_tier: AccessTier;
+  commercial_use_terms: CommercialUseTerms;
 }): DatasetSummary {
   return {
     id: r.id,
@@ -616,5 +653,6 @@ function rowToSummary(r: {
     sourceCatalog: null,
     originUrl: null,
     accessTier: r.access_tier,
+    commercialUseTerms: r.commercial_use_terms,
   };
 }
