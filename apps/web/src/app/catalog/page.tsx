@@ -64,6 +64,8 @@ interface SearchParams {
   anonymizationLevel?: string;
   license?: string | string[];
   duoTerms?: string | string[];
+  /** Commercial-use facet (#119). Single-value enum. */
+  commercialUseTerms?: string;
 }
 
 const SOURCE_OPTIONS: ReadonlyArray<{ value: DatasetSource; label: string; hint: string }> = [
@@ -156,6 +158,8 @@ interface FilterState {
   anonymizationLevel: string | null;
   license: string[];
   duoTerms: string[];
+  /** Commercial-use facet (#119). `null` = no filter. */
+  commercialUseTerms: 'OK' | 'NON_COMMERCIAL_ONLY' | 'CASE_BY_CASE' | null;
   page: number;
 }
 
@@ -170,8 +174,16 @@ function parseFilters(params: SearchParams): FilterState {
     anonymizationLevel: params.anonymizationLevel ?? null,
     license: toArray(params.license),
     duoTerms: toArray(params.duoTerms),
+    commercialUseTerms: normaliseCommercial(params.commercialUseTerms),
     page: Math.max(1, Number(params.page ?? '1') || 1),
   };
+}
+
+function normaliseCommercial(
+  v: string | undefined,
+): 'OK' | 'NON_COMMERCIAL_ONLY' | 'CASE_BY_CASE' | null {
+  if (v === 'OK' || v === 'NON_COMMERCIAL_ONLY' || v === 'CASE_BY_CASE') return v;
+  return null;
 }
 
 /**
@@ -192,6 +204,7 @@ function buildUrl(state: FilterState, overrides: Partial<FilterState>): string {
   if (merged.anonymizationLevel) qs.set('anonymizationLevel', merged.anonymizationLevel);
   for (const v of merged.license) qs.append('license', v);
   for (const v of merged.duoTerms) qs.append('duoTerms', v);
+  if (merged.commercialUseTerms) qs.set('commercialUseTerms', merged.commercialUseTerms);
   if (merged.page > 1) qs.set('page', String(merged.page));
   const s = qs.toString();
   return s.length > 0 ? `/catalog?${s}` : '/catalog';
@@ -232,6 +245,7 @@ export default async function CatalogPage({
   if (filters.anonymizationLevel) apiQs.set('anonymizationLevel', filters.anonymizationLevel);
   for (const v of filters.license) apiQs.append('license', v);
   for (const v of filters.duoTerms) apiQs.append('duoTerms', v);
+  if (filters.commercialUseTerms) apiQs.set('commercialUseTerms', filters.commercialUseTerms);
 
   let response: ListDatasetsResponse | null = null;
   let error: string | null = null;
@@ -311,6 +325,9 @@ export default async function CatalogPage({
           {filters.duoTerms.map((v) => (
             <input key={`d-${v}`} type="hidden" name="duoTerms" value={v} />
           ))}
+          {filters.commercialUseTerms ? (
+            <input type="hidden" name="commercialUseTerms" value={filters.commercialUseTerms} />
+          ) : null}
           <Button type="submit">Search</Button>
         </form>
 
@@ -402,6 +419,24 @@ function FilterPanel({ filters }: { filters: FilterState }) {
         selected={filters.duoTerms}
         toggleHref={(v) => toggleArrayFilter(filters, 'duoTerms', v)}
       />
+      <FacetSection
+        title="Commercial use"
+        options={[
+          { label: 'OK for commercial use', value: 'OK' },
+          { label: 'Non-commercial only', value: 'NON_COMMERCIAL_ONLY' },
+          { label: 'Case-by-case', value: 'CASE_BY_CASE' },
+        ]}
+        selected={filters.commercialUseTerms ? [filters.commercialUseTerms] : []}
+        toggleHref={(v) =>
+          buildUrl(filters, {
+            commercialUseTerms:
+              filters.commercialUseTerms === v
+                ? null
+                : (v as 'OK' | 'NON_COMMERCIAL_ONLY' | 'CASE_BY_CASE'),
+            page: 1,
+          })
+        }
+      />
     </aside>
   );
 }
@@ -492,6 +527,18 @@ function AppliedFilters({ filters }: { filters: FilterState }) {
       href: toggleArrayFilter(filters, 'duoTerms', v),
     });
   }
+  if (filters.commercialUseTerms) {
+    const label =
+      filters.commercialUseTerms === 'OK'
+        ? 'commercial OK'
+        : filters.commercialUseTerms === 'NON_COMMERCIAL_ONLY'
+          ? 'non-commercial only'
+          : 'case-by-case';
+    chips.push({
+      label: `Commercial: ${label}`,
+      href: buildUrl(filters, { commercialUseTerms: null, page: 1 }),
+    });
+  }
 
   if (chips.length === 0) return null;
 
@@ -523,6 +570,7 @@ function AppliedFilters({ filters }: { filters: FilterState }) {
                   anonymizationLevel: null,
                   license: [],
                   duoTerms: [],
+                  commercialUseTerms: null,
                   page: 1,
                 },
                 {},
@@ -726,13 +774,24 @@ function DatasetCard({ d }: { d: DatasetSummary }) {
         </CardHeader>
         <CardContent className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-4 text-xs text-[var(--color-muted-foreground)]">
           <span className="font-mono truncate">{d.slug}</span>
-          {isFederated ? (
-            <Badge tone="neutral">from {d.sourceCatalog?.name}</Badge>
-          ) : d.latestVersion ? (
-            <Badge tone="primary">v{d.latestVersion}</Badge>
-          ) : (
-            <Badge tone="neutral">no version</Badge>
-          )}
+          <span className="flex items-center gap-1.5">
+            {/* Commercial-use band on the card (#119). Only emphasised
+                when the host has explicitly granted (`OK`) or refused
+                (`NON_COMMERCIAL_ONLY`); CASE_BY_CASE is the conservative
+                default and would noise-up every card if shown. */}
+            {!isFederated && d.commercialUseTerms === 'OK' ? (
+              <Badge tone="success">commercial OK</Badge>
+            ) : !isFederated && d.commercialUseTerms === 'NON_COMMERCIAL_ONLY' ? (
+              <Badge tone="warning">non-commercial</Badge>
+            ) : null}
+            {isFederated ? (
+              <Badge tone="neutral">from {d.sourceCatalog?.name}</Badge>
+            ) : d.latestVersion ? (
+              <Badge tone="primary">v{d.latestVersion}</Badge>
+            ) : (
+              <Badge tone="neutral">no version</Badge>
+            )}
+          </span>
         </CardContent>
       </Card>
     </Link>
@@ -774,7 +833,8 @@ function EmptyState({ filters }: { filters: FilterState }) {
     filters.condition.length > 0 ||
     filters.anonymizationLevel ||
     filters.license.length > 0 ||
-    filters.duoTerms.length > 0;
+    filters.duoTerms.length > 0 ||
+    filters.commercialUseTerms !== null;
   return (
     <div className="rounded-xl border border-dashed border-[var(--color-border-strong)] bg-[var(--color-subtle)] p-12 text-center">
       <span
