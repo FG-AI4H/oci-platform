@@ -4,8 +4,11 @@ import type {
   AccessRequestMatchStatus,
   AccessRequestStatus,
   AccessRequestSummary,
+  AccessTier,
+  AiToolDisclosure,
   DatasetSlug,
   DuoTermId,
+  RequesterIdentityScore,
 } from '@oci/shared-types';
 // (DatasetSlug used only as a brand cast on the dataset.slug field in
 // `toSummary`; the import is here rather than module-bottom so the
@@ -29,21 +32,25 @@ export class AccessRequestRepository {
     datasetId: string;
     requesterId: string;
     justification: string;
+    iduStatement: string;
     attestations: AccessRequestAttestations;
     matchStatus: AccessRequestMatchStatus;
     matchExplanations: string[];
+    requesterIdentityScore: RequesterIdentityScore;
   }): Promise<{ id: string }> {
     const row = (await this.prisma.client.accessRequest.create({
       data: {
         datasetId: input.datasetId,
         requesterId: input.requesterId,
         justification: input.justification,
+        iduStatement: input.iduStatement,
         // Prisma stores Json columns as InputJsonValue; cast through unknown
         // to placate the structural mismatch (our typed `Attestations` shape
         // is a subset of `JsonValue`).
         attestations: input.attestations as unknown as object,
         matchStatus: input.matchStatus,
         matchExplanations: input.matchExplanations,
+        requesterIdentityScore: input.requesterIdentityScore,
       },
       select: { id: true },
     })) as { id: string };
@@ -97,7 +104,11 @@ export class AccessRequestRepository {
   async listForRequester(requesterId: string): Promise<AccessRequestSummary[]> {
     const rows = await this.prisma.client.accessRequest.findMany({
       where: { requesterId },
-      include: { dataset: { select: { id: true, slug: true, name: true, duoTerms: true } } },
+      include: {
+        dataset: {
+          select: { id: true, slug: true, name: true, duoTerms: true, accessTier: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
@@ -107,7 +118,11 @@ export class AccessRequestRepository {
   async listForDataset(datasetId: string): Promise<AccessRequestSummary[]> {
     const rows = await this.prisma.client.accessRequest.findMany({
       where: { datasetId },
-      include: { dataset: { select: { id: true, slug: true, name: true, duoTerms: true } } },
+      include: {
+        dataset: {
+          select: { id: true, slug: true, name: true, duoTerms: true, accessTier: true },
+        },
+      },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: 200,
     });
@@ -117,7 +132,11 @@ export class AccessRequestRepository {
   async listForHost(hostId: string): Promise<AccessRequestSummary[]> {
     const rows = await this.prisma.client.accessRequest.findMany({
       where: { dataset: { hostId } },
-      include: { dataset: { select: { id: true, slug: true, name: true, duoTerms: true } } },
+      include: {
+        dataset: {
+          select: { id: true, slug: true, name: true, duoTerms: true, accessTier: true },
+        },
+      },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: 200,
     });
@@ -147,6 +166,11 @@ interface DbRow {
   datasetId: string;
   requesterId: string;
   justification: string;
+  iduStatement: string | null;
+  aiToolDisclosure: unknown;
+  signingOfficialEmail: string | null;
+  pledgeAcceptedAt: Date | null;
+  requesterIdentityScore: RequesterIdentityScore;
   attestations: unknown;
   status: AccessRequestStatus;
   matchStatus: AccessRequestMatchStatus | null;
@@ -156,7 +180,7 @@ interface DbRow {
   decisionNote: string | null;
   createdAt: Date;
   updatedAt: Date;
-  dataset: { id: string; slug: string; name: string; duoTerms: string[] };
+  dataset: { id: string; slug: string; name: string; duoTerms: string[]; accessTier: AccessTier };
 }
 
 function toSummary(row: DbRow): AccessRequestSummary {
@@ -167,10 +191,16 @@ function toSummary(row: DbRow): AccessRequestSummary {
       slug: row.dataset.slug as DatasetSlug,
       name: row.dataset.name,
       duoTerms: (row.dataset.duoTerms ?? []) as DuoTermId[],
+      accessTier: row.dataset.accessTier,
     },
     requesterId: row.requesterId,
     requesterDisplayName: null,
     justification: row.justification,
+    iduStatement: row.iduStatement,
+    aiToolDisclosure: (row.aiToolDisclosure ?? null) as AiToolDisclosure | null,
+    signingOfficialEmail: row.signingOfficialEmail,
+    pledgeAcceptedAt: row.pledgeAcceptedAt ? row.pledgeAcceptedAt.toISOString() : null,
+    requesterIdentityScore: row.requesterIdentityScore,
     attestations: row.attestations as AccessRequestAttestations,
     status: row.status,
     matchStatus: row.matchStatus,
