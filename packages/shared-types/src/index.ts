@@ -186,6 +186,98 @@ export const PublishDatasetVersionRequestSchema = z.object({
 });
 export type PublishDatasetVersionRequest = z.infer<typeof PublishDatasetVersionRequestSchema>;
 
+// ==== Self-hosted distributions / uploads (DAP, PR I, #87) ===============
+//
+// Multipart upload protocol (browser → our S3, mediated by the API):
+//   1. POST .../uploads             → init
+//   2. POST .../uploads/:id/parts/:n/url   (one per part)
+//   3. POST .../uploads/:id/complete       (finalise; persists Distribution)
+//   4. POST .../uploads/:id/abort          (cleanup on cancel)
+//
+// Browser uploads parts in parallel against the per-part presigned
+// URLs; our API never sees the bytes. Resume across refresh is
+// localStorage-keyed by `uploadId` + `key`. Sized for ~50 GB realistic
+// browser sessions; the Tier 2 CLI tool (#88) takes the same API
+// surface but runs in a stable shell.
+
+export const InitUploadRequestSchema = z.object({
+  /** File the browser is about to upload, used to derive the S3 key. */
+  filename: z.string().min(1).max(500),
+  /** MIME type. We don't enforce a vocabulary — Croissant manifests
+   * carry whatever the host published. */
+  contentType: z.string().min(1).max(200),
+  /** Total size in bytes, claimed by the browser. Used to compute
+   * `partSize` so that part count stays under the S3 10 000 cap. */
+  contentSize: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(5 * 1024 ** 4), // 5 TB cap (S3 single-object limit)
+  /** Optional SHA-256, hex. Persisted as `Distribution.contentHash`
+   * verbatim; the platform doesn't re-verify in PR I (a full read at
+   * petabyte scale is cost-prohibitive). */
+  sha256: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/, 'sha256 must be 64 lowercase hex characters')
+    .optional(),
+});
+export type InitUploadRequest = z.infer<typeof InitUploadRequestSchema>;
+
+export interface InitUploadResponse {
+  uploadId: string;
+  /** S3 object key the browser will eventually find at `s3://<bucket>/<key>`. */
+  key: string;
+  /** Part size in bytes the browser should chunk to. Always a power-of-2-ish
+   * multiple of MB; the API picks it so that totalParts < 10 000. */
+  partSize: number;
+}
+
+export interface PartUrlResponse {
+  url: string;
+  /** ISO 8601 — browsers should request a fresh URL if this slips. */
+  expiresAt: string;
+}
+
+export const CompleteUploadRequestSchema = z.object({
+  /**
+   * Parts the browser successfully uploaded, in order. The S3 ETag
+   * is what `PUT` returned for each part — strip the surrounding
+   * double-quotes the SDK doesn't strip for you.
+   */
+  parts: z
+    .array(
+      z.object({
+        partNumber: z.number().int().min(1).max(10000),
+        etag: z.string().min(1).max(200),
+      }),
+    )
+    .min(1)
+    .max(10000),
+  /** Optional manifest hint: `croissantId` to use for the resulting
+   * Distribution row. Defaults to `<filename>` when omitted. */
+  croissantId: z.string().max(500).optional(),
+});
+export type CompleteUploadRequest = z.infer<typeof CompleteUploadRequestSchema>;
+
+/**
+ * Returned by complete + by the upload-list endpoint. The host pastes
+ * `contentUrl` into the Croissant manifest's `distribution[]`; the
+ * platform serves it via the gated download path, never the raw S3
+ * URI.
+ */
+export interface UploadedDistribution {
+  distributionId: string;
+  /** Display name (filename). */
+  name: string;
+  /** Same value the host should use as `contentUrl` in the manifest —
+   * a path on this site, not an S3 URL. */
+  contentUrl: string;
+  contentType: string;
+  contentSizeBytes: number;
+  sha256: string | null;
+  uploadedAt: string;
+}
+
 // ==== Access requests (DAP package, Phase B) ============================
 //
 // Participants request access to RESTRICTED datasets; dataset hosts (or
