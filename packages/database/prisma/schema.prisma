@@ -31,6 +31,21 @@ model User {
   @@schema("identity")
 }
 
+// One row per user. `userId` is a soft FK onto `identity.users.id`
+// (UUIDv5 derived from the Cognito sub via `subToUuid`); we don't
+// declare a Prisma relation because most rows are created lazily on
+// first preference read and pre-date the matching `users` row.
+model UserPreferences {
+  userId    String   @id @map("user_id") @db.Uuid
+  darkMode  String   @default("system") @map("dark_mode")
+  locale    String?
+  density   String   @default("comfortable")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_preferences")
+  @@schema("identity")
+}
+
 // ==========================================================================
 // catalog — datasets, Croissant 1.1 / RAI / BIOCroissant manifests,
 //            versions, distributions, access requests. (DAP package, WS-1.)

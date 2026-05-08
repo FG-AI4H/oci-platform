@@ -20,5 +20,6 @@ The OCI is a **federated, standards-aligned platform** that addresses all three:
 - [What is the OCI?](./what-is-oci.md) — concept, scope, what's in / out.
 - [Why the OCI exists](./why-oci.md) — the problems it solves, the alternatives we considered.
 - [Governance](./governance.md) — the ITU/WHO/WIPO mandate, working groups, decision-making.
+- [Access governance](./access-governance.md) — plain-English explainer: identity tiers, DUO, DUA, eIDAS e-signature levels (SES/AdES/QES), GA4GH Passports.
 - [Feature status](./feature-status.md) — what's shipped, what's in flight.
 - [Glossary](./glossary.md) — domain terms (Croissant, DUO, DUA, IRB, Federation, etc.).

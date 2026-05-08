@@ -105,13 +105,17 @@ export default async function HomePage() {
   const session = await auth();
 
   // Best-effort: a single small server-side call for the stat strip.
-  // If the API is unreachable we render placeholders — the homepage
-  // must still load when the catalog service is down.
+  // Live (no cache) so the count tracks the catalog as datasets get
+  // published and unpublished — a 60s window made the homepage feel
+  // stale during host workflows. The query is cheap (limit=1, only
+  // reads totalEstimate) so per-request rendering is fine. If the API
+  // is unreachable we fall back to placeholders so the homepage still
+  // loads when the catalog service is down.
   let totalDatasets: number | null = null;
   try {
     const res = await apiFetch<ListDatasetsResponse>('/v2/catalog/datasets?limit=1', {
       session,
-      revalidate: 60,
+      revalidate: 0,
     });
     if (res) totalDatasets = res.totalEstimate;
   } catch {
@@ -189,7 +193,7 @@ export default async function HomePage() {
             <Stat
               icon={<GlobeIcon size={20} />}
               value="Open source"
-              label="MIT licensed"
+              label="BSD 3-Clause licensed"
               hint="Reproducible, end-to-end auditable"
             />
           </div>

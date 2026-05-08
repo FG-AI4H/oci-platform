@@ -2,12 +2,13 @@
 
 You're here to **find a dataset, request access, and use it**. These guides walk you through each step.
 
-| Guide                                       | Read when                                                                                 |
-| ------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| [Finding datasets](./finding-datasets.md)   | You don't know what's out there yet — search, filter, federation.                         |
-| [Requesting access](./requesting-access.md) | You found a RESTRICTED dataset and need to file a structured access request.              |
-| [Using the data](./using-data.md)           | Your access has been approved; you want to download responsibly.                          |
-| [Citing a dataset](./citing.md)             | You're publishing and need to cite the dataset version in a stable, machine-readable way. |
+| Guide                                                           | Read when                                                                                                            |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| [How access works (overview)](../overview/access-governance.md) | You want the plain-English explainer of identity tiers, DUO, DUA, and e-signatures before filing your first request. |
+| [Finding datasets](./finding-datasets.md)                       | You don't know what's out there yet — search, filter, federation.                                                    |
+| [Requesting access](./requesting-access.md)                     | You found a RESTRICTED dataset and need to file a structured access request.                                         |
+| [Using the data](./using-data.md)                               | Your access has been approved; you want to download responsibly.                                                     |
+| [Citing a dataset](./citing.md)                                 | You're publishing and need to cite the dataset version in a stable, machine-readable way.                            |
 
 ## Quick orientation
 

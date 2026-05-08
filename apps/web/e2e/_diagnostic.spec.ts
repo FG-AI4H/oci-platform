@@ -202,7 +202,7 @@ test.describe('ui/ux diagnostic', () => {
       await page.getByRole('button', { name: /create draft/i }).click();
       await page.waitForURL(new RegExp(`/catalog/${slug}/publish$`));
       // Switch to the paste form (PR K wizard is the default).
-      await page.getByRole('tab', { name: 'I already have a manifest' }).click();
+      await page.getByRole('button', { name: 'I already have a manifest' }).click();
       // Trigger the structured-validation panel
       await page.getByLabel('Croissant manifest').fill('{"@type":"sc:Dataset","name":"x"}');
       await page.getByRole('button', { name: /validate.*publish/i }).click();
