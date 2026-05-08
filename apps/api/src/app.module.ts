@@ -9,6 +9,7 @@ import { AccessRequestModule } from './modules/access-request/access-request.mod
 import { CertificationModule } from './modules/certification/certification.module.js';
 import { PolicyAcceptanceModule } from './modules/policy-acceptance/policy-acceptance.module.js';
 import { PreferencesModule } from './modules/preferences/preferences.module.js';
+import { RenewalModule } from './modules/renewal/renewal.module.js';
 import { StorageModule } from './modules/storage/storage.module.js';
 import { HealthController } from './health.controller.js';
 import { MeController } from './me/me.controller.js';
@@ -33,6 +34,7 @@ import { MeController } from './me/me.controller.js';
     PreferencesModule,
     CertificationModule,
     PolicyAcceptanceModule,
+    RenewalModule,
     // Phase B will continue to add: AnnotationModule
     // Phase C: PredictionModule, EvaluationModule
     // Phase D: ReportingModule
