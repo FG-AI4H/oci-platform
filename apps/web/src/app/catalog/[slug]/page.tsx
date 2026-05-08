@@ -63,8 +63,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return { title: `${slug} — OCI Catalog` };
 }
 
-export default async function DatasetDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function DatasetDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ requested?: string }>;
+}) {
   const { slug } = await params;
+  const { requested } = await searchParams;
+  const justRequested = requested === '1';
   const session = await auth();
 
   let detail: DatasetDetail | null = null;
@@ -190,6 +198,7 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
               ownRequests={ownRequests}
               isAuthenticated={!!session}
               isPrivilegedForDataset={isAdmin(session) || isHostOfDataset(session, detail.hostId)}
+              justRequested={justRequested}
             />
           </div>
         </Container>

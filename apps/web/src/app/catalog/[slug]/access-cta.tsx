@@ -36,6 +36,9 @@ interface Props {
   isAuthenticated: boolean;
   /** True when the caller is the host of this dataset OR an admin. */
   isPrivilegedForDataset: boolean;
+  /** True on the immediate post-submit landing (`?requested=1`). Shows a
+   *  one-time confirmation banner above the status panel. */
+  justRequested?: boolean;
 }
 
 const STATUS_TONE: Record<AccessRequestStatus, 'info' | 'success' | 'danger' | 'neutral'> = {
@@ -60,7 +63,13 @@ function needsAccessGate(detail: DatasetDetail): boolean {
   return false;
 }
 
-export function AccessCta({ detail, ownRequests, isAuthenticated, isPrivilegedForDataset }: Props) {
+export function AccessCta({
+  detail,
+  ownRequests,
+  isAuthenticated,
+  isPrivilegedForDataset,
+  justRequested = false,
+}: Props) {
   if (detail.status !== 'PUBLISHED') return null;
   if (!needsAccessGate(detail)) return null;
   if (isPrivilegedForDataset) return null;
@@ -108,7 +117,17 @@ export function AccessCta({ detail, ownRequests, isAuthenticated, isPrivilegedFo
 
   // The caller has a prior request. Surface its state inline.
   return (
-    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-4">
+    <div className="space-y-3">
+      {justRequested && latest.status === 'PENDING' ? (
+        <div
+          role="status"
+          className="rounded-md border border-[var(--color-success)] bg-[var(--color-success-soft)] px-4 py-3 text-sm text-[var(--color-success)]"
+        >
+          Request submitted. The host has been notified — you&apos;ll see the decision here and on
+          your dashboard.
+        </div>
+      ) : null}
+      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium">Your access request</p>
         <Badge tone={STATUS_TONE[latest.status]}>{latest.status.toLowerCase()}</Badge>
@@ -156,6 +175,7 @@ export function AccessCta({ detail, ownRequests, isAuthenticated, isPrivilegedFo
             File a new request
           </Link>
         ) : null}
+      </div>
       </div>
     </div>
   );
