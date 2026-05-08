@@ -6,7 +6,7 @@ labels: ['type:task', 'area:platform']
 assignees: ''
 ---
 
-> Use this when an ADR has been *proposed* but not yet *accepted*, and the work
+> Use this when an ADR has been _proposed_ but not yet _accepted_, and the work
 > we'd start on depends on the ADR's specific decisions. Link the ADR clearly so
 > reviewers know the gate.
 
