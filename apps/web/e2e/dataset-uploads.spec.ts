@@ -116,7 +116,10 @@ test.describe('platform-hosted distributions', () => {
     // second manifest version pointing at the new file.
     const contentUrlText = (await contentUrlLine.textContent()) ?? '';
     const match = /contentUrl:\s*(\/v2\/catalog\/datasets\/[^\s]+)/.exec(contentUrlText);
-    expect(match, `contentUrl should match the platform-hosted shape; got: ${contentUrlText}`).not.toBeNull();
+    expect(
+      match,
+      `contentUrl should match the platform-hosted shape; got: ${contentUrlText}`,
+    ).not.toBeNull();
     const platformHostedUrl = match![1]!;
 
     // -- Republish: manifest now references the uploaded file --------------

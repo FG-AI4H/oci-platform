@@ -113,17 +113,20 @@ export async function uploadMultipart(opts: UploadOptions): Promise<UploadResult
   const concurrency = opts.concurrency ?? DEFAULT_CONCURRENCY;
 
   // 1. Initiate.
-  const init = (await jsonFetch(`${apiBase}/v2/catalog/datasets/${encodeURIComponent(opts.slug)}/uploads`, {
-    method: 'POST',
-    accessToken: opts.accessToken,
-    body: {
-      filename: opts.file.name,
-      contentType: opts.file.type || 'application/octet-stream',
-      contentSize: opts.file.size,
-      sha256: opts.sha256,
+  const init = (await jsonFetch(
+    `${apiBase}/v2/catalog/datasets/${encodeURIComponent(opts.slug)}/uploads`,
+    {
+      method: 'POST',
+      accessToken: opts.accessToken,
+      body: {
+        filename: opts.file.name,
+        contentType: opts.file.type || 'application/octet-stream',
+        contentSize: opts.file.size,
+        sha256: opts.sha256,
+      },
+      signal: opts.signal,
     },
-    signal: opts.signal,
-  })) as InitUploadResponse;
+  )) as InitUploadResponse;
 
   const totalParts = Math.max(1, Math.ceil(opts.file.size / init.partSize));
   const storageKey = resumeStorageKey(opts.slug, init.key, init.uploadId);
@@ -212,10 +215,10 @@ export async function uploadMultipart(opts: UploadOptions): Promise<UploadResult
   }
 
   // 3. Complete.
-  const sortedParts: PartState[] = Array.from(
-    completedByPart,
-    ([partNumber, etag]) => ({ partNumber, etag }),
-  ).sort((a, b) => a.partNumber - b.partNumber);
+  const sortedParts: PartState[] = Array.from(completedByPart, ([partNumber, etag]) => ({
+    partNumber,
+    etag,
+  })).sort((a, b) => a.partNumber - b.partNumber);
   const completeBody: CompleteUploadRequest = { parts: sortedParts };
 
   const completeUrl = new URL(

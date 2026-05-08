@@ -97,7 +97,11 @@ describe('StorageService.getDownloadUrl', () => {
   it('404s when the dataset is missing', async () => {
     catalog.findOwnerBySlug.mockResolvedValue(null);
     await expect(
-      svc.getDownloadUrl({ slug: 'missing', distributionId: DISTRIBUTION_ID, user: user(REQUESTER_SUB) }),
+      svc.getDownloadUrl({
+        slug: 'missing',
+        distributionId: DISTRIBUTION_ID,
+        user: user(REQUESTER_SUB),
+      }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -107,7 +111,11 @@ describe('StorageService.getDownloadUrl', () => {
     prisma.client.dataset.findUnique.mockResolvedValue(dataset('PRIVATE'));
 
     await expect(
-      svc.getDownloadUrl({ slug: 'demo', distributionId: DISTRIBUTION_ID, user: user(STRANGER_SUB) }),
+      svc.getDownloadUrl({
+        slug: 'demo',
+        distributionId: DISTRIBUTION_ID,
+        user: user(STRANGER_SUB),
+      }),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 

@@ -112,10 +112,10 @@ export default async function PublishVersionPage({ params }: PageProps) {
                 <CardHeader>
                   <CardTitle>Upload files</CardTitle>
                   <CardDescription>
-                    Optional. Host the data on this platform instead of pointing the manifest at
-                    an upstream URL. Each upload yields a stable{' '}
-                    <code className="font-mono text-xs">contentUrl</code> for the next version&apos;s
-                    manifest.
+                    Optional. Host the data on this platform instead of pointing the manifest at an
+                    upstream URL. Each upload yields a stable{' '}
+                    <code className="font-mono text-xs">contentUrl</code> for the next
+                    version&apos;s manifest.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

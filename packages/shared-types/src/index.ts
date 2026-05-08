@@ -208,7 +208,11 @@ export const InitUploadRequestSchema = z.object({
   contentType: z.string().min(1).max(200),
   /** Total size in bytes, claimed by the browser. Used to compute
    * `partSize` so that part count stays under the S3 10 000 cap. */
-  contentSize: z.coerce.number().int().min(1).max(5 * 1024 ** 4), // 5 TB cap (S3 single-object limit)
+  contentSize: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(5 * 1024 ** 4), // 5 TB cap (S3 single-object limit)
   /** Optional SHA-256, hex. Persisted as `Distribution.contentHash`
    * verbatim; the platform doesn't re-verify in PR I (a full read at
    * petabyte scale is cost-prohibitive). */

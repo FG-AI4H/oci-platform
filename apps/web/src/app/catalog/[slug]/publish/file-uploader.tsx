@@ -94,7 +94,11 @@ export function FileUploader({ slug, accessToken }: Props) {
             setFiles((prev) =>
               prev.map((f) =>
                 f.id === id
-                  ? { ...f, status: 'error', error: err instanceof Error ? err.message : String(err) }
+                  ? {
+                      ...f,
+                      status: 'error',
+                      error: err instanceof Error ? err.message : String(err),
+                    }
                   : f,
               ),
             ),
@@ -109,10 +113,10 @@ export function FileUploader({ slug, accessToken }: Props) {
       <Alert>
         <AlertTitle>How this works</AlertTitle>
         <AlertDescription>
-          Files upload directly to platform storage in chunks of ~16 MB. Browsers handle ~50 GB
-          per session reliably; for terabyte datasets, use the CLI (queued — #88). After upload,
-          paste each <code className="font-mono text-xs">contentUrl</code> below into your
-          Croissant manifest&apos;s <code className="font-mono text-xs">distribution[]</code>.
+          Files upload directly to platform storage in chunks of ~16 MB. Browsers handle ~50 GB per
+          session reliably; for terabyte datasets, use the CLI (queued — #88). After upload, paste
+          each <code className="font-mono text-xs">contentUrl</code> below into your Croissant
+          manifest&apos;s <code className="font-mono text-xs">distribution[]</code>.
         </AlertDescription>
       </Alert>
 
@@ -126,9 +130,7 @@ export function FileUploader({ slug, accessToken }: Props) {
           if (e.dataTransfer.files.length > 0) handlePicked(e.dataTransfer.files);
         }}
       >
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          Drop files here, or
-        </p>
+        <p className="text-sm text-[var(--color-muted-foreground)]">Drop files here, or</p>
         <Button
           type="button"
           variant="outline"
@@ -198,7 +200,8 @@ export function FileUploader({ slug, accessToken }: Props) {
 }
 
 function UploadStatus({ entry }: { entry: UploadingFile }) {
-  if (entry.status === 'done') return <span className="text-xs text-[var(--color-success)]">done</span>;
+  if (entry.status === 'done')
+    return <span className="text-xs text-[var(--color-success)]">done</span>;
   if (entry.status === 'error')
     return (
       <button

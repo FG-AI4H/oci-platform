@@ -125,9 +125,7 @@ export class StorageService {
   }): Promise<PartUrlResponse> {
     await this.requireHost(args.slug, args.user);
     if (args.partNumber < 1 || args.partNumber > StorageService.MAX_PARTS) {
-      throw new BadRequestException(
-        `partNumber must be between 1 and ${StorageService.MAX_PARTS}`,
-      );
+      throw new BadRequestException(`partNumber must be between 1 and ${StorageService.MAX_PARTS}`);
     }
 
     const cmd = new UploadPartCommand({
@@ -137,9 +135,7 @@ export class StorageService {
       PartNumber: args.partNumber,
     });
     const url = await this.presign(cmd, StorageService.PART_URL_TTL_S);
-    const expiresAt = new Date(
-      Date.now() + StorageService.PART_URL_TTL_S * 1000,
-    ).toISOString();
+    const expiresAt = new Date(Date.now() + StorageService.PART_URL_TTL_S * 1000).toISOString();
     return { url, expiresAt };
   }
 
@@ -188,11 +184,12 @@ export class StorageService {
       );
     }
 
-    const filename =
-      args.body.croissantId ?? args.key.split('/').filter(Boolean).pop() ?? args.key;
+    const filename = args.body.croissantId ?? args.key.split('/').filter(Boolean).pop() ?? args.key;
 
     const dist = await this.prisma.client.distribution.upsert({
-      where: { datasetVersionId_croissantId: { datasetVersionId: versionId, croissantId: filename } },
+      where: {
+        datasetVersionId_croissantId: { datasetVersionId: versionId, croissantId: filename },
+      },
       create: {
         datasetVersionId: versionId,
         croissantId: filename,
@@ -415,9 +412,7 @@ function rewriteHost(rawUrl: string, replacement: string): string {
 /** UUIDv5 from a Cognito sub — same derivation as catalog.service. */
 const SUB_NAMESPACE_UUID = 'a4f1c8b2-7d3e-5b9c-9f0a-3c8d4e5f6a7b';
 function subToUuid(sub: string): string {
-  if (
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(sub)
-  ) {
+  if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(sub)) {
     return sub.toLowerCase();
   }
   const nsBytes = Buffer.from(SUB_NAMESPACE_UUID.replace(/-/g, ''), 'hex');

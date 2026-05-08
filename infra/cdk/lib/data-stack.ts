@@ -124,11 +124,7 @@ export class DataStack extends cdk.Stack {
       cors: [
         {
           allowedHeaders: ['*'],
-          allowedMethods: [
-            s3.HttpMethods.PUT,
-            s3.HttpMethods.GET,
-            s3.HttpMethods.HEAD,
-          ],
+          allowedMethods: [s3.HttpMethods.PUT, s3.HttpMethods.GET, s3.HttpMethods.HEAD],
           allowedOrigins: [`https://${props.cfg.domainName}`],
           exposedHeaders: ['ETag'],
           maxAge: 3000,
