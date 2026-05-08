@@ -1,5 +1,18 @@
 import { z } from 'zod';
 
+export {
+  classifyEmailDomain,
+  safeClassifyEmailDomain,
+  EmailDomainCategorySchema,
+  EmailDomainAllowlistEntrySchema,
+} from './email-domain.js';
+export type {
+  EmailDomainCategory,
+  EmailDomainClassification,
+  ClassifyEmailDomainOptions,
+  EmailDomainAllowlistEntry,
+} from './email-domain.js';
+
 // ==== Identity ============================================================
 
 export const RoleSchema = z.enum([

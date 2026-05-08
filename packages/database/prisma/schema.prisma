@@ -149,6 +149,13 @@ model Dataset {
   /// page + the access-request matcher. Re-extracted on each publish.
   duoTerms String[] @default([]) @map("duo_terms")
 
+  /// Per-dataset email-domain allowlist (#116, Phase B · DAP). Empty
+  /// disables the allowlist; the API then falls back to the heuristic
+  /// classifier in `@oci/shared-types/email-domain.ts`. Entries are
+  /// either bare domains (`example.org`) or leading-dot wildcards
+  /// (`.example.org`); validated on write by the host config endpoint.
+  emailDomainAllowlist String[] @default([]) @map("email_domain_allowlist")
+
   versions       DatasetVersion[]
   accessRequests AccessRequest[]
 
