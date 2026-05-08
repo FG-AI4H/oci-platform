@@ -4,6 +4,8 @@ When you're building an AI product — for an LMIC public-health system, a regul
 
 This guide is the practical "how to file a request that gets approved" walkthrough.
 
+> **Status (2026-05-09)**: the builder-form variant is **live** (#120). Pick `Commercial research` or `Clinical care` under "Intended use" on `/catalog/<slug>/request-access` and the form swaps to the structured builder fields below. The `Commercial use` filter on `/catalog` (#119) lets you pre-screen for `commercial OK` datasets.
+>
 > Read [How access works (overview)](../overview/access-governance.md) first if you haven't yet — it explains the identity tiers, DUO, DUA, and eIDAS e-signature levels in plain English.
 
 ## Before you start — does this dataset allow commercial use?
