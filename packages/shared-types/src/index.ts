@@ -1190,6 +1190,97 @@ export const UpdateUserPreferencesRequestSchema = z
   .strict();
 export type UpdateUserPreferencesRequest = z.infer<typeof UpdateUserPreferencesRequestSchema>;
 
+// ==== Certification quiz (#117, ADR-0003 Phase 1) =========================
+//
+// Required to reach the CONTROLLED access tier (#115). The quiz is
+// served from a hardcoded bank in the API; this file only carries the
+// shapes the web side reads (the questions list — minus the correct
+// answers) and writes (the submission payload).
+
+/** A single quiz question, with the correct answer omitted for the wire. */
+export interface QuizQuestionPublic {
+  id: string;
+  prompt: string;
+  /** 4 string choices in canonical order — the index is the answer key. */
+  choices: readonly [string, string, string, string];
+  topic: 'ethics' | 'reidentification' | 'dua' | 'irb';
+}
+
+/**
+ * `GET /v2/certification/quizzes/:type` — fetch the quiz to render.
+ * Public structure; never includes correct answers.
+ */
+export interface QuizDefinitionPublic {
+  certificationType: string;
+  title: string;
+  passMarkPercent: number;
+  validityDays: number;
+  questions: QuizQuestionPublic[];
+}
+
+/** `POST /v2/certification/quizzes/:type/attempts` — start a new attempt. */
+export interface StartQuizAttemptResponse {
+  attemptId: string;
+  startedAt: string;
+}
+
+/** `POST /v2/certification/quizzes/:type/attempts/:id/submit` — submit answers. */
+export const SubmitQuizAttemptRequestSchema = z.object({
+  /**
+   * Answers in question-order; one entry per question. The server
+   * grades against the question bank by `questionId`, not by index,
+   * so a client that skipped a question can still submit (the
+   * skipped one will count as wrong).
+   */
+  answers: z
+    .array(
+      z.object({
+        questionId: z.string().min(1).max(64),
+        choiceIndex: z.number().int().min(0).max(3),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+export type SubmitQuizAttemptRequest = z.infer<typeof SubmitQuizAttemptRequestSchema>;
+
+/** Outcome of a submission. The wrong-answer detail is intentionally omitted. */
+export interface QuizAttemptResult {
+  attemptId: string;
+  certificationType: string;
+  /** 0–100. */
+  score: number;
+  passed: boolean;
+  passMarkPercent: number;
+  submittedAt: string;
+  /** ISO-8601; populated only when passed. */
+  expiresAt: string | null;
+}
+
+/**
+ * `GET /v2/me/certifications` — caller's certification summary +
+ * recent attempt history. The active certification is the most
+ * recent passed attempt within `validityDays`; `null` when no active
+ * cert exists. History is the last 20 attempts (newest first), used
+ * by the UI to surface "you have 2 prior attempts; this is attempt 3".
+ */
+export interface UserCertificationStatus {
+  certificationType: string;
+  /** Has an unexpired pass right now. */
+  active: boolean;
+  /** Date the active certification (if any) was passed. */
+  passedAt: string | null;
+  /** Date the active certification expires; null when not active. */
+  expiresAt: string | null;
+  /** Recent attempt summaries (most recent first). */
+  history: Array<{
+    attemptId: string;
+    submittedAt: string;
+    score: number;
+    passed: boolean;
+  }>;
+}
+
 export const tokens = {
   /** Phase B will add: Campaign, Task, Sample, Annotation, AnnotationTool */
   /** Phase C will add: Challenge, Submission, Phase, Leaderboard */
