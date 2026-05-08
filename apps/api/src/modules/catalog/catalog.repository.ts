@@ -88,9 +88,35 @@ export class CatalogRepository {
     statuses?: DatasetStatus[];
     hostId?: string;
     after?: { updatedAt: Date; id: string };
+    /** PR L.1 (#91) facets — see `ListDatasetsQuerySchema`. */
+    modality?: string[];
+    bodyRegion?: string[];
+    condition?: string[];
+    anonymizationLevel?: 'ANONYMIZED' | 'PSEUDONYMIZED' | 'IDENTIFIED';
+    license?: string[];
+    duoTerms?: string[];
+    /** Sort order. `recent` (default) | `name` | `oldest`. */
+    sort?: 'recent' | 'name' | 'oldest';
+    /** Offset alternative to cursor. Cursor wins when both are passed. */
+    offset?: number;
     limit: number;
   }): Promise<{ rows: DatasetSummary[]; totalEstimate: number }> {
-    const { q, visibilities, statuses, hostId, after, limit } = args;
+    const {
+      q,
+      visibilities,
+      statuses,
+      hostId,
+      after,
+      modality,
+      bodyRegion,
+      condition,
+      anonymizationLevel,
+      license,
+      duoTerms,
+      sort = 'recent',
+      offset,
+      limit,
+    } = args;
 
     // Compose a single SQL with conditional filters via Prisma.sql
     // fragments — keeps the query plan stable and avoids string concat.
@@ -109,9 +135,66 @@ export class CatalogRepository {
     const cursorClause = after
       ? Prisma.sql`AND (d.updated_at, d.id) < (${after.updatedAt}::timestamptz, ${after.id}::uuid)`
       : Prisma.sql``;
+
+    // BioCroissant facets (PR L.1). Filter against `d.croissant`
+    // (JSONB). Each facet stores values as `[{name: "X-ray"}, ...]`;
+    // we ILIKE-match the `name` field. Multiple values OR within a
+    // facet (`ANY`); facets AND across each other.
+    // Croissant manifests in the wild carry biomedical fields either
+    // as `[{name: ...}, ...]` (the wizard's output, MLCommons-recommended
+    // for multiple values) or as a single `{name: ...}` object (the
+    // IDRiD seed and several upstream manifests). Wrap singletons in
+    // an array so `jsonb_array_elements` accepts both shapes.
+    const bioFacetClause = (
+      key: 'bio:imagingModality' | 'bio:bodyRegion' | 'bio:diseaseCondition',
+      values: string[] | undefined,
+    ) =>
+      values && values.length > 0
+        ? Prisma.sql`AND EXISTS (
+            SELECT 1 FROM jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(d.croissant -> ${key}) = 'array'
+                  THEN d.croissant -> ${key}
+                WHEN jsonb_typeof(d.croissant -> ${key}) = 'object'
+                  THEN jsonb_build_array(d.croissant -> ${key})
+                ELSE '[]'::jsonb
+              END
+            ) AS elem
+            WHERE elem ->> 'name' ILIKE ANY(${values.map((v) => `%${v}%`)}::text[])
+          )`
+        : Prisma.sql``;
+    const modalityClause = bioFacetClause('bio:imagingModality', modality);
+    const bodyRegionClause = bioFacetClause('bio:bodyRegion', bodyRegion);
+    const conditionClause = bioFacetClause('bio:diseaseCondition', condition);
+    const anonClause = anonymizationLevel
+      ? Prisma.sql`AND d.croissant ->> 'bio:anonymizationLevel' = ${anonymizationLevel}`
+      : Prisma.sql``;
+    // License: substring match against the manifest's `license`
+    // string. Croissant allows objects too; those won't match — fine.
+    const licenseClause =
+      license && license.length > 0
+        ? Prisma.sql`AND d.croissant ->> 'license' ILIKE ANY(${license.map((v) => `%${v}%`)}::text[])`
+        : Prisma.sql``;
+    // DUO terms: array overlap. `&&` returns true when any element
+    // of duo_terms is in the requested set.
+    const duoClause =
+      duoTerms && duoTerms.length > 0
+        ? Prisma.sql`AND d.duo_terms && ${duoTerms}::text[]`
+        : Prisma.sql``;
+
+    // Sort. FTS rank still wins when `q` is set; secondary sort is
+    // controlled by the `sort` arg.
     const rankClause = q
       ? Prisma.sql`ts_rank(d.search_vector, plainto_tsquery('simple', ${q})) DESC,`
       : Prisma.sql``;
+    const orderClause =
+      sort === 'name'
+        ? Prisma.sql`d.name ASC, d.id ASC`
+        : sort === 'oldest'
+          ? Prisma.sql`d.created_at ASC, d.id ASC`
+          : Prisma.sql`d.updated_at DESC, d.id DESC`;
+    const offsetClause =
+      offset !== undefined && offset > 0 ? Prisma.sql`OFFSET ${offset}` : Prisma.sql``;
 
     type Row = {
       id: string;
@@ -150,12 +233,18 @@ export class CatalogRepository {
         ${visClause}
         ${statusClause}
         ${hostClause}
+        ${modalityClause}
+        ${bodyRegionClause}
+        ${conditionClause}
+        ${anonClause}
+        ${licenseClause}
+        ${duoClause}
         ${cursorClause}
-      ORDER BY ${rankClause} d.updated_at DESC, d.id DESC
-      LIMIT ${limit}
+      ORDER BY ${rankClause} ${orderClause}
+      LIMIT ${limit} ${offsetClause}
     `);
 
-    // For the total count: separate query without the cursor or LIMIT.
+    // For the total count: separate query without the cursor / offset / LIMIT.
     // At catalog scale (low thousands) this is cheap; if it ever isn't,
     // switch to a `pg_class.reltuples` estimate.
     const totalRow = await this.prisma.client.$queryRaw<{ count: bigint }[]>(Prisma.sql`
@@ -166,6 +255,12 @@ export class CatalogRepository {
         ${visClause}
         ${statusClause}
         ${hostClause}
+        ${modalityClause}
+        ${bodyRegionClause}
+        ${conditionClause}
+        ${anonClause}
+        ${licenseClause}
+        ${duoClause}
     `);
     const totalEstimate = Number(totalRow[0]?.count ?? 0n);
 
@@ -227,6 +322,7 @@ export class CatalogRepository {
           requiresAccess: d.requiresAccess,
         })) ?? [],
       duoTerms: ds.duoTerms ?? [],
+      hostId: ds.hostId,
     };
   }
 

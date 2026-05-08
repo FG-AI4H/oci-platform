@@ -26,6 +26,7 @@ import { apiFetch } from '../../../lib/api';
 import { datasetJsonLd } from '../../../lib/dataset-jsonld';
 import { siteUrl } from '../../../lib/site-url';
 import { isAdmin } from '../../../lib/groups';
+import { isHostOfDataset } from '../../../lib/identity';
 import { AccessCta } from './access-cta';
 
 const visibilityTone: Record<DatasetVisibility, 'success' | 'info' | 'warning'> = {
@@ -185,7 +186,7 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
               detail={detail}
               ownRequests={ownRequests}
               isAuthenticated={!!session}
-              isPrivilegedForDataset={isAdmin(session)}
+              isPrivilegedForDataset={isAdmin(session) || isHostOfDataset(session, detail.hostId)}
             />
           </div>
         </Container>
