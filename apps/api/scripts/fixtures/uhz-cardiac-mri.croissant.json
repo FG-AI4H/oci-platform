@@ -1,0 +1,290 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "sc": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "dct": "http://purl.org/dc/terms/",
+    "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
+  },
+  "@type": "sc:Dataset",
+  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
+
+  "name": "UHZ Cardiac MRI Arrhythmia Cohort 2024",
+  "description": "Single-centre cardiac MRI cohort from the University Hospital Zürich Cardiology and Radiology departments: 1 248 paired late-gadolinium-enhancement (LGE) and cine short-axis stack acquisitions in 412 patients with documented atrial fibrillation, ventricular tachycardia, or non-arrhythmogenic structural heart disease. Each acquisition includes pixel-level scar segmentations and structured ECG-derived arrhythmia labels reviewed by two cardiologists. The cohort is held PRIVATE: byte-level access is reserved for collaborating institutions named in the original IRB approval; shared evaluation is possible on the OCI platform via in-place model execution against the cohort without participant images leaving UHZ infrastructure.",
+  "url": "https://www.usz.ch/en/clinics/cardiology/research/",
+  "sameAs": [],
+
+  "creator": [
+    { "@type": "sc:Organization", "name": "University Hospital Zürich (UHZ) — Department of Cardiology" },
+    { "@type": "sc:Organization", "name": "University Hospital Zürich (UHZ) — Institute of Diagnostic and Interventional Radiology" },
+    { "@type": "sc:Person", "name": "Prof. Dr. Felix C. Tanner" },
+    { "@type": "sc:Person", "name": "PD Dr. Robert Manka" },
+    { "@type": "sc:Person", "name": "Dr. Anna-Sophie Kaeppeli" }
+  ],
+  "publisher": {
+    "@type": "sc:Organization",
+    "name": "University Hospital Zürich",
+    "url": "https://www.usz.ch/"
+  },
+  "datePublished": "2025-03-21",
+  "dateModified": "2026-04-30",
+  "version": "1.0.0",
+
+  "license": "https://oci.ai4h.net/licenses/uhz-cardiac-mri-2024",
+  "keywords": [
+    "cardiac MRI",
+    "late gadolinium enhancement",
+    "scar segmentation",
+    "atrial fibrillation",
+    "ventricular tachycardia",
+    "arrhythmia",
+    "cine imaging",
+    "myocardial fibrosis",
+    "private cohort",
+    "in-place evaluation"
+  ],
+  "citeAs": "@misc{uhz2025cardiacarrhythmia,title={UHZ Cardiac MRI Arrhythmia Cohort 2024 — Internal Reference Dataset},author={Tanner, Felix C. and Manka, Robert and Kaeppeli, Anna-Sophie and the UHZ Cardiac Imaging Research Group},howpublished={Internal release v1.0.0},institution={University Hospital Z\\\"{u}rich},year={2025}}",
+
+  "consentCode": [
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000007",
+      "termCode": "DUO_0000007",
+      "name": "Disease specific research",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000021",
+      "termCode": "DUO_0000021",
+      "name": "Ethics approval required",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000020",
+      "termCode": "DUO_0000020",
+      "name": "Collaboration required",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000045",
+      "termCode": "DUO_0000045",
+      "name": "Not for profit, non-commercial use only",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000028",
+      "termCode": "DUO_0000028",
+      "name": "Institution specific restriction",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000019",
+      "termCode": "DUO_0000019",
+      "name": "Publication required",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000029",
+      "termCode": "DUO_0000029",
+      "name": "Return to database / resource",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    }
+  ],
+
+  "distribution": [
+    {
+      "@type": "sc:FileObject",
+      "@id": "uhz-cmri-cine-stacks",
+      "name": "Cine short-axis stacks (DICOM, encrypted bundle)",
+      "description": "Short-axis cine bSSFP stacks. Bundle encrypted with KMS-CMK; release of the decryption key requires a signed UHZ Data Use Agreement and project-specific IRB amendment.",
+      "encodingFormat": "application/dicom",
+      "contentUrl": "s3://oci-private-uhz-cardiac-mri-2024/cine.tar.enc",
+      "contentSize": "184.0 GB",
+      "sha256": "8888888888888888888888888888888888888888888888888888888888888888"
+    },
+    {
+      "@type": "sc:FileObject",
+      "@id": "uhz-cmri-lge-stacks",
+      "name": "LGE short-axis stacks (DICOM, encrypted bundle)",
+      "description": "Late gadolinium enhancement short-axis stacks. Encrypted bundle.",
+      "encodingFormat": "application/dicom",
+      "contentUrl": "s3://oci-private-uhz-cardiac-mri-2024/lge.tar.enc",
+      "contentSize": "62.0 GB",
+      "sha256": "9999999999999999999999999999999999999999999999999999999999999999"
+    },
+    {
+      "@type": "sc:FileObject",
+      "@id": "uhz-cmri-scar-masks",
+      "name": "Scar segmentation masks (NIfTI)",
+      "description": "Pixel-level scar/non-scar masks aligned to the LGE acquisition.",
+      "encodingFormat": "application/x-nifti",
+      "contentUrl": "s3://oci-private-uhz-cardiac-mri-2024/masks.tar.enc",
+      "contentSize": "1.8 GB",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "@type": "sc:FileObject",
+      "@id": "uhz-cmri-clinical-csv",
+      "name": "Clinical & arrhythmia labels (CSV)",
+      "description": "Per-patient ECG-derived arrhythmia labels (AF, VT, none), LVEF, scar burden percentage, NYHA class, and outcome at 12 months.",
+      "encodingFormat": "text/csv",
+      "contentUrl": "s3://oci-private-uhz-cardiac-mri-2024/clinical.csv.enc",
+      "contentSize": "2.1 MB",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  ],
+
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "patient-records",
+      "name": "Patient-level clinical records",
+      "description": "One row per enrolled patient. Imaging acquisitions are linked by patient_id.",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "patient-records/patient_id",
+          "name": "patient_id",
+          "description": "UHZ-internal pseudonymised patient identifier (UUID v4).",
+          "dataType": "sc:Text"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "patient-records/age_at_scan_years",
+          "name": "age_at_scan_years",
+          "description": "Patient age at time of cardiac MRI (5-year bins).",
+          "dataType": "sc:Integer"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "patient-records/sex",
+          "name": "sex",
+          "description": "Recorded sex at birth (M, F, U).",
+          "dataType": "sc:Text"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "patient-records/arrhythmia_label",
+          "name": "arrhythmia_label",
+          "description": "Adjudicated diagnostic label: AF (atrial fibrillation), VT (ventricular tachycardia), NONE (no documented arrhythmia, structural heart disease only).",
+          "dataType": ["sc:Text", "cr:Label"]
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "patient-records/lvef_pct",
+          "name": "lvef_pct",
+          "description": "Left ventricular ejection fraction (%) computed from the cine stack.",
+          "dataType": "sc:Float"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "patient-records/scar_burden_pct",
+          "name": "scar_burden_pct",
+          "description": "Total scar volume as a fraction of LV myocardial mass (%) from the LGE segmentation.",
+          "dataType": "sc:Float"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "patient-records/nyha_class",
+          "name": "nyha_class",
+          "description": "New York Heart Association functional class at scan (I, II, III, IV).",
+          "dataType": "sc:Text"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "patient-records/major_event_12mo",
+          "name": "major_event_12mo",
+          "description": "Composite outcome at 12 months post-scan: death, sustained VT, or appropriate ICD shock (1=yes, 0=no, NA=lost to follow-up).",
+          "dataType": ["sc:Text", "cr:Label"]
+        }
+      ]
+    }
+  ],
+
+  "prov:wasAttributedTo": [
+    { "@type": "prov:Organization", "name": "UHZ Cardiac Imaging Research Group" },
+    { "@type": "prov:Person", "name": "PD Dr. Robert Manka — adjudication lead" }
+  ],
+
+  "rai:dataCollection": "Prospective single-centre enrolment between January 2018 and December 2023. All patients referred for cardiac MRI workup of suspected arrhythmogenic substrate at UHZ were screened; 412 met inclusion criteria (signed broad consent, no prior cardiac surgery, complete cine + LGE stack, ECG-confirmed arrhythmia status). Imaging acquired on three Siemens 1.5T and 3T scanners under a uniform departmental protocol.",
+  "rai:dataCollectionType": "Prospective single-centre enrolment.",
+  "rai:dataCollectionTimeframe": "2018-01-01/2023-12-31",
+  "rai:dataAnnotationProtocol": "Two consultant cardiologists with EACVI Level 3 CMR certification independently reviewed each case, segmenting LV scar on the LGE stack using cvi42 (Circle CVI). Disagreements (Dice <0.75) were adjudicated by a third reader. Arrhythmia labels were assigned from the patient's adjudicated 12-lead ECG and Holter recordings within ±30 days of the MRI.",
+  "rai:dataAnnotationPlatform": "cvi42 (Circle Cardiovascular Imaging, v5.14).",
+  "rai:annotationsPerItem": "2 readers + adjudicator on disagreement.",
+  "rai:annotatorDemographics": "Three EACVI Level 3 CMR consultants at UHZ, ages 38-55, mixed clinical and academic practice.",
+  "rai:dataBiases": "Single tertiary referral centre — population enriched for moderate-to-severe disease; primary-care presentations under-represented. Geographic skew: ≈92% Swiss residents. Sex distribution: 64% male, 36% female. Scanner mix is dominated by one Siemens Aera 1.5T (≈70% of scans).",
+  "rai:dataLimitations": "No 4D-flow or T1-mapping. LGE acquired on a single inversion-time per study; partial-volume effects not modelled in the masks. Holter follow-up was not uniformly available for asymptomatic patients. Race / skin-tone metadata is not captured (Swiss data-protection guidance).",
+  "rai:personalSensitiveInformation": "Direct identifiers removed (DICOM Safe Harbor profile + custom UHZ pseudonymisation). Date metadata is shifted by per-patient random offset. Original DICOM private tags scrubbed. Re-identification risk assessed Low by UHZ Data Protection Office given the geographic and demographic distribution.",
+  "rai:dataUseCases": "Disease-specific research on arrhythmogenic substrate identification; scar-burden quantification benchmarks; in-place model evaluation via OCI Platform without participant images leaving UHZ infrastructure.",
+  "rai:dataReleaseMaintenancePlan": "Maintained on UHZ secure storage. Quarterly re-adjudication of edge cases by the lead cardiologist. Annual amendment to the IRB approval; access to byte-level data terminates on 2031-03-21 unless renewed.",
+
+  "bio:imagingModality": [
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Magnetic Resonance Imaging",
+      "termCode": "RID10312",
+      "inDefinedTermSet": "http://radlex.org/RID/"
+    }
+  ],
+  "bio:bodyRegion": [
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Heart",
+      "termCode": "RID1385",
+      "inDefinedTermSet": "http://radlex.org/RID/"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Cardiovascular system",
+      "termCode": "RID1384",
+      "inDefinedTermSet": "http://radlex.org/RID/"
+    }
+  ],
+  "bio:diseaseCondition": [
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Atrial fibrillation",
+      "termCode": "BC81.3",
+      "inDefinedTermSet": "https://icd.who.int/browse/2024-01/mms"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Ventricular tachycardia",
+      "termCode": "BC81.4",
+      "inDefinedTermSet": "https://icd.who.int/browse/2024-01/mms"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Cardiac arrhythmia, unspecified",
+      "termCode": "BC9Z",
+      "inDefinedTermSet": "https://icd.who.int/browse/2024-01/mms"
+    }
+  ],
+  "bio:populationCharacteristics": {
+    "ageRange": { "min": 25, "max": 88, "unit": "years" },
+    "geographicOrigin": "CH"
+  },
+  "bio:dataAcquisitionProtocol": "Cine bSSFP short-axis stack (10-12 slices, 25 phases, 8 mm slice thickness, 2 mm gap). LGE acquired 10-15 minutes post 0.15 mmol/kg gadobutrol (Gadovist) bolus, 2D segmented inversion-recovery, slice-matched to cine. ECG-gated breath-hold acquisitions; in-plane resolution 1.5×1.5 mm. Three Siemens scanners (Aera 1.5T, Sola 1.5T, Vida 3T).",
+  "bio:dataAcquisitionEquipment": [
+    { "manufacturer": "Siemens Healthineers", "model": "MAGNETOM Aera 1.5T", "softwareVersion": "syngo MR XA20" },
+    { "manufacturer": "Siemens Healthineers", "model": "MAGNETOM Sola 1.5T", "softwareVersion": "syngo MR XA50" },
+    { "manufacturer": "Siemens Healthineers", "model": "MAGNETOM Vida 3T", "softwareVersion": "syngo MR XA31" }
+  ],
+  "bio:irbApproval": {
+    "approvingBody": "Kantonale Ethikkommission Zürich (KEK-ZH)",
+    "approvalNumber": "BASEC 2017-01987",
+    "approvalDate": "2017-11-14",
+    "approvalDocument": "https://kek.zh.ch/"
+  },
+  "bio:anonymizationLevel": "DEIDENTIFIED",
+  "bio:consentNotes": "Broad informed consent for research re-use captured at admission per UHZ standard form (rev. 2017-09). Re-contact for amendment is in place via UHZ research office; opt-out is honoured at any time. Bytes never leave UHZ-controlled storage; sharing is mediated by OCI Platform's in-place evaluation."
+}
