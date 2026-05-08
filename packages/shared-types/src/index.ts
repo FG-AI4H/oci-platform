@@ -1,5 +1,18 @@
 import { z } from 'zod';
 
+export {
+  classifyEmailDomain,
+  safeClassifyEmailDomain,
+  EmailDomainCategorySchema,
+  EmailDomainAllowlistEntrySchema,
+} from './email-domain.js';
+export type {
+  EmailDomainCategory,
+  EmailDomainClassification,
+  ClassifyEmailDomainOptions,
+  EmailDomainAllowlistEntry,
+} from './email-domain.js';
+
 // ==== Identity ============================================================
 
 export const RoleSchema = z.enum([
@@ -720,6 +733,50 @@ export const CreateRemoteCatalogRequestSchema = z.object({
   description: z.string().max(2000).nullable().optional(),
 });
 export type CreateRemoteCatalogRequest = z.infer<typeof CreateRemoteCatalogRequestSchema>;
+
+// ==== User UI preferences (identity package, PR M) =======================
+
+/** Light / dark / 'system' (follow OS preference). */
+export const DarkModeSchema = z.enum(['system', 'light', 'dark']);
+export type DarkMode = z.infer<typeof DarkModeSchema>;
+
+/** UI density. */
+export const DensitySchema = z.enum(['comfortable', 'compact']);
+export type Density = z.infer<typeof DensitySchema>;
+
+/**
+ * BCP-47 language tag. Loose by design — the API accepts anything that
+ * looks like a tag; canonical resolution against the supported-locales
+ * list happens at render time so adding a new locale doesn't require a
+ * shared-types bump.
+ */
+export const LocaleSchema = z
+  .string()
+  .min(2)
+  .max(35)
+  .regex(/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/);
+export type Locale = z.infer<typeof LocaleSchema>;
+
+export interface UserPreferences {
+  darkMode: DarkMode;
+  locale: Locale | null;
+  density: Density;
+  updatedAt: string;
+}
+
+/**
+ * `PUT /v2/preferences/me` — partial update. All fields optional;
+ * unset fields are left unchanged. `locale: null` explicitly clears it
+ * (revert to "use the browser default").
+ */
+export const UpdateUserPreferencesRequestSchema = z
+  .object({
+    darkMode: DarkModeSchema.optional(),
+    locale: LocaleSchema.nullable().optional(),
+    density: DensitySchema.optional(),
+  })
+  .strict();
+export type UpdateUserPreferencesRequest = z.infer<typeof UpdateUserPreferencesRequestSchema>;
 
 export const tokens = {
   /** Phase B will add: Campaign, Task, Sample, Annotation, AnnotationTool */

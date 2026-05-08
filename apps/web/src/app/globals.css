@@ -19,9 +19,12 @@
  * when a subtle hover state on a primary button needs to feel like a
  * step rather than a jump.
  *
- * Light mode is the default; dark mode is opt-in via `prefers-color-scheme`
- * and overrides the same custom properties further down. Component
- * styles only reference token names, never literal colors.
+ * Light mode is the default. Dark mode is opt-in via either an explicit
+ * `data-theme="dark"` attribute on `<html>` (driven by the user's saved
+ * preference + a `oci-theme` cookie for SSR) or, when the user picks
+ * "system", `prefers-color-scheme: dark`. The same tokens are reasserted
+ * in the dark block further down. Component styles only reference token
+ * names, never literal colors.
  */
 
 @theme {
@@ -124,8 +127,58 @@
  * :root rule inside @media. The names match @theme above so all utility
  * classes and `var(--…)` references resolve correctly at runtime.
  */
+/* Dark tokens — applied in two cases:
+   1. Explicit override: `<html data-theme="dark">` from the user's
+      saved preference (SSR-rendered from the `oci-theme` cookie).
+   2. System fallback: OS reports `prefers-color-scheme: dark` AND the
+      user hasn't explicitly chosen "light".
+   Both rules share the same body; if you change one, change the other. */
+:root[data-theme='dark'] {
+  --color-background: oklch(0.18 0.025 240);
+  --color-foreground: oklch(0.95 0.005 230);
+  --color-card: oklch(0.22 0.025 240);
+  --color-card-foreground: oklch(0.95 0.005 230);
+  --color-muted: oklch(0.25 0.02 240);
+  --color-muted-foreground: oklch(0.7 0.015 230);
+  --color-subtle: oklch(0.24 0.022 240);
+  --color-elevated: oklch(0.26 0.025 240);
+
+  --color-border: oklch(0.3 0.02 240);
+  --color-border-strong: oklch(0.38 0.02 240);
+  --color-input: oklch(0.3 0.02 240);
+  --color-ring: oklch(0.7 0.13 200);
+
+  --color-primary: oklch(0.7 0.12 215);
+  --color-primary-foreground: oklch(0.18 0.025 240);
+  --color-primary-hover: oklch(0.75 0.12 215);
+  --color-primary-soft: oklch(0.32 0.05 220);
+  --color-primary-emphasis: oklch(0.78 0.13 215);
+
+  --color-accent: oklch(0.78 0.13 195);
+  --color-accent-foreground: oklch(0.18 0.025 240);
+  --color-accent-soft: oklch(0.3 0.05 200);
+
+  --color-success: oklch(0.82 0.14 155);
+  --color-success-soft: oklch(0.3 0.05 155);
+  --color-warning: oklch(0.85 0.14 80);
+  --color-warning-foreground: oklch(0.95 0.005 230);
+  --color-warning-soft: oklch(0.32 0.07 75);
+  --color-danger: oklch(0.78 0.16 25);
+  --color-danger-soft: oklch(0.32 0.08 25);
+  --color-info: oklch(0.78 0.13 240);
+  --color-info-soft: oklch(0.3 0.05 240);
+
+  --color-phase-a: oklch(0.78 0.13 220);
+  --color-phase-b: oklch(0.78 0.13 285);
+  --color-phase-c: oklch(0.78 0.13 175);
+  --color-phase-d: oklch(0.82 0.14 80);
+
+  --shadow-glow:
+    0 0 0 1px oklch(0.7 0.12 215 / 0.25), 0 8px 24px -8px oklch(0.7 0.12 215 / 0.2);
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --color-background: oklch(0.18 0.025 240);
     --color-foreground: oklch(0.95 0.005 230);
     --color-card: oklch(0.22 0.025 240);
@@ -150,8 +203,6 @@
     --color-accent-foreground: oklch(0.18 0.025 240);
     --color-accent-soft: oklch(0.3 0.05 200);
 
-    /* Semantic foregrounds need to be lighter against the dark soft
-       tunings — light-mode mid-tone hues fail WCAG 4.5:1 here. */
     --color-success: oklch(0.82 0.14 155);
     --color-success-soft: oklch(0.3 0.05 155);
     --color-warning: oklch(0.85 0.14 80);
