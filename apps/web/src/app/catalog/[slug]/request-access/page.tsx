@@ -105,7 +105,7 @@ export default async function RequestAccessPage({ params }: PageProps) {
             <CardTitle>Request details</CardTitle>
           </CardHeader>
           <CardContent>
-            <RequestAccessForm slug={detail.slug} />
+            <RequestAccessForm slug={detail.slug} datasetDuoTerms={detail.duoTerms ?? []} />
           </CardContent>
         </Card>
       </Section>

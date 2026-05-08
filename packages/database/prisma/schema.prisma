@@ -127,6 +127,13 @@ model Dataset {
   /// generated client surface (which would force casts everywhere).
   searchVector       Unsupported("tsvector")? @map("search_vector")
 
+  /// DUO permission term short ids (e.g. "DUO_0000042") extracted from
+  /// the latest published manifest's `consentCode` (PR J.1, #93). Empty
+  /// when no terms declared. Authoritative source remains the manifest;
+  /// this column is a denormalised cache for fast read on the detail
+  /// page + the access-request matcher. Re-extracted on each publish.
+  duoTerms String[] @default([]) @map("duo_terms")
+
   versions       DatasetVersion[]
   accessRequests AccessRequest[]
 
@@ -205,6 +212,17 @@ model Distribution {
   @@schema("catalog")
 }
 
+/// Result of auto-matching the requester's intended use against the
+/// dataset's DUO permission terms (PR J.1, #93). NULL on legacy rows
+/// from before the matcher shipped.
+enum AccessRequestMatchStatus {
+  MATCHED
+  CONFLICT
+  UNCLEAR
+
+  @@schema("catalog")
+}
+
 model AccessRequest {
   id            String              @id @default(uuid()) @db.Uuid
   datasetId     String              @map("dataset_id") @db.Uuid
@@ -217,11 +235,26 @@ model AccessRequest {
   /// Soft FK → identity.users.id. Host or admin who APPROVED/DENIED/REVOKED.
   decidedById   String?             @map("decided_by_id") @db.Uuid
   decisionNote  String?             @map("decision_note")
-  /// Structured consent / compliance attestations. Shape (Phase B):
-  ///   { irbApproved: boolean, irbApprovalRef?: string,
-  ///     dpiaRef?: string, dataRetentionDays?: number,
-  ///     duoConsent?: string[]  // DUO term IRIs }
+  /// Structured intended-use attestations (PR J.1, #93). Replaces the v0
+  /// placeholder shape; AccessRequestAttestationsSchema in
+  /// `@oci/shared-types` is the source of truth. Validated on insert by
+  /// the API; legacy rows from PR F (#75) read with a permissive parser.
+  ///
+  /// v1 shape:
+  ///   { v: 1, projectTitle, projectDescription, institution,
+  ///     intendedUseCategory, intendedUseDuoTerms[],
+  ///     irbApproved, irbApprovalRef?, dpiaRef?, dataRetentionDays,
+  ///     redistributionIntent, outputType }
   attestations  Json?
+
+  /// Auto-match decision. Set by the API when the request is created
+  /// from the requester's DUO terms + dataset DUO terms. The host
+  /// inbox renders this as a badge; null = legacy / not matched.
+  matchStatus       AccessRequestMatchStatus? @map("match_status")
+  /// Human-readable matcher findings. Empty array when MATCHED;
+  /// populated for CONFLICT / UNCLEAR so the host sees the *why*
+  /// without having to learn DUO themselves.
+  matchExplanations String[] @default([]) @map("match_explanations")
 
   dataset Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
 
@@ -229,6 +262,7 @@ model AccessRequest {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([datasetId, status])
+  @@index([datasetId, status, matchStatus])
   @@index([requesterId, status])
   @@map("access_requests")
   @@schema("catalog")

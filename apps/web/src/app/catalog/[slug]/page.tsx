@@ -20,6 +20,7 @@ import {
   ShieldIcon,
 } from '@oci/ui';
 import type { DatasetDetail, DatasetVisibility } from '@oci/shared-types';
+import { lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../../auth';
 import { apiFetch } from '../../../lib/api';
 import { datasetJsonLd } from '../../../lib/dataset-jsonld';
@@ -266,6 +267,35 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
                     <Badge tone={anonymization === 'IDENTIFIED' ? 'danger' : 'success'}>
                       {anonymization}
                     </Badge>
+                  </DefinitionItem>
+                ) : null}
+                {detail.duoTerms.length > 0 ? (
+                  <DefinitionItem term="Permitted use (DUO)">
+                    <ul className="space-y-1.5 text-sm">
+                      {detail.duoTerms.map((id) => {
+                        const t = lookupDuoTerm(id);
+                        if (!t) {
+                          return (
+                            <li key={id} className="font-mono text-xs">
+                              {id}
+                            </li>
+                          );
+                        }
+                        return (
+                          <li key={id} className="flex items-start gap-2">
+                            <Badge tone="info" className="font-mono">
+                              {t.code}
+                            </Badge>
+                            <span>
+                              <span className="font-medium">{t.label}.</span>{' '}
+                              <span className="text-[var(--color-muted-foreground)]">
+                                {t.summary}
+                              </span>
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   </DefinitionItem>
                 ) : null}
                 {citeAs ? (

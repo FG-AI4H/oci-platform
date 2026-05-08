@@ -5,12 +5,17 @@ import { CreateAccessRequestRequestSchema } from '@oci/shared-types';
 import { auth } from '../../../../auth';
 
 export interface RequestAccessValues {
-  justification: string;
+  projectTitle: string;
+  projectDescription: string;
+  institution: string;
+  intendedUseCategory: string;
+  intendedUseDuoTerms: string[];
   irbApproved: string;
   irbApprovalRef: string;
   dpiaRef: string;
   dataRetentionDays: string;
-  duoConsent: string;
+  redistributionIntent: string;
+  outputType: string;
 }
 
 export type RequestAccessState =
@@ -24,9 +29,10 @@ export type RequestAccessState =
 
 /**
  * Server action: POST /v2/catalog/datasets/:slug/access-requests on
- * behalf of the authenticated caller. Validates the form fields with
- * the same Zod schema the API uses, then forwards. Redirects to
- * `/dashboard/access-requests` on success.
+ * behalf of the authenticated caller. Validates with the same Zod
+ * schema the API uses, then forwards. The API runs the DUO matcher +
+ * persists matchStatus; on success we redirect to the requester's
+ * dashboard which shows the badge.
  */
 export async function requestAccessAction(
   slug: string,
@@ -39,27 +45,36 @@ export async function requestAccessAction(
   }
 
   const raw: RequestAccessValues = {
-    justification: String(formData.get('justification') ?? ''),
+    projectTitle: String(formData.get('projectTitle') ?? ''),
+    projectDescription: String(formData.get('projectDescription') ?? ''),
+    institution: String(formData.get('institution') ?? ''),
+    intendedUseCategory: String(formData.get('intendedUseCategory') ?? ''),
+    // Multi-select via repeated checkbox name. FormData.getAll returns
+    // every value with the matching name.
+    intendedUseDuoTerms: formData.getAll('intendedUseDuoTerms').map(String),
     irbApproved: String(formData.get('irbApproved') ?? ''),
     irbApprovalRef: String(formData.get('irbApprovalRef') ?? ''),
     dpiaRef: String(formData.get('dpiaRef') ?? ''),
     dataRetentionDays: String(formData.get('dataRetentionDays') ?? ''),
-    duoConsent: String(formData.get('duoConsent') ?? ''),
+    redistributionIntent: String(formData.get('redistributionIntent') ?? ''),
+    outputType: String(formData.get('outputType') ?? ''),
   };
 
-  // FormData is all strings; coerce to the contract shape before parse.
   const candidate = {
-    justification: raw.justification,
     attestations: {
+      v: 1 as const,
+      projectTitle: raw.projectTitle,
+      projectDescription: raw.projectDescription,
+      institution: raw.institution,
+      intendedUseCategory: raw.intendedUseCategory,
+      intendedUseDuoTerms: raw.intendedUseDuoTerms,
       irbApproved: raw.irbApproved === 'true' || raw.irbApproved === 'on',
       irbApprovalRef: raw.irbApprovalRef.length > 0 ? raw.irbApprovalRef : null,
       dpiaRef: raw.dpiaRef.length > 0 ? raw.dpiaRef : null,
-      dataRetentionDays: raw.dataRetentionDays.length > 0 ? Number(raw.dataRetentionDays) : null,
-      // One IRI per line. Empty lines + whitespace are dropped.
-      duoConsent: raw.duoConsent
-        .split(/\r?\n/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0),
+      dataRetentionDays:
+        raw.dataRetentionDays.length > 0 ? Number(raw.dataRetentionDays) : Number.NaN,
+      redistributionIntent: raw.redistributionIntent,
+      outputType: raw.outputType,
     },
   };
 

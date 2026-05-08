@@ -55,9 +55,27 @@ beforeEach(() => {
   );
 });
 
+function buildAttestations(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    v: 1 as const,
+    projectTitle: 'RSNA pneumonia replication study',
+    projectDescription:
+      'Replicating an analysis published in 10.1234/example for thesis work, on the RSNA pneumonia detection benchmark, in a non-commercial setting.',
+    institution: 'University of Geneva',
+    intendedUseCategory: 'NON_COMMERCIAL_RESEARCH' as const,
+    intendedUseDuoTerms: ['DUO_0000042'],
+    irbApproved: true,
+    irbApprovalRef: 'IRB-2026-001',
+    dpiaRef: null,
+    dataRetentionDays: 365,
+    redistributionIntent: 'NONE' as const,
+    outputType: 'PUBLICATION' as const,
+    ...overrides,
+  };
+}
+
 const validBody = {
-  justification: 'Replicating an analysis published in 10.1234/example for thesis work.',
-  attestations: { irbApproved: true },
+  attestations: buildAttestations(),
 };
 
 describe('AccessRequestService.create', () => {
@@ -75,43 +93,94 @@ describe('AccessRequestService.create', () => {
   });
 
   it('rejects a host self-requesting access on their own dataset', async () => {
-    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB });
+    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB, duoTerms: [] });
     await expect(service.create('mine', validBody, user(HOST_SUB, 'host'))).rejects.toBeInstanceOf(
       BadRequestException,
     );
   });
 
-  it('persists a PENDING request for an authenticated non-host', async () => {
-    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB });
+  it('persists a PENDING request and matches MATCHED on a GRU dataset', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: ['DUO_0000042'],
+    });
     repo.create.mockResolvedValue({ id: REQUEST_ID });
     const out = await service.create('rsna', validBody, user(REQUESTER_SUB));
-    expect(out).toEqual({ id: REQUEST_ID });
-    expect(repo.create).toHaveBeenCalledWith({
-      datasetId: DATASET_ID,
-      requesterId: REQUESTER_SUB,
-      justification: validBody.justification,
-      attestations: validBody.attestations,
+    expect(out).toEqual({ id: REQUEST_ID, matchStatus: 'MATCHED' });
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        datasetId: DATASET_ID,
+        requesterId: REQUESTER_SUB,
+        attestations: validBody.attestations,
+        matchStatus: 'MATCHED',
+      }),
+    );
+  });
+
+  it('matches CONFLICT when commercial intent meets a NCU dataset', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      // GRU permission + NCU restriction (non-commercial use only)
+      duoTerms: ['DUO_0000042', 'DUO_0000046'],
     });
+    repo.create.mockResolvedValue({ id: REQUEST_ID });
+    const body = {
+      attestations: buildAttestations({ intendedUseCategory: 'COMMERCIAL_RESEARCH' as const }),
+    };
+    const out = await service.create('rsna', body, user(REQUESTER_SUB));
+    expect(out.matchStatus).toBe('CONFLICT');
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ matchStatus: 'CONFLICT' }),
+    );
+  });
+
+  it('matches CONFLICT when IRB-required dataset receives a non-IRB request', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      // GRU + IRB modifier
+      duoTerms: ['DUO_0000042', 'DUO_0000021'],
+    });
+    repo.create.mockResolvedValue({ id: REQUEST_ID });
+    const body = {
+      attestations: buildAttestations({ irbApproved: false, irbApprovalRef: null }),
+    };
+    const out = await service.create('rsna', body, user(REQUESTER_SUB));
+    expect(out.matchStatus).toBe('CONFLICT');
+  });
+
+  it('matches UNCLEAR when a formal-agreement modifier (RTN) is present', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      // GRU + RTN (return derived data) — needs a DUA, J.2 territory.
+      duoTerms: ['DUO_0000042', 'DUO_0000029'],
+    });
+    repo.create.mockResolvedValue({ id: REQUEST_ID });
+    const out = await service.create('rsna', validBody, user(REQUESTER_SUB));
+    expect(out.matchStatus).toBe('UNCLEAR');
   });
 });
 
 describe('AccessRequestService.listForDataset', () => {
   it('forbids a participant', async () => {
-    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB });
+    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB, duoTerms: [] });
     await expect(
       service.listForDataset('rsna', user(REQUESTER_SUB, 'participant')),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('lets the dataset host list', async () => {
-    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB });
+    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB, duoTerms: [] });
     repo.listForDataset.mockResolvedValue([]);
     await service.listForDataset('rsna', user(HOST_SUB, 'host'));
     expect(repo.listForDataset).toHaveBeenCalledWith(DATASET_ID);
   });
 
   it('lets an admin list (regardless of host id)', async () => {
-    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB });
+    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB, duoTerms: [] });
     repo.listForDataset.mockResolvedValue([]);
     await service.listForDataset('rsna', user(ADMIN_SUB, 'admin'));
     expect(repo.listForDataset).toHaveBeenCalledWith(DATASET_ID);
@@ -132,7 +201,7 @@ describe('AccessRequestService.decide', () => {
       status: 'PENDING' as const,
       createdAt: new Date(),
       updatedAt: new Date(),
-      dataset: { id: DATASET_ID, slug: 'rsna', name: 'RSNA', hostId: HOST_SUB },
+      dataset: { id: DATASET_ID, slug: 'rsna', name: 'RSNA', hostId: HOST_SUB, duoTerms: [] },
     };
   }
 
