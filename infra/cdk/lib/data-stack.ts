@@ -27,6 +27,12 @@ export class DataStack extends cdk.Stack {
   public readonly database: rds.DatabaseCluster;
   public readonly mediaBucket: s3.Bucket;
   public readonly artifactBucket: s3.Bucket;
+  /**
+   * Self-hosted dataset distributions (PR I, #87). Browsers PUT
+   * directly via presigned multipart URLs minted by the API; the API
+   * also presigns short-lived GET URLs on the gated download path.
+   */
+  public readonly datasetsBucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props: DataStackProps) {
     super(scope, id, props);
@@ -99,9 +105,49 @@ export class DataStack extends cdk.Stack {
       objectLockEnabled: props.cfg.envName === 'prod',
     });
 
+    // Self-hosted dataset distributions. Browsers PUT directly via
+    // presigned multipart URLs (origin = web app); the API presigns
+    // short-lived GETs for gated download.
+    //
+    // CORS allowed methods: PUT for uploads, GET/HEAD for resumed
+    // browser downloads on the rare path where the browser fetches
+    // the presigned URL directly. The web origin is the only
+    // permitted referer; tighter than `*` per CLAUDE.md security
+    // baseline. ExposeHeaders: ETag is the multipart-completion
+    // contract — without it the browser can't read each part's ETag
+    // and the complete-upload call breaks.
+    this.datasetsBucket = new s3.Bucket(this, 'DatasetsBucket', {
+      ...bucketDefaults,
+      bucketName: `oci-${props.cfg.envName}-datasets-${this.account}`,
+      serverAccessLogsPrefix: 'datasets/',
+      objectLockEnabled: props.cfg.envName === 'prod',
+      cors: [
+        {
+          allowedHeaders: ['*'],
+          allowedMethods: [
+            s3.HttpMethods.PUT,
+            s3.HttpMethods.GET,
+            s3.HttpMethods.HEAD,
+          ],
+          allowedOrigins: [`https://${props.cfg.domainName}`],
+          exposedHeaders: ['ETag'],
+          maxAge: 3000,
+        },
+      ],
+      lifecycleRules: [
+        {
+          id: 'abort-incomplete-multipart',
+          // Garbage-collect partial uploads — browsers / CLIs that
+          // crashed mid-flight leave per-part data accumulating.
+          abortIncompleteMultipartUploadAfter: cdk.Duration.days(7),
+        },
+      ],
+    });
+
     new cdk.CfnOutput(this, 'DatabaseEndpoint', { value: this.database.clusterEndpoint.hostname });
     new cdk.CfnOutput(this, 'MediaBucketName', { value: this.mediaBucket.bucketName });
     new cdk.CfnOutput(this, 'ArtifactBucketName', { value: this.artifactBucket.bucketName });
+    new cdk.CfnOutput(this, 'DatasetsBucketName', { value: this.datasetsBucket.bucketName });
 
     // Automatic rotation for the Aurora master secret in int/prod.
     // Dev keeps the static credential to keep the stack thin.

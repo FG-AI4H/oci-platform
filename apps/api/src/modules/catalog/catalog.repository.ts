@@ -275,6 +275,13 @@ export class CatalogRepository {
       contentSizeBytes: number | null;
       contentHash: string | null;
       requiresAccess: boolean;
+      // PR I (#87): when the manifest's `contentUrl` references a
+      // platform-hosted upload, the service stamps the source S3
+      // location onto the extract so downstream gated downloads work.
+      storageBackend?: 'EXTERNAL' | 'S3' | 'EXTERNAL_S3';
+      s3Bucket?: string | null;
+      s3Key?: string | null;
+      uploadStatus?: 'PENDING' | 'READY' | 'FAILED' | null;
     }>;
   }): Promise<DatasetVersionRow> {
     return (await this.prisma.client.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -299,6 +306,12 @@ export class CatalogRepository {
             contentSizeBytes: d.contentSizeBytes == null ? null : BigInt(d.contentSizeBytes),
             contentHash: d.contentHash,
             requiresAccess: d.requiresAccess,
+            // Default-to-EXTERNAL is safe; the service only sets these
+            // when adopting a prior platform-hosted upload (PR I, #87).
+            storageBackend: d.storageBackend ?? 'EXTERNAL',
+            s3Bucket: d.s3Bucket ?? null,
+            s3Key: d.s3Key ?? null,
+            uploadStatus: d.uploadStatus ?? null,
           })),
         });
       }
@@ -314,6 +327,50 @@ export class CatalogRepository {
 
       return v;
     })) as DatasetVersionRow;
+  }
+
+  /**
+   * Look up Distributions by ID for the publish-time adoption pass
+   * (PR I, #87). Returns just the columns the catalog service needs
+   * to copy onto a freshly-extracted ExtractedDistribution: storage
+   * backend + S3 location + size/hash + the dataset id (for the
+   * same-dataset guardrail in the service).
+   */
+  async findDistributionsForAdoption(ids: string[]): Promise<
+    Array<{
+      id: string;
+      datasetId: string;
+      uploadStatus: 'PENDING' | 'READY' | 'FAILED' | null;
+      s3Bucket: string | null;
+      s3Key: string | null;
+      contentSizeBytes: bigint | null;
+      contentHash: string | null;
+    }>
+  > {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.client.distribution.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        uploadStatus: true,
+        s3Bucket: true,
+        s3Key: true,
+        contentSizeBytes: true,
+        contentHash: true,
+        // Distribution → DatasetVersion → datasetId. Cheaper than
+        // emitting two queries since Prisma flattens to a JOIN.
+        datasetVersion: { select: { datasetId: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      datasetId: r.datasetVersion.datasetId,
+      uploadStatus: r.uploadStatus,
+      s3Bucket: r.s3Bucket,
+      s3Key: r.s3Key,
+      contentSizeBytes: r.contentSizeBytes,
+      contentHash: r.contentHash,
+    }));
   }
 
   /** Public-only: feeds `/v2/catalog/.well-known/croissant-catalog.json`. */

@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { DatasetSlugSchema, PublishDatasetVersionRequestSchema } from '@oci/shared-types';
 import { auth } from '../../../../auth';
@@ -156,5 +157,19 @@ export async function publishVersionAction(
     };
   }
 
+  // Bust the detail page's 30s cache so the host sees the new
+  // distributions / version they just published — without this the
+  // redirect lands on a stale render and misleads "did it work?".
+  revalidatePath(`/catalog/${parsed.data.slug}`);
   redirect(`/catalog/${parsed.data.slug}`);
+}
+
+/**
+ * Bust the detail-page cache after a host completes a file upload —
+ * the upload happens browser → API directly so Next.js never sees it
+ * and the 30s `apiFetch` revalidate window leaves the freshly-attached
+ * distribution invisible. Called from the FileUploader on `done`.
+ */
+export async function revalidateDatasetDetail(slug: string): Promise<void> {
+  revalidatePath(`/catalog/${slug}`);
 }

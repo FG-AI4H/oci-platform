@@ -284,59 +284,75 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
               <CardHeader>
                 <CardTitle>Distributions</CardTitle>
                 <CardDescription>
-                  Files in the latest version. Links labelled <em>upstream</em> point at the
-                  original host (e.g. Grand Challenge) — the platform references rather than mirrors
-                  them. S3-mirrored bytes with pre-signed URLs land in PR C; restricted entries will
-                  go through an access request flow at the same time.
+                  Files in the latest version. <em>Platform-hosted</em> entries stream from our S3
+                  via short-lived presigned URLs — the link below goes through the access gate.{' '}
+                  <em>Upstream</em> entries point at the original host (e.g. Grand Challenge) and
+                  the platform references rather than mirrors them.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {detail.distributions.map((d, i) => (
-                  <div
-                    key={d.id}
-                    className={
-                      'flex flex-col gap-3 rounded-md p-3 sm:flex-row sm:items-center sm:justify-between' +
-                      (i % 2 === 0 ? ' bg-[var(--color-subtle)]' : '')
-                    }
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <p className="font-medium font-mono text-sm break-words">{d.croissantId}</p>
-                      <p className="text-xs text-[var(--color-muted-foreground)]">
-                        {d.contentType}
-                        {d.contentSizeBytes !== null
-                          ? ` · ${formatBytes(d.contentSizeBytes)}`
-                          : null}
-                        {d.contentHash ? (
+                {detail.distributions.map((d, i) => {
+                  const platformHosted = isPlatformHosted(d.contentUrl);
+                  return (
+                    <div
+                      key={d.id}
+                      className={
+                        'flex flex-col gap-3 rounded-md p-3 sm:flex-row sm:items-center sm:justify-between' +
+                        (i % 2 === 0 ? ' bg-[var(--color-subtle)]' : '')
+                      }
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <p className="font-medium font-mono text-sm break-words">{d.croissantId}</p>
+                        <p className="text-xs text-[var(--color-muted-foreground)]">
+                          {d.contentType}
+                          {d.contentSizeBytes !== null
+                            ? ` · ${formatBytes(d.contentSizeBytes)}`
+                            : null}
+                          {d.contentHash ? (
+                            <>
+                              {' · '}
+                              <span className="font-mono">
+                                sha256:{d.contentHash.slice(0, 12)}…
+                              </span>
+                            </>
+                          ) : null}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {d.requiresAccess ? (
+                          <Badge tone="warning">requires access</Badge>
+                        ) : platformHosted ? (
                           <>
-                            {' · '}
-                            <span className="font-mono">sha256:{d.contentHash.slice(0, 12)}…</span>
+                            <Badge tone="success">hosted</Badge>
+                            <a
+                              href={`/catalog/${detail.slug}/distributions/${d.id}/download`}
+                              aria-label={`Download ${d.croissantId} from platform storage`}
+                              className="inline-flex items-center gap-1 rounded text-sm font-medium text-[var(--color-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+                            >
+                              <span>download</span>
+                            </a>
                           </>
-                        ) : null}
-                      </p>
+                        ) : d.contentUrl ? (
+                          <>
+                            <Badge tone="neutral">upstream</Badge>
+                            <a
+                              href={d.contentUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={`Open ${d.croissantId} on upstream host (opens in new tab)`}
+                              className="inline-flex items-center gap-1 rounded text-sm font-medium text-[var(--color-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+                            >
+                              <span>open</span>
+                              <ExternalLinkIcon size={14} />
+                            </a>
+                          </>
+                        ) : (
+                          <Badge tone="neutral">no url</Badge>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {d.requiresAccess ? (
-                        <Badge tone="warning">requires access</Badge>
-                      ) : d.contentUrl ? (
-                        <>
-                          <Badge tone="neutral">upstream</Badge>
-                          <a
-                            href={d.contentUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            aria-label={`Open ${d.croissantId} on upstream host (opens in new tab)`}
-                            className="inline-flex items-center gap-1 rounded text-sm font-medium text-[var(--color-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
-                          >
-                            <span>open</span>
-                            <ExternalLinkIcon size={14} />
-                          </a>
-                        </>
-                      ) : (
-                        <Badge tone="neutral">no url</Badge>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </CardContent>
             </Card>
           ) : null}
@@ -430,4 +446,16 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+}
+
+/**
+ * Platform-hosted distributions get a relative `contentUrl` of
+ * `/v2/catalog/datasets/<slug>/distributions/<id>/download` (set by
+ * StorageService.completeUpload). Upstream URLs are absolute. The gate
+ * is the relative-path discriminator, not a parse — keeps the contract
+ * cheap on both halves.
+ */
+function isPlatformHosted(contentUrl: string | null): boolean {
+  if (!contentUrl) return false;
+  return contentUrl.startsWith('/v2/catalog/');
 }
