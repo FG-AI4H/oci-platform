@@ -77,6 +77,9 @@ test.describe('catalog host workflow', () => {
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/publish$`));
 
+    // Switch to the paste form (PR K wizard is the default).
+    await page.getByRole('tab', { name: 'I already have a manifest' }).click();
+
     // -- Negative case: malformed JSON ------------------------------------
     await page.getByLabel('Croissant manifest').fill('not json');
     await page.getByRole('button', { name: /validate.*publish/i }).click();

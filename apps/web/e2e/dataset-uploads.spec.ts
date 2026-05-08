@@ -83,6 +83,8 @@ test.describe('platform-hosted distributions', () => {
     await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/publish$`));
 
     // -- Publish a minimal manifest so latestVersion is set ----------------
+    // Switch to the paste form (PR K wizard is the default).
+    await page.getByRole('tab', { name: 'I already have a manifest' }).click();
     await page.getByLabel('Croissant manifest').fill(minimalManifest(`E2E upload ${slug}`));
     await page.getByRole('button', { name: /validate.*publish/i }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${slug}$`));
@@ -91,6 +93,9 @@ test.describe('platform-hosted distributions', () => {
     // latestVersion is present (see publish/page.tsx).
     await page.goto(`/catalog/${slug}/publish`);
     await expect(page.getByRole('heading', { name: 'Upload files' })).toBeVisible();
+    // Re-switch to the paste form for the second publish (the upload
+    // card is below it on the page either way).
+    await page.getByRole('tab', { name: 'I already have a manifest' }).click();
 
     // -- Pick a tiny file → uploader does multipart against MinIO ----------
     // The file input is the sr-only `<input type="file">` next to the
