@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@oci/database';
 import type {
+  AccessTier,
   DatasetSummary,
   DatasetDetail,
   DatasetSlug,
@@ -28,6 +29,7 @@ interface DatasetRow {
   conformanceVersion: string | null;
   croissant: unknown;
   duoTerms: string[];
+  accessTier: AccessTier;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -207,6 +209,7 @@ export class CatalogRepository {
       latest_version: string | null;
       created_at: Date;
       updated_at: Date;
+      access_tier: AccessTier;
     };
 
     const rows = await this.prisma.client.$queryRaw<Row[]>(Prisma.sql`
@@ -218,6 +221,7 @@ export class CatalogRepository {
         d.visibility,
         d.status,
         d.conformance_version,
+        d.access_tier,
         (
           SELECT v.version
           FROM "catalog"."dataset_versions" v
@@ -323,6 +327,7 @@ export class CatalogRepository {
         })) ?? [],
       duoTerms: ds.duoTerms ?? [],
       hostId: ds.hostId,
+      accessTier: ds.accessTier as AccessTier,
     };
   }
 
@@ -350,10 +355,19 @@ export class CatalogRepository {
     hostId: string;
     visibility: DatasetVisibility;
     duoTerms: string[];
+    accessTier: AccessTier;
+    emailDomainAllowlist: string[];
   } | null> {
     const ds = await this.prisma.client.dataset.findUnique({
       where: { slug },
-      select: { id: true, hostId: true, visibility: true, duoTerms: true },
+      select: {
+        id: true,
+        hostId: true,
+        visibility: true,
+        duoTerms: true,
+        accessTier: true,
+        emailDomainAllowlist: true,
+      },
     });
     if (!ds) return null;
     return {
@@ -361,6 +375,8 @@ export class CatalogRepository {
       hostId: ds.hostId,
       visibility: ds.visibility as DatasetVisibility,
       duoTerms: ds.duoTerms ?? [],
+      accessTier: ds.accessTier as AccessTier,
+      emailDomainAllowlist: ds.emailDomainAllowlist ?? [],
     };
   }
 
@@ -563,6 +579,10 @@ export class CatalogRepository {
         updatedAt: r.harvestedAt.toISOString(),
         sourceCatalog: r.sourceCatalog,
         originUrl: r.originUrl,
+        // Federated rows have no local accessTier — peers manage their
+        // own tier policy. Default to OPEN so the catalog list renders;
+        // any per-distribution `requiresAccess` still gates download.
+        accessTier: 'OPEN' as const,
       })),
       totalEstimate,
     };
@@ -580,6 +600,7 @@ function rowToSummary(r: {
   latest_version: string | null;
   created_at: Date;
   updated_at: Date;
+  access_tier: AccessTier;
 }): DatasetSummary {
   return {
     id: r.id,
@@ -594,5 +615,6 @@ function rowToSummary(r: {
     updatedAt: r.updated_at.toISOString(),
     sourceCatalog: null,
     originUrl: null,
+    accessTier: r.access_tier,
   };
 }

@@ -50,6 +50,7 @@ const baseDetail: DatasetDetail = {
   originUrl: null,
   duoTerms: [],
   hostId: '00000000-0000-0000-0000-0000000000aa',
+  accessTier: 'OPEN',
 };
 
 describe('datasetJsonLd', () => {

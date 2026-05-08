@@ -92,6 +92,34 @@ enum AccessRequestStatus {
   @@schema("catalog")
 }
 
+/// Identity assurance tier (#115, ADR-0003 Decision 1). Decoupled from
+/// `DatasetVisibility`. `OPEN` keeps existing rows permissive; hosts opt
+/// up as they publish more sensitive material.
+enum AccessTier {
+  OPEN
+  REGISTERED
+  CONTROLLED
+  SENSITIVE
+
+  @@schema("catalog")
+}
+
+/// Computed identity-assurance score for a requester at access-request
+/// creation time (#115, ADR-0003 Decision 2). Persisted on `AccessRequest`
+/// so the host inbox can show "what we know about this person" without
+/// recomputation. Order is canonical — see `REQUESTER_IDENTITY_SCORE_RANK`
+/// in `@oci/shared-types`.
+enum RequesterIdentityScore {
+  EMAIL_ONLY
+  EMAIL_DOMAIN_VERIFIED
+  ORCID_LINKED
+  QUIZ_PASSED
+  PI_COUNTERSIGNED
+  PASSPORT_VERIFIED
+
+  @@schema("catalog")
+}
+
 /// Where the bytes for a Distribution actually live. PR I (#87) adds
 /// `S3` for self-hosted uploads under `oci-datasets-<env>`; everything
 /// before PR I was implicitly `EXTERNAL` (the manifest's contentUrl
@@ -155,6 +183,13 @@ model Dataset {
   /// either bare domains (`example.org`) or leading-dot wildcards
   /// (`.example.org`); validated on write by the host config endpoint.
   emailDomainAllowlist String[] @default([]) @map("email_domain_allowlist")
+
+  /// Identity-assurance tier (#115, ADR-0003 Decision 1). Decoupled from
+  /// `visibility`. Default `OPEN` keeps existing rows permissive; hosts
+  /// opt up as they publish more sensitive material. The DUO matcher
+  /// surfaces a CONFLICT explanation when the requester's identity score
+  /// is below this tier's minimum (`ACCESS_TIER_MIN_SCORE`).
+  accessTier AccessTier @default(OPEN) @map("access_tier")
 
   versions       DatasetVersion[]
   accessRequests AccessRequest[]
@@ -277,6 +312,38 @@ model AccessRequest {
   /// populated for CONFLICT / UNCLEAR so the host sees the *why*
   /// without having to learn DUO themselves.
   matchExplanations String[] @default([]) @map("match_explanations")
+
+  /// Computed at create time from the `RequesterIdentityContext`
+  /// normalizer (#115, ADR-0003 Decision 2). Default `EMAIL_ONLY` keeps
+  /// legacy rows valid post-migration; new rows pick up
+  /// `EMAIL_DOMAIN_VERIFIED` when the requester's email is institutional
+  /// or corporate (#116). Future PRs lift toward `QUIZ_PASSED` (#117),
+  /// `PI_COUNTERSIGNED` (DUA flow), and `PASSPORT_VERIFIED` (Passport
+  /// ingestion).
+  requesterIdentityScore RequesterIdentityScore @default(EMAIL_ONLY) @map("requester_identity_score")
+
+  /// Intended Data Use statement (#115). Replaces `justification` as
+  /// the canonical free-text rationale. Backfilled from `justification`
+  /// on existing rows by the migration; new rows mirror
+  /// `attestations.projectDescription` here during the transition.
+  /// Nullable for legacy rows that never had a justification value.
+  iduStatement String? @map("idu_statement")
+
+  /// Optional AI-tool transparency disclosure (#115). Schema:
+  /// `{ tools: [{ name, usage }], notes? }` — see `AiToolDisclosureSchema`
+  /// in `@oci/shared-types`. Populated by #120 (builder/researcher form
+  /// variants) when the requester declares AI tooling used in the project.
+  aiToolDisclosure Json? @map("ai_tool_disclosure")
+
+  /// PI / Signing Official email for CONTROLLED+ tier countersign
+  /// workflows (#115). `null` until the form captures it (#120) and the
+  /// DUA flow uses it (future PR alongside DocuSeal AdES integration).
+  signingOfficialEmail String? @map("signing_official_email")
+
+  /// Timestamp when the requester accepted the data-use pledge / click-
+  /// wrap (#118). `null` on existing rows; populated when #118 lands the
+  /// click-wrap component on the request-access page.
+  pledgeAcceptedAt DateTime? @map("pledge_accepted_at")
 
   dataset Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
 
