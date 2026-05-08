@@ -1,0 +1,100 @@
+name: Feature / engineering task
+description: A piece of engineering work — feature, refactor, bug, or technical debt.
+title: '[Phase X · WS] Short title (WS YYYY-Qn)'
+labels:
+  - type:feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for any engineering work that needs to be tracked on the project board.
+
+        **Title convention**: `[Phase X · WS] Short title` where `WS` is the workstream
+        (`DAP`, `DP`, `AP`, `EP`, `PP`, `RP`, or `platform`). Add the quarterly target
+        (`WS 2026-Q3`) when one applies.
+        Examples: `[Phase B · DAP] Tiered access model — Dataset.accessTier`,
+        `[Phase A · platform] CDK skeleton bootstrap`.
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: |
+        What's in scope, in enough detail that a fresh implementer can pick this up.
+        Include affected modules, schemas, API endpoints, UI surfaces. Don't paste full
+        code — but do name the files and the shape of the change.
+      placeholder: |
+        - Add `Dataset.accessTier` enum (`OPEN | REGISTERED | CONTROLLED | SENSITIVE`) to Prisma schema.
+        - New schemas in `@oci/shared-types` for the request DTO + response.
+        - Surface the tier on the catalog detail page next to the visibility badge.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Why this exists / what motivates it
+      description: |
+        Reference links to ADRs, audience docs, conversations, parent issues, and external
+        standards. The board is the source of truth for *what*; this section is the source
+        of truth for *why*.
+      placeholder: |
+        - ADR-0003 § Decision item 1
+        - docs/overview/access-governance.md (plain-English explainer)
+        - Parent issue: #136 (steering: endorse ADR-0003)
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: |
+        How does the implementer know they're done? Make this testable.
+      placeholder: |
+        - [ ] Prisma migration applied to dev + int.
+        - [ ] `GET /v2/catalog/datasets/:slug` returns `accessTier` in the response.
+        - [ ] Catalog detail page renders the tier badge for non-OPEN datasets.
+        - [ ] Vitest covers the matcher's tier-aware branch.
+        - [ ] Playwright e2e covers the tier badge rendering.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Phase
+      description: Which phase does this map to in the modernisation plan?
+      options:
+        - 'phase:A'
+        - 'phase:B'
+        - 'phase:C'
+        - 'phase:D'
+        - 'phase:E'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package / Workstream
+      options:
+        - 'package:DAP — Data Acquisition Package (catalog, access requests, federation)'
+        - 'package:DP — Data Storage Package (identity, storage, infra)'
+        - 'package:AP — Annotation Package'
+        - 'package:EP — Evaluation Package'
+        - 'package:PP — Prediction Package'
+        - 'package:RP — Reporting Package'
+        - 'area:platform — cross-cutting / non-package'
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies / blockers
+      description: |
+        Other issues that must land first. Cross-link with `Depends on #N`.
+      placeholder: |
+        Depends on #115 (tiered access model)
+        Blocks #119 (commercial-use terms surface)

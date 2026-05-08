@@ -1,0 +1,54 @@
+name: Follow-up / cleanup
+description: A small fix, audit-finding, or technical debt item surfaced by recent work.
+title: '[follow-up] Short title'
+labels:
+  - type:tech-debt
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for issues surfaced by audits, post-merge review, or "we noticed this
+        while doing something else". Bigger than a one-line PR, smaller than a feature.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: One-sentence summary of the fix.
+      placeholder: |
+        Replace `aria-pressed` on catalog facet anchors with `aria-current` (axe critical violation).
+    validations:
+      required: true
+
+  - type: textarea
+    id: where
+    attributes:
+      label: Where it surfaced
+      description: |
+        What audit / PR / spec / conversation surfaced this? Link the artefact so the
+        next reader can understand the context without re-deriving it.
+      placeholder: |
+        - Surfaced by /ui-ux-expert audit on PR #144 (see `apps/web/test-results/audit/SESSION-AUDIT-REPORT.md` finding #A1).
+        - Pre-existing from PR L.1 (#100, faceted search).
+    validations:
+      required: true
+
+  - type: textarea
+    id: fix
+    attributes:
+      label: Suggested fix
+      description: |
+        What's the change? File-level if you know it. Doesn't have to be the final answer
+        but should give the implementer a head start.
+      placeholder: |
+        - Convert facet pills from `<a>` with `aria-pressed` to `<button>` with `aria-pressed`,
+          OR keep the `<a>` (for SEO crawl) and replace `aria-pressed` with `aria-current="true"` on active.
+        - File: `apps/web/src/app/catalog/list-facets.tsx`.
+
+  - type: textarea
+    id: verify
+    attributes:
+      label: How to verify
+      placeholder: |
+        - axe-core scan on /catalog returns 0 critical violations.
+        - Existing Playwright specs still pass.
