@@ -201,6 +201,12 @@ export class CatalogService {
           : 'unknown';
 
     const distributions = extractDistributions(req.croissant);
+    // For each platform-hosted contentUrl, look up the upstream
+    // Distribution and inherit its S3 location. The gated download path
+    // refuses EXTERNAL rows (correctly — it has nothing to sign), so
+    // without this adoption a host who uploads + republishes ends up
+    // with a manifest that points at a 400-ing endpoint.
+    await this.adoptPlatformHostedDistributions(target.id, distributions);
     const croissantHash = sha256OfJson(req.croissant);
 
     try {
@@ -232,6 +238,52 @@ export class CatalogService {
     const ds = await this.repo.findBySlug(slug);
     if (!ds) throw new Error('inconsistent state — published dataset not found');
     return ds;
+  }
+
+  /**
+   * For each entry whose `contentUrl` points at our gated-download
+   * route, look up the source Distribution and copy its S3 location
+   * onto the entry. Mutates `distributions` in place. Cross-dataset
+   * references are intentionally allowed by ID match alone — the
+   * caller must already be the host of the destination dataset
+   * (publishVersion gates that), and the source row's own visibility
+   * is enforced at download time, not at publish time.
+   */
+  private async adoptPlatformHostedDistributions(
+    datasetId: string,
+    distributions: ExtractedDistribution[],
+  ): Promise<void> {
+    const ids = distributions
+      .map((d) => (d.contentUrl ? (PLATFORM_HOSTED_URL.exec(d.contentUrl)?.[1] ?? null) : null))
+      .filter((id): id is string => id !== null);
+    if (ids.length === 0) return;
+
+    const rows = await this.repo.findDistributionsForAdoption(ids);
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    for (const d of distributions) {
+      if (!d.contentUrl) continue;
+      const m = PLATFORM_HOSTED_URL.exec(d.contentUrl);
+      if (!m) continue;
+      const src = byId.get(m[1]!);
+      // If the upload completed cleanly we adopt; otherwise leave the
+      // row as EXTERNAL so the host gets a clear "no bytes" signal at
+      // download time rather than a half-broken download. Same dataset
+      // requirement is a guardrail — adoption shouldn't make a host
+      // siphon another host's bytes.
+      if (!src || src.uploadStatus !== 'READY' || src.datasetId !== datasetId) continue;
+      d.storageBackend = 'S3';
+      d.s3Bucket = src.s3Bucket;
+      d.s3Key = src.s3Key;
+      d.uploadStatus = 'READY';
+      // Carry through size/hash from the upload — the manifest may omit
+      // them and the platform already knows the truth.
+      if (d.contentSizeBytes == null && src.contentSizeBytes != null) {
+        d.contentSizeBytes = Number(src.contentSizeBytes);
+      }
+      if (d.contentHash == null && src.contentHash != null) {
+        d.contentHash = src.contentHash;
+      }
+    }
   }
 
   /**
@@ -374,7 +426,23 @@ interface ExtractedDistribution {
   contentSizeBytes: number | null;
   contentHash: string | null;
   requiresAccess: boolean;
+  /**
+   * If the manifest's `contentUrl` references a platform-hosted file
+   * (i.e. `/v2/catalog/datasets/:slug/distributions/:id/download`), the
+   * service resolves it to the underlying S3 location and stamps these
+   * fields on the new Distribution row. Without this, republishing
+   * with the URL the uploader handed back creates an EXTERNAL row that
+   * the gated-download path refuses (PR I, #87).
+   */
+  storageBackend?: 'EXTERNAL' | 'S3' | 'EXTERNAL_S3';
+  s3Bucket?: string | null;
+  s3Key?: string | null;
+  uploadStatus?: 'PENDING' | 'READY' | 'FAILED' | null;
 }
+
+/** Matches `/v2/catalog/datasets/<slug>/distributions/<uuid>/download`. */
+const PLATFORM_HOSTED_URL =
+  /^\/v2\/catalog\/datasets\/[a-z0-9][a-z0-9-]*\/distributions\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/download$/;
 
 /**
  * Walk the Croissant manifest's `distribution[]` array (FileObject and

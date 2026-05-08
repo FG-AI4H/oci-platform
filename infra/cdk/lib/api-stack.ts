@@ -26,6 +26,13 @@ export interface ApiStackProps extends cdk.StackProps {
   /** Shared access-logs bucket (from observability stack) used as ALB access log target. */
   accessLogsBucket: s3.IBucket;
   /**
+   * Self-hosted dataset distributions bucket (PR I, #87). The API
+   * task gets read/write IAM on it for multipart upload + presigned
+   * GET; the bucket name is exposed to the container as
+   * `OCI_DATASETS_BUCKET`.
+   */
+  datasetsBucket: s3.IBucket;
+  /**
    * ECR image URI (`<account>.dkr.ecr.<region>.amazonaws.com/oci-api:<sha>`)
    * built and pushed by the GitHub Actions Deploy workflow.
    * When undefined (e.g. local `cdk synth` without `--context apiImage=...`),
@@ -145,6 +152,10 @@ export class ApiStack extends cdk.Stack {
             `/oci/${props.cfg.envName}/cognito/web-client-id`,
           ),
           COGNITO_REGION: this.region,
+          // PR I (#87): the storage module reads this to know which
+          // bucket to multipart-upload + presign against. Region
+          // already injected above.
+          OCI_DATASETS_BUCKET: props.datasetsBucket.bucketName,
         },
         // Aurora credential secrets — same per-field injection as the
         // migrate task. The API composes DATABASE_URL at boot from these
@@ -231,6 +242,51 @@ export class ApiStack extends cdk.Stack {
     // permission. Without this, the sidecar fails to start (403 Forbidden)
     // — a non-essential failure but visible noise in the events.
     grantGuardDutyAgentEcrPull(fargate.taskDefinition);
+
+    // Self-hosted dataset distributions (PR I, #87). The API multipart
+    // orchestration needs full RW + multipart-abort, plus permission
+    // to presign GETs for the gated download path. KMS access on the
+    // bucket's CMK is granted automatically by the high-level
+    // grantReadWrite helper (it inspects the bucket's encryption key).
+    props.datasetsBucket.grantReadWrite(fargate.taskDefinition.taskRole);
+    fargate.taskDefinition.taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          's3:AbortMultipartUpload',
+          's3:ListBucketMultipartUploads',
+          's3:ListMultipartUploadParts',
+        ],
+        resources: [props.datasetsBucket.bucketArn, `${props.datasetsBucket.bucketArn}/*`],
+      }),
+    );
+    // The aggregate policy that `grantReadWrite` synthesises uses S3
+    // action wildcards (`s3:GetObject*`, `s3:GetBucket*`, etc.) and
+    // KMS wildcards (`kms:GenerateDataKey*`, `kms:ReEncrypt*`). cdk-nag
+    // flags these as IAM5 violations; the wildcards are scoped to the
+    // datasets bucket + its CMK and are the standard CDK pattern for
+    // bucket-level RW. Suppressing with the explicit appliesTo list
+    // documents the intent rather than turning IAM5 off globally.
+    NagSuppressions.addResourceSuppressionsByPath(
+      this,
+      `/${this.stackName}/ApiService/TaskDef/TaskRole/DefaultPolicy/Resource`,
+      [
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            "S3 action wildcards on `${datasetsBucket.bucketArn}/*` are the standard CDK shape for `bucket.grantReadWrite()`; the principal is the API task role and the resource is scoped to one bucket. KMS wildcards are needed because the bucket's CMK is rotated and the SDK transparently calls GenerateDataKey + ReEncrypt during multipart uploads; both are scoped to the bucket's encryption key.",
+          appliesTo: [
+            'Action::s3:GetObject*',
+            'Action::s3:GetBucket*',
+            'Action::s3:List*',
+            'Action::s3:DeleteObject*',
+            'Action::s3:Abort*',
+            'Action::kms:ReEncrypt*',
+            'Action::kms:GenerateDataKey*',
+            { regex: '/^Resource::<DatasetsBucket.*\\.Arn>\\/\\*$/' },
+          ],
+        },
+      ],
+    );
 
     // ----------------------------------------------------------------------
     // One-shot Prisma migrate task definition. Rendered only when an

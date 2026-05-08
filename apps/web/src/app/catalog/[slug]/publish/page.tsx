@@ -18,6 +18,7 @@ import type { DatasetDetail } from '@oci/shared-types';
 import { auth } from '../../../../auth';
 import { apiFetch } from '../../../../lib/api';
 import { requireHost } from '../../../../lib/groups';
+import { FileUploader } from './file-uploader';
 import { PublishVersionForm } from './publish-version-form';
 
 export const metadata = {
@@ -87,14 +88,42 @@ export default async function PublishVersionPage({ params }: PageProps) {
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
-          <Card>
-            <CardHeader>
-              <CardTitle>New version</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PublishVersionForm slug={detail.slug} suggestedVersion={nextVersion} />
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>New version</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PublishVersionForm slug={detail.slug} suggestedVersion={nextVersion} />
+              </CardContent>
+            </Card>
+
+            {/*
+             * Self-hosted uploads (PR I, #87). Only meaningful once a
+             * version exists — multipart-complete attaches each file
+             * to the latest published version. Surfaced after the
+             * publish form so the host's flow is "publish manifest →
+             * upload files → paste contentUrls → publish next version".
+             * For datasets that already use external URLs, this
+             * section is just ignored.
+             */}
+            {detail.latestVersion && session?.accessToken ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Upload files</CardTitle>
+                  <CardDescription>
+                    Optional. Host the data on this platform instead of pointing the manifest at an
+                    upstream URL. Each upload yields a stable{' '}
+                    <code className="font-mono text-xs">contentUrl</code> for the next
+                    version&apos;s manifest.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <FileUploader slug={detail.slug} accessToken={session.accessToken} />
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
 
           <Card tone="subtle" className="h-fit lg:sticky lg:top-20">
             <CardHeader>
@@ -126,6 +155,7 @@ export default async function PublishVersionPage({ params }: PageProps) {
               </div>
             </CardContent>
           </Card>
+          {/* end grid columns */}
         </div>
       </Section>
     </Container>

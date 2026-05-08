@@ -78,6 +78,7 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
   database: data.database,
   logGroup: observability.apiLogGroup,
   accessLogsBucket: observability.accessLogsBucket,
+  datasetsBucket: data.datasetsBucket,
   apiImage,
   migrateImage,
   workerIngestImage,
