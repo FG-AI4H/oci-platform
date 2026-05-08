@@ -67,7 +67,7 @@ The funding ask is in three buckets:
 
 A multilateral funding model — rather than single-donor — is itself a design principle. It makes the OCI robust to single-funder withdrawal and aligns governance with funding.
 
-## What we explicitly do *not* ask for
+## What we explicitly do _not_ ask for
 
 - **Locking out commercial alternatives.** The OCI publishes to Google Dataset Search and HuggingFace; it interoperates rather than competes. Member states can use multiple surfaces.
 - **Data exclusivity.** A dataset published on the OCI is not removed from other surfaces; the OCI is the authoritative metadata + access-control surface, not a data jail.
@@ -78,13 +78,13 @@ A multilateral funding model — rather than single-donor — is itself a design
 
 A typical timeline:
 
-| Phase | Duration | Activities |
-| --- | --- | --- |
-| Engagement | 1–2 months | Joint Secretariat introductions, alignment on legal posture, AWS account procurement (or other cloud). |
-| Pilot deployment | 1 month | CDK deploy of `dev` environment in the member state's region; identity + Cognito wired; first test dataset onboarded. |
-| First federated PUBLIC dataset | 1–2 months | One real dataset published; appears in global federation feed; cited in a public communication. |
-| Full operations | 3+ months | `int` and `prod` deployed; operator runbooks adopted; second/third dataset published; first access requests handled. |
-| Full participation | ongoing | Routine PUBLIC publication; access-request workflow used; member state's engineers contribute to platform. |
+| Phase                          | Duration   | Activities                                                                                                            |
+| ------------------------------ | ---------- | --------------------------------------------------------------------------------------------------------------------- |
+| Engagement                     | 1–2 months | Joint Secretariat introductions, alignment on legal posture, AWS account procurement (or other cloud).                |
+| Pilot deployment               | 1 month    | CDK deploy of `dev` environment in the member state's region; identity + Cognito wired; first test dataset onboarded. |
+| First federated PUBLIC dataset | 1–2 months | One real dataset published; appears in global federation feed; cited in a public communication.                       |
+| Full operations                | 3+ months  | `int` and `prod` deployed; operator runbooks adopted; second/third dataset published; first access requests handled.  |
+| Full participation             | ongoing    | Routine PUBLIC publication; access-request workflow used; member state's engineers contribute to platform.            |
 
 Total: ~6–9 months from first engagement to full operations.
 

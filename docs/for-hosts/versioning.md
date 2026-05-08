@@ -4,10 +4,10 @@ Croissant versions follow semver: `MAJOR.MINOR.PATCH`. Each published version is
 
 ## When to bump what
 
-| Bump | Examples |
-| --- | --- |
-| **Patch** (`1.0.0 → 1.0.1`) | Typo in description; broken upstream URL; missing keyword. No structural change. |
-| **Minor** (`1.0.0 → 1.1.0`) | New file added; new metadata field populated; cohort metadata refined. Existing consumers' code keeps working. |
+| Bump                        | Examples                                                                                                                                                                                        |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Patch** (`1.0.0 → 1.0.1`) | Typo in description; broken upstream URL; missing keyword. No structural change.                                                                                                                |
+| **Minor** (`1.0.0 → 1.1.0`) | New file added; new metadata field populated; cohort metadata refined. Existing consumers' code keeps working.                                                                                  |
 | **Major** (`1.0.0 → 2.0.0`) | Distribution removed or renamed; license changed; consent terms changed in a way that may invalidate prior approvals; data re-collected from a new cohort. Existing consumers must re-evaluate. |
 
 When in doubt, bump bigger. Downstream evaluation reports cite the version; "I trained on v1.0.0" is wrong if you actually trained on v1.0.0 + a v1.0.1 patch that changed the data.
@@ -37,7 +37,7 @@ When citing the dataset in a paper or evaluation report, include the hash:
 For draft / RC versions during development:
 
 - `1.0.0-alpha.1`, `1.0.0-rc.1` are accepted by the validator.
-- They count as their own immutable versions; bumping `1.0.0-alpha.1 → 1.0.0-alpha.2` is fine, but you can't *replace* alpha.1 with alpha.2.
+- They count as their own immutable versions; bumping `1.0.0-alpha.1 → 1.0.0-alpha.2` is fine, but you can't _replace_ alpha.1 with alpha.2.
 - Pre-release versions don't participate in the federation outbound feed (`/.well-known/croissant-catalog.json` only lists `latestVersion` which can be a stable release).
 
 ## Anti-patterns

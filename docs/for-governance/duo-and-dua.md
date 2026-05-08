@@ -2,7 +2,7 @@
 
 The OCI's access-control surface is built on two layers:
 
-- **DUO (Data Use Ontology)** — machine-readable expressions of what a dataset *permits* and what a requester *intends*. GA4GH-approved technical standard. **Live today (PR J.1).**
+- **DUO (Data Use Ontology)** — machine-readable expressions of what a dataset _permits_ and what a requester _intends_. GA4GH-approved technical standard. **Live today (PR J.1).**
 - **DUA (Data Use Agreement)** — the formal contractual artefact for cases where DUO is insufficient. **Planned (PR J.2).**
 
 Together they cover the access spectrum from "anyone can use it for anything" (`NRES`) to "only this named institution may use it for this named project after signing a bespoke agreement" (`US`/`PS`/`IS` + DUA).
@@ -13,7 +13,7 @@ DUO is a vocabulary of ~30 terms. The OCI's matcher recognises 16 of them — th
 
 ### The three categories of DUO term
 
-**Permissions** — what the dataset is *for*. A dataset typically declares one.
+**Permissions** — what the dataset is _for_. A dataset typically declares one.
 
 - `GRU` (general research use), `HMB` (health/medical/biomedical), `DS` (disease-specific), `POA` (population/ancestry only), `NRES` (no restriction).
 
@@ -52,7 +52,7 @@ DUO is a **vocabulary**, not a contract. It can express that "this dataset requi
 
 For datasets where these matter, DUO terms with a formal-agreement modifier (`RTN`, `COL`, etc.) signal "this needs a DUA". The OCI flags these for the host; the DUA itself is the contract.
 
-## Layer 2 — DUA *(planned, PR J.2)*
+## Layer 2 — DUA _(planned, PR J.2)_
 
 When PR J.2 ships, the platform will:
 

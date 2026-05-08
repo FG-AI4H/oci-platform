@@ -4,15 +4,15 @@ The Open Code Infrastructure (OCI) Platform is a global public good, convened by
 
 This documentation is organised by **audience**. Pick the entry point that matches who you are:
 
-| Audience | What you'll find | Start here |
-| --- | --- | --- |
-| 🌍 **Anyone** — what is the OCI? | Concept, mandate, governance, glossary | [Overview](./overview/README.md) |
-| 🔬 **Researcher / Data consumer** | Find datasets, request access, use the data | [For researchers](./for-researchers/README.md) |
-| 🏥 **Dataset host** | Publish a dataset, upload files, review access requests | [For hosts](./for-hosts/README.md) |
-| 💻 **Developer / Integrator** | API, Croissant manifest, local setup, contribution | [For developers](./for-developers/README.md) |
-| ⚙️ **Operator / SRE** | Deployment, runbooks, security baseline | [For operators](./for-operators/README.md) |
-| 🏛️ **Member-state / Regulator / DPO** | Sovereignty, compliance, DUO/DUA framework, audit | [For governance](./for-governance/README.md) |
-| 🎯 **ITU/WHO/WIPO management** | Strategic overview, mandate alignment, adoption | [For strategy](./for-strategy/README.md) |
+| Audience                              | What you'll find                                        | Start here                                     |
+| ------------------------------------- | ------------------------------------------------------- | ---------------------------------------------- |
+| 🌍 **Anyone** — what is the OCI?      | Concept, mandate, governance, glossary                  | [Overview](./overview/README.md)               |
+| 🔬 **Researcher / Data consumer**     | Find datasets, request access, use the data             | [For researchers](./for-researchers/README.md) |
+| 🏥 **Dataset host**                   | Publish a dataset, upload files, review access requests | [For hosts](./for-hosts/README.md)             |
+| 💻 **Developer / Integrator**         | API, Croissant manifest, local setup, contribution      | [For developers](./for-developers/README.md)   |
+| ⚙️ **Operator / SRE**                 | Deployment, runbooks, security baseline                 | [For operators](./for-operators/README.md)     |
+| 🏛️ **Member-state / Regulator / DPO** | Sovereignty, compliance, DUO/DUA framework, audit       | [For governance](./for-governance/README.md)   |
+| 🎯 **ITU/WHO/WIPO management**        | Strategic overview, mandate alignment, adoption         | [For strategy](./for-strategy/README.md)       |
 
 ## Conventions
 

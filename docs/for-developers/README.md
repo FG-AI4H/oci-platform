@@ -2,13 +2,13 @@
 
 You're integrating with the OCI, contributing to the platform, or both. The platform is a TypeScript monorepo (NestJS API + Next.js web + AWS CDK + shared `@oci/*` packages).
 
-| Guide | Read when |
-| --- | --- |
-| [Local setup](./local-setup.md) | First-time contributor. Bringing the stack up on your laptop. |
-| [Architecture](../architecture.md) | Where everything lives, why. |
-| [API reference](./api-reference.md) | Calling the OCI from outside. Endpoints, auth, payload shapes. |
-| [Croissant manifest reference](./croissant-manifest.md) | Authoring or parsing manifests. Validator quirks. |
-| [Contributing](./contributing.md) | PR conventions, the orchestrator skills, the verification gate. |
+| Guide                                                          | Read when                                                                |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [Local setup](./local-setup.md)                                | First-time contributor. Bringing the stack up on your laptop.            |
+| [Architecture](../architecture.md)                             | Where everything lives, why.                                             |
+| [API reference](./api-reference.md)                            | Calling the OCI from outside. Endpoints, auth, payload shapes.           |
+| [Croissant manifest reference](./croissant-manifest.md)        | Authoring or parsing manifests. Validator quirks.                        |
+| [Contributing](./contributing.md)                              | PR conventions, the orchestrator skills, the verification gate.          |
 | [Strangler-fig migration plan](../migration/strangler-plan.md) | Why the legacy Spring Boot + Django are being replaced module by module. |
 
 ## Quick orientation
@@ -39,7 +39,7 @@ Full auth + payload shapes in [api-reference.md](./api-reference.md). OpenAPI sp
 - **Authenticated participant**: + RESTRICTED rows (visible, gated downloads), + access-request creation.
 - **Host**: + own datasets at any visibility/status, + publish / upload / review-requests.
 - **Admin**: + everything.
-- **Regulator / supervisor** *(reserved for Phase D)*: + audit trail.
+- **Regulator / supervisor** _(reserved for Phase D)_: + audit trail.
 
 ## Where to ask
 

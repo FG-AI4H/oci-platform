@@ -27,7 +27,7 @@ The OCI is designed to be **configured for your jurisdiction**, not to claim one
 - Every download (gated) recorded against the requester's identity.
 - ALB access logs to a dedicated S3 bucket with restricted IAM access.
 - CloudWatch Logs structured JSON with correlation ids; PII redacted at the pino layer.
-- Database audit log via `pgaudit` extension *(Phase D — under review)*.
+- Database audit log via `pgaudit` extension _(Phase D — under review)_.
 
 ### Application security
 
@@ -53,25 +53,25 @@ This is a partial, illustrative map. **Each row is a hint, not a certification.*
 
 ### EU GDPR
 
-| Requirement | OCI control | Notes |
-| --- | --- | --- |
-| Lawful basis | Host declares legal basis on the manifest; requester declares intended use + IRB ref. | OCI doesn't infer lawful basis; it records the host's and requester's claims. |
-| Data minimisation | Federation principle: metadata travels, bytes don't. | Host responsibility to publish only what's necessary. |
-| Purpose limitation | DUO terms encode permitted purpose; matcher checks intended use. | UNCLEAR triggers manual review; CONFLICT is denial-by-default. |
-| Right to erasure | Out of scope for dataset bytes (research data isn't typically subject to erasure under GDPR Art 89 research exemption); applies to user-account data per Cognito policy. | Document this explicitly in your DPIA. |
-| DPIA | Manifest has a `dpiaRef` field on access-request attestations. | Reference, not the document itself. |
-| Cross-border transfers | Configurable: host can pin to upstream-only, or stand up a national OCI instance. | See [data-sovereignty.md](./data-sovereignty.md). |
-| Records of processing | Audit trail. | Read-only access available to DPO on request. |
+| Requirement            | OCI control                                                                                                                                                              | Notes                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| Lawful basis           | Host declares legal basis on the manifest; requester declares intended use + IRB ref.                                                                                    | OCI doesn't infer lawful basis; it records the host's and requester's claims. |
+| Data minimisation      | Federation principle: metadata travels, bytes don't.                                                                                                                     | Host responsibility to publish only what's necessary.                         |
+| Purpose limitation     | DUO terms encode permitted purpose; matcher checks intended use.                                                                                                         | UNCLEAR triggers manual review; CONFLICT is denial-by-default.                |
+| Right to erasure       | Out of scope for dataset bytes (research data isn't typically subject to erasure under GDPR Art 89 research exemption); applies to user-account data per Cognito policy. | Document this explicitly in your DPIA.                                        |
+| DPIA                   | Manifest has a `dpiaRef` field on access-request attestations.                                                                                                           | Reference, not the document itself.                                           |
+| Cross-border transfers | Configurable: host can pin to upstream-only, or stand up a national OCI instance.                                                                                        | See [data-sovereignty.md](./data-sovereignty.md).                             |
+| Records of processing  | Audit trail.                                                                                                                                                             | Read-only access available to DPO on request.                                 |
 
 ### US HIPAA
 
-| Requirement | OCI control | Notes |
-| --- | --- | --- |
-| De-identification | Manifest has `bio:anonymizationLevel`. Hosts attest, don't validate. | The OCI does not perform de-identification. |
-| Business Associate Agreement (BAA) | Out of scope at the platform level. The hosting AWS account is the BA boundary. | Operators of US-targeting instances must execute BAAs with hosts. |
-| Audit controls | Logs + audit trail above. | HIPAA-equivalent logging is configurable; check operator runbooks. |
-| Access controls | Cognito + role-based authz. | MFA mandatory in `prod` for admin / regulator / supervisor. |
-| Encryption | At-rest KMS-CMK + in-transit TLS 1.3. | Meets HIPAA's "Addressable" encryption specs. |
+| Requirement                        | OCI control                                                                     | Notes                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| De-identification                  | Manifest has `bio:anonymizationLevel`. Hosts attest, don't validate.            | The OCI does not perform de-identification.                        |
+| Business Associate Agreement (BAA) | Out of scope at the platform level. The hosting AWS account is the BA boundary. | Operators of US-targeting instances must execute BAAs with hosts.  |
+| Audit controls                     | Logs + audit trail above.                                                       | HIPAA-equivalent logging is configurable; check operator runbooks. |
+| Access controls                    | Cognito + role-based authz.                                                     | MFA mandatory in `prod` for admin / regulator / supervisor.        |
+| Encryption                         | At-rest KMS-CMK + in-transit TLS 1.3.                                           | Meets HIPAA's "Addressable" encryption specs.                      |
 
 ### China PIPL
 
@@ -87,7 +87,7 @@ Whether the OCI's standard posture combined with these configs meets PIPL is a q
 
 Similar pattern: the OCI provides the structural controls (encryption, role-based access, audit, configurable residency, DUO-machine-checkable consent); jurisdiction-specific obligations are met through configuration + the operator's own policies.
 
-## What the OCI does *not* implement (yet)
+## What the OCI does _not_ implement (yet)
 
 - **Data Use Agreement (DUA) generation + e-sign.** Today the platform flags DUO terms requiring a formal agreement (`RTN`, `COL`, `MOR`, `US`, `PS`, `IS`) as UNCLEAR; hosts negotiate the agreement out-of-band and reference it in decision notes. PR J.2 will introduce template generation + countersigning.
 - **DAC (Data Access Committee) escalation routing.** Today every host inbox is the DAC; multi-member committees coordinate via decision notes. PR J.2 territory.
@@ -106,8 +106,8 @@ See [`docs/security.md`](../security.md) for the platform's STRIDE-aligned threa
 
 1. Read [`docs/security.md`](../security.md) and this page.
 2. Map your jurisdiction's requirements against the controls above. Note the gaps.
-3. Configure the deployment to close the gaps that *can* be closed (residency, federation participation, DUO terms required at publish, MFA scope).
-4. Document the gaps that *can't* be closed (DUA generation, audit export today) as accepted risks with planned mitigations.
+3. Configure the deployment to close the gaps that _can_ be closed (residency, federation participation, DUO terms required at publish, MFA scope).
+4. Document the gaps that _can't_ be closed (DUA generation, audit export today) as accepted risks with planned mitigations.
 5. Engage WG-Ethics if the gaps are common across jurisdictions — it's the GI-AI4H forum for posture changes.
 
 ## Reference

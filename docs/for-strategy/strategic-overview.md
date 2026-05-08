@@ -12,7 +12,7 @@ Today:
 - **Compliance is bespoke.** Every cross-border data-sharing agreement is rebuilt from scratch — slowly, expensively, inconsistently. The cost falls hardest on smaller institutions and lower-resource countries.
 - **Reproducibility is voluntary.** A regulator reviewing an AI-as-a-medical-device submission has no authoritative way to verify a vendor's training-data claims years after the fact.
 
-These compound. Over a decade, they widen the gap between who *gets to build* health AI and who *receives* it — a structural inequity in a technology that is increasingly consequential for public health.
+These compound. Over a decade, they widen the gap between who _gets to build_ health AI and who _receives_ it — a structural inequity in a technology that is increasingly consequential for public health.
 
 ## The OCI's response
 
@@ -20,7 +20,7 @@ A federated, standards-aligned platform with three layers:
 
 1. **Catalogue** — datasets described in MLCommons Croissant 1.1 metadata, indexed by Google Dataset Search and peer Croissant catalogues, surfaced through one search interface.
 2. **Access governance** — GA4GH Data Use Ontology (DUO) terms expressed on each dataset, structured intended-use declarations from requesters, machine-checkable matching, with a path to formal Data Use Agreements.
-3. **Evaluation traceability** *(Phase C, in flight)* — versioned dataset hashes that benchmarking results can cite, so model claims are verifiable years later.
+3. **Evaluation traceability** _(Phase C, in flight)_ — versioned dataset hashes that benchmarking results can cite, so model claims are verifiable years later.
 
 All three layers are **federated**. Member-state platforms, regional health authorities, hospital networks, and academic data hubs run their own OCI instances and link them together — metadata flows globally, bytes stay sovereign.
 
@@ -28,7 +28,7 @@ All three layers are **federated**. Member-state platforms, regional health auth
 
 ### ITU
 
-The OCI sits within ITU's "AI for Good" portfolio. It implements GI-AI4H's WG-Data Data and Model Exchange Protocol — the technical infrastructure that gives the initiative something to *operate*, not just to standardise. Member states already engage with ITU on telecom and digital-development topics; the OCI extends that engagement into health-AI infrastructure.
+The OCI sits within ITU's "AI for Good" portfolio. It implements GI-AI4H's WG-Data Data and Model Exchange Protocol — the technical infrastructure that gives the initiative something to _operate_, not just to standardise. Member states already engage with ITU on telecom and digital-development topics; the OCI extends that engagement into health-AI infrastructure.
 
 ### WHO
 
@@ -40,29 +40,29 @@ Datasets carry licences and attribution metadata under Croissant. The OCI surfac
 
 ## What's shipped today (May 2026)
 
-| Capability | State |
-| --- | --- |
-| Catalogue with full-text search, JSON-LD detail, Google-Dataset-Search indexing | ✅ Live |
-| Host workflow: create draft, publish manifest version, upload files | ✅ Live |
-| Federation: peer-catalogue harvest, source filter, outbound `/.well-known/...` feed | ✅ Live |
-| Self-hosted dataset distributions: multipart upload + gated download | ✅ Live (PR I) |
-| Structured access requests with DUO matching: MATCHED / CONFLICT / UNCLEAR | ✅ Live (PR J.1) |
-| Three deployment environments (`dev` / `int` / `prod`); CDK-defined; OIDC-only deploys | ✅ Live |
-| Three datasets in production: IDRiD seed + the federation-harvested cohort | 🚧 Onboarding |
+| Capability                                                                             | State            |
+| -------------------------------------------------------------------------------------- | ---------------- |
+| Catalogue with full-text search, JSON-LD detail, Google-Dataset-Search indexing        | ✅ Live          |
+| Host workflow: create draft, publish manifest version, upload files                    | ✅ Live          |
+| Federation: peer-catalogue harvest, source filter, outbound `/.well-known/...` feed    | ✅ Live          |
+| Self-hosted dataset distributions: multipart upload + gated download                   | ✅ Live (PR I)   |
+| Structured access requests with DUO matching: MATCHED / CONFLICT / UNCLEAR             | ✅ Live (PR J.1) |
+| Three deployment environments (`dev` / `int` / `prod`); CDK-defined; OIDC-only deploys | ✅ Live          |
+| Three datasets in production: IDRiD seed + the federation-harvested cohort             | 🚧 Onboarding    |
 
 Full live capability matrix at [overview/feature-status.md](../overview/feature-status.md).
 
 ## What's in flight
 
-| Feature | Status |
-| --- | --- |
-| Data Use Agreement (DUA) generation + e-sign + DAC routing | PR J.2 (next) |
-| CLI tool for TB-scale uploads | [#88](https://github.com/FG-AI4H/oci-platform/issues/88) |
-| External S3 mount for petabyte datasets | [#89](https://github.com/FG-AI4H/oci-platform/issues/89) |
-| Evaluation surface (Phase C — port from legacy Django) | Epic [#46](https://github.com/FG-AI4H/oci-platform/issues/46) |
-| Regulator audit-trail export endpoint | Phase D, [#47](https://github.com/FG-AI4H/oci-platform/issues/47) |
-| Annotation reactivation (Phase B) | Epic [#45](https://github.com/FG-AI4H/oci-platform/issues/45) |
-| Email notifications on access decisions | [#93](https://github.com/FG-AI4H/oci-platform/issues/93) |
+| Feature                                                    | Status                                                            |
+| ---------------------------------------------------------- | ----------------------------------------------------------------- |
+| Data Use Agreement (DUA) generation + e-sign + DAC routing | PR J.2 (next)                                                     |
+| CLI tool for TB-scale uploads                              | [#88](https://github.com/FG-AI4H/oci-platform/issues/88)          |
+| External S3 mount for petabyte datasets                    | [#89](https://github.com/FG-AI4H/oci-platform/issues/89)          |
+| Evaluation surface (Phase C — port from legacy Django)     | Epic [#46](https://github.com/FG-AI4H/oci-platform/issues/46)     |
+| Regulator audit-trail export endpoint                      | Phase D, [#47](https://github.com/FG-AI4H/oci-platform/issues/47) |
+| Annotation reactivation (Phase B)                          | Epic [#45](https://github.com/FG-AI4H/oci-platform/issues/45)     |
+| Email notifications on access decisions                    | [#93](https://github.com/FG-AI4H/oci-platform/issues/93)          |
 
 ## What we're betting on
 

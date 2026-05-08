@@ -8,7 +8,7 @@ This is **Tier 1** (browser-based, suitable for ~50 GB sessions). Tier 2 is a CL
 
 You need:
 
-- A **published version of the dataset**. Uploads attach to the latest published version, so you publish a manifest first (with whatever upstream distributions you have, or none), *then* upload, *then* republish a new version with the platform-hosted `contentUrl`s.
+- A **published version of the dataset**. Uploads attach to the latest published version, so you publish a manifest first (with whatever upstream distributions you have, or none), _then_ upload, _then_ republish a new version with the platform-hosted `contentUrl`s.
 - Files of any reasonable size. The browser uploader handles up to ~50 GB per file in one session; resume across refreshes is supported via localStorage.
 - A modern browser (Chromium / Firefox / Safari current — the multipart upload uses standard `fetch` with presigned URLs).
 
@@ -28,7 +28,7 @@ You need:
      "@id": "images.zip",
      "name": "images.zip",
      "encodingFormat": "application/zip",
-     "contentUrl": "/v2/catalog/datasets/<slug>/distributions/<id>/download"
+     "contentUrl": "/v2/catalog/datasets/<slug>/distributions/<id>/download",
    }
    ```
 6. Bump the version (e.g. `1.0.0 → 1.0.1`) and click "Validate & publish". The catalog publish step automatically inherits the S3 metadata from the prior upload so the gated download works.
@@ -79,11 +79,11 @@ The "cancel" button per file aborts the in-flight `fetch` and the API issues `Ab
 
 ## Sizing guidance
 
-| Your dataset | Use |
-| --- | --- |
-| < 50 GB total | Browser uploader (this page). |
-| 50 GB – 1 TB | CLI when [#88](https://github.com/FG-AI4H/oci-platform/issues/88) ships. Browser works but UX gets fragile around the 50 GB mark. |
-| > 1 TB | External S3 mount when [#89](https://github.com/FG-AI4H/oci-platform/issues/89) ships. Until then, bring your own S3 bucket and use upstream URLs in the manifest. |
+| Your dataset  | Use                                                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| < 50 GB total | Browser uploader (this page).                                                                                                                                      |
+| 50 GB – 1 TB  | CLI when [#88](https://github.com/FG-AI4H/oci-platform/issues/88) ships. Browser works but UX gets fragile around the 50 GB mark.                                  |
+| > 1 TB        | External S3 mount when [#89](https://github.com/FG-AI4H/oci-platform/issues/89) ships. Until then, bring your own S3 bucket and use upstream URLs in the manifest. |
 
 ## Troubleshooting
 

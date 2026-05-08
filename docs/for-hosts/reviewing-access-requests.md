@@ -41,6 +41,7 @@ Three states. Each is a recommendation, not an enforcement — you can approve a
 The requester's declared use is **consistent with all your DUO terms**, no formal-agreement modifier blocks approval, and IRB-required terms are met. Default action: **approve**, unless something in the project description changes your mind.
 
 What to scan:
+
 - Does the project description match the project title? (Mismatch = possible cut-paste error.)
 - Is the institution legitimate? (You're not the platform's first line of defence here — the OCI requires a verified account — but you're the second.)
 - Is the retention window reasonable for the project?
@@ -50,6 +51,7 @@ What to scan:
 The matcher found at least one explicit conflict — typically commercial intent vs NCU, or no IRB on an IRB-required dataset. Default action: **deny**, with a decision note that points the requester to the conflict (the matcher's explanation is right there in the alert).
 
 When to override:
+
 - The matcher was wrong (rare — the conflicts are mechanical). File an issue if it happens.
 - You have out-of-band reason to grant the request anyway (e.g. you've signed a side-letter that explicitly waives the restriction). Document it in the decision note for the audit trail.
 

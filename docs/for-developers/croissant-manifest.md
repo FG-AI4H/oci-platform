@@ -11,7 +11,7 @@ The validator runs in layers (`packages/croissant/src/validator/`):
 1. **Croissant 1.0 base** (locked since March 2024) — the schema.org `Dataset` shape, RecordSet, Field, FileObject / FileSet, top-level identification fields.
 2. **Croissant 1.1 deltas** (Feb 2026) — PROV-O provenance (`wasDerivedFrom`, `wasGeneratedBy`, `wasAttributedTo`), ODRL usage policies (`hasOffer`), DUO consent codes (`consentCode`), the vocabulary framework.
 3. **RAI extension** — Responsible AI properties (~20 fields: bias, sensitivity, etc.).
-4. **BioCroissant draft** *(OCI proposal, namespace `https://oci.ai4h.net/biocroissant/v0.1#`)* — imaging modality, body region, disease condition, anonymisation level, IRB attestations, cohort characteristics.
+4. **BioCroissant draft** _(OCI proposal, namespace `https://oci.ai4h.net/biocroissant/v0.1#`)_ — imaging modality, body region, disease condition, anonymisation level, IRB attestations, cohort characteristics.
 5. **OCI publish-time checks** — application-level rules, e.g. fail-closed for non-PUBLIC datasets without DUO terms.
 
 Layers run in order; failure at any layer aborts and returns the issues. The web publish form renders them under "Manifest validation failed (croissant-1.1)".
@@ -78,7 +78,7 @@ The publish endpoint also:
 - Inherits `duoTerms` from the manifest's `consentCode`.
 - Adopts platform-hosted `contentUrl`s back to their S3 origin (so a host who uploaded → republished doesn't end up with a manifest pointing at a 400-ing endpoint).
 
-## What's *not* in our validator
+## What's _not_ in our validator
 
 - **Full JSON-LD `@context` expansion**. We don't bring in `jsonld.js`; we strip known prefixes only.
 - **SHACL constraint validation**. The Croissant spec does have SHACL shapes; we don't enforce them.
@@ -96,7 +96,7 @@ A minimal valid Croissant 1.1 manifest for a non-PUBLIC dataset:
     "@vocab": "https://schema.org/",
     "sc": "https://schema.org/",
     "cr": "http://mlcommons.org/croissant/",
-    "dct": "http://purl.org/dc/terms/"
+    "dct": "http://purl.org/dc/terms/",
   },
   "@type": "sc:Dataset",
   "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
@@ -112,9 +112,9 @@ A minimal valid Croissant 1.1 manifest for a non-PUBLIC dataset:
       "@type": "sc:DefinedTerm",
       "termCode": "DUO_0000042",
       "@id": "http://purl.obolibrary.org/obo/DUO_0000042",
-      "name": "general research use"
-    }
-  ]
+      "name": "general research use",
+    },
+  ],
 }
 ```
 

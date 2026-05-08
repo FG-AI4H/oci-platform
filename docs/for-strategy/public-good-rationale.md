@@ -8,7 +8,7 @@ Three properties matter for the kind of infrastructure the OCI is, and only a pu
 
 ### 1. Mandate-aligned governance
 
-A health-AI data platform's *governance posture* — what data is allowed, who can use it, how compliance is enforced, what the audit trail looks like — should be set by the same multilateral institutions that hold the public-health mandate.
+A health-AI data platform's _governance posture_ — what data is allowed, who can use it, how compliance is enforced, what the audit trail looks like — should be set by the same multilateral institutions that hold the public-health mandate.
 
 Vendor-operated alternatives have their governance decided commercially. Even good-faith vendors are subject to:
 
@@ -20,7 +20,7 @@ A multilateral, open-source platform is robust to all three. ITU, WHO, and WIPO 
 
 ### 2. Federation and sovereignty
 
-Health data is sovereign. Member states, hospital networks, and research consortia legitimately can't export bytes to a single global vendor. They *can* expose metadata and accept access requests under their own rules.
+Health data is sovereign. Member states, hospital networks, and research consortia legitimately can't export bytes to a single global vendor. They _can_ expose metadata and accept access requests under their own rules.
 
 A federated architecture that respects this is hard to monetise — there's no choke-point to charge for. Vendors don't build federated public infrastructure because nobody pays for it. A multilateral entity, with a public-good mandate, can.
 
@@ -28,7 +28,7 @@ A federated architecture that respects this is hard to monetise — there's no c
 
 The OCI's source code is on GitHub. Anyone — a member state's engineers, a regulator's audit team, a journalist, a public-interest advocacy group — can read it, fork it, or self-host it.
 
-This open-source posture is not a commodity feature; it *is* a governance commitment. It means:
+This open-source posture is not a commodity feature; it _is_ a governance commitment. It means:
 
 - A member state can verify what the platform actually does, not just what the documentation claims.
 - A future leadership change can't quietly re-purpose the platform; the audit trail is in the git history.

@@ -6,7 +6,7 @@ Domain terms used throughout the OCI documentation.
 
 **Croissant** — JSON-LD metadata standard for ML-ready datasets, governed by [MLCommons](https://mlcommons.org/working-groups/data/croissant/). The OCI conforms to Croissant 1.1 (Feb 2026), which adds PROV-O provenance, ODRL usage policy, DUO consent codes, and an extensible vocabulary framework on top of the 1.0 base.
 
-**BioCroissant** — Working group inside the Croissant ecosystem (co-led by MLCommons Medical WG and GI-AI4H WG-Data) defining health-and-life-sciences extensions to Croissant: imaging modality, anatomical region, IRB attestations, cohort characteristics, etc. Note: "BioCroissant" is the *team name*; the resulting vocabulary ships under the Croissant namespace.
+**BioCroissant** — Working group inside the Croissant ecosystem (co-led by MLCommons Medical WG and GI-AI4H WG-Data) defining health-and-life-sciences extensions to Croissant: imaging modality, anatomical region, IRB attestations, cohort characteristics, etc. Note: "BioCroissant" is the _team name_; the resulting vocabulary ships under the Croissant namespace.
 
 **DUO — Data Use Ontology** — GA4GH-approved technical standard for expressing dataset-use permissions in ~30 machine-readable terms (e.g. `DUO_0000042` general research use). The OCI uses DUO to express what a dataset permits + what a requester intends. See [for-governance/duo-and-dua.md](../for-governance/duo-and-dua.md).
 
@@ -35,6 +35,7 @@ Domain terms used throughout the OCI documentation.
 ## Data-access concepts
 
 **Visibility** — the dataset-level discoverability tier:
+
 - `PUBLIC`: anyone can see it in the catalogue, anyone can pull `cr:dataUseTerms`-permitted distributions.
 - `RESTRICTED`: visible in the catalogue; access requires an approved AccessRequest.
 - `PRIVATE`: only the host and admins see it (used for drafts).
@@ -43,11 +44,11 @@ Domain terms used throughout the OCI documentation.
 
 **Auto-match** — the platform reduces (dataset DUO terms × requester DUO terms × intended use) to MATCHED / CONFLICT / UNCLEAR. The host inbox shows a badge + the matcher's explanations; CONFLICT is denial-by-default unless the host overrides; UNCLEAR triggers manual review.
 
-**DUA — Data Use Agreement** — the formal contractual layer (PR J.2 territory). When a DUO term requires a formal agreement (`RTN`, `COL`, `MOR`, `US`/`PS`/`IS`), a DUA template is generated for countersigning. *Out of scope for J.1.*
+**DUA — Data Use Agreement** — the formal contractual layer (PR J.2 territory). When a DUO term requires a formal agreement (`RTN`, `COL`, `MOR`, `US`/`PS`/`IS`), a DUA template is generated for countersigning. _Out of scope for J.1._
 
 **DAC — Data Access Committee** — a governing body (often institution-level) that reviews access requests for sensitive datasets. The OCI supports DAC escalation as a configuration; details land with PR J.2.
 
-**IRB — Institutional Review Board** — the ethics committee approving research that involves human subjects. The OCI captures the *fact* of approval and the reference number; it does not perform IRB review.
+**IRB — Institutional Review Board** — the ethics committee approving research that involves human subjects. The OCI captures the _fact_ of approval and the reference number; it does not perform IRB review.
 
 **DPIA — Data Protection Impact Assessment** — required under GDPR for high-risk processing; the OCI surfaces the requester's DPIA reference for the host's record.
 
@@ -67,11 +68,11 @@ Domain terms used throughout the OCI documentation.
 
 ## Phase labels
 
-- **Phase A**: Foundation. NestJS + Next.js + Cognito + CDK reproducible end-to-end in `dev`. *(Largely complete.)*
-- **Phase B**: Catalog + access governance + annotation reactivation. *(In flight.)*
-- **Phase C**: Evaluation surface (port from legacy Django). *(Planned.)*
-- **Phase D**: Reporting & regulator portal. *(Planned.)*
-- **Phase E**: DMXP v1.0, federation worker, MedEval-GI. *(Down-payment shipped; full rollout planned.)*
+- **Phase A**: Foundation. NestJS + Next.js + Cognito + CDK reproducible end-to-end in `dev`. _(Largely complete.)_
+- **Phase B**: Catalog + access governance + annotation reactivation. _(In flight.)_
+- **Phase C**: Evaluation surface (port from legacy Django). _(Planned.)_
+- **Phase D**: Reporting & regulator portal. _(Planned.)_
+- **Phase E**: DMXP v1.0, federation worker, MedEval-GI. _(Down-payment shipped; full rollout planned.)_
 
 See [`docs/migration/strangler-plan.md`](../migration/strangler-plan.md) and [`docs/oci-milestones-2026-2027.md`](../oci-milestones-2026-2027.md) for the long-form plan.
 

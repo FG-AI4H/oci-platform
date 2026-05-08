@@ -60,7 +60,7 @@ test(web): Playwright suite for host workflow
 docs(for-hosts): DUO terms guide
 ```
 
-Long bodies are encouraged for non-trivial changes — explain *why*, not *what*. Examples:
+Long bodies are encouraged for non-trivial changes — explain _why_, not _what_. Examples:
 
 - [PR I commit](https://github.com/FG-AI4H/oci-platform/commit/0203b48) — multi-section "API / Web / Infra / Schema / Tests" structure for a feature-spanning PR.
 - [PR J.1 commit](https://github.com/FG-AI4H/oci-platform/commit/) — "Croissant package / Schema / API / Web / Tests" with explicit out-of-scope for the follow-up.

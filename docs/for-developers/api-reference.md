@@ -21,15 +21,15 @@ Anonymous calls work for public read endpoints. They return only PUBLIC + PUBLIS
 
 List / search / filter datasets.
 
-| Query param | Type | Default | Notes |
-| --- | --- | --- | --- |
-| `q` | string | – | Full-text search over name, description, keywords, BioCroissant fields. |
-| `visibility` | `PUBLIC` \| `RESTRICTED` \| `PRIVATE` | – | Filter; visibility-aware (anonymous can only request PUBLIC). |
-| `status` | `DRAFT` \| `PUBLISHED` \| `ARCHIVED` | – | Filter. |
-| `hostId` | UUID | – | Datasets owned by this host. |
-| `source` | `local` \| `federated` \| `all` | `local` | Federation filter. |
-| `cursor` | string | – | Opaque base64 cursor from prior page. |
-| `limit` | int (1..100) | 25 | Page size. |
+| Query param  | Type                                  | Default | Notes                                                                   |
+| ------------ | ------------------------------------- | ------- | ----------------------------------------------------------------------- |
+| `q`          | string                                | –       | Full-text search over name, description, keywords, BioCroissant fields. |
+| `visibility` | `PUBLIC` \| `RESTRICTED` \| `PRIVATE` | –       | Filter; visibility-aware (anonymous can only request PUBLIC).           |
+| `status`     | `DRAFT` \| `PUBLISHED` \| `ARCHIVED`  | –       | Filter.                                                                 |
+| `hostId`     | UUID                                  | –       | Datasets owned by this host.                                            |
+| `source`     | `local` \| `federated` \| `all`       | `local` | Federation filter.                                                      |
+| `cursor`     | string                                | –       | Opaque base64 cursor from prior page.                                   |
+| `limit`      | int (1..100)                          | 25      | Page size.                                                              |
 
 Response: `ListDatasetsResponse` — `{ items: DatasetSummary[]; nextCursor: string | null; totalEstimate: number }`.
 
@@ -39,11 +39,11 @@ Detail for one dataset. Visibility-aware.
 
 Response: `DatasetDetail` — `DatasetSummary` + `croissant` (the manifest), `versions[]`, `distributions[]`, `duoTerms[]`.
 
-### `POST /v2/catalog/datasets` *(host)*
+### `POST /v2/catalog/datasets` _(host)_
 
 Create a draft. Body: `CreateDatasetRequest` (`slug`, `name`, optional `description`, `visibility`).
 
-### `POST /v2/catalog/datasets/:slug/versions` *(host or admin)*
+### `POST /v2/catalog/datasets/:slug/versions` _(host or admin)_
 
 Publish a manifest version. Body: `PublishDatasetVersionRequest` (`version`, `croissant`, optional `notes`).
 
@@ -59,7 +59,7 @@ Federation outbound. Lists every PUBLIC + PUBLISHED dataset's latest version as 
 
 ## Access requests
 
-### `POST /v2/catalog/datasets/:slug/access-requests` *(any auth)*
+### `POST /v2/catalog/datasets/:slug/access-requests` _(any auth)_
 
 File a structured access request.
 
@@ -75,41 +75,41 @@ Body: `CreateAccessRequestRequest` — `{ attestations: AccessRequestAttestation
 
 Response: `{ id, matchStatus }` — the matcher's verdict (MATCHED / CONFLICT / UNCLEAR) is computed inline.
 
-### `GET /v2/me/access-requests` *(any auth)*
+### `GET /v2/me/access-requests` _(any auth)_
 
 Caller's own access requests across all datasets.
 
-### `GET /v2/me/host/access-requests` *(host)*
+### `GET /v2/me/host/access-requests` _(host)_
 
 Inbox — access requests for datasets the caller hosts.
 
-### `GET /v2/catalog/datasets/:slug/access-requests` *(host or admin)*
+### `GET /v2/catalog/datasets/:slug/access-requests` _(host or admin)_
 
 Same data, scoped to one dataset.
 
-### `POST /v2/catalog/access-requests/:id/decision` *(host or admin)*
+### `POST /v2/catalog/access-requests/:id/decision` _(host or admin)_
 
 Decide. Body: `{ status: 'APPROVED' \| 'DENIED' \| 'REVOKED', decisionNote?: string }`. State-machine guards: APPROVE/DENY only from PENDING; REVOKE only from APPROVED.
 
 ## Storage / distributions
 
-### `POST /v2/catalog/datasets/:slug/uploads` *(host)*
+### `POST /v2/catalog/datasets/:slug/uploads` _(host)_
 
 Initiate a multipart upload. Body: `InitUploadRequest` (`filename`, `contentType`, `contentSize`, optional `sha256`).
 
 Response: `{ uploadId, key, partSize }`. The browser then mints presigned URLs per part:
 
-### `GET /v2/catalog/datasets/:slug/uploads/:uploadId/parts/:partNumber/url?key=…` *(host)*
+### `GET /v2/catalog/datasets/:slug/uploads/:uploadId/parts/:partNumber/url?key=…` _(host)_
 
 Returns `{ url, expiresAt }` — the presigned PUT URL for one part.
 
-### `POST /v2/catalog/datasets/:slug/uploads/:uploadId/complete?key=…&contentType=…&contentSize=…&sha256=…` *(host)*
+### `POST /v2/catalog/datasets/:slug/uploads/:uploadId/complete?key=…&contentType=…&contentSize=…&sha256=…` _(host)_
 
 Body: `{ parts: [{ partNumber, etag }] }`. Finalises the multipart on S3, upserts the Distribution row.
 
 Response: `UploadedDistribution` — `{ distributionId, name, contentUrl, contentType, contentSizeBytes, sha256, uploadedAt }`. The `contentUrl` is the relative `/v2/catalog/datasets/:slug/distributions/:id/download` path you paste into the next manifest version.
 
-### `POST /v2/catalog/datasets/:slug/uploads/:uploadId/abort?key=…` *(host)*
+### `POST /v2/catalog/datasets/:slug/uploads/:uploadId/abort?key=…` _(host)_
 
 Aborts an in-flight upload.
 
@@ -145,4 +145,4 @@ Per-IP throttling at the ALB; default 100 requests/min. Bulk consumers (CLI, fed
 
 - `/v2/` is stable. Breaking changes require an ADR + a `/v3/` rollout.
 - Additive fields on responses are not breaking and don't bump the major.
-- Required-field changes on requests *are* breaking and require a major bump.
+- Required-field changes on requests _are_ breaking and require a major bump.

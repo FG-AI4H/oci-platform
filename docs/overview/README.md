@@ -4,7 +4,7 @@ The Open Code Infrastructure (OCI) is **shared, open, public-good infrastructure
 
 It exists because health AI today suffers from three structural problems that no single country, hospital, or vendor can solve alone:
 
-1. **Datasets are siloed.** Every research group has its own description format, access process, and licensing language. Data that *could* improve outcomes globally stays invisible to everyone except the originating institution.
+1. **Datasets are siloed.** Every research group has its own description format, access process, and licensing language. Data that _could_ improve outcomes globally stays invisible to everyone except the originating institution.
 2. **Benchmarks aren't comparable.** A model evaluated on one dataset can't be honestly compared to a model evaluated on another, even when they ostensibly do the same task.
 3. **Compliance is bespoke.** Every cross-border data-sharing agreement is rebuilt from scratch, slowing legitimate research and incentivising shortcuts.
 

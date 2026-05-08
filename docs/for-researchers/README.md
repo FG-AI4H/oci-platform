@@ -2,12 +2,12 @@
 
 You're here to **find a dataset, request access, and use it**. These guides walk you through each step.
 
-| Guide | Read when |
-| --- | --- |
-| [Finding datasets](./finding-datasets.md) | You don't know what's out there yet — search, filter, federation. |
-| [Requesting access](./requesting-access.md) | You found a RESTRICTED dataset and need to file a structured access request. |
-| [Using the data](./using-data.md) | Your access has been approved; you want to download responsibly. |
-| [Citing a dataset](./citing.md) | You're publishing and need to cite the dataset version in a stable, machine-readable way. |
+| Guide                                       | Read when                                                                                 |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [Finding datasets](./finding-datasets.md)   | You don't know what's out there yet — search, filter, federation.                         |
+| [Requesting access](./requesting-access.md) | You found a RESTRICTED dataset and need to file a structured access request.              |
+| [Using the data](./using-data.md)           | Your access has been approved; you want to download responsibly.                          |
+| [Citing a dataset](./citing.md)             | You're publishing and need to cite the dataset version in a stable, machine-readable way. |
 
 ## Quick orientation
 
@@ -27,4 +27,4 @@ If a dataset's host has uploaded files to platform-managed storage, you'll see a
 
 - Reading the catalogue, requesting access, downloading approved data: this section.
 - Building a model and submitting it for benchmarking: see [for-developers/](../for-developers/) (and Phase C documentation, when published).
-- Becoming a *host* of your own dataset: see [for-hosts/](../for-hosts/).
+- Becoming a _host_ of your own dataset: see [for-hosts/](../for-hosts/).

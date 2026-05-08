@@ -44,7 +44,7 @@ Three things to remember:
 2. **Respect retention.** Delete the data after the retention window you declared, unless you've requested an extension.
 3. **Acknowledge return-of-results obligations.** If the dataset's DUO terms include `RTN` (return-to-database), `PUB` (publication required), or `MOR` (publication moratorium), abide by them. The platform records your acknowledgement; it doesn't enforce technically. Hosts and regulators audit periodically.
 
-## What the platform does *not* do
+## What the platform does _not_ do
 
 - It doesn't enforce retention deletion on your machines.
 - It doesn't watermark downloads (yet — discussed for evaluation challenges in Phase C).

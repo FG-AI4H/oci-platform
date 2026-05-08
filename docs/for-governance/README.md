@@ -4,13 +4,13 @@ You're responsible for assuring that the OCI's operation is consistent with your
 
 The OCI is **not** a single-jurisdiction product. Compliance posture is configurable per deployment so that an EU member-state instance, a WHO regional-office instance, and an academic instance can all coexist within the global federation.
 
-| Topic | Read when |
-| --- | --- |
-| [Data sovereignty](./data-sovereignty.md) | Your jurisdiction has data-residency requirements; you need to know what stays where. |
-| [Compliance posture](./compliance.md) | You need to map the OCI's controls to GDPR / HIPAA / PIPL / equivalents. |
+| Topic                                     | Read when                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| [Data sovereignty](./data-sovereignty.md) | Your jurisdiction has data-residency requirements; you need to know what stays where.                        |
+| [Compliance posture](./compliance.md)     | You need to map the OCI's controls to GDPR / HIPAA / PIPL / equivalents.                                     |
 | [DUO and DUA framework](./duo-and-dua.md) | You need to understand how the platform expresses, matches, and (eventually) formalises data-use agreements. |
-| [Audit and transparency](./audit.md) | You need to confirm what's recorded, who can read it, and how to subpoena it. |
-| [Risk register](./risks.md) | You need a structured view of platform risks and their mitigations. |
+| [Audit and transparency](./audit.md)      | You need to confirm what's recorded, who can read it, and how to subpoena it.                                |
+| [Risk register](./risks.md)               | You need a structured view of platform risks and their mitigations.                                          |
 
 ## What the OCI promises
 
@@ -22,7 +22,7 @@ The OCI is **not** a single-jurisdiction product. Compliance posture is configur
 
 ## What the OCI does not do
 
-- It does not perform IRB / ethics review. It records the *fact* of approval and the reference number; the substantive review remains with your institution's IRB or equivalent.
+- It does not perform IRB / ethics review. It records the _fact_ of approval and the reference number; the substantive review remains with your institution's IRB or equivalent.
 - It does not adjudicate cross-border legality. If your jurisdiction prohibits a transfer, the OCI helps you express that (`DUO_0000028` Institution-specific restriction; geographic scoping in DUO_0000037; visibility set to RESTRICTED with manual approval); it does not make the transfer for you.
 - It does not generate or hold electronic signatures yet. PR J.2 will introduce DUA generation + e-sign capture; until then, formal-agreement modifiers (`RTN`, `COL`, `MOR`, `US`/`PS`/`IS`) require out-of-band agreements that hosts reference in decision notes.
 - It does not waterproof against malicious insiders. Like any platform, it depends on the operator's identity / access controls. Threat modelling is in [`docs/security.md`](../security.md).

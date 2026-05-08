@@ -2,13 +2,13 @@
 
 You're deploying or running an OCI instance. The platform is designed to run as a fleet — the global instance at `oci.ai4h.net`, plus member-state and regional-office instances that federate with it.
 
-| Guide | Read when |
-| --- | --- |
-| [Deployment](../deployment.md) | First-time deploy of a new environment. |
-| [Architecture](../architecture.md) | High-level reference for what's where. |
-| [Security baseline](../security.md) | The controls expected on every instance (KMS, WAF, OIDC, etc.). |
-| [Runbooks](../runbooks/) | Day-2 operations: incidents, rotations, restores. |
-| [Observability](./observability.md) *(stub)* | What to wire to your CloudWatch / X-Ray / Grafana. |
+| Guide                                        | Read when                                                       |
+| -------------------------------------------- | --------------------------------------------------------------- |
+| [Deployment](../deployment.md)               | First-time deploy of a new environment.                         |
+| [Architecture](../architecture.md)           | High-level reference for what's where.                          |
+| [Security baseline](../security.md)          | The controls expected on every instance (KMS, WAF, OIDC, etc.). |
+| [Runbooks](../runbooks/)                     | Day-2 operations: incidents, rotations, restores.               |
+| [Observability](./observability.md) _(stub)_ | What to wire to your CloudWatch / X-Ray / Grafana.              |
 
 ## Trust model summary
 
@@ -19,18 +19,18 @@ You're deploying or running an OCI instance. The platform is designed to run as 
 
 ## What every instance ships
 
-| Layer | Production-grade default |
-| --- | --- |
-| Network | VPC, public + private isolated subnets, NAT in non-dev, private endpoints for S3/SSM/SecretsManager. |
-| Identity | Cognito user pool + client; SSM-published primitives for the API to read at runtime. |
-| Data | Aurora Postgres Serverless v2 (multi-AZ in int/prod), KMS-CMK, automated backups, Performance Insights in int/prod. S3 buckets (KMS, versioned, public-block-on, server-access logs). |
-| API | ECS Fargate (NestJS, distroless), behind ALB, WAFv2 in int/prod. |
-| Web | ECS Fargate (Next.js 16, distroless), same cluster + ALB. |
-| Federation worker | ECS Fargate scheduled task; consumes the federation index from peer catalogues. |
-| Observability | CloudWatch Logs (structured JSON), X-Ray, ALB access logs to S3. |
-| Storage | `oci-datasets-<env>` S3 bucket with multipart upload + 7-day abort + object-lock in prod. |
+| Layer             | Production-grade default                                                                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Network           | VPC, public + private isolated subnets, NAT in non-dev, private endpoints for S3/SSM/SecretsManager.                                                                                  |
+| Identity          | Cognito user pool + client; SSM-published primitives for the API to read at runtime.                                                                                                  |
+| Data              | Aurora Postgres Serverless v2 (multi-AZ in int/prod), KMS-CMK, automated backups, Performance Insights in int/prod. S3 buckets (KMS, versioned, public-block-on, server-access logs). |
+| API               | ECS Fargate (NestJS, distroless), behind ALB, WAFv2 in int/prod.                                                                                                                      |
+| Web               | ECS Fargate (Next.js 16, distroless), same cluster + ALB.                                                                                                                             |
+| Federation worker | ECS Fargate scheduled task; consumes the federation index from peer catalogues.                                                                                                       |
+| Observability     | CloudWatch Logs (structured JSON), X-Ray, ALB access logs to S3.                                                                                                                      |
+| Storage           | `oci-datasets-<env>` S3 bucket with multipart upload + 7-day abort + object-lock in prod.                                                                                             |
 
-## What an instance can be configured to *not* ship
+## What an instance can be configured to _not_ ship
 
 - The CLI tool ([#88](https://github.com/FG-AI4H/oci-platform/issues/88)) is independent — instances can run without it.
 - The federation harvester worker can be disabled if your instance is purely a producer (only outbound `/.well-known/croissant-catalog.json`).
@@ -49,16 +49,16 @@ There is no central federation registry. Each instance maintains its own peer li
 
 ## Per-environment configuration
 
-| Setting | dev | int | prod |
-| --- | --- | --- | --- |
-| Domain | `dev.oci.ai4h.net` | `int.oci.ai4h.net` | `oci.ai4h.net` |
-| Aurora ACU | 0.5 / 2 | 0.5 / 4 | 1 / 16 |
-| Fargate min/max | 1 / 2 | 2 / 4 | 3 / 12 |
-| WAF | off | on | on |
-| Multi-AZ | no | yes | yes |
-| RemovalPolicy | DESTROY | SNAPSHOT | RETAIN |
-| Cognito MFA | optional | required for admin/regulator/supervisor | required for admin/regulator/supervisor |
-| Object Lock on artefact bucket | off | off | on |
+| Setting                        | dev                | int                                     | prod                                    |
+| ------------------------------ | ------------------ | --------------------------------------- | --------------------------------------- |
+| Domain                         | `dev.oci.ai4h.net` | `int.oci.ai4h.net`                      | `oci.ai4h.net`                          |
+| Aurora ACU                     | 0.5 / 2            | 0.5 / 4                                 | 1 / 16                                  |
+| Fargate min/max                | 1 / 2              | 2 / 4                                   | 3 / 12                                  |
+| WAF                            | off                | on                                      | on                                      |
+| Multi-AZ                       | no                 | yes                                     | yes                                     |
+| RemovalPolicy                  | DESTROY            | SNAPSHOT                                | RETAIN                                  |
+| Cognito MFA                    | optional           | required for admin/regulator/supervisor | required for admin/regulator/supervisor |
+| Object Lock on artefact bucket | off                | off                                     | on                                      |
 
 Source: [`infra/cdk/lib/environments.ts`](../../infra/cdk/lib/environments.ts).
 

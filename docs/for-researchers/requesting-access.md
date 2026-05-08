@@ -26,7 +26,7 @@ Have these ready:
   - **Redistribution intent** — None / derivatives only / with explicit permission per request.
   - **Output type** — peer-reviewed publication / model weights / derivative dataset / internal report.
 
-The form is conservative on partial information. *"I'll figure it out as I go"* will get flagged UNCLEAR; *"I'll publish a peer-reviewed paper using model X to evaluate Y on this cohort"* will get matched.
+The form is conservative on partial information. _"I'll figure it out as I go"_ will get flagged UNCLEAR; _"I'll publish a peer-reviewed paper using model X to evaluate Y on this cohort"_ will get matched.
 
 ## What the dataset's DUO terms mean
 
@@ -43,14 +43,14 @@ Your declared use must be **consistent with all of them**. If the dataset has `N
 
 ## How the matcher decides
 
-| Dataset has | Your intent says | Result |
-| --- | --- | --- |
-| `GRU` (no restrictions) | anything | MATCHED |
-| `NCU` (no commercial) | Commercial research | CONFLICT |
-| `IRB` (ethics required) | IRB-approved unchecked | CONFLICT |
-| `HMB` (health/medical) | Education | CONFLICT |
-| `DS` (disease-specific) | Non-commercial research | UNCLEAR (host eyeballs your project description for disease fit) |
-| `RTN` (must return derivatives) | any | UNCLEAR (a formal DUA is needed; PR J.2 will auto-generate it) |
+| Dataset has                     | Your intent says        | Result                                                           |
+| ------------------------------- | ----------------------- | ---------------------------------------------------------------- |
+| `GRU` (no restrictions)         | anything                | MATCHED                                                          |
+| `NCU` (no commercial)           | Commercial research     | CONFLICT                                                         |
+| `IRB` (ethics required)         | IRB-approved unchecked  | CONFLICT                                                         |
+| `HMB` (health/medical)          | Education               | CONFLICT                                                         |
+| `DS` (disease-specific)         | Non-commercial research | UNCLEAR (host eyeballs your project description for disease fit) |
+| `RTN` (must return derivatives) | any                     | UNCLEAR (a formal DUA is needed; PR J.2 will auto-generate it)   |
 
 The full table is in [for-governance/duo-and-dua.md](../for-governance/duo-and-dua.md).
 

@@ -60,28 +60,28 @@ In Cognito (separate from the catalogue DB):
 - WAF logs (int / prod).
 - AWS Config, CloudTrail (account-level — not platform-specific).
 
-## What's *not* recorded
+## What's _not_ recorded
 
 - The bytes of dataset distributions in the API logs (logging redacts payload contents).
-- Personal data of *subjects* in datasets — that's in the dataset itself, governed by the host.
+- Personal data of _subjects_ in datasets — that's in the dataset itself, governed by the host.
 - IP addresses of dataset downloaders beyond the ALB log retention (90 days in prod).
 - Browser fingerprints, behavioural analytics, or A/B-test bucketing — none are implemented.
 
 ## Who can read what
 
-| Role | Can read | Cannot read |
-| --- | --- | --- |
-| **Anonymous** | PUBLIC + PUBLISHED datasets only. Federation outbound. | Anything else. |
-| **Authenticated participant** | + RESTRICTED datasets (visible, not auto-downloaded). + own access requests. | Other users' access requests; admin/regulator data. |
-| **Host** | + own datasets at any visibility/status. + access requests against own datasets. | Other hosts' datasets they don't own. |
-| **Admin** | All catalogue rows. All access requests. Operational metadata. | Cognito user PII without a separate authorisation. |
-| **Regulator** *(reserved for Phase D — read-only audit)* | Full audit trail (catalogue + access requests). Operational logs on request. | Cognito PII (PII is on a separate authorisation track). |
+| Role                                                     | Can read                                                                         | Cannot read                                             |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| **Anonymous**                                            | PUBLIC + PUBLISHED datasets only. Federation outbound.                           | Anything else.                                          |
+| **Authenticated participant**                            | + RESTRICTED datasets (visible, not auto-downloaded). + own access requests.     | Other users' access requests; admin/regulator data.     |
+| **Host**                                                 | + own datasets at any visibility/status. + access requests against own datasets. | Other hosts' datasets they don't own.                   |
+| **Admin**                                                | All catalogue rows. All access requests. Operational metadata.                   | Cognito user PII without a separate authorisation.      |
+| **Regulator** _(reserved for Phase D — read-only audit)_ | Full audit trail (catalogue + access requests). Operational logs on request.     | Cognito PII (PII is on a separate authorisation track). |
 
 A **regulator audit-trail export endpoint** is planned for Phase D. Until then, regulator audits are run by the operator via direct read-only access to the audit data.
 
 ## How to verify a model's training-data claims
 
-A claim like *"trained on RSNA Pneumonia 2018 v1.0.0 (manifest sha256:abc…)"* is verifiable end-to-end:
+A claim like _"trained on RSNA Pneumonia 2018 v1.0.0 (manifest sha256:abc…)"_ is verifiable end-to-end:
 
 1. Fetch `GET /v2/catalog/datasets/rsna-pneumonia-2018`.
 2. In the response, find the version with `version: "1.0.0"`. Its `croissantHash` is recorded.
@@ -89,7 +89,7 @@ A claim like *"trained on RSNA Pneumonia 2018 v1.0.0 (manifest sha256:abc…)"* 
 4. The `croissant` field on that version is the manifest the model was trained against. It identifies the distributions, the cohort metadata, the DUO terms.
 5. Cross-reference the `AccessRequest` rows for that dataset: who downloaded which version, when, under what declared use.
 
-This is the regulator-facing payoff of immutable versioning + structured access-requests: *"prove what you trained on"* becomes a deterministic check, not a paperwork dance.
+This is the regulator-facing payoff of immutable versioning + structured access-requests: _"prove what you trained on"_ becomes a deterministic check, not a paperwork dance.
 
 ## How to subpoena audit data
 

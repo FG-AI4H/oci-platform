@@ -2,13 +2,13 @@
 
 This section is for the Steering Committee, Joint Secretariat, partner-organisation senior leadership, and member-state programme officers. It's the **executive surface**: what the OCI is in two minutes, what's shipped, what's in flight, what it means for the GI-AI4H mandate, and what to ask for next.
 
-| Topic | Read when |
-| --- | --- |
-| [Strategic overview](./strategic-overview.md) | You need a 5-minute summary of the OCI's purpose, posture, and current state. |
+| Topic                                                   | Read when                                                                                            |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| [Strategic overview](./strategic-overview.md)           | You need a 5-minute summary of the OCI's purpose, posture, and current state.                        |
 | [Alignment with mandates](./alignment-with-mandates.md) | You're mapping OCI deliverables to GI-AI4H working groups, SDGs, or partner-organisation strategies. |
-| [Adoption roadmap](./adoption-roadmap.md) | You're planning member-state onboarding or partner integration. |
-| [Public-good rationale](./public-good-rationale.md) | You're justifying multilateral funding or addressing private-sector alternatives. |
-| [Risks and what we're betting on](./risks.md) | You're prioritising scope or planning continuity. |
+| [Adoption roadmap](./adoption-roadmap.md)               | You're planning member-state onboarding or partner integration.                                      |
+| [Public-good rationale](./public-good-rationale.md)     | You're justifying multilateral funding or addressing private-sector alternatives.                    |
+| [Risks and what we're betting on](./risks.md)           | You're prioritising scope or planning continuity.                                                    |
 
 ## Two-minute summary
 

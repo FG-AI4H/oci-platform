@@ -13,14 +13,14 @@ It is operated as a **public good**: free at the point of use, open-source, and 
 
 A federation of **standards-aligned services**:
 
-| Layer | What it does | Standard / Tool |
-| --- | --- | --- |
-| **Catalogue** | Describes datasets in a machine-readable, search-engine-indexable way. | [MLCommons Croissant 1.1](https://mlcommons.org/2026/02/croissant-1-1-standard/) + biomedical extensions (BioCroissant WG). |
-| **Access governance** | Expresses what data may be used for; matches intended use against permissions. | [GA4GH Data Use Ontology (DUO)](https://www.ga4gh.org/product/data-use-ontology-duo/), [W3C ODRL](https://www.w3.org/TR/odrl-model/). |
-| **Storage** | Hosts dataset bytes when the host doesn't have its own infrastructure. | S3-compatible (AWS S3 in production, MinIO in local dev), KMS-encrypted, multipart upload. |
-| **Identity** | Authenticates researchers, hosts, regulators, admins. | AWS Cognito (production); local-dev stub. |
-| **Evaluation** *(Phase C, in flight)* | Runs sandboxed model evaluations against versioned dataset hashes. | Containerised runner; reuses MLCommons MedPerf where appropriate. |
-| **Federation** | Discovers peer catalogues via well-known endpoints. | `/.well-known/croissant-catalog.json` (Croissant index), JSON-LD over HTTPS. |
+| Layer                                 | What it does                                                                   | Standard / Tool                                                                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Catalogue**                         | Describes datasets in a machine-readable, search-engine-indexable way.         | [MLCommons Croissant 1.1](https://mlcommons.org/2026/02/croissant-1-1-standard/) + biomedical extensions (BioCroissant WG).           |
+| **Access governance**                 | Expresses what data may be used for; matches intended use against permissions. | [GA4GH Data Use Ontology (DUO)](https://www.ga4gh.org/product/data-use-ontology-duo/), [W3C ODRL](https://www.w3.org/TR/odrl-model/). |
+| **Storage**                           | Hosts dataset bytes when the host doesn't have its own infrastructure.         | S3-compatible (AWS S3 in production, MinIO in local dev), KMS-encrypted, multipart upload.                                            |
+| **Identity**                          | Authenticates researchers, hosts, regulators, admins.                          | AWS Cognito (production); local-dev stub.                                                                                             |
+| **Evaluation** _(Phase C, in flight)_ | Runs sandboxed model evaluations against versioned dataset hashes.             | Containerised runner; reuses MLCommons MedPerf where appropriate.                                                                     |
+| **Federation**                        | Discovers peer catalogues via well-known endpoints.                            | `/.well-known/croissant-catalog.json` (Croissant index), JSON-LD over HTTPS.                                                          |
 
 It exposes itself through three surfaces:
 
@@ -28,12 +28,12 @@ It exposes itself through three surfaces:
 - An **authenticated host workflow** (create / publish / upload / review access requests).
 - A **JSON over HTTPS API** (`/v2/...`) for integrators — HuggingFace, Kaggle, OpenML, member-state platforms, etc.
 
-## What the OCI is *not*
+## What the OCI is _not_
 
 - **Not a data store of last resort.** Hosts retain ownership and can pull a dataset at any time. The OCI references; it does not appropriate.
-- **Not an evaluation arbiter.** Model evaluation results are reproducible and machine-readable, but the *interpretation* (does this model meet a regulatory bar?) belongs to the regulator.
+- **Not an evaluation arbiter.** Model evaluation results are reproducible and machine-readable, but the _interpretation_ (does this model meet a regulatory bar?) belongs to the regulator.
 - **Not a single-jurisdiction product.** Compliance posture is configurable per deployment so that an EU member-state instance, a WHO regional-office instance, and an academic instance can all coexist within the federation.
-- **Not a replacement for IRB / ethics review.** It records and machine-checks the *fact* of approval; it does not perform it.
+- **Not a replacement for IRB / ethics review.** It records and machine-checks the _fact_ of approval; it does not perform it.
 
 ## Architecture in one diagram
 

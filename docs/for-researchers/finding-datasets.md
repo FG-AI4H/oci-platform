@@ -20,11 +20,11 @@ You don't need to know the JSON-LD field names; type plain language.
 
 ## Filter by source
 
-| Chip | Shows | Use when |
-| --- | --- | --- |
-| Local | Locally published rows only | You're looking for the canonical version of a known dataset. |
-| Federated | Peer-catalogue rows only | You're surveying what other GI-AI4H instances expose. |
-| All | Union | You want the broadest funnel; expect duplicates if a dataset is co-listed. |
+| Chip      | Shows                       | Use when                                                                   |
+| --------- | --------------------------- | -------------------------------------------------------------------------- |
+| Local     | Locally published rows only | You're looking for the canonical version of a known dataset.               |
+| Federated | Peer-catalogue rows only    | You're surveying what other GI-AI4H instances expose.                      |
+| All       | Union                       | You want the broadest funnel; expect duplicates if a dataset is co-listed. |
 
 Federated rows are always **PUBLIC + PUBLISHED** — peer catalogues only expose what's already public. The card shows the source catalogue name and a deep-link to the upstream record.
 
@@ -32,12 +32,12 @@ Federated rows are always **PUBLIC + PUBLISHED** — peer catalogues only expose
 
 A signed-in researcher sees:
 
-| | PUBLIC | RESTRICTED | PRIVATE |
-| --- | --- | --- | --- |
-| Anonymous | ✅ | – | – |
-| Signed-in (any role) | ✅ | ✅ (visible; access-gated) | – |
-| Host of the dataset | ✅ | ✅ | ✅ (own only) |
-| Admin / regulator | ✅ | ✅ | ✅ |
+|                      | PUBLIC | RESTRICTED                 | PRIVATE       |
+| -------------------- | ------ | -------------------------- | ------------- |
+| Anonymous            | ✅     | –                          | –             |
+| Signed-in (any role) | ✅     | ✅ (visible; access-gated) | –             |
+| Host of the dataset  | ✅     | ✅                         | ✅ (own only) |
+| Admin / regulator    | ✅     | ✅                         | ✅            |
 
 Datasets in DRAFT (a host is preparing them) are invisible to anyone but the host and admins.
 

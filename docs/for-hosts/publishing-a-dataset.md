@@ -11,12 +11,12 @@ Both happen at `/catalog/new` and `/catalog/<slug>/publish` respectively. Sign i
 
 From the catalogue's "New dataset" link (host-only):
 
-| Field | Constraints | Notes |
-| --- | --- | --- |
-| **Slug** | URL-safe, lowercase, hyphenated, unique platform-wide | Used in URLs. Pick something stable — slugs don't change. |
-| **Name** | 1–200 chars | Human-readable; the JSON-LD `Dataset.name`. |
-| **Description** | 0–2000 chars | Plain text. Markdown is *not* rendered. |
-| **Visibility** | PUBLIC / RESTRICTED / PRIVATE | Start PRIVATE if you want to iterate on the manifest before exposing the row. You can flip later. |
+| Field           | Constraints                                           | Notes                                                                                             |
+| --------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Slug**        | URL-safe, lowercase, hyphenated, unique platform-wide | Used in URLs. Pick something stable — slugs don't change.                                         |
+| **Name**        | 1–200 chars                                           | Human-readable; the JSON-LD `Dataset.name`.                                                       |
+| **Description** | 0–2000 chars                                          | Plain text. Markdown is _not_ rendered.                                                           |
+| **Visibility**  | PUBLIC / RESTRICTED / PRIVATE                         | Start PRIVATE if you want to iterate on the manifest before exposing the row. You can flip later. |
 
 The draft is created; you're redirected to the publish page.
 
@@ -31,7 +31,7 @@ A minimal Croissant 1.1 manifest:
     "sc": "https://schema.org/",
     "cr": "http://mlcommons.org/croissant/",
     "dct": "http://purl.org/dc/terms/",
-    "bio": "http://mlcommons.org/croissant/biomed/"
+    "bio": "http://mlcommons.org/croissant/biomed/",
   },
   "@type": "sc:Dataset",
   "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
@@ -49,8 +49,8 @@ A minimal Croissant 1.1 manifest:
       "@type": "sc:DefinedTerm",
       "@id": "http://purl.obolibrary.org/obo/DUO_0000042",
       "termCode": "DUO_0000042",
-      "name": "general research use"
-    }
+      "name": "general research use",
+    },
   ],
 
   // Health-domain fields (BioCroissant working group).
@@ -67,9 +67,9 @@ A minimal Croissant 1.1 manifest:
       "@id": "metadata.csv",
       "name": "metadata.csv",
       "encodingFormat": "text/csv",
-      "contentUrl": "https://your-institution.example/data/metadata.csv"
-    }
-  ]
+      "contentUrl": "https://your-institution.example/data/metadata.csv",
+    },
+  ],
 }
 ```
 

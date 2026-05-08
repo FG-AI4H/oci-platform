@@ -2,7 +2,7 @@
 
 Bring the OCI stack up on your laptop in ~5 minutes.
 
-> **Looking for the contributor onboarding?** This page is the *up-and-running* path. The end-to-end onboarding is at [`docs/getting-started.md`](../getting-started.md).
+> **Looking for the contributor onboarding?** This page is the _up-and-running_ path. The end-to-end onboarding is at [`docs/getting-started.md`](../getting-started.md).
 
 ## Prerequisites
 

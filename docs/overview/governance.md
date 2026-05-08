@@ -27,7 +27,7 @@ Cross-cutting themes:
 
 - **WG-Regulatory considerations** — regulatory science, AI/ML medical-device frameworks.
 - **WG-Ethics & governance** — consent, equity, transparency, bias.
-- **WG-Data** *(this is where the OCI lives)* — data standards, access protocols, federation.
+- **WG-Data** _(this is where the OCI lives)_ — data standards, access protocols, federation.
 - **WG-Evaluation** — benchmarking methodology, reproducibility.
 - **WG-Intellectual property & innovation** — licensing, attribution, public-domain pathways.
 
@@ -36,26 +36,26 @@ Cross-cutting themes:
 - Traditional medicine ✓
 - Maternal & reproductive health
 - Point-of-care / primary health care
-- Oral health *(on hold)*
+- Oral health _(on hold)_
 
 ## Where the OCI sits
 
 The OCI is operated under **WG-Data** as the implementation of the **Data and Model Exchange Protocol (DMXP)**. WG-Data sets the protocol; the OCI ships the running infrastructure. WG-Data's stated objectives:
 
-- **G1**: Dataset metadata standardisation and basic matchmaking. *(OCI catalogue + Croissant 1.1 = G1.)*
-- **G2**: Searchable, ontology-linked index of health datasets. *(OCI federation + DUO = G2.)*
-- **G3**: Secure transaction protocols (authentication, licensing, access control). *(OCI access governance + DUO matcher = G3 in progress; DUA generation in PR J.2 closes the licensing piece.)*
-- **G4**: Federated testing environments and real-world pilots. *(WG-Evaluation surface, cross-linked from OCI; Phase C.)*
+- **G1**: Dataset metadata standardisation and basic matchmaking. _(OCI catalogue + Croissant 1.1 = G1.)_
+- **G2**: Searchable, ontology-linked index of health datasets. _(OCI federation + DUO = G2.)_
+- **G3**: Secure transaction protocols (authentication, licensing, access control). _(OCI access governance + DUO matcher = G3 in progress; DUA generation in PR J.2 closes the licensing piece.)_
+- **G4**: Federated testing environments and real-world pilots. _(WG-Evaluation surface, cross-linked from OCI; Phase C.)_
 
 ## Decision-making
 
-| Decision class | Who decides | Recorded where |
-| --- | --- | --- |
-| **Cross-cutting architecture / pattern** (auth model, validation pattern, error envelope) | OCI maintainers + WG-Data lead, with notice to Steering Committee | [`docs/adr/`](../adr/) |
-| **Operational** (deploy gates, security baseline, dependency upgrades) | OCI maintainers | Pull-request review trail; CHANGELOG. |
-| **Standards alignment** (which version of Croissant; which DUO terms to surface) | WG-Data, in coordination with MLCommons / GA4GH where applicable | ADR + change in `@oci/croissant`. |
-| **Compliance posture** (what jurisdictions are supported, what audit artefacts are emitted) | WG-Ethics & governance + Steering Committee | [`docs/for-governance/compliance.md`](../for-governance/compliance.md) and per-environment runbooks. |
-| **Roadmap & prioritisation** (which Phase ships first, which Topic Group is supported) | Steering Committee, advised by Joint Secretariat | [`docs/oci-milestones-2026-2027.md`](../oci-milestones-2026-2027.md) and the public GitHub Project board. |
+| Decision class                                                                              | Who decides                                                       | Recorded where                                                                                            |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Cross-cutting architecture / pattern** (auth model, validation pattern, error envelope)   | OCI maintainers + WG-Data lead, with notice to Steering Committee | [`docs/adr/`](../adr/)                                                                                    |
+| **Operational** (deploy gates, security baseline, dependency upgrades)                      | OCI maintainers                                                   | Pull-request review trail; CHANGELOG.                                                                     |
+| **Standards alignment** (which version of Croissant; which DUO terms to surface)            | WG-Data, in coordination with MLCommons / GA4GH where applicable  | ADR + change in `@oci/croissant`.                                                                         |
+| **Compliance posture** (what jurisdictions are supported, what audit artefacts are emitted) | WG-Ethics & governance + Steering Committee                       | [`docs/for-governance/compliance.md`](../for-governance/compliance.md) and per-environment runbooks.      |
+| **Roadmap & prioritisation** (which Phase ships first, which Topic Group is supported)      | Steering Committee, advised by Joint Secretariat                  | [`docs/oci-milestones-2026-2027.md`](../oci-milestones-2026-2027.md) and the public GitHub Project board. |
 
 ## Operating principles
 
