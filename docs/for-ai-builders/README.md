@@ -33,12 +33,12 @@ The OCI exists in part to serve you. The platform's distinctive mandate under GI
 
 ## Where to start
 
-| Guide | Read when |
-|---|---|
-| [How access works (overview)](../overview/access-governance.md) | First time. Plain-English explainer of identity tiers, DUO, DUA, e-signatures, GA4GH Passports. |
-| [Requesting access for commercial / deployment use](./accessing-data.md) | You've found a dataset and need to file a request that covers your commercial deployment scenario. |
-| [Choosing a dataset for AI development](./choosing-a-dataset.md) | You're scoping a project and need to filter by WHO priority, deployment region, commercial-use status. *(Coming with Phase 1)* |
-| [Citation & traceability for regulatory submissions](./regulatory-traceability.md) | You're preparing an FDA / EMA / national-MoH submission and need stable dataset references. *(Coming with Phase C)* |
+| Guide                                                                              | Read when                                                                                                                      |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| [How access works (overview)](../overview/access-governance.md)                    | First time. Plain-English explainer of identity tiers, DUO, DUA, e-signatures, GA4GH Passports.                                |
+| [Requesting access for commercial / deployment use](./accessing-data.md)           | You've found a dataset and need to file a request that covers your commercial deployment scenario.                             |
+| [Choosing a dataset for AI development](./choosing-a-dataset.md)                   | You're scoping a project and need to filter by WHO priority, deployment region, commercial-use status. _(Coming with Phase 1)_ |
+| [Citation & traceability for regulatory submissions](./regulatory-traceability.md) | You're preparing an FDA / EMA / national-MoH submission and need stable dataset references. _(Coming with Phase C)_            |
 
 ## Quick orientation
 
@@ -47,6 +47,7 @@ The OCI exists in part to serve you. The platform's distinctive mandate under GI
 - **PRIVATE datasets** are invisible to you; only the host and admins see them. Drafts.
 
 The catalogue can be filtered by:
+
 - **WHO priority area** (TB, malaria, maternal/child health, NCDs, mental health, etc.).
 - **Geographic origin** of the data (the populations it represents).
 - **Commercial-use status** (`commercial OK` / `non-commercial only` / `case-by-case`).
@@ -90,12 +91,12 @@ Three things make this AI-builder flow distinct from the researcher flow:
 ## Where to ask
 
 - **Your country's GI-AI4H contact.** Each member-state programme has a focal point.
-- **Email**: `oci-platform@itu.int` *(TODO confirm operator address)*.
+- **Email**: `oci-platform@itu.int` _(TODO confirm operator address)_.
 - **WHO Innovation Hub**: for accreditation that pre-grants access to curated datasets.
 
 ## What's in scope here vs elsewhere
 
 - Requesting access, downloading data, building your model, citing the version: this section.
-- Becoming a *host* of your own dataset: see [for-hosts/](../for-hosts/).
+- Becoming a _host_ of your own dataset: see [for-hosts/](../for-hosts/).
 - Submitting your model for benchmarking: see [for-developers/](../for-developers/) (and Phase C documentation, when published).
 - Pure-academic research access: see [for-researchers/](../for-researchers/).

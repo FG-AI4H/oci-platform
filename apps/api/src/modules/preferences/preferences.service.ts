@@ -12,9 +12,7 @@ const DEFAULT_PREFERENCES: Omit<UserPreferences, 'updatedAt'> = {
 
 @Injectable()
 export class PreferencesService {
-  constructor(
-    @Inject(PreferencesRepository) private readonly repo: PreferencesRepository,
-  ) {}
+  constructor(@Inject(PreferencesRepository) private readonly repo: PreferencesRepository) {}
 
   /**
    * GET — returns the caller's preferences, or the defaults if no row

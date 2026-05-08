@@ -3,10 +3,7 @@
 import { useActionState } from 'react';
 import { Button } from '@oci/ui';
 import type { UserPreferences } from '@oci/shared-types';
-import {
-  updatePreferencesAction,
-  type PreferencesFormState,
-} from './actions';
+import { updatePreferencesAction, type PreferencesFormState } from './actions';
 
 const INITIAL_STATE: PreferencesFormState = { status: 'idle' };
 
@@ -36,8 +33,8 @@ export function PreferencesForm({
       <fieldset className="space-y-3">
         <legend className="text-sm font-semibold text-[var(--color-foreground)]">Theme</legend>
         <p className="text-sm text-[var(--color-muted-foreground)]">
-          Choose how the platform should look. <strong>System</strong> follows your device
-          setting; <strong>Light</strong> and <strong>Dark</strong> override it.
+          Choose how the platform should look. <strong>System</strong> follows your device setting;{' '}
+          <strong>Light</strong> and <strong>Dark</strong> override it.
         </p>
         <div role="radiogroup" aria-label="Dark mode" className="flex flex-wrap gap-3">
           <ThemeRadio

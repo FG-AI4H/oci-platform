@@ -128,54 +128,54 @@ export function AccessCta({
         </div>
       ) : null}
       <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium">Your access request</p>
-        <Badge tone={STATUS_TONE[latest.status]}>{latest.status.toLowerCase()}</Badge>
-      </div>
-      {latest.status === 'PENDING' ? (
-        <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-          The host is reviewing your request. You&apos;ll see the decision on your dashboard.
-        </p>
-      ) : null}
-      {latest.status === 'APPROVED' ? (
-        <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-          You can download distributions below.
-        </p>
-      ) : null}
-      {latest.status === 'DENIED' ? (
-        <>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium">Your access request</p>
+          <Badge tone={STATUS_TONE[latest.status]}>{latest.status.toLowerCase()}</Badge>
+        </div>
+        {latest.status === 'PENDING' ? (
           <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-            Your request was denied. You can file a fresh request with corrected attestations.
+            The host is reviewing your request. You&apos;ll see the decision on your dashboard.
           </p>
-          {latest.decisionNote ? (
-            <p className="mt-2 rounded-md bg-[var(--color-subtle)] p-2 text-xs">
-              <span className="font-medium">Host&apos;s note:</span> {latest.decisionNote}
+        ) : null}
+        {latest.status === 'APPROVED' ? (
+          <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+            You can download distributions below.
+          </p>
+        ) : null}
+        {latest.status === 'DENIED' ? (
+          <>
+            <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+              Your request was denied. You can file a fresh request with corrected attestations.
             </p>
-          ) : null}
-        </>
-      ) : null}
-      {latest.status === 'REVOKED' ? (
-        <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-          A previously-approved request was revoked. File a fresh request if your project now meets
-          the revoked-condition.
-        </p>
-      ) : null}
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
-        <Link
-          href="/dashboard/access-requests"
-          className="font-medium text-[var(--color-primary)] underline underline-offset-2"
-        >
-          See your requests
-        </Link>
-        {latest.status === 'DENIED' || latest.status === 'REVOKED' ? (
+            {latest.decisionNote ? (
+              <p className="mt-2 rounded-md bg-[var(--color-subtle)] p-2 text-xs">
+                <span className="font-medium">Host&apos;s note:</span> {latest.decisionNote}
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {latest.status === 'REVOKED' ? (
+          <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+            A previously-approved request was revoked. File a fresh request if your project now
+            meets the revoked-condition.
+          </p>
+        ) : null}
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
           <Link
-            href={`/catalog/${detail.slug}/request-access`}
+            href="/dashboard/access-requests"
             className="font-medium text-[var(--color-primary)] underline underline-offset-2"
           >
-            File a new request
+            See your requests
           </Link>
-        ) : null}
-      </div>
+          {latest.status === 'DENIED' || latest.status === 'REVOKED' ? (
+            <Link
+              href={`/catalog/${detail.slug}/request-access`}
+              className="font-medium text-[var(--color-primary)] underline underline-offset-2"
+            >
+              File a new request
+            </Link>
+          ) : null}
+        </div>
       </div>
     </div>
   );

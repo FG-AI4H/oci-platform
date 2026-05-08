@@ -77,6 +77,8 @@ describe('PreferencesService.updateMine', () => {
     await service.updateMine(user('cognito-username-123'), { darkMode: 'system' });
 
     const [derivedId] = repo.upsert.mock.calls[0]!;
-    expect(derivedId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(derivedId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
   });
 });

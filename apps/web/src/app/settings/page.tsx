@@ -1,5 +1,13 @@
 import { redirect } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, Container, Section } from '@oci/ui';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Container,
+  Section,
+} from '@oci/ui';
 import type { UserPreferences } from '@oci/shared-types';
 import { auth } from '../../auth';
 import { apiFetch } from '../../lib/api';
@@ -28,10 +36,11 @@ export default async function SettingsPage({
     redirect('/signin?callbackUrl=%2Fsettings');
   }
 
-  const initial = (await apiFetch<UserPreferences>('/v2/preferences/me', {
-    session,
-    revalidate: 0,
-  })) ?? FALLBACK;
+  const initial =
+    (await apiFetch<UserPreferences>('/v2/preferences/me', {
+      session,
+      revalidate: 0,
+    })) ?? FALLBACK;
 
   const params = await searchParams;
   const savedFlag = params.saved === '1';
@@ -40,12 +49,9 @@ export default async function SettingsPage({
     <Container>
       <Section>
         <header className="mb-8 space-y-2">
-          <h1 className="text-display tracking-tight text-[var(--color-foreground)]">
-            Settings
-          </h1>
+          <h1 className="text-display tracking-tight text-[var(--color-foreground)]">Settings</h1>
           <p className="max-w-2xl text-base text-[var(--color-muted-foreground)]">
-            Per-user UI preferences. These are saved to your account and follow you across
-            devices.
+            Per-user UI preferences. These are saved to your account and follow you across devices.
           </p>
         </header>
 

@@ -165,8 +165,14 @@
   ],
 
   "prov:wasAttributedTo": [
-    { "@type": "prov:Organization", "name": "RSNA Pneumonia Detection Challenge — Radiological Society of North America" },
-    { "@type": "prov:Organization", "name": "U.S. National Institutes of Health Clinical Center (source images)" }
+    {
+      "@type": "prov:Organization",
+      "name": "RSNA Pneumonia Detection Challenge — Radiological Society of North America"
+    },
+    {
+      "@type": "prov:Organization",
+      "name": "U.S. National Institutes of Health Clinical Center (source images)"
+    }
   ],
 
   "rai:dataCollection": "Source images come from the NIH Clinical Center ChestX-ray8 dataset (~112 000 frontal chest radiographs from ~30 000 unique patients, retrospectively curated 1992-2015 from the NIH PACS). RSNA filtered to 30 000 frontal images and re-annotated them for the 2018 challenge.",

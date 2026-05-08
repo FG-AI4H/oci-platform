@@ -6,9 +6,9 @@
 
 Health AI's data bottleneck isn't a single problem. It's three:
 
-1. **Findability** — which datasets exist, what they describe, who hosts them. *Solved by the catalogue layer (Croissant 1.1, federation, Google Dataset Search indexing).*
-2. **Permission** — what is each dataset allowed to be used for, by whom, under what terms. *This is what the access-governance layer addresses.*
-3. **Reproducibility** — can a regulator or peer verify a model claim against a versioned dataset years later. *Solved by the evaluation-traceability layer (Phase C).*
+1. **Findability** — which datasets exist, what they describe, who hosts them. _Solved by the catalogue layer (Croissant 1.1, federation, Google Dataset Search indexing)._
+2. **Permission** — what is each dataset allowed to be used for, by whom, under what terms. _This is what the access-governance layer addresses._
+3. **Reproducibility** — can a regulator or peer verify a model claim against a versioned dataset years later. _Solved by the evaluation-traceability layer (Phase C)._
 
 The middle problem is the hardest because it's where law, ethics, institutional politics, and cryptography all meet. A platform that gets it wrong ends up either a glorified spreadsheet (no real access control) or an unusable bureaucracy (every request takes weeks). Synapse, EGA, dbGaP, and UK Biobank have all wrestled with this for over a decade. We can either reinvent the field's mistakes or stand on what the field has learned.
 
@@ -17,16 +17,16 @@ The middle problem is the hardest because it's where law, ethics, institutional 
 OCI is not just an academic-research catalogue. The platform's distinctive mandate under GI-AI4H is to **enable AI solutions for WHO public-health priorities, especially in low- and middle-income countries (LMICs)**. The data-access architecture therefore has to serve two equally first-class user populations:
 
 - **Researchers** — academic, clinical, public-health. The traditional Synapse/EGA/dbGaP audience. They need rigorous access governance and citation-grade dataset versioning.
-- **AI solution developers** — LMIC startups, MedTech vendors, academic spin-offs, WHO Collaborating Centres operating implementation projects. They need the *same* governance rigour but with an access flow that doesn't assume a US R1 university affiliation, plus a Data Use Agreement that supports commercial deployment when the host has granted it.
+- **AI solution developers** — LMIC startups, MedTech vendors, academic spin-offs, WHO Collaborating Centres operating implementation projects. They need the _same_ governance rigour but with an access flow that doesn't assume a US R1 university affiliation, plus a Data Use Agreement that supports commercial deployment when the host has granted it.
 
 Peer platforms (Synapse, EGA, dbGaP) skew strongly toward the first audience. Their default DUA language assumes academic non-commercial use. **OCI's distinctive value is that it serves both.** A Senegalese startup building a TB X-ray triage tool for Ministry-of-Health deployment, or a Brazilian MedTech company building a cervical-cancer-screening AI, or a Cambodian academic spin-off commercialising a malaria-classifier, should all be able to request and use OCI-curated datasets through a flow that takes their use case seriously — without first being routed to a US-style "non-commercial research use only" default that excludes them.
 
-This isn't a softening of access governance. The matcher, the DUA, and the OCI ACT review apply equally. What changes is the *shape* of the request form, the *language* of the DUA template, and the *terms* a host can offer (e.g. "commercial use OK for LMIC public-sector deployments, royalty-free; high-income-country deployment requires a separate negotiation"). The platform encodes these as machine-readable terms so that a commercial requester knows ex-ante whether their use case fits — no months of bilateral negotiation just to find out.
+This isn't a softening of access governance. The matcher, the DUA, and the OCI ACT review apply equally. What changes is the _shape_ of the request form, the _language_ of the DUA template, and the _terms_ a host can offer (e.g. "commercial use OK for LMIC public-sector deployments, royalty-free; high-income-country deployment requires a separate negotiation"). The platform encodes these as machine-readable terms so that a commercial requester knows ex-ante whether their use case fits — no months of bilateral negotiation just to find out.
 
 Concrete consequences for the architecture:
 
 1. **Commercial use is a first-class identity context**, not a flag inside the researcher form. The request flow asks deployment country, regulatory pathway, WHO-priority alignment, and royalty terms — and these flow through to the DUA template and the host's review surface.
-2. **DUO vocabulary used carefully.** `DUO_0000046` (Non-Commercial Use Only) is meaningful for *some* datasets but is **not** the default for GI-AI4H curated content; `DUO_0000007` (Disease Specific) and the bare permission terms are typically the right defaults for curated, AI-development-targeted data.
+2. **DUO vocabulary used carefully.** `DUO_0000046` (Non-Commercial Use Only) is meaningful for _some_ datasets but is **not** the default for GI-AI4H curated content; `DUO_0000007` (Disease Specific) and the bare permission terms are typically the right defaults for curated, AI-development-targeted data.
 3. **Pre-grants for accredited LMIC actors.** A startup registered with the WHO Innovation Hub or accredited by a national MoH innovation programme can be pre-granted access to GI-AI4H curated datasets — the platform records the accreditation as a Visa-equivalent identity claim, the dataset's `accessTier` rules honour it, and the request collapses to a click-wrap.
 4. **The DUA template carries a "WHO public-health priorities" mode** with optional clauses for royalty-free LMIC public-sector deployment, modelled loosely on the GAVI / vaccine-pricing tiered-licensing precedent.
 
@@ -53,14 +53,14 @@ This is the key competitive positioning: **OCI as a peer to EGA / dbGaP / Synaps
 
 ### Standards-aligned across all three convening mandates
 
-| Convening org | Standards we honour | How |
-|---|---|---|
-| **ITU** | GI-AI4H WG-Data Data and Model Exchange Protocol | DUO + DUA + Passports operationalise the WG-Data architecture |
-| **WHO** | WHO Ethics & Governance of AI for Health; WHO Health Data Governance Principles | DUO encodes consent provisions; the IRB attestation flow operationalises ethics oversight; the audit trail satisfies transparency |
-| **WIPO** | Licensing as machine-readable dataset metadata | Croissant `license` field + DUA preserves the licence chain through access |
-| **EU** | eIDAS Regulation 910/2014 for e-signatures; GDPR Art. 9 (special-category) and Art. 89 (research exemption) for processing | SES/AdES/QES tiers map to dataset sensitivity; DUA template bakes in Art. 89 language |
-| **Switzerland** | ZertES (Federal Act on Electronic Signature) | Yousign QTSP covers eIDAS; ZertES alignment available via Skribble if a Swiss-only host needs it |
-| **US** | ESIGN Act / UETA; NIH dbGaP Genomic Data Sharing Policy | SES (click-wrap with hash) is sufficient; dbGaP Passport interop planned |
+| Convening org   | Standards we honour                                                                                                        | How                                                                                                                               |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **ITU**         | GI-AI4H WG-Data Data and Model Exchange Protocol                                                                           | DUO + DUA + Passports operationalise the WG-Data architecture                                                                     |
+| **WHO**         | WHO Ethics & Governance of AI for Health; WHO Health Data Governance Principles                                            | DUO encodes consent provisions; the IRB attestation flow operationalises ethics oversight; the audit trail satisfies transparency |
+| **WIPO**        | Licensing as machine-readable dataset metadata                                                                             | Croissant `license` field + DUA preserves the licence chain through access                                                        |
+| **EU**          | eIDAS Regulation 910/2014 for e-signatures; GDPR Art. 9 (special-category) and Art. 89 (research exemption) for processing | SES/AdES/QES tiers map to dataset sensitivity; DUA template bakes in Art. 89 language                                             |
+| **Switzerland** | ZertES (Federal Act on Electronic Signature)                                                                               | Yousign QTSP covers eIDAS; ZertES alignment available via Skribble if a Swiss-only host needs it                                  |
+| **US**          | ESIGN Act / UETA; NIH dbGaP Genomic Data Sharing Policy                                                                    | SES (click-wrap with hash) is sufficient; dbGaP Passport interop planned                                                          |
 
 We stay aligned with all of these by adopting their standards directly, not by writing our own.
 
@@ -70,11 +70,11 @@ The platform is convened by ITU, WHO, and WIPO and operates on body-funded budge
 
 Instead, OCI uses a **three-tier signing stack with usage-scaled cost**:
 
-| Tier | Service | Cost shape | Annual cost |
-|---|---|---|---|
-| **SES** (most cases) | Built-in click-wrap with SHA-256 hash | $0 marginal | **$0** |
-| **AdES** (CONTROLLED tier DUAs) | DocuSeal — open-source, self-hosted on AWS Fargate | ~$15/mo Fargate task | **~$180** |
-| **QES** (SENSITIVE tier only, when policy requires) | Yousign EU QTSP via AWS Marketplace | Pay-per-signature ~€1–2 | **~€150** at 100 sigs/yr |
+| Tier                                                | Service                                            | Cost shape              | Annual cost              |
+| --------------------------------------------------- | -------------------------------------------------- | ----------------------- | ------------------------ |
+| **SES** (most cases)                                | Built-in click-wrap with SHA-256 hash              | $0 marginal             | **$0**                   |
+| **AdES** (CONTROLLED tier DUAs)                     | DocuSeal — open-source, self-hosted on AWS Fargate | ~$15/mo Fargate task    | **~$180**                |
+| **QES** (SENSITIVE tier only, when policy requires) | Yousign EU QTSP via AWS Marketplace                | Pay-per-signature ~€1–2 | **~€150** at 100 sigs/yr |
 
 Total expected annual signing cost at full Phase 3 deployment: **under €350**. This consolidates onto our existing AWS bill via AWS Marketplace — no separate vendor procurement. Compare to a single DocuSign Standard seat (the canonical industry choice) at $540/year — we'd exceed the entire signing budget on day one with one user.
 
@@ -92,7 +92,7 @@ This is deliberate: **standards over vendors.** Where a vendor relationship is g
 
 1. **Legal review of the DUA template is a prerequisite to any e-sig integration.** Engineering can scaffold; only legal can sign off on enforceability. Recommend tabling for the next steering meeting whether OCI adopts the GA4GH model DTUA verbatim or commissions our own.
 
-2. **Tier mapping is policy, not code.** Which OCI dataset categories *require* QES vs. AdES vs. SES is a steering-body call, not a developer call. The platform supports the choice; the choice itself needs the GI-AI4H Steering Committee on the line.
+2. **Tier mapping is policy, not code.** Which OCI dataset categories _require_ QES vs. AdES vs. SES is a steering-body call, not a developer call. The platform supports the choice; the choice itself needs the GI-AI4H Steering Committee on the line.
 
 3. **Quiz content is hard to author defensibly.** Synapse's certification quiz took years to refine. Our risk is shipping a weak quiz that gives false assurance. **Recommended action:** ask Sage Bionetworks if we can adopt their quiz with attribution — partners-of-partners agreement, light to negotiate.
 
@@ -104,12 +104,12 @@ This is deliberate: **standards over vendors.** Where a vendor relationship is g
 
 ## What this means for the budget
 
-| Phase | Engineering | External spend |
-|---|---|---|
-| **Phase 1 (~2 weeks)** | 1 engineer | $0 |
-| **Phase 2 (1–3 months)** | 1 engineer | DocuSeal infra ~$180/yr |
+| Phase                     | Engineering                         | External spend                                       |
+| ------------------------- | ----------------------------------- | ---------------------------------------------------- |
+| **Phase 1 (~2 weeks)**    | 1 engineer                          | $0                                                   |
+| **Phase 2 (1–3 months)**  | 1 engineer                          | DocuSeal infra ~$180/yr                              |
 | **Phase 3 (6–12 months)** | 1 engineer + 0.25 ACT reviewer time | Yousign ~€150/yr at expected volume + DocuSeal infra |
-| **Steady state** | 0.25 engineer for maintenance | < €400/yr total signature & infra |
+| **Steady state**          | 0.25 engineer for maintenance       | < €400/yr total signature & infra                    |
 
 Compared to acquiring an off-the-shelf SaaS solution (DocuSign + ID-verification add-ons + per-seat Adobe Sign for jurisdiction coverage), the OCI stack runs on roughly **3% of the canonical industry cost**, with no vendor lock-in.
 

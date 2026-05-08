@@ -21,15 +21,15 @@ The dataset detail page surfaces this prominently: look for the **Commercial use
 
 The researcher form covers project title, description, IRB approval reference, output type, retention. You'll see those — they still matter. The AI-builder form adds:
 
-| Field | What it's for | What "good" looks like |
-|---|---|---|
-| **Legal entity** | Who actually signs the DUA. Must be a registered company, foundation, or accredited organisation. | "Acme Medical AI SAS, registered in France, SIREN 123456789" |
-| **Deployment country / region** | The DUA template branches on this. LMIC public-sector deployment may unlock royalty-free clauses. | "Senegal (primary), Mali, Burkina Faso (secondary). Public-sector deployment via Senegalese Ministry of Health." |
-| **Regulatory pathway** | What regulator you're targeting and what class of submission. Tells the reviewer how the dataset will be used in your validation evidence. | "EU MDR Class IIa SaMD, FDA 510(k) De Novo, WHO Prequalification stream" |
-| **WHO health-priority alignment** | Free-text + reference to a WHO-published priority list where applicable. Routes accredited cases for faster review. | "Tuberculosis triage in primary care — aligns with WHO End TB Strategy and the 2024 WHO Operational Handbook on Tuberculosis Module 2 (screening)." |
-| **WHO Innovation Hub or national-MoH accreditation** | If you have one. This can pre-grant access to curated datasets and shortens review path significantly. | "WHO Innovation Hub Cohort 2024 / accredited under [scheme]. Reference: [URL/doc]." |
-| **Royalty / commercialisation plan** | Where the host has set commercial-use terms, what you're agreeing to. | "Royalty-free for Senegal MoH deployment via WHO Country Office. Subsequent commercialisation in HIC markets subject to bilateral agreement with host." |
-| **Post-market data flow** | What you'll do with downstream data (model improvements, surveillance reports). | "Annual technical surveillance report to host institution; aggregate model performance to WHO Innovation Hub registry." |
+| Field                                                | What it's for                                                                                                                              | What "good" looks like                                                                                                                                  |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Legal entity**                                     | Who actually signs the DUA. Must be a registered company, foundation, or accredited organisation.                                          | "Acme Medical AI SAS, registered in France, SIREN 123456789"                                                                                            |
+| **Deployment country / region**                      | The DUA template branches on this. LMIC public-sector deployment may unlock royalty-free clauses.                                          | "Senegal (primary), Mali, Burkina Faso (secondary). Public-sector deployment via Senegalese Ministry of Health."                                        |
+| **Regulatory pathway**                               | What regulator you're targeting and what class of submission. Tells the reviewer how the dataset will be used in your validation evidence. | "EU MDR Class IIa SaMD, FDA 510(k) De Novo, WHO Prequalification stream"                                                                                |
+| **WHO health-priority alignment**                    | Free-text + reference to a WHO-published priority list where applicable. Routes accredited cases for faster review.                        | "Tuberculosis triage in primary care — aligns with WHO End TB Strategy and the 2024 WHO Operational Handbook on Tuberculosis Module 2 (screening)."     |
+| **WHO Innovation Hub or national-MoH accreditation** | If you have one. This can pre-grant access to curated datasets and shortens review path significantly.                                     | "WHO Innovation Hub Cohort 2024 / accredited under [scheme]. Reference: [URL/doc]."                                                                     |
+| **Royalty / commercialisation plan**                 | Where the host has set commercial-use terms, what you're agreeing to.                                                                      | "Royalty-free for Senegal MoH deployment via WHO Country Office. Subsequent commercialisation in HIC markets subject to bilateral agreement with host." |
+| **Post-market data flow**                            | What you'll do with downstream data (model improvements, surveillance reports).                                                            | "Annual technical surveillance report to host institution; aggregate model performance to WHO Innovation Hub registry."                                 |
 
 These declarations flow into the DUA template the host's e-signature service generates. You sign what you declared. Misalignment between declaration and intended use is contract violation, not just a paperwork mismatch.
 
@@ -89,11 +89,11 @@ The DUA is a real legal document. It is **not** a research project description. 
 
 ## E-signature levels — what you'll do
 
-| Tier | What you sign with | Practical experience |
-|---|---|---|
-| **OPEN / REGISTERED** | Click-wrap acceptance | A checkbox in the platform. Hashed and stored as legal evidence. |
-| **CONTROLLED** | AdES via DocuSeal (self-hosted by OCI) | An emailed signing link. Identity-verified, tamper-evident. Free to you. |
-| **SENSITIVE** | QES via Yousign (EU QTSP, AWS Marketplace) | An emailed signing link with stronger identity verification (typically video ID-check or eID card). Equivalent to a handwritten signature under EU law. ~€1–2 per signature, billed to the platform — not to you. |
+| Tier                  | What you sign with                         | Practical experience                                                                                                                                                                                              |
+| --------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **OPEN / REGISTERED** | Click-wrap acceptance                      | A checkbox in the platform. Hashed and stored as legal evidence.                                                                                                                                                  |
+| **CONTROLLED**        | AdES via DocuSeal (self-hosted by OCI)     | An emailed signing link. Identity-verified, tamper-evident. Free to you.                                                                                                                                          |
+| **SENSITIVE**         | QES via Yousign (EU QTSP, AWS Marketplace) | An emailed signing link with stronger identity verification (typically video ID-check or eID card). Equivalent to a handwritten signature under EU law. ~€1–2 per signature, billed to the platform — not to you. |
 
 You don't pay for any of this; the platform absorbs the signing cost as part of operating costs. See [for-strategy/access-governance-positioning.md](../for-strategy/access-governance-positioning.md#cost-shape) for why the cost shape is sustainable for a public-good platform.
 
@@ -109,6 +109,7 @@ You don't pay for any of this; the platform absorbs the signing cost as part of 
 ### "We're an LMIC startup deploying through the public health system"
 
 This is one of the cleanest paths. Declare:
+
 - Deployment country / region with the public-sector entity named.
 - WHO-priority alignment — the operational handbook or strategy document your work aligns to.
 - WHO Innovation Hub or national-MoH accreditation if you have it.
@@ -118,6 +119,7 @@ The DUA generated for you will typically carry a royalty-free clause for that pu
 ### "We're a MedTech company integrating an AI module"
 
 You're a more typical commercial requester. Declare:
+
 - The regulatory class and pathway clearly (FDA 510(k) / De Novo / EU MDR Class / national equivalent).
 - Your full deployment-market list — the DUA may differentiate terms by market.
 - Your post-market surveillance plan.
@@ -145,7 +147,7 @@ Three patterns:
 - **Your country's GI-AI4H contact** can navigate accreditation and country-specific routing.
 - **WHO Innovation Hub** for global-priority alignment guidance and accreditation.
 - **The dataset host** for dataset-specific questions about terms.
-- **`oci-platform@itu.int`** for platform questions *(TODO confirm operator address)*.
+- **`oci-platform@itu.int`** for platform questions _(TODO confirm operator address)_.
 - **OCI ACT** for SENSITIVE-tier and curated-dataset escalations.
 
 ## Feedback
