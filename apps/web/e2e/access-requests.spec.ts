@@ -78,6 +78,8 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await page.getByRole('radio', { name: 'Restricted' }).check();
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${datasetSlug}/publish$`));
+    // Switch to the paste form (PR K wizard is the default).
+    await page.getByRole('tab', { name: 'I already have a manifest' }).click();
     await page
       .getByLabel('Croissant manifest')
       .fill(manifestWithConsent(['DUO_0000042', 'DUO_0000021']));
@@ -160,6 +162,8 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/publish$`));
 
+    // Switch to the paste form (PR K wizard is the default).
+    await page.getByRole('tab', { name: 'I already have a manifest' }).click();
     // IDRiD without consentCode — should be rejected at publish.
     await page.getByLabel('Croissant manifest').fill(readFileSync(FIXTURE, 'utf8'));
     await page.getByRole('button', { name: /validate.*publish/i }).click();
@@ -177,6 +181,8 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await page.getByRole('radio', { name: 'Restricted' }).check();
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/publish$`));
+    // Switch to the paste form (PR K wizard is the default).
+    await page.getByRole('tab', { name: 'I already have a manifest' }).click();
     await page
       .getByLabel('Croissant manifest')
       // GRU + NCU = research use, no commercial.
