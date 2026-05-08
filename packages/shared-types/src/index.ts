@@ -131,6 +131,14 @@ export const DatasetDetailSchema = DatasetSummarySchema.extend({
   distributions: z.array(DistributionSchema),
   /** DUO permission term ids attached to the latest published manifest. */
   duoTerms: z.array(DuoTermIdSchema).default([]),
+  /**
+   * Identity of the dataset host (UUID). Surfaces here so the web side
+   * can detect "viewer is the host of this dataset" and suppress
+   * affordances that don't apply (PR L.1, #91 — refines the access-CTA
+   * gate from PR L.3 which had to fall back to admin-only). Soft FK
+   * onto `identity.users.id`.
+   */
+  hostId: z.string().uuid(),
 });
 export type DatasetDetail = z.infer<typeof DatasetDetailSchema>;
 
@@ -151,13 +159,66 @@ export type DatasetDetail = z.infer<typeof DatasetDetailSchema>;
 export const DatasetSourceSchema = z.enum(['local', 'federated', 'all']);
 export type DatasetSource = z.infer<typeof DatasetSourceSchema>;
 
-/** Query params for `GET /v2/catalog/datasets`. */
+/**
+ * Sort options for the catalog list (PR L.1, #91 / search work).
+ *
+ * `recent` (default) — newest updates first; surface fresh content.
+ * `name`            — alphabetical by dataset name.
+ * `oldest`          — useful for "what's been around long enough to
+ *                     have downstream work cite it?"
+ */
+export const ListDatasetsSortSchema = z.enum(['recent', 'name', 'oldest']);
+export type ListDatasetsSort = z.infer<typeof ListDatasetsSortSchema>;
+
+/**
+ * Faceted query params for `GET /v2/catalog/datasets` (PR L.1).
+ *
+ * The classic `q` (full-text) is preserved. New facets ANDs with `q`
+ * — a researcher can search "pneumonia" AND filter to chest x-rays
+ * AND limit to non-commercial datasets. Each facet is repeatable
+ * (`?modality=X-ray&modality=CT`). Empty arrays are treated as "no
+ * filter" rather than "match nothing".
+ *
+ * **Pagination**. Two surfaces:
+ *   - `?page=N` (1-indexed) — the catalog list UI uses this. Offset
+ *     + total count so the user sees "page 3 of 12" and can jump.
+ *   - `?cursor=…` — preserved for federation / API clients that
+ *     prefer cursor-based pagination at scale. Both are accepted;
+ *     `cursor` wins when both are present.
+ */
 export const ListDatasetsQuerySchema = z.object({
   q: z.string().min(1).max(200).optional(),
   visibility: DatasetVisibilitySchema.optional(),
   status: DatasetStatusSchema.optional(),
   hostId: z.string().uuid().optional(),
   source: DatasetSourceSchema.default('local'),
+
+  // Faceted filters — case-insensitive substring match against the
+  // BioCroissant fields. Multiple values OR within a facet; facets AND
+  // across each other.
+  modality: z.union([z.string(), z.array(z.string())]).optional(),
+  bodyRegion: z.union([z.string(), z.array(z.string())]).optional(),
+  condition: z.union([z.string(), z.array(z.string())]).optional(),
+  /**
+   * Anonymisation level filter. `any` (default) drops the filter.
+   */
+  anonymizationLevel: z.enum(['ANONYMIZED', 'PSEUDONYMIZED', 'IDENTIFIED']).optional(),
+  /**
+   * License filter — substring match against `manifest.license`. The
+   * web UI surfaces a small known-set picker; the API stays open
+   * because real-world licence strings vary.
+   */
+  license: z.union([z.string(), z.array(z.string())]).optional(),
+  /**
+   * DUO permission term ids (PR J.1). Multi-value; ORs within. A
+   * dataset matches if ANY of its `duoTerms` is in the requested set.
+   */
+  duoTerms: z.union([DuoTermIdSchema, z.array(DuoTermIdSchema)]).optional(),
+
+  sort: ListDatasetsSortSchema.default('recent'),
+
+  /** 1-indexed page. Used by the web UI; the API still honours cursor. */
+  page: z.coerce.number().int().min(1).max(10_000).optional(),
   /** Cursor: opaque base64 of the prior page's last `(updatedAt, id)`. */
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
@@ -170,6 +231,14 @@ export const ListDatasetsResponseSchema = z.object({
   nextCursor: z.string().nullable(),
   /** Total matches (best-effort; may be approximate at scale — Phase E). */
   totalEstimate: z.number().int(),
+  /**
+   * Page-aware fields (PR L.1, #91). Populated when the request used
+   * `?page=N`. The web UI uses these to render "page X of Y" + jump.
+   * `null` when the caller used cursor-based pagination instead.
+   */
+  page: z.number().int().nullable(),
+  pageSize: z.number().int().nullable(),
+  totalPages: z.number().int().nullable(),
 });
 export type ListDatasetsResponse = z.infer<typeof ListDatasetsResponseSchema>;
 

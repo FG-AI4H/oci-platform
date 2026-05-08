@@ -73,41 +73,81 @@ export class CatalogService {
         q: query.q,
         limit: query.limit,
       });
-      return { items: rows, nextCursor: null, totalEstimate };
+      return {
+        items: rows,
+        nextCursor: null,
+        totalEstimate,
+        page: null,
+        pageSize: null,
+        totalPages: null,
+      };
     }
 
+    // Cursor wins when both `cursor` and `page` are present — older
+    // clients shouldn't have their cursor flow disrupted. Page-mode is
+    // for the new web UI (PR L.1).
+    const usePage = query.page !== undefined && !query.cursor;
     const after = query.cursor ? decodeCursor(query.cursor) : undefined;
+    const offset = usePage ? Math.max(0, ((query.page ?? 1) - 1) * query.limit) : undefined;
+
+    // Normalise repeated facet values (Zod accepts string OR string[]).
+    const toArray = (v: string | string[] | undefined): string[] | undefined =>
+      v === undefined ? undefined : Array.isArray(v) ? v : [v];
+
     const { rows: localRows, totalEstimate: localTotal } = await this.repo.search({
       q: query.q,
       visibilities,
       statuses: query.status ? [query.status] : undefined,
       hostId: query.hostId,
       after,
-      limit: query.limit + 1, // one extra to detect the next page
+      modality: toArray(query.modality),
+      bodyRegion: toArray(query.bodyRegion),
+      condition: toArray(query.condition),
+      anonymizationLevel: query.anonymizationLevel,
+      license: toArray(query.license),
+      duoTerms: toArray(query.duoTerms),
+      sort: query.sort,
+      offset,
+      limit: usePage ? query.limit : query.limit + 1, // cursor mode peeks 1 extra
     });
 
     let nextCursor: string | null = null;
     let items = localRows;
-    if (localRows.length > query.limit) {
+    if (!usePage && localRows.length > query.limit) {
       items = localRows.slice(0, query.limit);
       const last = items[items.length - 1]!;
       nextCursor = encodeCursor({ updatedAt: new Date(last.updatedAt), id: last.id });
     }
 
-    if (query.source === 'all' && nextCursor === null && items.length < query.limit) {
+    if (
+      query.source === 'all' &&
+      ((usePage && items.length < query.limit) ||
+        (!usePage && nextCursor === null && items.length < query.limit))
+    ) {
       const fedSlots = query.limit - items.length;
       const { rows: fedRows, totalEstimate: fedTotal } = await this.repo.searchFederated({
         q: query.q,
         limit: fedSlots,
       });
+      const mergedTotal = localTotal + fedTotal;
       return {
         items: [...items, ...fedRows],
         nextCursor: null,
-        totalEstimate: localTotal + fedTotal,
+        totalEstimate: mergedTotal,
+        page: usePage ? (query.page ?? 1) : null,
+        pageSize: usePage ? query.limit : null,
+        totalPages: usePage ? Math.max(1, Math.ceil(mergedTotal / query.limit)) : null,
       };
     }
 
-    return { items, nextCursor, totalEstimate: localTotal };
+    return {
+      items,
+      nextCursor,
+      totalEstimate: localTotal,
+      page: usePage ? (query.page ?? 1) : null,
+      pageSize: usePage ? query.limit : null,
+      totalPages: usePage ? Math.max(1, Math.ceil(localTotal / query.limit)) : null,
+    };
   }
 
   async detail(slug: DatasetSlug, user?: CognitoAccessTokenPayload): Promise<DatasetDetail> {
