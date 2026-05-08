@@ -7,6 +7,7 @@ import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { RemoteCatalogModule } from './modules/remote-catalog/remote-catalog.module.js';
 import { AccessRequestModule } from './modules/access-request/access-request.module.js';
 import { CertificationModule } from './modules/certification/certification.module.js';
+import { PolicyAcceptanceModule } from './modules/policy-acceptance/policy-acceptance.module.js';
 import { PreferencesModule } from './modules/preferences/preferences.module.js';
 import { StorageModule } from './modules/storage/storage.module.js';
 import { HealthController } from './health.controller.js';
@@ -31,6 +32,7 @@ import { MeController } from './me/me.controller.js';
     StorageModule,
     PreferencesModule,
     CertificationModule,
+    PolicyAcceptanceModule,
     // Phase B will continue to add: AnnotationModule
     // Phase C: PredictionModule, EvaluationModule
     // Phase D: ReportingModule
