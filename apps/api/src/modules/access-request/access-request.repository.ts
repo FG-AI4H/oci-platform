@@ -157,13 +157,95 @@ export class AccessRequestRepository {
     decidedById: string;
     decisionNote: string | null;
   }): Promise<void> {
+    const now = new Date();
+    // On APPROVED transition, set expiresAt = decidedAt + validity window
+    // (#130). On any other terminal state, clear expiresAt — DENIED /
+    // REVOKED rows have no live grant to renew.
+    const validityDays = Number(process.env.OCI_ACCESS_GRANT_VALIDITY_DAYS ?? '365');
+    const expiresAt =
+      input.status === 'APPROVED'
+        ? new Date(now.getTime() + validityDays * 24 * 60 * 60 * 1000)
+        : null;
     await this.prisma.client.accessRequest.update({
       where: { id: input.id },
       data: {
         status: input.status,
-        decidedAt: new Date(),
+        decidedAt: now,
         decidedById: input.decidedById,
         decisionNote: input.decisionNote,
+        expiresAt,
+        // Reset the notice-sent flag on any decision so a re-approval
+        // (REVOKE → re-APPROVE in a future flow) gets a fresh notice.
+        expiryNoticeSentAt: null,
+      },
+    });
+  }
+
+  /**
+   * Renewal cron read path (#130) — APPROVED rows expiring within the
+   * next `withinDays` and not yet notified. Returns a thin shape so
+   * the worker doesn't drag `attestations` / `policyText` over the
+   * wire on a daily scan.
+   */
+  async findApprovedNearExpiry(args: {
+    withinDays: number;
+  }): Promise<Array<{ id: string; requesterId: string; expiresAt: Date; datasetId: string }>> {
+    const now = new Date();
+    const horizon = new Date(now.getTime() + args.withinDays * 24 * 60 * 60 * 1000);
+    const rows = (await this.prisma.client.accessRequest.findMany({
+      where: {
+        status: 'APPROVED',
+        expiresAt: { gte: now, lte: horizon },
+        expiryNoticeSentAt: null,
+      },
+      select: { id: true, requesterId: true, expiresAt: true, datasetId: true },
+    })) as Array<{ id: string; requesterId: string; expiresAt: Date | null; datasetId: string }>;
+    return rows.filter(
+      (r): r is { id: string; requesterId: string; expiresAt: Date; datasetId: string } =>
+        r.expiresAt != null,
+    );
+  }
+
+  /**
+   * Renewal cron read path (#130) — APPROVED rows that have already
+   * passed their `expiresAt`. Targets for auto-revoke.
+   */
+  async findExpired(): Promise<
+    Array<{ id: string; requesterId: string; expiresAt: Date; datasetId: string }>
+  > {
+    const now = new Date();
+    const rows = (await this.prisma.client.accessRequest.findMany({
+      where: {
+        status: 'APPROVED',
+        expiresAt: { lt: now },
+      },
+      select: { id: true, requesterId: true, expiresAt: true, datasetId: true },
+    })) as Array<{ id: string; requesterId: string; expiresAt: Date | null; datasetId: string }>;
+    return rows.filter(
+      (r): r is { id: string; requesterId: string; expiresAt: Date; datasetId: string } =>
+        r.expiresAt != null,
+    );
+  }
+
+  /** Stamp the expiry-notice timestamp so the daily cron doesn't re-email. */
+  async markExpiryNoticeSent(id: string): Promise<void> {
+    await this.prisma.client.accessRequest.update({
+      where: { id },
+      data: { expiryNoticeSentAt: new Date() },
+    });
+  }
+
+  /** Auto-revoke an expired row from the renewal cron. */
+  async autoRevokeExpired(id: string): Promise<void> {
+    await this.prisma.client.accessRequest.update({
+      where: { id },
+      data: {
+        status: 'REVOKED',
+        decidedAt: new Date(),
+        // decidedById intentionally not touched — the original decider
+        // stays on record; the auto-revoke is system-driven.
+        decisionNote:
+          'Auto-revoked on expiry (#130). The grant exceeded its validity window without renewal.',
       },
     });
   }
