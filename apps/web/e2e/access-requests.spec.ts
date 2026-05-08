@@ -79,7 +79,7 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${datasetSlug}/publish$`));
     // Switch to the paste form (PR K wizard is the default).
-    await page.getByRole('tab', { name: 'I already have a manifest' }).click();
+    await page.getByRole('button', { name: 'I already have a manifest' }).click();
     await page
       .getByLabel('Croissant manifest')
       .fill(manifestWithConsent(['DUO_0000042', 'DUO_0000021']));
@@ -117,9 +117,14 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await page.getByLabel('Redistribution intent').selectOption('NONE');
     await page.getByLabel('Output type').selectOption('PUBLICATION');
     await page.getByRole('button', { name: /submit request/i }).click();
-    await expect(page).toHaveURL(/\/dashboard\/access-requests$/);
+    // Post-submit lands back on the dataset detail page with a one-time
+    // confirmation banner; the access CTA there carries the PENDING badge.
+    await expect(page).toHaveURL(new RegExp(`/catalog/${datasetSlug}\\?requested=1$`));
+    await expect(page.getByRole('status')).toContainText(/request submitted/i);
+    await expect(page.getByText('pending').first()).toBeVisible();
 
-    // Requester sees PENDING row.
+    // The /dashboard/access-requests path also lists the row.
+    await page.goto('/dashboard/access-requests');
     await expect(page.getByText(`Restricted ${stamp}`)).toBeVisible();
     await expect(page.getByText('pending').first()).toBeVisible();
     await signOut(page);
@@ -163,7 +168,7 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/publish$`));
 
     // Switch to the paste form (PR K wizard is the default).
-    await page.getByRole('tab', { name: 'I already have a manifest' }).click();
+    await page.getByRole('button', { name: 'I already have a manifest' }).click();
     // IDRiD without consentCode — should be rejected at publish.
     await page.getByLabel('Croissant manifest').fill(readFileSync(FIXTURE, 'utf8'));
     await page.getByRole('button', { name: /validate.*publish/i }).click();
@@ -182,7 +187,7 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/publish$`));
     // Switch to the paste form (PR K wizard is the default).
-    await page.getByRole('tab', { name: 'I already have a manifest' }).click();
+    await page.getByRole('button', { name: 'I already have a manifest' }).click();
     await page
       .getByLabel('Croissant manifest')
       // GRU + NCU = research use, no commercial.
@@ -207,7 +212,9 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await page.getByLabel('Redistribution intent').selectOption('DERIVATIVES_ONLY');
     await page.getByLabel('Output type').selectOption('MODEL_WEIGHTS');
     await page.getByRole('button', { name: /submit request/i }).click();
-    await expect(page).toHaveURL(/\/dashboard\/access-requests$/);
+    // Lands on the dataset detail page with the confirmation banner.
+    await expect(page).toHaveURL(new RegExp(`\\?requested=1$`));
+    await expect(page.getByRole('status')).toContainText(/request submitted/i);
     await signOut(page);
 
     // Host inbox: this row shows CONFLICT.

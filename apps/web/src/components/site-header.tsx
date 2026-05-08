@@ -53,6 +53,7 @@ export async function SiteHeader() {
           {session?.user ? (
             <>
               <NavLink href="/dashboard">Dashboard</NavLink>
+              <NavLink href="/settings">Settings</NavLink>
               <span
                 className="hidden md:inline text-sm text-[var(--color-muted-foreground)] truncate max-w-[14ch]"
                 title={session.user.email ?? session.user.name ?? undefined}

@@ -60,7 +60,7 @@ export function SiteFooter() {
 
       <div className="border-t border-[var(--color-border)]">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-4 text-xs text-[var(--color-muted-foreground)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p>© {year} OCI Platform contributors. Open source.</p>
+          <p>© {year} OCI Platform contributors. BSD-3-Clause licensed.</p>
           <p className="font-mono">
             env: <span className="text-[var(--color-foreground)]">{env}</span>
           </p>

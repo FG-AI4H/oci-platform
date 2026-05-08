@@ -1,0 +1,292 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "sc": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "dct": "http://purl.org/dc/terms/",
+    "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
+  },
+  "@type": "sc:Dataset",
+  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
+
+  "name": "ISIC 2019 Skin Lesion Classification — OCI Restricted Mirror",
+  "description": "OCI restricted-tier mirror of the ISIC 2019 Skin Lesion Diagnosis challenge: 25 331 dermoscopic images across nine diagnostic categories (melanoma, melanocytic nevus, basal cell carcinoma, actinic keratosis, benign keratosis, dermatofibroma, vascular lesion, squamous cell carcinoma, and an unknown 'out-of-distribution' class). Access is gated behind a documented research purpose, an institutional review board approval, and a signed data-use agreement; the underlying images carry CC-BY-NC and the original consent forms restrict use to non-commercial research with publication.",
+  "url": "https://challenge.isic-archive.com/landing/2019/",
+  "sameAs": [
+    "https://doi.org/10.1038/sdata.2018.161",
+    "https://doi.org/10.34970/2020-ds01",
+    "https://www.isic-archive.com/"
+  ],
+
+  "creator": [
+    { "@type": "sc:Organization", "name": "International Skin Imaging Collaboration (ISIC)" },
+    { "@type": "sc:Person", "name": "Marc Combalia" },
+    { "@type": "sc:Person", "name": "Noel C. F. Codella" },
+    { "@type": "sc:Person", "name": "Veronica Rotemberg" },
+    { "@type": "sc:Person", "name": "Brian Helba" },
+    { "@type": "sc:Person", "name": "Konstantinos Liopyris" },
+    { "@type": "sc:Person", "name": "Cristina Carrera" },
+    { "@type": "sc:Person", "name": "Susana Puig" },
+    { "@type": "sc:Person", "name": "Allan C. Halpern" },
+    { "@type": "sc:Person", "name": "Josep Malvehy" }
+  ],
+  "publisher": {
+    "@type": "sc:Organization",
+    "name": "International Skin Imaging Collaboration",
+    "url": "https://www.isic-archive.com/"
+  },
+  "datePublished": "2019-08-02",
+  "dateModified": "2020-06-15",
+  "version": "1.0.0",
+
+  "license": "https://creativecommons.org/licenses/by-nc/4.0/",
+  "keywords": [
+    "dermoscopy",
+    "skin cancer",
+    "melanoma",
+    "basal cell carcinoma",
+    "image classification",
+    "multi-class",
+    "out-of-distribution detection",
+    "dermatology",
+    "supervised learning"
+  ],
+  "citeAs": "@article{combalia2019bcn20000,title={BCN20000: Dermoscopic Lesions in the Wild},author={Combalia, Marc and Codella, Noel C F and Rotemberg, Veronica and Helba, Brian and Vilaplana, Veronica and Reiter, Ofer and Carrera, Cristina and Barreiro, Alicia and Halpern, Allan C and Puig, Susana and Malvehy, Josep},journal={arXiv preprint arXiv:1908.02288},year={2019}}",
+
+  "consentCode": [
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000006",
+      "termCode": "DUO_0000006",
+      "name": "Health, medical or biomedical research",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000021",
+      "termCode": "DUO_0000021",
+      "name": "Ethics approval required",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000019",
+      "termCode": "DUO_0000019",
+      "name": "Publication required",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000046",
+      "termCode": "DUO_0000046",
+      "name": "Non-commercial use only",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    }
+  ],
+
+  "distribution": [
+    {
+      "@type": "sc:FileObject",
+      "@id": "isic-2019-train-images",
+      "name": "Training images (JPEG)",
+      "description": "25 331 dermoscopic JPEGs aggregated from BCN_20000, HAM10000 and MSK datasets.",
+      "encodingFormat": "image/jpeg",
+      "contentUrl": "https://challenge.isic-archive.com/data/2019/ISIC_2019_Training_Input.zip",
+      "contentSize": "9.1 GB",
+      "sha256": "44f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3f3"
+    },
+    {
+      "@type": "sc:FileObject",
+      "@id": "isic-2019-train-labels",
+      "name": "Training labels (CSV)",
+      "description": "Per-image one-hot ground-truth across nine categories.",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://challenge.isic-archive.com/data/2019/ISIC_2019_Training_GroundTruth.csv",
+      "contentSize": "1.4 MB",
+      "sha256": "5555555555555555555555555555555555555555555555555555555555555555"
+    },
+    {
+      "@type": "sc:FileObject",
+      "@id": "isic-2019-train-metadata",
+      "name": "Training metadata (CSV)",
+      "description": "Per-image age (binned), sex, and anatomical site.",
+      "encodingFormat": "text/csv",
+      "contentUrl": "https://challenge.isic-archive.com/data/2019/ISIC_2019_Training_Metadata.csv",
+      "contentSize": "1.6 MB",
+      "sha256": "6666666666666666666666666666666666666666666666666666666666666666"
+    },
+    {
+      "@type": "sc:FileObject",
+      "@id": "isic-2019-test-images",
+      "name": "Test images (JPEG)",
+      "description": "8 238 held-out dermoscopic JPEGs for the public test split.",
+      "encodingFormat": "image/jpeg",
+      "contentUrl": "https://challenge.isic-archive.com/data/2019/ISIC_2019_Test_Input.zip",
+      "contentSize": "3.0 GB",
+      "sha256": "7777777777777777777777777777777777777777777777777777777777777777"
+    }
+  ],
+
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "lesion-labels",
+      "name": "Lesion diagnostic labels",
+      "description": "Per-image ground-truth across the nine ISIC 2019 diagnostic categories. Exactly one column is 1.0 per row.",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "lesion-labels/image",
+          "name": "image",
+          "description": "ISIC archive identifier (e.g. ISIC_0000000).",
+          "dataType": "sc:Text"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "lesion-labels/MEL",
+          "name": "MEL",
+          "description": "Melanoma.",
+          "dataType": ["sc:Float", "cr:Label"]
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "lesion-labels/NV",
+          "name": "NV",
+          "description": "Melanocytic nevus.",
+          "dataType": ["sc:Float", "cr:Label"]
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "lesion-labels/BCC",
+          "name": "BCC",
+          "description": "Basal cell carcinoma.",
+          "dataType": ["sc:Float", "cr:Label"]
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "lesion-labels/AK",
+          "name": "AK",
+          "description": "Actinic keratosis.",
+          "dataType": ["sc:Float", "cr:Label"]
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "lesion-labels/BKL",
+          "name": "BKL",
+          "description": "Benign keratosis (solar lentigo / seborrheic keratosis / lichen planus-like keratosis).",
+          "dataType": ["sc:Float", "cr:Label"]
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "lesion-labels/DF",
+          "name": "DF",
+          "description": "Dermatofibroma.",
+          "dataType": ["sc:Float", "cr:Label"]
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "lesion-labels/VASC",
+          "name": "VASC",
+          "description": "Vascular lesion.",
+          "dataType": ["sc:Float", "cr:Label"]
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "lesion-labels/SCC",
+          "name": "SCC",
+          "description": "Squamous cell carcinoma.",
+          "dataType": ["sc:Float", "cr:Label"]
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "lesion-labels/UNK",
+          "name": "UNK",
+          "description": "None of the above (out-of-distribution / unknown).",
+          "dataType": ["sc:Float", "cr:Label"]
+        }
+      ]
+    }
+  ],
+
+  "prov:wasAttributedTo": [
+    { "@type": "prov:Organization", "name": "Hospital Clínic de Barcelona — BCN_20000" },
+    { "@type": "prov:Organization", "name": "Medical University of Vienna — HAM10000" },
+    { "@type": "prov:Organization", "name": "Memorial Sloan Kettering Cancer Center — MSK" }
+  ],
+
+  "rai:dataCollection": "Aggregation of three dermoscopic image collections curated by the International Skin Imaging Collaboration: BCN_20000 (Hospital Clínic de Barcelona, 2010-2016), HAM10000 (Medical University of Vienna + Cliff Rosendahl skin cancer practice, 1999-2017), and MSK (Memorial Sloan Kettering, 2000-2017).",
+  "rai:dataCollectionType": "Multi-site retrospective collection across three academic dermatology services.",
+  "rai:dataCollectionTimeframe": "1999-01-01/2017-12-31",
+  "rai:dataAnnotationProtocol": "Each image carries a definitive diagnosis derived from histopathological confirmation when available (≈55% of cases) or expert dermoscopic consensus by ≥2 board-certified dermatologists. Diagnostic categories follow the 2018 ISIC ontology. Cases without consensus or histology were excluded. Sex, anatomical site, and age (5-year bins) were extracted from the source EHR.",
+  "rai:dataAnnotationPlatform": "ISIC Archive (proprietary).",
+  "rai:annotationsPerItem": "Histology-confirmed (≈55%) or ≥2 dermatologist consensus.",
+  "rai:annotatorDemographics": "Mixed European and US dermatologists, board-certified in their respective national systems.",
+  "rai:dataBiases": "Skin-tone distribution heavily skewed toward Fitzpatrick I-III (light skin) — under-representation of Fitzpatrick V-VI introduces measurable performance disparity across skin tones. Anatomical-site distribution favours dorsum, leg, and trunk; acral and mucosal lesions are under-represented. Class imbalance: melanocytic nevus (NV) dominates at ~50%; squamous cell carcinoma (SCC) and dermatofibroma (DF) <2% each. Age skew: median age in the BCN cohort is 60+; paediatric cases are absent.",
+  "rai:dataLimitations": "Dermoscopy only — no clinical (overview) photography, no patient-history features, no follow-up. Histology is not provided for non-confirmed cases. Image preprocessing is not standardised: BCN_20000 was hair-removed digitally, HAM10000 was not. Some duplicates exist between train/test splits when used outside the official challenge protocol.",
+  "rai:personalSensitiveInformation": "Direct identifiers removed; lesion images may incidentally show tattoos, distinctive nevi, or skin features that are theoretically re-identifiable. EXIF metadata stripped from JPEGs prior to release.",
+  "rai:dataUseCases": "Training and benchmarking multi-class skin-lesion classifiers; out-of-distribution / unknown-class detection; fairness analyses across skin tone and anatomical site; semi-supervised learning experiments.",
+  "rai:dataReleaseMaintenancePlan": "Hosted in perpetuity by the ISIC Archive. ISIC committee reviews label corrections annually; corrections are versioned and announced via challenge mailing list.",
+
+  "bio:imagingModality": [
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Dermoscopy",
+      "termCode": "9418681000",
+      "inDefinedTermSet": "https://snomed.info/sct"
+    }
+  ],
+  "bio:bodyRegion": [
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Skin",
+      "termCode": "39937001",
+      "inDefinedTermSet": "https://snomed.info/sct"
+    }
+  ],
+  "bio:diseaseCondition": [
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Melanoma of skin",
+      "termCode": "2C30",
+      "inDefinedTermSet": "https://icd.who.int/browse/2024-01/mms"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Basal cell carcinoma of skin",
+      "termCode": "2C32",
+      "inDefinedTermSet": "https://icd.who.int/browse/2024-01/mms"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Squamous cell carcinoma of skin",
+      "termCode": "2C31",
+      "inDefinedTermSet": "https://icd.who.int/browse/2024-01/mms"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Melanocytic nevus",
+      "termCode": "2F20.Z",
+      "inDefinedTermSet": "https://icd.who.int/browse/2024-01/mms"
+    }
+  ],
+  "bio:populationCharacteristics": {
+    "ageRange": { "min": 5, "max": 95, "unit": "years" },
+    "geographicOrigin": ["ES", "AT", "US"]
+  },
+  "bio:dataAcquisitionProtocol": "Polarised-light dermoscopy with a contact dermatoscope (DermLite, FotoFinder, MoleMax) at standardised magnification. Captured as JPEG at native sensor resolution; no resampling at acquisition time. EXIF metadata captured device manufacturer and model in the source archive, stripped on release.",
+  "bio:dataAcquisitionEquipment": [
+    { "manufacturer": "3Gen", "model": "DermLite (multiple)", "softwareVersion": "n/a" },
+    { "manufacturer": "FotoFinder", "model": "Medicam (multiple)", "softwareVersion": "n/a" },
+    { "manufacturer": "Derma Medical Systems", "model": "MoleMax HD", "softwareVersion": "n/a" }
+  ],
+  "bio:irbApproval": {
+    "approvingBody": "Hospital Clínic de Barcelona Ethics Committee (lead site)",
+    "approvalNumber": "HCB/2016/0673",
+    "approvalDate": "2016-11-04",
+    "approvalDocument": "https://challenge.isic-archive.com/landing/2019/"
+  },
+  "bio:anonymizationLevel": "ANONYMIZED",
+  "bio:consentNotes": "Broad informed consent for research and educational use was captured at the source clinical encounters per each contributing institution's standard ethics protocol. Reuse for commercial product development is not covered by the original consents — DUO_0000046 (Non-commercial use only) is therefore enforced."
+}

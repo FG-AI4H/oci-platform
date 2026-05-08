@@ -9,13 +9,14 @@ You're publishing a dataset on the OCI. As a host, you decide:
 
 The platform automates the bookkeeping (validation, federation, audit trail, auto-matching of intended use) so you can focus on the data and the people requesting it.
 
-| Guide                                                       | Read when                                                               |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [Publishing a dataset](./publishing-a-dataset.md)           | First-time host workflow: create draft → publish manifest.              |
-| [Uploading files](./uploading-files.md)                     | You don't have an upstream URL; you want the OCI to host the bytes.     |
-| [DUO terms — choosing the right ones](./duo-terms-guide.md) | You need to express what your dataset permits in machine-readable form. |
-| [Reviewing access requests](./reviewing-access-requests.md) | The inbox flow: badges, the matcher's reasoning, decision notes.        |
-| [Versioning](./versioning.md)                               | When to bump major / minor / patch on a dataset.                        |
+| Guide                                                           | Read when                                                                                                                     |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| [How access works (overview)](../overview/access-governance.md) | You want the plain-English explainer of identity tiers, DUO, DUA, and e-signatures before configuring access on your dataset. |
+| [Publishing a dataset](./publishing-a-dataset.md)               | First-time host workflow: create draft → publish manifest.                                                                    |
+| [Uploading files](./uploading-files.md)                         | You don't have an upstream URL; you want the OCI to host the bytes.                                                           |
+| [DUO terms — choosing the right ones](./duo-terms-guide.md)     | You need to express what your dataset permits in machine-readable form.                                                       |
+| [Reviewing access requests](./reviewing-access-requests.md)     | The inbox flow: badges, the matcher's reasoning, decision notes.                                                              |
+| [Versioning](./versioning.md)                                   | When to bump major / minor / patch on a dataset.                                                                              |
 
 ## Quick orientation
 

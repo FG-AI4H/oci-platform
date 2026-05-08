@@ -65,7 +65,7 @@ test.describe('catalog faceted search (PR L.1)', () => {
     await page.getByRole('radio', { name: 'PUBLIC' }).check();
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/publish$`));
-    await page.getByRole('tab', { name: 'I already have a manifest' }).click();
+    await page.getByRole('button', { name: 'I already have a manifest' }).click();
     await page.getByLabel('Croissant manifest').fill(manifestWithConsent(['DUO_0000042']));
     await page.getByRole('button', { name: /validate.*publish/i }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${slug}$`));

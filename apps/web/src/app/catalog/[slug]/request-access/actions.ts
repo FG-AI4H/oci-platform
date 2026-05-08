@@ -128,5 +128,9 @@ export async function requestAccessAction(
     };
   }
 
-  redirect('/dashboard/access-requests');
+  // Land back on the dataset detail page with a confirmation banner.
+  // The CTA there is already status-aware, so the user sees their
+  // request transition to PENDING inline — and the "View in dashboard"
+  // link in that panel is the path forward to the full list.
+  redirect(`/catalog/${encodeURIComponent(slug)}?requested=1`);
 }
