@@ -49,17 +49,19 @@ export default async function SettingsPage({
           </p>
         </header>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Appearance</CardTitle>
-            <CardDescription>
-              Theme, density, and language. Stored in <code>identity.user_preferences</code>.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PreferencesForm initial={initial} savedFlag={savedFlag} />
-          </CardContent>
-        </Card>
+        <div className="max-w-2xl">
+          <Card>
+            <CardHeader>
+              <CardTitle>Appearance</CardTitle>
+              <CardDescription>
+                Theme, density, and language. Stored in <code>identity.user_preferences</code>.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PreferencesForm initial={initial} savedFlag={savedFlag} />
+            </CardContent>
+          </Card>
+        </div>
       </Section>
     </Container>
   );

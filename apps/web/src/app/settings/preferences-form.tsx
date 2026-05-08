@@ -137,7 +137,7 @@ export function PreferencesForm({
         </p>
       ) : null}
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center justify-end gap-3 border-t border-[var(--color-border)] pt-4">
         <Button type="submit" disabled={pending}>
           {pending ? 'Saving…' : 'Save preferences'}
         </Button>
