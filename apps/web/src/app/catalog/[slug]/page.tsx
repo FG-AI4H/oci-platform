@@ -19,12 +19,14 @@ import {
   Separator,
   ShieldIcon,
 } from '@oci/ui';
-import type { DatasetDetail, DatasetVisibility } from '@oci/shared-types';
+import type { AccessRequestSummary, DatasetDetail, DatasetVisibility } from '@oci/shared-types';
 import { lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../../auth';
 import { apiFetch } from '../../../lib/api';
 import { datasetJsonLd } from '../../../lib/dataset-jsonld';
 import { siteUrl } from '../../../lib/site-url';
+import { isAdmin } from '../../../lib/groups';
+import { AccessCta } from './access-cta';
 
 const visibilityTone: Record<DatasetVisibility, 'success' | 'info' | 'warning'> = {
   PUBLIC: 'success',
@@ -63,10 +65,22 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
 
   let detail: DatasetDetail | null = null;
   let error: string | null = null;
+  let ownRequests: AccessRequestSummary[] = [];
   try {
     detail = await apiFetch<DatasetDetail>(`/v2/catalog/datasets/${encodeURIComponent(slug)}`, {
       session,
     });
+    if (session) {
+      // Pull the caller's own access requests so the CTA can render
+      // status-aware (PENDING / APPROVED / DENIED). Best-effort —
+      // failure here doesn't break the detail page; we just fall back
+      // to the unauthenticated CTA shape.
+      const all = await apiFetch<AccessRequestSummary[]>('/v2/me/access-requests', {
+        session,
+        revalidate: 0,
+      });
+      ownRequests = (all ?? []).filter((r) => r.dataset.slug === slug);
+    }
   } catch (err) {
     error = err instanceof Error ? err.message : 'Unable to reach catalog API';
   }
@@ -156,22 +170,23 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
               <ShieldIcon size={12} />
               <span>{visibilityCopy[detail.visibility]}</span>
             </p>
-            {/*
-             * "Request access" CTA for RESTRICTED + PUBLISHED datasets.
-             * The form lives at /catalog/<slug>/request-access; the page
-             * itself bounces anonymous callers through /signin first
-             * (PR F, #75). Don't render the CTA on PRIVATE drafts (only
-             * the host should see those) or on local datasets the caller
-             * doesn't actually need to request access to.
-             */}
-            {detail.visibility === 'RESTRICTED' && detail.status === 'PUBLISHED' ? (
-              <Link
-                href={`/catalog/${detail.slug}/request-access`}
-                className="inline-flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-[var(--color-primary-foreground)] shadow-[var(--shadow-sm)] hover:bg-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
-              >
-                Request access
-              </Link>
-            ) : null}
+          </div>
+
+          {/*
+           * Access-request widget (PR L.3). Visible whenever the
+           * dataset is gated for the caller — RESTRICTED, or PUBLIC
+           * with at-least-one `requiresAccess` distribution. Hidden
+           * for admins. Status-aware: shows PENDING / APPROVED /
+           * DENIED inline rather than just a "Request access" link
+           * the user has to click to find out where they stand.
+           */}
+          <div className="mt-6 max-w-xl">
+            <AccessCta
+              detail={detail}
+              ownRequests={ownRequests}
+              isAuthenticated={!!session}
+              isPrivilegedForDataset={isAdmin(session)}
+            />
           </div>
         </Container>
       </Section>
