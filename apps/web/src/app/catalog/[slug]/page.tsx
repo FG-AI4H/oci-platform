@@ -28,6 +28,9 @@ import { siteUrl } from '../../../lib/site-url';
 import { isAdmin } from '../../../lib/groups';
 import { isHostOfDataset } from '../../../lib/identity';
 import { AccessCta } from './access-cta';
+import { JsonTree } from './json-tree';
+import { ManifestFullView } from './manifest-full-view';
+import { ManifestTabs } from './manifest-tabs';
 
 const visibilityTone: Record<DatasetVisibility, 'success' | 'info' | 'warning'> = {
   PUBLIC: 'success',
@@ -198,7 +201,9 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
             <CardHeader>
               <CardTitle>Manifest</CardTitle>
               <CardDescription>
-                Selected fields from the Croissant {detail.conformanceVersion ?? ''} manifest. Full
+                Croissant {detail.conformanceVersion ?? ''} manifest. <strong>Summary</strong> shows
+                the curated highlights; <strong>Full manifest</strong> renders every populated field
+                grouped by namespace; <strong>Raw JSON</strong> is the collapsible tree. Standalone
                 JSON-LD:{' '}
                 <Link
                   className="font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)]"
@@ -210,118 +215,124 @@ export default async function DatasetDetailPage({ params }: { params: Promise<{ 
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <DefinitionList>
-                {conformsTo ? (
-                  <DefinitionItem term="Conforms to" mono>
-                    {conformsTo}
-                  </DefinitionItem>
-                ) : null}
-                {license ? (
-                  <DefinitionItem term="License">
-                    <span className="font-mono">{stringifyLicense(license)}</span>
-                  </DefinitionItem>
-                ) : null}
-                {homepage ? (
-                  <DefinitionItem term="Homepage">
-                    <a
-                      className="inline-flex items-center gap-1 text-[var(--color-primary)] underline underline-offset-2 break-all hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
-                      href={String(homepage)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <span>{String(homepage)}</span>
-                      <ExternalLinkIcon size={14} />
-                    </a>
-                  </DefinitionItem>
-                ) : null}
-                {keywords && keywords.length > 0 ? (
-                  <DefinitionItem term="Keywords">
-                    <span className="flex flex-wrap gap-1.5">
-                      {keywords.map((k) => (
-                        <Badge key={k} tone="neutral">
-                          {k}
-                        </Badge>
-                      ))}
-                    </span>
-                  </DefinitionItem>
-                ) : null}
-                {modalityNames.length > 0 ? (
-                  <DefinitionItem term="Modality">
-                    <span className="flex flex-wrap gap-1.5">
-                      {modalityNames.map((n) => (
-                        <Badge key={n} tone="info">
-                          {n}
-                        </Badge>
-                      ))}
-                    </span>
-                  </DefinitionItem>
-                ) : null}
-                {bodyRegionNames.length > 0 ? (
-                  <DefinitionItem term="Body region">
-                    <span className="flex flex-wrap gap-1.5">
-                      {bodyRegionNames.map((n) => (
-                        <Badge key={n} tone="info">
-                          {n}
-                        </Badge>
-                      ))}
-                    </span>
-                  </DefinitionItem>
-                ) : null}
-                {diseaseNames.length > 0 ? (
-                  <DefinitionItem term="Conditions">
-                    <span className="flex flex-wrap gap-1.5">
-                      {diseaseNames.map((n) => (
-                        <Badge key={n} tone="warning">
-                          {n}
-                        </Badge>
-                      ))}
-                    </span>
-                  </DefinitionItem>
-                ) : null}
-                {anonymization ? (
-                  <DefinitionItem term="Anonymization">
-                    <Badge tone={anonymization === 'IDENTIFIED' ? 'danger' : 'success'}>
-                      {anonymization}
-                    </Badge>
-                  </DefinitionItem>
-                ) : null}
-                {detail.duoTerms.length > 0 ? (
-                  <DefinitionItem term="Permitted use (DUO)">
-                    <ul className="space-y-1.5 text-sm">
-                      {detail.duoTerms.map((id) => {
-                        const t = lookupDuoTerm(id);
-                        if (!t) {
-                          return (
-                            <li key={id} className="font-mono text-xs">
-                              {id}
-                            </li>
-                          );
-                        }
-                        return (
-                          <li key={id} className="flex items-start gap-2">
-                            <Badge tone="info" className="font-mono">
-                              {t.code}
+              <ManifestTabs
+                summary={
+                  <DefinitionList>
+                    {conformsTo ? (
+                      <DefinitionItem term="Conforms to" mono>
+                        {conformsTo}
+                      </DefinitionItem>
+                    ) : null}
+                    {license ? (
+                      <DefinitionItem term="License">
+                        <span className="font-mono">{stringifyLicense(license)}</span>
+                      </DefinitionItem>
+                    ) : null}
+                    {homepage ? (
+                      <DefinitionItem term="Homepage">
+                        <a
+                          className="inline-flex items-center gap-1 text-[var(--color-primary)] underline underline-offset-2 break-all hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
+                          href={String(homepage)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <span>{String(homepage)}</span>
+                          <ExternalLinkIcon size={14} />
+                        </a>
+                      </DefinitionItem>
+                    ) : null}
+                    {keywords && keywords.length > 0 ? (
+                      <DefinitionItem term="Keywords">
+                        <span className="flex flex-wrap gap-1.5">
+                          {keywords.map((k) => (
+                            <Badge key={k} tone="neutral">
+                              {k}
                             </Badge>
-                            <span>
-                              <span className="font-medium">{t.label}.</span>{' '}
-                              <span className="text-[var(--color-muted-foreground)]">
-                                {t.summary}
-                              </span>
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </DefinitionItem>
-                ) : null}
-                {citeAs ? (
-                  <DefinitionItem term="Cite as">
-                    <pre className="whitespace-pre-wrap break-words text-xs font-mono leading-relaxed text-[var(--color-foreground)]/85">
-                      {String(citeAs)}
-                    </pre>
-                  </DefinitionItem>
-                ) : null}
-              </DefinitionList>
+                          ))}
+                        </span>
+                      </DefinitionItem>
+                    ) : null}
+                    {modalityNames.length > 0 ? (
+                      <DefinitionItem term="Modality">
+                        <span className="flex flex-wrap gap-1.5">
+                          {modalityNames.map((n) => (
+                            <Badge key={n} tone="info">
+                              {n}
+                            </Badge>
+                          ))}
+                        </span>
+                      </DefinitionItem>
+                    ) : null}
+                    {bodyRegionNames.length > 0 ? (
+                      <DefinitionItem term="Body region">
+                        <span className="flex flex-wrap gap-1.5">
+                          {bodyRegionNames.map((n) => (
+                            <Badge key={n} tone="info">
+                              {n}
+                            </Badge>
+                          ))}
+                        </span>
+                      </DefinitionItem>
+                    ) : null}
+                    {diseaseNames.length > 0 ? (
+                      <DefinitionItem term="Conditions">
+                        <span className="flex flex-wrap gap-1.5">
+                          {diseaseNames.map((n) => (
+                            <Badge key={n} tone="warning">
+                              {n}
+                            </Badge>
+                          ))}
+                        </span>
+                      </DefinitionItem>
+                    ) : null}
+                    {anonymization ? (
+                      <DefinitionItem term="Anonymization">
+                        <Badge tone={anonymization === 'IDENTIFIED' ? 'danger' : 'success'}>
+                          {anonymization}
+                        </Badge>
+                      </DefinitionItem>
+                    ) : null}
+                    {detail.duoTerms.length > 0 ? (
+                      <DefinitionItem term="Permitted use (DUO)">
+                        <ul className="space-y-1.5 text-sm">
+                          {detail.duoTerms.map((id) => {
+                            const t = lookupDuoTerm(id);
+                            if (!t) {
+                              return (
+                                <li key={id} className="font-mono text-xs">
+                                  {id}
+                                </li>
+                              );
+                            }
+                            return (
+                              <li key={id} className="flex items-start gap-2">
+                                <Badge tone="info" className="font-mono">
+                                  {t.code}
+                                </Badge>
+                                <span>
+                                  <span className="font-medium">{t.label}.</span>{' '}
+                                  <span className="text-[var(--color-muted-foreground)]">
+                                    {t.summary}
+                                  </span>
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </DefinitionItem>
+                    ) : null}
+                    {citeAs ? (
+                      <DefinitionItem term="Cite as">
+                        <pre className="whitespace-pre-wrap break-words text-xs font-mono leading-relaxed text-[var(--color-foreground)]/85">
+                          {String(citeAs)}
+                        </pre>
+                      </DefinitionItem>
+                    ) : null}
+                  </DefinitionList>
+                }
+                full={<ManifestFullView manifest={detail.croissant} />}
+                raw={<JsonTree value={detail.croissant} />}
+              />
             </CardContent>
           </Card>
 
