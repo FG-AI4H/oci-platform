@@ -22,6 +22,9 @@ The platform automates the bookkeeping (validation, federation, audit trail, aut
 
 - A dataset is **created in DRAFT**, **moves to PUBLISHED** once you've published a manifest version.
 - Visibility is set at create-time but can change later — `PRIVATE` (you only) → `RESTRICTED` (visible, gated) → `PUBLIC` (open).
+- **Access tier** is independent of visibility (#115, ADR-0003). Four bands — `OPEN` / `REGISTERED` / `CONTROLLED` / `SENSITIVE` — pick what identity assurance the requester must demonstrate before download is granted. Defaults to `OPEN`; opt up as the data warrants.
+- **Commercial-use band** (#119) is a separate three-band field — `OK` / `NON_COMMERCIAL_ONLY` / `CASE_BY_CASE`. The catalog list shows it as a badge so AI builders can scan compatible datasets at a glance. Optional free-text `commercialClauses` lets you spell out nuance (e.g. "OK with royalty-free LMIC public-sector deployment"). Default is `CASE_BY_CASE`; existing rows with the NCU DUO term auto-backfill to `NON_COMMERCIAL_ONLY`.
+- **Email-domain allowlist** (#116) — `Dataset.emailDomainAllowlist` is a list of bare domains (`example.org`) or leading-dot wildcards (`.example.org`). Empty disables the allowlist; non-empty pre-blesses listed consortia even when the platform's heuristic would mark them corporate.
 - The **Croissant manifest is the source of truth** for everything: title, description, license, distributions, DUO permission terms. Re-publish a new version to change them.
 - Distributions in the manifest can be:
   - **Upstream URLs** (`contentUrl: "https://hospital.example/data/..."`) — the OCI references the upstream host; bytes never touch our storage.

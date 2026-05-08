@@ -2,7 +2,7 @@
 
 The live capability matrix. Updated on every shipped feature (per the [orchestrator skill's docs step](../../.claude/skills/oci-fullstack-feature-scaffold/SKILL.md#9-update-the-audience-documentation)).
 
-Last update: **2026-05-08** (after PR M, ADR-0003, audit-driven board reconciliation).
+Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116/#117/#118/#119/#120 all live).
 
 ## At a glance
 
@@ -10,30 +10,32 @@ Last update: **2026-05-08** (after PR M, ADR-0003, audit-driven board reconcilia
 - ✅ **Catalog (Phase B core)** shipped: list + detail + faceted search + manifest wizard + raw-JSON view + JSON-LD discoverability + federation harvest.
 - ✅ **Access governance (Phase B basics)** shipped: structured intended-use form, DUO matcher, status-aware access CTA, post-submit confirmation flow.
 - ✅ **User UI preferences** shipped: dark mode + density + locale (PR M, #144).
-- 🚧 **Access governance (Phase B advanced)** — committed in [ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md), not yet implemented. Tracked as #115-120 (Phase 1, ~2 weeks) → #125-130 (Phase 2, 1-3 months).
+- ✅ **Access governance (Phase B Phase-1)** shipped: tiered access model (#115), email-domain classifier (#116), certification quiz (#117), click-wrap with SHA-256 + KMS receipt (#118), commercial-use terms (#119), builder-vs-researcher form variants (#120). All committed in [ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md).
+- 🚧 **Access governance (Phase B Phase-2)** — ORCID, GA4GH Passport (RP + issuer), DocuSeal AdES + DUA templates, renewal cron. Tracked as #125-130.
 - 🚧 **Phase C (evaluation)** — Django port not yet started.
 - 🚧 **Phase D (reporting)** — not yet started.
 - 🚧 **Phase E (DMXP / federation v1.0)** — DMXP v0.1 design in progress; full v1.0 in Phase E.
 
 ## Catalogue
 
-| Capability                                                                                              | Status     | Shipped in                                                        |
-| ------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------- |
-| Public dataset listing + search                                                                         | ✅ Live    | PR C ([#76](https://github.com/FG-AI4H/oci-platform/pull/76))     |
-| Faceted search (modality / region / disease / anonymization / license / DUO) + offset pagination + sort | ✅ Live    | PR L.1 ([#100](https://github.com/FG-AI4H/oci-platform/pull/100)) |
-| Dataset detail page                                                                                     | ✅ Live    | PR C / PR G (visual pass)                                         |
-| Tabbed detail view (Summary / Full manifest / Raw JSON)                                                 | ✅ Live    | PR L.2 ([#101](https://github.com/FG-AI4H/oci-platform/pull/101)) |
-| JSON-LD discoverability (Google Dataset Search, sitemap, robots)                                        | ✅ Live    | PR C ([#76](https://github.com/FG-AI4H/oci-platform/pull/76))     |
-| Host workflow — create draft, publish manifest                                                          | ✅ Live    | PR D ([#78](https://github.com/FG-AI4H/oci-platform/pull/78))     |
-| Croissant manifest wizard — guided publish flow                                                         | ✅ Live    | PR K ([#98](https://github.com/FG-AI4H/oci-platform/pull/98))     |
-| Croissant 1.1 manifest validation (Croissant + RAI + BioCroissant)                                      | ✅ Live    | `@oci/croissant`                                                  |
-| Federation — peer registration + harvester                                                              | ✅ Live    | PRs E.1 / E.2 / E.3                                               |
-| Source filter (`local` / `federated` / `all`)                                                           | ✅ Live    | PR E.2                                                            |
-| Public Croissant catalogue endpoint (federation outbound)                                               | ✅ Live    | PR C                                                              |
-| Three rich seed fixtures (PUBLIC + RESTRICTED + PRIVATE) for local UI testing                           | ✅ Live    | PR M ([#144](https://github.com/FG-AI4H/oci-platform/pull/144))   |
-| WHO health-priority filter on catalog list                                                              | 🚧 Planned | [#121](https://github.com/FG-AI4H/oci-platform/issues/121)        |
-| Commercial-use badge + filter                                                                           | 🚧 Planned | [#119](https://github.com/FG-AI4H/oci-platform/issues/119)        |
-| Dataset version history UI                                                                              | 🚧 Planned | [#91](https://github.com/FG-AI4H/oci-platform/issues/91)          |
+| Capability                                                                                              | Status     | Shipped in                                                         |
+| ------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------ |
+| Public dataset listing + search                                                                         | ✅ Live    | PR C ([#76](https://github.com/FG-AI4H/oci-platform/pull/76))      |
+| Faceted search (modality / region / disease / anonymization / license / DUO) + offset pagination + sort | ✅ Live    | PR L.1 ([#100](https://github.com/FG-AI4H/oci-platform/pull/100))  |
+| Dataset detail page                                                                                     | ✅ Live    | PR C / PR G (visual pass)                                          |
+| Tabbed detail view (Summary / Full manifest / Raw JSON)                                                 | ✅ Live    | PR L.2 ([#101](https://github.com/FG-AI4H/oci-platform/pull/101))  |
+| JSON-LD discoverability (Google Dataset Search, sitemap, robots)                                        | ✅ Live    | PR C ([#76](https://github.com/FG-AI4H/oci-platform/pull/76))      |
+| Host workflow — create draft, publish manifest                                                          | ✅ Live    | PR D ([#78](https://github.com/FG-AI4H/oci-platform/pull/78))      |
+| Croissant manifest wizard — guided publish flow                                                         | ✅ Live    | PR K ([#98](https://github.com/FG-AI4H/oci-platform/pull/98))      |
+| Croissant 1.1 manifest validation (Croissant + RAI + BioCroissant)                                      | ✅ Live    | `@oci/croissant`                                                   |
+| Federation — peer registration + harvester                                                              | ✅ Live    | PRs E.1 / E.2 / E.3                                                |
+| Source filter (`local` / `federated` / `all`)                                                           | ✅ Live    | PR E.2                                                             |
+| Public Croissant catalogue endpoint (federation outbound)                                               | ✅ Live    | PR C                                                               |
+| Three rich seed fixtures (PUBLIC + RESTRICTED + PRIVATE) for local UI testing                           | ✅ Live    | PR M ([#144](https://github.com/FG-AI4H/oci-platform/pull/144))    |
+| Commercial-use badge + filter                                                                           | ✅ Live    | PR [#156](https://github.com/FG-AI4H/oci-platform/pull/156) (#119) |
+| Access-tier badge on dataset detail                                                                     | ✅ Live    | PR [#154](https://github.com/FG-AI4H/oci-platform/pull/154) (#115) |
+| WHO health-priority filter on catalog list                                                              | 🚧 Planned | [#121](https://github.com/FG-AI4H/oci-platform/issues/121)         |
+| Dataset version history UI                                                                              | 🚧 Planned | [#91](https://github.com/FG-AI4H/oci-platform/issues/91)           |
 
 ## Storage & distributions
 
@@ -50,34 +52,45 @@ Last update: **2026-05-08** (after PR M, ADR-0003, audit-driven board reconcilia
 
 ### Live today (Phase B basics)
 
-| Capability                                                                                     | Status  | Shipped in                                                      |
-| ---------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------- |
-| Access request — create / list / decide                                                        | ✅ Live | PR F ([#86](https://github.com/FG-AI4H/oci-platform/pull/86))   |
-| Structured intended-use form (project + DUO terms + IRB + retention + redistribution + output) | ✅ Live | PR J.1 ([#96](https://github.com/FG-AI4H/oci-platform/pull/96)) |
-| DUO permission terms on the dataset (`consentCode`)                                            | ✅ Live | PR J.1                                                          |
-| Auto-matcher (MATCHED / CONFLICT / UNCLEAR)                                                    | ✅ Live | PR J.1                                                          |
-| Publish-time fail-closed for non-PUBLIC without DUO terms                                      | ✅ Live | PR J.1                                                          |
-| Status-aware access CTA on dataset detail (PENDING / APPROVED / DENIED inline)                 | ✅ Live | PR L.3 ([#99](https://github.com/FG-AI4H/oci-platform/pull/99)) |
-| Post-submit confirmation banner — redirect back to dataset detail                              | ✅ Live | PR M ([#144](https://github.com/FG-AI4H/oci-platform/pull/144)) |
+| Capability                                                                                             | Status  | Shipped in                                                      |
+| ------------------------------------------------------------------------------------------------------ | ------- | --------------------------------------------------------------- |
+| Access request — create / list / decide                                                                | ✅ Live | PR F ([#86](https://github.com/FG-AI4H/oci-platform/pull/86))   |
+| Structured intended-use form (project + DUO terms + IRB + retention + redistribution + output)         | ✅ Live | PR J.1 ([#96](https://github.com/FG-AI4H/oci-platform/pull/96)) |
+| DUO permission terms on the dataset (`consentCode`)                                                    | ✅ Live | PR J.1                                                          |
+| Auto-matcher (MATCHED / CONFLICT / UNCLEAR)                                                            | ✅ Live | PR J.1                                                          |
+| Publish-time fail-closed for non-PUBLIC without DUO terms                                              | ✅ Live | PR J.1                                                          |
+| Status-aware access CTA on dataset detail (PENDING / APPROVED / DENIED inline)                         | ✅ Live | PR L.3 ([#99](https://github.com/FG-AI4H/oci-platform/pull/99)) |
+| Post-submit confirmation banner — redirect back to dataset detail                                      | ✅ Live | PR M ([#144](https://github.com/FG-AI4H/oci-platform/pull/144)) |
+| Tiered access (OPEN / REGISTERED / CONTROLLED / SENSITIVE) + identity score + tier-mismatch CONFLICT   | ✅ Live | [#154](https://github.com/FG-AI4H/oci-platform/pull/154) (#115) |
+| Email-domain classifier (institutional / corporate / public / disposable) + dataset allowlist          | ✅ Live | [#154](https://github.com/FG-AI4H/oci-platform/pull/154) (#116) |
+| Certification quiz (15 questions, 80% pass, 1-yr validity) at `/certification`                         | ✅ Live | [#159](https://github.com/FG-AI4H/oci-platform/pull/159) (#117) |
+| Click-wrap policy acceptance — SHA-256 + optional KMS receipt — `POST /v2/identity/policy-acceptances` | ✅ Live | [#162](https://github.com/FG-AI4H/oci-platform/pull/162) (#118) |
+| Commercial-use band (OK / NCO / case-by-case) + clauses + catalog filter                               | ✅ Live | [#156](https://github.com/FG-AI4H/oci-platform/pull/156) (#119) |
+| Builder vs. researcher request-form variants + `builderContext` JSONB                                  | ✅ Live | [#160](https://github.com/FG-AI4H/oci-platform/pull/160) (#120) |
 
 ### Architectural commitment landed (ADR-0003, 2026-05-08)
 
 [ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md) commits the platform to a tiered identity assurance + GA4GH-Passport-first model, with researchers AND AI solution developers as first-class audiences. Plain-English explainer at [overview/access-governance.md](./access-governance.md). Strategy positioning at [for-strategy/access-governance-positioning.md](../for-strategy/access-governance-positioning.md). Field research at [research/access-governance-2026-05-08.md](../research/access-governance-2026-05-08.md).
 
-### Phase 1 (next 2 weeks, no SaaS)
+### Phase 1 (delivered 2026-05-09)
 
-| Capability                                                              | Status       | Tracked                                                    |
-| ----------------------------------------------------------------------- | ------------ | ---------------------------------------------------------- |
-| Tiered access model — `Dataset.accessTier` + `AccessRequest` extensions | 🚧 In flight | [#115](https://github.com/FG-AI4H/oci-platform/issues/115) |
-| Email-domain checker — disposable blocklist + per-dataset allowlist     | 🚧 In flight | [#116](https://github.com/FG-AI4H/oci-platform/issues/116) |
-| Certification quiz module (1-yr validity)                               | 🚧 Planned   | [#117](https://github.com/FG-AI4H/oci-platform/issues/117) |
-| Click-wrap with SHA-256 hash storage (SES-grade evidence)               | 🚧 Planned   | [#118](https://github.com/FG-AI4H/oci-platform/issues/118) |
-| Commercial-use terms — `Dataset.commercialUseTerms` + UI surface        | 🚧 Planned   | [#119](https://github.com/FG-AI4H/oci-platform/issues/119) |
-| Builder-vs-researcher request-form variants                             | 🚧 Planned   | [#120](https://github.com/FG-AI4H/oci-platform/issues/120) |
-| WHO priority filter on catalog                                          | 🚧 Planned   | [#121](https://github.com/FG-AI4H/oci-platform/issues/121) |
-| Email verification (OTP)                                                | 🚧 Planned   | [#122](https://github.com/FG-AI4H/oci-platform/issues/122) |
-| Self-service signup flow                                                | 🚧 Planned   | [#123](https://github.com/FG-AI4H/oci-platform/issues/123) |
-| i18n scaffold (FR / ES / PT / AR for LMIC users)                        | 🚧 Planned   | [#124](https://github.com/FG-AI4H/oci-platform/issues/124) |
+| Capability                                                                                                                                                                                                            | Status  | Shipped in                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------ |
+| Tiered access model — `Dataset.accessTier` (OPEN/REGISTERED/CONTROLLED/SENSITIVE) + identity-context normalizer + tier-aware DUO matcher                                                                              | ✅ Live | PR [#154](https://github.com/FG-AI4H/oci-platform/pull/154) (#115) |
+| Email-domain classifier — disposable blocklist + per-dataset allowlist + form-side guard                                                                                                                              | ✅ Live | PR [#154](https://github.com/FG-AI4H/oci-platform/pull/154) (#116) |
+| Certification quiz module — 15-question bank, 1-yr validity, attempt history, `/certification` UI                                                                                                                     | ✅ Live | PR [#159](https://github.com/FG-AI4H/oci-platform/pull/159) (#117) |
+| Click-wrap policy acceptance — SHA-256 hash + optional KMS-signed receipt + `/v2/me/policy-acceptances` audit trail                                                                                                   | ✅ Live | PR [#162](https://github.com/FG-AI4H/oci-platform/pull/162) (#118) |
+| Commercial-use terms — `Dataset.commercialUseTerms` band + clauses + catalog filter + badge                                                                                                                           | ✅ Live | PR [#156](https://github.com/FG-AI4H/oci-platform/pull/156) (#119) |
+| Builder-vs-researcher request-form variants — `AccessRequest.audience` + `builderContext` (legal entity, deployment countries, regulatory pathway, WHO priority, accreditations, royalty plan, post-market data flow) | ✅ Live | PR [#160](https://github.com/FG-AI4H/oci-platform/pull/160) (#120) |
+
+### Phase 1 still planned (LMIC + signup polish)
+
+| Capability                                       | Status     | Tracked                                                    |
+| ------------------------------------------------ | ---------- | ---------------------------------------------------------- |
+| WHO priority filter on catalog                   | 🚧 Planned | [#121](https://github.com/FG-AI4H/oci-platform/issues/121) |
+| Email verification (OTP)                         | 🚧 Planned | [#122](https://github.com/FG-AI4H/oci-platform/issues/122) |
+| Self-service signup flow                         | 🚧 Planned | [#123](https://github.com/FG-AI4H/oci-platform/issues/123) |
+| i18n scaffold (FR / ES / PT / AR for LMIC users) | 🚧 Planned | [#124](https://github.com/FG-AI4H/oci-platform/issues/124) |
 
 ### Phase 2 (1–3 months)
 
