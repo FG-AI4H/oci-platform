@@ -1281,6 +1281,77 @@ export interface UserCertificationStatus {
   }>;
 }
 
+// ==== Click-wrap policy acceptance (#118, ADR-0003 Decision 4) ============
+//
+// SES-grade evidence for OPEN/REGISTERED tier flows. The API records
+// the policy text + its SHA-256 hash + (when KMS is configured) a
+// signed receipt. Legally binding under US ESIGN/UETA + EU eIDAS for
+// click-wrap; CONTROLLED/SENSITIVE tiers will use AdES (DocuSeal) /
+// QES (Yousign) on top of this primitive in future PRs.
+
+/**
+ * Optional context attached to an acceptance — links the click-wrap
+ * event to the workflow that triggered it. Open list; the most common
+ * values today are `access_request` (a request-access click-through)
+ * and `dataset_publish` (a host accepting the contributor agreement).
+ */
+export const PolicyAcceptanceContextTypeSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z][a-z0-9_]*$/, 'context type must be lower_snake_case');
+export type PolicyAcceptanceContextType = z.infer<typeof PolicyAcceptanceContextTypeSchema>;
+
+/** `POST /v2/identity/policy-acceptances` — record a click-through. */
+export const RecordPolicyAcceptanceRequestSchema = z.object({
+  /** Canonical URL for the policy doc — surfaced in the audit trail. */
+  policyUrl: z.string().url().max(2000),
+  /** Version slug (e.g. "v1.0", "2026-05") shown in the policy header. */
+  policyVersion: z.string().min(1).max(64),
+  /**
+   * Verbatim policy text the user clicked to accept. Stored on the row
+   * so the binding survives canonical-doc rotation. Capped at 1 MB
+   * (typical policy: a few KB; we leave headroom for long DUAs).
+   */
+  policyText: z.string().min(1).max(1_048_576),
+  /** Optional `(contextType, contextRef)` binding — see schema docs. */
+  contextType: PolicyAcceptanceContextTypeSchema.nullable().optional(),
+  /**
+   * Free-text reference, typically a UUID or slug pointing back to
+   * the workflow that triggered the click-through. Bounded.
+   */
+  contextRef: z.string().min(1).max(200).nullable().optional(),
+});
+export type RecordPolicyAcceptanceRequest = z.infer<typeof RecordPolicyAcceptanceRequestSchema>;
+
+/**
+ * Acceptance receipt returned to the caller. The `textSha256` is the
+ * canonical binding artifact — clients can persist it as proof. When
+ * KMS is configured at the API, `signature` carries a base64-encoded
+ * detached signature over `{id, userId, policyUrl, policyVersion,
+ * textSha256, acceptedAt}`; verifiers recompute that JSON and call
+ * KMS Verify. Null when KMS wasn't configured at acceptance time —
+ * the hash alone is still legally sufficient for SES.
+ */
+export interface PolicyAcceptanceReceipt {
+  id: string;
+  userId: string;
+  policyUrl: string;
+  policyVersion: string;
+  textSha256: string;
+  acceptedAt: string; // ISO 8601
+  contextType: PolicyAcceptanceContextType | null;
+  contextRef: string | null;
+  /** Base64 KMS signature; null when KMS signing wasn't configured. */
+  signature: string | null;
+  /** KMS key id used to sign; null when `signature` is null. */
+  signatureKeyId: string | null;
+}
+
+export interface ListPolicyAcceptancesResponse {
+  items: PolicyAcceptanceReceipt[];
+}
+
 export const tokens = {
   /** Phase B will add: Campaign, Task, Sample, Annotation, AnnotationTool */
   /** Phase C will add: Challenge, Submission, Phase, Leaderboard */
