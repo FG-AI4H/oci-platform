@@ -46,6 +46,7 @@ describe('REQUESTER_IDENTITY_SCORE_RANK', () => {
       'PI_COUNTERSIGNED',
       'PASSPORT_VERIFIED',
     ];
+    /* eslint-disable security/detect-object-injection -- typed enum keys */
     for (let i = 1; i < order.length; i++) {
       const prev = order[i - 1] as RequesterIdentityScore;
       const curr = order[i] as RequesterIdentityScore;
@@ -53,6 +54,7 @@ describe('REQUESTER_IDENTITY_SCORE_RANK', () => {
         REQUESTER_IDENTITY_SCORE_RANK[prev],
       );
     }
+    /* eslint-enable security/detect-object-injection */
   });
 });
 
@@ -60,12 +62,14 @@ describe('ACCESS_TIER_MIN_SCORE', () => {
   it('lists each tier with a non-decreasing minimum requirement', () => {
     const tiers: AccessTier[] = ['OPEN', 'REGISTERED', 'CONTROLLED', 'SENSITIVE'];
     let lastRank = -1;
+    /* eslint-disable security/detect-object-injection -- typed enum keys */
     for (const tier of tiers) {
       const required = ACCESS_TIER_MIN_SCORE[tier];
       const rank = REQUESTER_IDENTITY_SCORE_RANK[required];
       expect(rank).toBeGreaterThanOrEqual(lastRank);
       lastRank = rank;
     }
+    /* eslint-enable security/detect-object-injection */
   });
 
   it('OPEN requires only EMAIL_ONLY', () => {
