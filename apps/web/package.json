@@ -15,6 +15,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@oci/auth": "workspace:*",
+    "@oci/croissant": "workspace:*",
     "@oci/shared-types": "workspace:*",
     "@oci/ui": "workspace:*",
     "@tanstack/react-query": "^5.100.8",

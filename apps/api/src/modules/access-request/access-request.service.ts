@@ -16,6 +16,7 @@ import type {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CatalogService } from '../catalog/catalog.service.js';
 import { AccessRequestRepository } from './access-request.repository.js';
+import { matchDuoIntent } from './duo-matcher.js';
 
 /**
  * Access-request lifecycle (PR F).
@@ -49,7 +50,7 @@ export class AccessRequestService {
     slug: DatasetSlug,
     body: CreateAccessRequestRequest,
     user: CognitoAccessTokenPayload,
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; matchStatus: 'MATCHED' | 'CONFLICT' | 'UNCLEAR' }> {
     requireUser(user);
     const target = await this.catalog.findOwnerBySlug(slug);
     if (!target) throw new NotFoundException(`dataset "${slug}" not found`);
@@ -62,12 +63,25 @@ export class AccessRequestService {
       throw new BadRequestException("you can't request access to a dataset you host");
     }
 
-    return this.repo.create({
+    // Auto-match the requester's intended use against the dataset's
+    // DUO permission terms (PR J.1, #93). Persisted on the row so the
+    // host inbox renders a badge + explanations.
+    const match = matchDuoIntent(target.duoTerms, body.attestations);
+
+    // Mirror the project description into the legacy `justification`
+    // column so old code paths (and the regulator audit export when
+    // it lands) keep working without a schema migration.
+    const justification = body.attestations.projectDescription;
+
+    const created = await this.repo.create({
       datasetId: target.id,
       requesterId,
-      justification: body.justification,
+      justification,
       attestations: body.attestations,
+      matchStatus: match.status,
+      matchExplanations: match.explanations,
     });
+    return { ...created, matchStatus: match.status };
   }
 
   async listOwn(user: CognitoAccessTokenPayload): Promise<AccessRequestSummary[]> {

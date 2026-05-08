@@ -8,7 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@oci/database';
-import { validate as validateCroissant } from '@oci/croissant';
+import { validate as validateCroissant, extractDuoTerms } from '@oci/croissant';
 import type {
   CreateDatasetRequest,
   DatasetDetail,
@@ -42,7 +42,12 @@ export class CatalogService {
    * visibility filter — callers must NOT surface this directly to
    * un-authenticated readers.
    */
-  async findOwnerBySlug(slug: DatasetSlug): Promise<{ id: string; hostId: string } | null> {
+  async findOwnerBySlug(slug: DatasetSlug): Promise<{
+    id: string;
+    hostId: string;
+    visibility: 'PRIVATE' | 'RESTRICTED' | 'PUBLIC';
+    duoTerms: string[];
+  } | null> {
     return this.repo.findIdAndHostBySlug(slug);
   }
 
@@ -207,6 +212,34 @@ export class CatalogService {
     // without this adoption a host who uploads + republishes ends up
     // with a manifest that points at a 400-ing endpoint.
     await this.adoptPlatformHostedDistributions(target.id, distributions);
+
+    // DUO permission terms (PR J.1, #93). Extract from the manifest's
+    // `consentCode` and persist on the Dataset row for fast read on
+    // the detail page + the access-request matcher. Manifest stays
+    // the source of truth — re-publishing rewrites the column.
+    const duoTerms = extractDuoTerms(req.croissant);
+
+    // Fail closed for non-PUBLIC datasets without DUO terms (decision
+    // #2 in the J.1 design). RESTRICTED + PRIVATE need a declared use
+    // policy because access requests for them go through the matcher;
+    // PUBLIC can ship without one (open data, anyone in).
+    if (target.visibility !== 'PUBLIC' && duoTerms.length === 0) {
+      throw new BadRequestException({
+        message:
+          'Manifest must declare at least one DUO consent code (consentCode) for non-PUBLIC datasets. See https://www.ga4gh.org/product/data-use-ontology-duo/',
+        conformance: result.conformance,
+        issues: [
+          {
+            path: '/consentCode',
+            level: 'error',
+            code: 'oci.j1.duo.missing-on-non-public',
+            message:
+              'No DUO consent codes detected. Add at least one DefinedTerm referencing a DUO id (e.g. DUO_0000042 General research use, DUO_0000046 Non-commercial use only).',
+          },
+        ],
+      });
+    }
+
     const croissantHash = sha256OfJson(req.croissant);
 
     try {
@@ -219,6 +252,7 @@ export class CatalogService {
         publishedById: userId,
         conformanceVersion,
         distributions,
+        duoTerms,
       });
     } catch (err: unknown) {
       // Unique constraint on (dataset_id, version) — re-publishing the

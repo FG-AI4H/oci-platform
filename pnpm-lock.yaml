@@ -186,6 +186,9 @@ importers:
       '@oci/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@oci/croissant':
+        specifier: workspace:*
+        version: link:../../packages/croissant
       '@oci/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types

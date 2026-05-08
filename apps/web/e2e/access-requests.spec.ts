@@ -3,18 +3,26 @@ import { resolve as resolvePath } from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * E2E coverage for the access-request lifecycle shipped in PR F (#75).
+ * E2E coverage for the access-request lifecycle:
+ *   - PR F (#75): create + approve + visibility flip in the requester
+ *     dashboard.
+ *   - PR J.1 (#93): structured intended-use form, DUO permission terms
+ *     on the dataset, auto-match badge in the host inbox, fail-closed
+ *     publish for non-PUBLIC manifests without consentCode.
  *
- * Covers requester + host halves end-to-end against the running stack:
- *   1. Host signs in, creates a RESTRICTED dataset, publishes IDRiD.
- *   2. Requester signs in, hits the dataset detail, clicks the
- *      "Request access" CTA, fills the form, submits.
- *   3. Requester sees the request on /dashboard/access-requests as
- *      PENDING.
- *   4. Host signs back in, opens /dashboard/host/access-requests,
- *      sees the row, approves it with a note.
- *   5. Requester reloads /dashboard/access-requests, sees the row
- *      flipped to APPROVED with the host's note visible.
+ * What this spec asserts end-to-end:
+ *   1. Host creates a RESTRICTED dataset and publishes IDRiD with
+ *      `consentCode` injected (GRU + IRB). Without consentCode the
+ *      publish would 400 (J.1 fail-closed).
+ *   2. Requester signs in, opens the request-access page, sees the
+ *      dataset's DUO terms inline.
+ *   3. Requester fills the structured form (project title +
+ *      description + institution + intended-use category + DUO terms
+ *      + IRB ref + retention + redistribution + output type) and
+ *      submits. Lands on the dashboard with the request as PENDING.
+ *   4. Host opens the inbox, sees the row with the auto-match badge
+ *      (MATCHED for non-commercial + IRB-approved against GRU+IRB).
+ *   5. Host approves with a note. Requester sees APPROVED + the note.
  *
  * Pre-conditions: docker compose + API on :3000 + web on :3001 (same
  * as the rest of the suite).
@@ -36,20 +44,33 @@ async function signInAs(page: Page, user: string, roles: string) {
 }
 
 async function signOut(page: Page) {
-  // The header's sign-out button is a small server-action form with
-  // a "Sign out" label.
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/\/$/);
 }
 
-test.describe('access requests lifecycle', () => {
-  // Shared dataset slug across the whole flow — requester references
-  // it by URL, host approves the same row from the inbox.
+/**
+ * Reads the IDRiD fixture and injects DUO consent codes — the
+ * publish-time fail-closed rejects non-PUBLIC manifests without
+ * consentCode (J.1 decision #2).
+ */
+function manifestWithConsent(duoIds: string[]): string {
+  const manifest = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Record<string, unknown>;
+  manifest.consentCode = duoIds.map((id) => ({
+    '@type': 'sc:DefinedTerm',
+    '@id': `http://purl.obolibrary.org/obo/${id}`,
+    termCode: id,
+  }));
+  return JSON.stringify(manifest);
+}
+
+test.describe('access requests lifecycle (PR F + PR J.1)', () => {
   const stamp = Date.now();
   const datasetSlug = `restricted-${stamp}`;
 
-  test('requester submits, host approves; requester sees APPROVED', async ({ page }) => {
-    // -- Host creates a RESTRICTED dataset with an IDRiD manifest.
+  test('matched: requester submits structured form, auto-match flags MATCHED, host approves', async ({
+    page,
+  }) => {
+    // -- Host creates a RESTRICTED dataset with IDRiD + GRU + IRB.
     await signInAs(page, HOST, 'host');
     await page.goto('/catalog/new');
     await page.getByLabel('Slug').fill(datasetSlug);
@@ -57,59 +78,138 @@ test.describe('access requests lifecycle', () => {
     await page.getByRole('radio', { name: 'Restricted' }).check();
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${datasetSlug}/publish$`));
-    await page.getByLabel('Croissant manifest').fill(readFileSync(FIXTURE, 'utf8'));
+    await page
+      .getByLabel('Croissant manifest')
+      .fill(manifestWithConsent(['DUO_0000042', 'DUO_0000021']));
     await page.getByRole('button', { name: /validate.*publish/i }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${datasetSlug}$`));
+
+    // The detail page should now render the DUO permission terms
+    // under "Permitted use (DUO)".
+    await expect(page.getByText('General research use', { exact: false })).toBeVisible();
+    await expect(page.getByText('Ethics approval required', { exact: false })).toBeVisible();
     await signOut(page);
 
-    // -- Requester signs in and submits.
+    // -- Requester signs in and submits the structured form.
     await signInAs(page, REQUESTER, 'participant');
     await page.goto(`/catalog/${datasetSlug}`);
     await page.getByRole('link', { name: 'Request access' }).click();
     await expect(page).toHaveURL(new RegExp(`/catalog/${datasetSlug}/request-access$`));
 
+    // Form sees the dataset's DUO terms inline above the fields.
+    await expect(page.getByText("This dataset's permitted uses")).toBeVisible();
+
+    await page.getByLabel('Project title').fill(`Replication study ${stamp}`);
     await page
-      .getByLabel('Why do you need access?')
+      .getByLabel('Project description')
       .fill(
-        'Replicating an analysis published in 10.1234/example for thesis work — comparing diabetic-retinopathy detection models on the IDRiD set against our own data.',
+        'Replicating the published IDRiD diabetic-retinopathy detection benchmark, comparing models on the segmentation sub-set, in a non-commercial setting.',
       );
-    // The IRB checkbox is a checkbox without an explicit `getByLabel`-friendly
-    // wrapping; click it via its accessible label.
+    await page.locator('#field-institution').fill('University of Geneva');
+    await page.getByRole('radio', { name: /^Non-commercial research/i }).check();
+    // GRU = DUO_0000042; selected via the requester's DUO multi-select.
+    await page.getByLabel(/General research use/i).check();
     await page.locator('input[name="irbApproved"]').check();
     await page.getByLabel('IRB approval reference').fill('IRB-2026-042');
+    await page.getByLabel('Data retention (days)').fill('365');
+    await page.getByLabel('Redistribution intent').selectOption('NONE');
+    await page.getByLabel('Output type').selectOption('PUBLICATION');
     await page.getByRole('button', { name: /submit request/i }).click();
     await expect(page).toHaveURL(/\/dashboard\/access-requests$/);
 
-    // -- Requester sees their PENDING row.
+    // Requester sees PENDING row.
     await expect(page.getByText(`Restricted ${stamp}`)).toBeVisible();
-    const pendingRow = page.getByText('pending').first();
-    await expect(pendingRow).toBeVisible();
+    await expect(page.getByText('pending').first()).toBeVisible();
     await signOut(page);
 
-    // -- Host reviews + approves.
+    // -- Host reviews. Inbox shows the auto-match badge.
     await signInAs(page, HOST, 'host');
     await page.goto('/dashboard/host/access-requests');
-    // The row's visible markers: requester id (UUID-shaped) + the
-    // dataset name. Use the dataset name as the disambiguating
-    // anchor since the requester id appears in many rows in dev.
-    const inboxRow = page.locator('article, li').filter({ hasText: `Restricted ${stamp}` });
+    const inboxRow = page.locator('article, li').filter({ hasText: `Replication study ${stamp}` });
     await expect(inboxRow.first()).toBeVisible();
+    // Auto-match badge — MATCHED because non-commercial + IRB-approved
+    // against a GRU + IRB-required dataset.
+    await expect(inboxRow.first().getByText(/auto-match: matched/i)).toBeVisible();
+    // Structured fields visible inline.
+    await expect(inboxRow.first().getByText('Non-commercial research')).toBeVisible();
+    await expect(inboxRow.first().getByText('University of Geneva')).toBeVisible();
 
-    // Decision form: write a note and click Approve.
+    // Approve with a note.
     await inboxRow
       .first()
       .getByLabel('Decision note')
       .fill('Approved for thesis comparison; standard data-use rules apply.');
     await inboxRow.first().getByRole('button', { name: 'Approve' }).click();
-
-    // After revalidatePath the row should re-render with status=APPROVED.
     await expect(inboxRow.first().getByText('approved').first()).toBeVisible();
     await signOut(page);
 
-    // -- Requester sees APPROVED + the host's note.
+    // -- Requester sees APPROVED.
     await signInAs(page, REQUESTER, 'participant');
     await page.goto('/dashboard/access-requests');
     await expect(page.getByText('approved').first()).toBeVisible();
     await expect(page.getByText('Approved for thesis comparison')).toBeVisible();
+  });
+
+  test('publish-time fail-closed: RESTRICTED without consentCode is rejected', async ({ page }) => {
+    const slug = `restricted-noduo-${Date.now()}`;
+    await signInAs(page, HOST, 'host');
+    await page.goto('/catalog/new');
+    await page.getByLabel('Slug').fill(slug);
+    await page.getByLabel('Name').fill(`Restricted no-DUO ${slug}`);
+    await page.getByRole('radio', { name: 'Restricted' }).check();
+    await page.getByRole('button', { name: /create draft/i }).click();
+    await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/publish$`));
+
+    // IDRiD without consentCode — should be rejected at publish.
+    await page.getByLabel('Croissant manifest').fill(readFileSync(FIXTURE, 'utf8'));
+    await page.getByRole('button', { name: /validate.*publish/i }).click();
+    // Stays on the publish page with the validation error surfaced.
+    await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/publish$`));
+    await expect(page.getByText(/DUO consent code/i).first()).toBeVisible();
+  });
+
+  test('conflict: commercial intent on a NCU dataset → CONFLICT badge', async ({ page }) => {
+    const slug = `restricted-ncu-${Date.now()}`;
+    await signInAs(page, HOST, 'host');
+    await page.goto('/catalog/new');
+    await page.getByLabel('Slug').fill(slug);
+    await page.getByLabel('Name').fill(`Restricted NCU ${slug}`);
+    await page.getByRole('radio', { name: 'Restricted' }).check();
+    await page.getByRole('button', { name: /create draft/i }).click();
+    await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/publish$`));
+    await page
+      .getByLabel('Croissant manifest')
+      // GRU + NCU = research use, no commercial.
+      .fill(manifestWithConsent(['DUO_0000042', 'DUO_0000046']));
+    await page.getByRole('button', { name: /validate.*publish/i }).click();
+    await expect(page).toHaveURL(new RegExp(`/catalog/${slug}$`));
+    await signOut(page);
+
+    await signInAs(page, REQUESTER, 'participant');
+    await page.goto(`/catalog/${slug}/request-access`);
+    await page.getByLabel('Project title').fill(`Commercial pilot ${slug}`);
+    await page
+      .getByLabel('Project description')
+      .fill(
+        'Pilot to evaluate IDRiD as a candidate training set for our commercial diabetic-retinopathy screening product. Output: model weights for productisation.',
+      );
+    await page.locator('#field-institution').fill('Acme Health Inc.');
+    await page.getByRole('radio', { name: /^Commercial research/i }).check();
+    await page.getByLabel(/General research use/i).check();
+    await page.locator('input[name="irbApproved"]').check();
+    await page.getByLabel('Data retention (days)').fill('730');
+    await page.getByLabel('Redistribution intent').selectOption('DERIVATIVES_ONLY');
+    await page.getByLabel('Output type').selectOption('MODEL_WEIGHTS');
+    await page.getByRole('button', { name: /submit request/i }).click();
+    await expect(page).toHaveURL(/\/dashboard\/access-requests$/);
+    await signOut(page);
+
+    // Host inbox: this row shows CONFLICT.
+    await signInAs(page, HOST, 'host');
+    await page.goto('/dashboard/host/access-requests');
+    const inboxRow = page.locator('article, li').filter({ hasText: `Commercial pilot ${slug}` });
+    await expect(inboxRow.first()).toBeVisible();
+    await expect(inboxRow.first().getByText(/auto-match: conflict/i)).toBeVisible();
+    await expect(inboxRow.first().getByText(/commercial use prohibited/i)).toBeVisible();
   });
 });
