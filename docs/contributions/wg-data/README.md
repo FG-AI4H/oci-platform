@@ -15,8 +15,8 @@ Documents here are **discussion contributions** — not formal deliverables. The
 
 ## Contents
 
-| Date | Title | Track |
-|---|---|---|
+| Date       | Title                                                                                                                                        | Track                                      |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
 | 2026-05-09 | [BuilderStatus — Proposed Visa Type extension to GA4GH Passport for AI builder accreditation](./2026-05-09-builderstatus-visa-proposal.docx) | OCI access governance → GA4GH WG-Data DURI |
 
 ## How a contribution lands here
