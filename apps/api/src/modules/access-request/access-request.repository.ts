@@ -1,9 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   AccessRequestAttestations,
+  AccessRequestMatchStatus,
   AccessRequestStatus,
   AccessRequestSummary,
   DatasetSlug,
+  DuoTermId,
 } from '@oci/shared-types';
 // (DatasetSlug used only as a brand cast on the dataset.slug field in
 // `toSummary`; the import is here rather than module-bottom so the
@@ -28,6 +30,8 @@ export class AccessRequestRepository {
     requesterId: string;
     justification: string;
     attestations: AccessRequestAttestations;
+    matchStatus: AccessRequestMatchStatus;
+    matchExplanations: string[];
   }): Promise<{ id: string }> {
     const row = (await this.prisma.client.accessRequest.create({
       data: {
@@ -38,6 +42,8 @@ export class AccessRequestRepository {
         // to placate the structural mismatch (our typed `Attestations` shape
         // is a subset of `JsonValue`).
         attestations: input.attestations as unknown as object,
+        matchStatus: input.matchStatus,
+        matchExplanations: input.matchExplanations,
       },
       select: { id: true },
     })) as { id: string };
@@ -91,7 +97,7 @@ export class AccessRequestRepository {
   async listForRequester(requesterId: string): Promise<AccessRequestSummary[]> {
     const rows = await this.prisma.client.accessRequest.findMany({
       where: { requesterId },
-      include: { dataset: { select: { id: true, slug: true, name: true } } },
+      include: { dataset: { select: { id: true, slug: true, name: true, duoTerms: true } } },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
@@ -101,7 +107,7 @@ export class AccessRequestRepository {
   async listForDataset(datasetId: string): Promise<AccessRequestSummary[]> {
     const rows = await this.prisma.client.accessRequest.findMany({
       where: { datasetId },
-      include: { dataset: { select: { id: true, slug: true, name: true } } },
+      include: { dataset: { select: { id: true, slug: true, name: true, duoTerms: true } } },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: 200,
     });
@@ -111,7 +117,7 @@ export class AccessRequestRepository {
   async listForHost(hostId: string): Promise<AccessRequestSummary[]> {
     const rows = await this.prisma.client.accessRequest.findMany({
       where: { dataset: { hostId } },
-      include: { dataset: { select: { id: true, slug: true, name: true } } },
+      include: { dataset: { select: { id: true, slug: true, name: true, duoTerms: true } } },
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: 200,
     });
@@ -143,12 +149,14 @@ interface DbRow {
   justification: string;
   attestations: unknown;
   status: AccessRequestStatus;
+  matchStatus: AccessRequestMatchStatus | null;
+  matchExplanations: string[];
   decidedAt: Date | null;
   decidedById: string | null;
   decisionNote: string | null;
   createdAt: Date;
   updatedAt: Date;
-  dataset: { id: string; slug: string; name: string };
+  dataset: { id: string; slug: string; name: string; duoTerms: string[] };
 }
 
 function toSummary(row: DbRow): AccessRequestSummary {
@@ -158,12 +166,15 @@ function toSummary(row: DbRow): AccessRequestSummary {
       id: row.dataset.id,
       slug: row.dataset.slug as DatasetSlug,
       name: row.dataset.name,
+      duoTerms: (row.dataset.duoTerms ?? []) as DuoTermId[],
     },
     requesterId: row.requesterId,
     requesterDisplayName: null,
     justification: row.justification,
     attestations: row.attestations as AccessRequestAttestations,
     status: row.status,
+    matchStatus: row.matchStatus,
+    matchExplanations: row.matchExplanations ?? [],
     decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
     decidedById: row.decidedById,
     decisionNote: row.decisionNote,

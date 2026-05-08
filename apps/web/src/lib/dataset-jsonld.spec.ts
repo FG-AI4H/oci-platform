@@ -48,6 +48,7 @@ const baseDetail: DatasetDetail = {
   ],
   sourceCatalog: null,
   originUrl: null,
+  duoTerms: [],
 };
 
 describe('datasetJsonLd', () => {

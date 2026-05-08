@@ -44,3 +44,13 @@ export {
 } from './biocroissant/schema.js';
 
 export { NS, CONFORMS_TO } from './namespaces/index.js';
+
+export {
+  DUO_REGISTRY,
+  lookupDuoTerm,
+  isKnownDuoTerm,
+  normaliseDuoId,
+  type DuoTerm,
+  type DuoCategory,
+} from './duo/registry.js';
+export { extractDuoTerms } from './duo/extract.js';

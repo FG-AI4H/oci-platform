@@ -113,11 +113,24 @@ export const DatasetVersionSchema = z.object({
 });
 export type DatasetVersion = z.infer<typeof DatasetVersionSchema>;
 
+/**
+ * DUO permission terms attached to a dataset (PR J.1, #93). Extracted
+ * from the manifest's `cr:dataUseTerms` array on publish so the detail
+ * page + the access-request matcher can read them without re-parsing
+ * the manifest. Empty array for legacy rows / PUBLIC datasets that
+ * declined to declare. Ids are OBO short form (`DUO_0000042`); the
+ * registry in `@oci/croissant` resolves to human labels.
+ */
+export const DuoTermIdSchema = z.string().regex(/^DUO_\d{7}$/, 'expected DUO OBO id (DUO_NNNNNNN)');
+export type DuoTermId = z.infer<typeof DuoTermIdSchema>;
+
 /** Full detail returned by `GET /v2/catalog/datasets/:slug`. */
 export const DatasetDetailSchema = DatasetSummarySchema.extend({
   croissant: z.unknown().nullable(),
   versions: z.array(DatasetVersionSchema),
   distributions: z.array(DistributionSchema),
+  /** DUO permission term ids attached to the latest published manifest. */
+  duoTerms: z.array(DuoTermIdSchema).default([]),
 });
 export type DatasetDetail = z.infer<typeof DatasetDetailSchema>;
 
@@ -290,25 +303,90 @@ export const AccessRequestStatusSchema = z.enum(['PENDING', 'APPROVED', 'DENIED'
 export type AccessRequestStatus = z.infer<typeof AccessRequestStatusSchema>;
 
 /**
- * Structured attestations the requester signs off when asking for
- * access. Free-text DUO IRIs for now (per #75); the ontology-aware
- * selector is a follow-up. Stored verbatim on `AccessRequest.attestations`.
+ * Result of automatically matching the requester's intended use
+ * against the dataset's DUO permission terms (PR J.1, #93). Persisted
+ * on `AccessRequest.matchStatus`; surfaced as a badge in the host
+ * inbox so the host can prioritise quick-decisions on `MATCHED` and
+ * scrutiny on `CONFLICT`.
+ *
+ *   - `MATCHED`   — every requester-declared use is permitted by the
+ *                   dataset's terms; no formal-agreement modifier
+ *                   blocks approval.
+ *   - `CONFLICT`  — the matcher found at least one conflict (e.g.
+ *                   commercial intent on a NCU dataset, no IRB on
+ *                   IRB-required dataset). Should be denied unless
+ *                   the host has out-of-band reason to override.
+ *   - `UNCLEAR`   — terms don't cleanly match (e.g. dataset has
+ *                   `RTN` modifier requiring a DUA, or one of the
+ *                   terms isn't in our registry yet). Host reads the
+ *                   structured fields and decides manually.
+ */
+export const AccessRequestMatchStatusSchema = z.enum(['MATCHED', 'CONFLICT', 'UNCLEAR']);
+export type AccessRequestMatchStatus = z.infer<typeof AccessRequestMatchStatusSchema>;
+
+/**
+ * What the requester intends to do with the data. The matcher reduces
+ * this to one of `commercial / non-commercial / clinical-care` and
+ * checks it against the dataset's DUO permission terms.
+ */
+export const IntendedUseCategorySchema = z.enum([
+  'NON_COMMERCIAL_RESEARCH',
+  'COMMERCIAL_RESEARCH',
+  'CLINICAL_CARE',
+  'EDUCATION',
+]);
+export type IntendedUseCategory = z.infer<typeof IntendedUseCategorySchema>;
+
+/** What gets done with derived outputs. Drives `RTN`/`PUB`-related modifiers. */
+export const RedistributionIntentSchema = z.enum(['NONE', 'DERIVATIVES_ONLY', 'WITH_PERMISSION']);
+export type RedistributionIntent = z.infer<typeof RedistributionIntentSchema>;
+
+export const OutputTypeSchema = z.enum([
+  'PUBLICATION',
+  'MODEL_WEIGHTS',
+  'DERIVATIVE_DATASET',
+  'INTERNAL_USE',
+]);
+export type OutputType = z.infer<typeof OutputTypeSchema>;
+
+/**
+ * Structured intended-use payload submitted by the requester. Stored
+ * verbatim in `AccessRequest.attestations` (Json column); the matcher
+ * + the host inbox both read from this typed shape.
+ *
+ * Replaces the v0 free-text justification + ad-hoc DUO IRI list. Old
+ * rows persisted with the v0 shape are read with a permissive parser
+ * in the API; the form always writes v1.
  */
 export const AccessRequestAttestationsSchema = z.object({
-  /** Has the requester's institutional review board approved this study? */
-  irbApproved: z.boolean(),
-  /** Optional reference to the IRB approval document / number. */
-  irbApprovalRef: z.string().max(500).nullable().optional(),
-  /** Optional reference to the data-protection impact assessment. */
-  dpiaRef: z.string().max(500).nullable().optional(),
-  /** How long the data will be retained, in days. Capped at 10 years. */
-  dataRetentionDays: z.number().int().min(1).max(3650).nullable().optional(),
+  /** Schema version marker — bump when adding required fields. */
+  v: z.literal(1).default(1),
+  /** Short project title; 5–200 chars, displayed in the host inbox. */
+  projectTitle: z.string().min(5).max(200),
+  /** Detailed project description; 50–4000 chars. */
+  projectDescription: z.string().min(50).max(4000),
+  /** Affiliated institution / company. Free-form; not auto-validated. */
+  institution: z.string().min(2).max(200),
+  /** Primary intended use bucket. */
+  intendedUseCategory: IntendedUseCategorySchema,
   /**
-   * DUO (Data Use Ontology) term IRIs the requester acknowledges.
-   * Free-text in PR F — a future PR adds the ontology-aware selector.
-   * Each entry is a URI; max 50 to bound payload size.
+   * DUO term ids the requester claims their use is consistent with.
+   * Empty array is OK at the form layer (the matcher will then mark
+   * the request UNCLEAR), but the form encourages at least one.
    */
-  duoConsent: z.array(z.string().url().max(500)).max(50).optional(),
+  intendedUseDuoTerms: z.array(DuoTermIdSchema).max(20).default([]),
+  /** IRB / ethics committee approval status. */
+  irbApproved: z.boolean(),
+  /** Free-text reference to the IRB approval — number or URL. */
+  irbApprovalRef: z.string().max(500).nullable().optional(),
+  /** Optional DPIA reference. */
+  dpiaRef: z.string().max(500).nullable().optional(),
+  /** Retention window in days; capped at 10 years. */
+  dataRetentionDays: z.number().int().min(1).max(3650),
+  /** Will the requester redistribute derivatives? */
+  redistributionIntent: RedistributionIntentSchema,
+  /** What kind of output the project will produce. */
+  outputType: OutputTypeSchema,
 });
 export type AccessRequestAttestations = z.infer<typeof AccessRequestAttestationsSchema>;
 
@@ -319,15 +397,40 @@ export type AccessRequestAttestations = z.infer<typeof AccessRequestAttestations
  */
 export interface AccessRequestSummary {
   id: string;
-  /** Snapshot of the dataset metadata at request time. */
-  dataset: { id: string; slug: DatasetSlug; name: string };
+  /**
+   * Snapshot of the dataset metadata at request time. `duoTerms` are
+   * the dataset's DUO permission terms at the moment the request was
+   * created — captured here so the host inbox can reason about the
+   * decision even if the host re-publishes with different terms
+   * later.
+   */
+  dataset: { id: string; slug: DatasetSlug; name: string; duoTerms: DuoTermId[] };
   /** Requester identity — sub from Cognito (UUID-shaped). */
   requesterId: string;
   /** Optional: requester's display name (email or username). Null when not surfaced. */
   requesterDisplayName: string | null;
+  /**
+   * Free-text justification. Retained for backwards-compat with the
+   * v0 form; v1 mirrors `attestations.projectDescription` here so
+   * legacy code paths keep rendering. New consumers should read from
+   * `attestations`.
+   */
   justification: string;
   attestations: AccessRequestAttestations;
   status: AccessRequestStatus;
+  /**
+   * Result of the auto-match between requester intent + dataset DUO
+   * terms (PR J.1, #93). Null on legacy rows from before the matcher
+   * shipped.
+   */
+  matchStatus: AccessRequestMatchStatus | null;
+  /**
+   * Human-readable list of the matcher's findings (one entry per
+   * conflict / unclear point). Empty when MATCHED. Surfaced verbatim
+   * in the host inbox so a host who's not familiar with DUO can still
+   * act on the request.
+   */
+  matchExplanations: string[];
   /** Set when status leaves PENDING. */
   decidedAt: string | null;
   /** Cognito sub of the host/admin who decided. */
@@ -339,7 +442,6 @@ export interface AccessRequestSummary {
 
 /** `POST /v2/catalog/datasets/:slug/access-requests` */
 export const CreateAccessRequestRequestSchema = z.object({
-  justification: z.string().min(20).max(4000),
   attestations: AccessRequestAttestationsSchema,
 });
 export type CreateAccessRequestRequest = z.infer<typeof CreateAccessRequestRequestSchema>;

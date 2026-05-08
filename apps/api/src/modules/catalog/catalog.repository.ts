@@ -27,6 +27,7 @@ interface DatasetRow {
   status: DatasetStatus;
   conformanceVersion: string | null;
   croissant: unknown;
+  duoTerms: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -225,6 +226,7 @@ export class CatalogRepository {
           contentHash: d.contentHash,
           requiresAccess: d.requiresAccess,
         })) ?? [],
+      duoTerms: ds.duoTerms ?? [],
     };
   }
 
@@ -247,12 +249,23 @@ export class CatalogRepository {
     })) as DatasetRow;
   }
 
-  async findIdAndHostBySlug(slug: string): Promise<{ id: string; hostId: string } | null> {
+  async findIdAndHostBySlug(slug: string): Promise<{
+    id: string;
+    hostId: string;
+    visibility: DatasetVisibility;
+    duoTerms: string[];
+  } | null> {
     const ds = await this.prisma.client.dataset.findUnique({
       where: { slug },
-      select: { id: true, hostId: true },
+      select: { id: true, hostId: true, visibility: true, duoTerms: true },
     });
-    return ds;
+    if (!ds) return null;
+    return {
+      id: ds.id,
+      hostId: ds.hostId,
+      visibility: ds.visibility as DatasetVisibility,
+      duoTerms: ds.duoTerms ?? [],
+    };
   }
 
   /**
@@ -268,6 +281,8 @@ export class CatalogRepository {
     notes: string | null;
     publishedById: string;
     conformanceVersion: string;
+    /** PR J.1 (#93): DUO ids extracted from the manifest's consentCode. */
+    duoTerms: string[];
     distributions: Array<{
       croissantId: string;
       contentUrl: string | null;
@@ -322,6 +337,7 @@ export class CatalogRepository {
           status: 'PUBLISHED',
           conformanceVersion: args.conformanceVersion,
           croissant: args.croissant as Prisma.InputJsonValue,
+          duoTerms: args.duoTerms,
         },
       });
 
