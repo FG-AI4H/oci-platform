@@ -741,6 +741,7 @@ export const LocaleSchema = z
   .string()
   .min(2)
   .max(35)
+  // eslint-disable-next-line security/detect-unsafe-regex -- bounded by .max(35); BCP-47 segments are 2-8 chars, no realistic ReDoS surface
   .regex(/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/);
 export type Locale = z.infer<typeof LocaleSchema>;
 
