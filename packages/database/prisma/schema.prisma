@@ -506,6 +506,18 @@ model AccessRequest {
   /// click-wrap component on the request-access page.
   pledgeAcceptedAt DateTime? @map("pledge_accepted_at")
 
+  /// Renewal lifecycle (#130, ADR-0003 Phase 2). `expiresAt` is set on
+  /// the APPROVED transition to `decidedAt + OCI_ACCESS_GRANT_VALIDITY_DAYS`
+  /// (default 365). The renewal cron auto-revokes APPROVED rows whose
+  /// `expiresAt` has passed; renewals extend the timestamp instead of
+  /// creating a new row. Null on PENDING / DENIED / REVOKED rows.
+  expiresAt DateTime? @map("expires_at")
+
+  /// Set the first time the renewal cron emits a 30-day pre-expiry
+  /// notice for this row. Used as a deduplication guard so the cron
+  /// running daily doesn't spam the requester.
+  expiryNoticeSentAt DateTime? @map("expiry_notice_sent_at")
+
   dataset Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -514,6 +526,8 @@ model AccessRequest {
   @@index([datasetId, status])
   @@index([datasetId, status, matchStatus])
   @@index([requesterId, status])
+  /// Renewal cron's primary read path (#130).
+  @@index([status, expiresAt])
   @@map("access_requests")
   @@schema("catalog")
 }
