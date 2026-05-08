@@ -3,11 +3,12 @@
 The **Open Code Infrastructure (OCI)** is a global, open-source, public-good platform that lets:
 
 - **Researchers** discover, request, and use health datasets that are usually invisible across institutional and national boundaries.
+- **AI solution developers** — including LMIC startups, MedTech vendors, and academic spin-offs building deployable AI for WHO-prioritised health problems — find **curated, GI-AI4H-vetted training data** with clear permission terms, so they can build, validate, and deploy products without rebuilding the data-access layer for every project.
 - **Dataset hosts** publish their data with machine-readable metadata + machine-checkable access policies, without giving up sovereignty over where the bytes live.
 - **Regulators and auditors** trace which model was trained on which version of which dataset, with a permanent record.
 - **Member states** federate their own national platforms with the OCI without exporting data.
 
-It is operated as a **public good**: free at the point of use, open-source, and governed under the GI-AI4H mandate (ITU + WHO + WIPO).
+It is operated as a **public good**: free at the point of use, open-source, and governed under the GI-AI4H mandate (ITU + WHO + WIPO). A core mission is **enabling AI solutions for WHO public-health priorities, especially in low- and middle-income countries (LMICs)** — by curating datasets aligned to those priorities and exposing them under permission terms that LMIC AI builders can act on.
 
 ## What the OCI is
 

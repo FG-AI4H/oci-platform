@@ -5,6 +5,7 @@ This section is for the Steering Committee, Joint Secretariat, partner-organisat
 | Topic                                                   | Read when                                                                                            |
 | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | [Strategic overview](./strategic-overview.md)           | You need a 5-minute summary of the OCI's purpose, posture, and current state.                        |
+| [Access governance — strategic positioning](./access-governance-positioning.md) | You're briefing the Steering Committee on how OCI's data-access architecture compares to peer platforms (Synapse, EGA, dbGaP) and what it costs to operate. |
 | [Alignment with mandates](./alignment-with-mandates.md) | You're mapping OCI deliverables to GI-AI4H working groups, SDGs, or partner-organisation strategies. |
 | [Adoption roadmap](./adoption-roadmap.md)               | You're planning member-state onboarding or partner integration.                                      |
 | [Public-good rationale](./public-good-rationale.md)     | You're justifying multilateral funding or addressing private-sector alternatives.                    |

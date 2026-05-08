@@ -4,15 +4,18 @@ The Open Code Infrastructure (OCI) Platform is a global public good, convened by
 
 This documentation is organised by **audience**. Pick the entry point that matches who you are:
 
-| Audience                              | What you'll find                                        | Start here                                     |
-| ------------------------------------- | ------------------------------------------------------- | ---------------------------------------------- |
-| 🌍 **Anyone** — what is the OCI?      | Concept, mandate, governance, glossary                  | [Overview](./overview/README.md)               |
-| 🔬 **Researcher / Data consumer**     | Find datasets, request access, use the data             | [For researchers](./for-researchers/README.md) |
-| 🏥 **Dataset host**                   | Publish a dataset, upload files, review access requests | [For hosts](./for-hosts/README.md)             |
-| 💻 **Developer / Integrator**         | API, Croissant manifest, local setup, contribution      | [For developers](./for-developers/README.md)   |
-| ⚙️ **Operator / SRE**                 | Deployment, runbooks, security baseline                 | [For operators](./for-operators/README.md)     |
-| 🏛️ **Member-state / Regulator / DPO** | Sovereignty, compliance, DUO/DUA framework, audit       | [For governance](./for-governance/README.md)   |
-| 🎯 **ITU/WHO/WIPO management**        | Strategic overview, mandate alignment, adoption         | [For strategy](./for-strategy/README.md)       |
+| Audience                                   | What you'll find                                                                                            | Start here                                       |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| 🌍 **Anyone** — what is the OCI?           | Concept, mandate, governance, glossary                                                                       | [Overview](./overview/README.md)                 |
+| 🔬 **Researcher**                          | Academic / clinical research; find datasets, request access, use the data, cite versions for publication    | [For researchers](./for-researchers/README.md)   |
+| 🚀 **AI solution developer**               | LMIC startup, MedTech vendor, academic spin-off, WHO Collaborating Centre — building deployable AI for WHO health priorities | [For AI builders](./for-ai-builders/README.md)   |
+| 🏥 **Dataset host**                        | Publish a dataset, upload files, review access requests                                                      | [For hosts](./for-hosts/README.md)               |
+| 💻 **Platform developer / Integrator**     | API, Croissant manifest, local setup, contribution                                                           | [For developers](./for-developers/README.md)     |
+| ⚙️ **Operator / SRE**                      | Deployment, runbooks, security baseline                                                                      | [For operators](./for-operators/README.md)       |
+| 🏛️ **Member-state / Regulator / DPO**      | Sovereignty, compliance, DUO/DUA framework, audit                                                            | [For governance](./for-governance/README.md)     |
+| 🎯 **ITU/WHO/WIPO management**             | Strategic overview, mandate alignment, adoption                                                              | [For strategy](./for-strategy/README.md)         |
+
+> **Two audiences consume the data, not one.** Researchers and AI solution developers use the same catalogue and the same access-governance machinery, but the request form, the Data Use Agreement template, and the routing rules differ. If you're not sure which audience you fit, read the [access-governance overview](./overview/access-governance.md) — it has both flows side-by-side.
 
 ## Conventions
 

@@ -11,6 +11,7 @@ The platform automates the bookkeeping (validation, federation, audit trail, aut
 
 | Guide                                                       | Read when                                                               |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [How access works (overview)](../overview/access-governance.md) | You want the plain-English explainer of identity tiers, DUO, DUA, and e-signatures before configuring access on your dataset. |
 | [Publishing a dataset](./publishing-a-dataset.md)           | First-time host workflow: create draft → publish manifest.              |
 | [Uploading files](./uploading-files.md)                     | You don't have an upstream URL; you want the OCI to host the bytes.     |
 | [DUO terms — choosing the right ones](./duo-terms-guide.md) | You need to express what your dataset permits in machine-readable form. |
