@@ -1,0 +1,64 @@
+name: Steering / governance decision
+description: A decision needed from the GI-AI4H Steering Committee (ITU/WHO/WIPO joint mandate). Not engineering work; tracked here because it blocks engineering.
+title: '[steering] Short title'
+labels:
+  - question
+  - area:platform
+body:
+  - type: markdown
+    attributes:
+      value: |
+        These issues are for **decisions only**. The actual implementation issue
+        (if any) goes via the standard "Feature / engineering task" template once
+        the decision lands.
+
+        Steering decisions go to the Joint Secretariat; this issue is the trail.
+
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision needed
+      description: |
+        State the decision in one sentence. What is being asked of the Steering
+        Committee?
+      placeholder: |
+        Endorse ADR-0003 (tiered identity assurance + GA4GH-Passport-first access governance)
+        as the architectural commitment for the platform's data-access surface.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: |
+        Why is this a steering question and not a developer call? Reference the
+        ADR / audience-doc / strategy brief that motivates it.
+      placeholder: |
+        - ADR-0003 commits the platform to a multi-vendor signing stack (DocuSeal AdES, Yousign QES via AWS Marketplace), an OCI ACT review body, and a treatment of commercial use as first-class.
+        - These are policy choices that engineering cannot make alone — they need the convening organisations' alignment.
+        - See docs/for-strategy/access-governance-positioning.md.
+    validations:
+      required: true
+
+  - type: textarea
+    id: blocks
+    attributes:
+      label: What this blocks
+      description: |
+        Which engineering issues are stalled until this decision lands? List by issue
+        number with `Blocks #N`.
+      placeholder: |
+        Blocks #126 (GA4GH Passport relying party) — needs endorsement before procurement / public commitments.
+        Blocks #131 (Yousign QES integration) — needs tier-mapping policy decision (#139).
+
+  - type: textarea
+    id: forum
+    attributes:
+      label: Forum / decision route
+      description: |
+        Where will this be discussed? When?
+      placeholder: |
+        - Next Steering Committee briefing (cadence per Joint Secretariat).
+        - WG-Data agenda item if technically scoped.
+        - Bilateral via Simao Campos (ITU-T) if process question.
