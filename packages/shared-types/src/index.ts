@@ -775,6 +775,105 @@ export const AccessRequestAttestationsSchema = z.object({
 export type AccessRequestAttestations = z.infer<typeof AccessRequestAttestationsSchema>;
 
 /**
+ * Access-request audience (#120, ADR-0003 Decision 8). RESEARCHER flows
+ * assume publication-as-output; BUILDER flows assume product-as-output
+ * (regulated medical device, deployed AI service). Both share the same
+ * state machine and Visa issuance.
+ */
+export const AccessRequestAudienceSchema = z.enum(['RESEARCHER', 'BUILDER']);
+export type AccessRequestAudience = z.infer<typeof AccessRequestAudienceSchema>;
+
+/**
+ * Regulatory pathway the AI-builder is targeting (#120). Open list to
+ * cover non-US/EU pathways (national health-tech regulators emerging
+ * in LMIC) — the matcher doesn't gate on the value, the host reviewer
+ * eyeballs it. Free-text-with-suggested-vocabulary in the form.
+ */
+export const RegulatoryPathwaySchema = z.enum([
+  'FDA_510K',
+  'FDA_DE_NOVO',
+  'FDA_PMA',
+  'EU_MDR_CLASS_I',
+  'EU_MDR_CLASS_IIA',
+  'EU_MDR_CLASS_IIB',
+  'EU_MDR_CLASS_III',
+  'EU_IVDR',
+  'NATIONAL_LMIC',
+  'NONE_RESEARCH_ONLY',
+  'OTHER',
+]);
+export type RegulatoryPathway = z.infer<typeof RegulatoryPathwaySchema>;
+
+/**
+ * Post-market data-flow declaration (#120). What does the deployed
+ * product *do* with the data it sees in production? GDPR Art. 22 +
+ * proposed EU AI Act both anchor on this. Free vocabulary; values
+ * surfaced verbatim to the host.
+ */
+export const PostMarketDataFlowSchema = z.enum([
+  'NO_PERSISTENCE', // inference-only; nothing retained
+  'AGGREGATE_STATS', // counts / metrics retained
+  'PSEUDONYMISED_RETAINED', // de-identified individual rows
+  'IDENTIFIED_RETAINED', // identifiable rows (rare; high scrutiny)
+]);
+export type PostMarketDataFlow = z.infer<typeof PostMarketDataFlowSchema>;
+
+/**
+ * AI-builder-specific context (#120). Populated only when the
+ * requester selects a BUILDER audience. Persisted on
+ * `AccessRequest.builderContext` (JSONB).
+ *
+ * Tuned for the OCI mission per ADR-0003: GI-AI4H is mandated to
+ * enable AI solutions for WHO public-health priorities, especially in
+ * LMICs. Fields like `whoPriorityAlignment` and `accreditations` (for
+ * WHO Innovation Hub / national-MoH endorsement) directly serve that
+ * mission — peers like Synapse don't ask these because their model
+ * defaults academic-non-commercial.
+ */
+export const BuilderContextSchema = z.object({
+  /** Legal entity that will hold the licence — full company name + jurisdiction. */
+  legalEntity: z
+    .object({
+      name: z.string().min(1).max(200),
+      /** ISO 3166-1 alpha-2 country code where the entity is registered. */
+      jurisdictionCountry: z.string().regex(/^[A-Z]{2}$/, 'expected ISO 3166-1 alpha-2'),
+    })
+    .strict(),
+  /**
+   * Countries where the AI builder intends to deploy — ISO alpha-2.
+   * Drives jurisdiction-specific DUA clauses (LMIC royalty-free terms,
+   * US FDA pre-market, EU MDR conformity).
+   */
+  deploymentCountries: z
+    .array(z.string().regex(/^[A-Z]{2}$/))
+    .min(1)
+    .max(50),
+  regulatoryPathway: RegulatoryPathwaySchema,
+  /**
+   * Optional: which WHO priority area does the deployment address?
+   * Free-text; recommended values are tuberculosis, maternal health,
+   * NCDs, antimicrobial resistance, etc. Empty for non-mission-aligned
+   * builders — still allowed; the field is signal, not a gate.
+   */
+  whoPriorityAlignment: z.string().max(500).nullable().optional(),
+  /**
+   * Recognised accreditations the builder holds (WHO Innovation Hub,
+   * national MoH innovation programme, ISO 13485, IEC 62304, etc.).
+   * Free-text per entry; ADR-0003 Decision 10 envisions pre-grants
+   * for accredited LMIC actors, this field surfaces the evidence.
+   */
+  accreditations: z.array(z.string().min(1).max(200)).max(20).default([]),
+  /**
+   * Royalty / commercialisation plan summary. Free-text up to 4000
+   * chars. Hosts may negotiate clauses (LMIC royalty-free, HIC
+   * tiered split) bilaterally.
+   */
+  royaltyPlan: z.string().max(4000).nullable().optional(),
+  postMarketDataFlow: PostMarketDataFlowSchema,
+});
+export type BuilderContext = z.infer<typeof BuilderContextSchema>;
+
+/**
  * AI-tool disclosure (#115). Optional structured declaration of which
  * AI / ML tools the requester used (or will use) in the project. Drives
  * the "AI tool transparency" badge in the host inbox and a future
@@ -867,6 +966,17 @@ export interface AccessRequestSummary {
    * recomputation per render.
    */
   requesterIdentityScore: RequesterIdentityScore;
+  /**
+   * Audience classification (#120). Derived at create time from
+   * `attestations.intendedUseCategory`. Drives which form template the
+   * host inbox shows (researcher detail vs. builder detail).
+   */
+  audience: AccessRequestAudience;
+  /**
+   * AI-builder-specific context (#120). Populated for `BUILDER`
+   * audience rows; null for `RESEARCHER`.
+   */
+  builderContext: BuilderContext | null;
   attestations: AccessRequestAttestations;
   status: AccessRequestStatus;
   /**
@@ -892,10 +1002,55 @@ export interface AccessRequestSummary {
 }
 
 /** `POST /v2/catalog/datasets/:slug/access-requests` */
-export const CreateAccessRequestRequestSchema = z.object({
-  attestations: AccessRequestAttestationsSchema,
-});
+export const CreateAccessRequestRequestSchema = z
+  .object({
+    attestations: AccessRequestAttestationsSchema,
+    /**
+     * AI-builder-specific context (#120). Required when the
+     * requester's intended use is `COMMERCIAL_RESEARCH` or
+     * `CLINICAL_CARE` (BUILDER audience), forbidden otherwise. The
+     * service derives `audience` server-side from
+     * `attestations.intendedUseCategory` and validates the
+     * builderContext against this requirement.
+     */
+    builderContext: BuilderContextSchema.nullable().optional(),
+  })
+  .superRefine((value, ctx) => {
+    const isBuilderIntent =
+      value.attestations.intendedUseCategory === 'COMMERCIAL_RESEARCH' ||
+      value.attestations.intendedUseCategory === 'CLINICAL_CARE';
+    if (isBuilderIntent && !value.builderContext) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['builderContext'],
+        message:
+          'builderContext is required for COMMERCIAL_RESEARCH or CLINICAL_CARE intent (BUILDER audience)',
+      });
+    }
+    if (!isBuilderIntent && value.builderContext) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['builderContext'],
+        message:
+          'builderContext is only accepted for COMMERCIAL_RESEARCH or CLINICAL_CARE intent (RESEARCHER audience requests must omit it)',
+      });
+    }
+  });
 export type CreateAccessRequestRequest = z.infer<typeof CreateAccessRequestRequestSchema>;
+
+/**
+ * Derive the audience from the requester's intended-use category. Pure
+ * helper; the service uses this to compute the persisted `audience`
+ * field, and the form uses it to swap between researcher and builder
+ * field templates.
+ */
+export function audienceFromIntendedUse(
+  intendedUseCategory: IntendedUseCategory,
+): AccessRequestAudience {
+  return intendedUseCategory === 'COMMERCIAL_RESEARCH' || intendedUseCategory === 'CLINICAL_CARE'
+    ? 'BUILDER'
+    : 'RESEARCHER';
+}
 
 /** `POST /v2/catalog/access-requests/:id/decision` */
 export const AccessRequestDecisionSchema = z.object({
