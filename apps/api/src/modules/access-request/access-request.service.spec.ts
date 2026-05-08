@@ -35,8 +35,13 @@ interface CatalogMock {
   findOwnerBySlug: ReturnType<typeof vi.fn>;
 }
 
+interface CertificationMock {
+  listOwnStatus: ReturnType<typeof vi.fn>;
+}
+
 let repo: RepoMock;
 let catalog: CatalogMock;
+let certification: CertificationMock;
 let service: AccessRequestService;
 
 beforeEach(() => {
@@ -49,9 +54,20 @@ beforeEach(() => {
     setDecision: vi.fn(),
   };
   catalog = { findOwnerBySlug: vi.fn() };
+  // Default: no active cert; tests that need one override per-test.
+  certification = {
+    listOwnStatus: vi.fn().mockResolvedValue({
+      certificationType: 'data_ethics_v1',
+      active: false,
+      passedAt: null,
+      expiresAt: null,
+      history: [],
+    }),
+  };
   service = new AccessRequestService(
     repo as unknown as AccessRequestRepository,
     catalog as unknown as CatalogService,
+    certification as unknown as import('../certification/certification.service.js').CertificationService,
   );
 });
 
@@ -217,6 +233,44 @@ describe('AccessRequestService.create', () => {
     const out = await service.create('rsna', validBody, user('researcher@stanford.edu'));
     expect(out.matchStatus).toBe('MATCHED');
     expect(out.requesterIdentityScore).toBe('EMAIL_DOMAIN_VERIFIED');
+  });
+
+  it('lifts requester score to QUIZ_PASSED when an active certification exists (#117 follow-up)', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: ['DUO_0000042'],
+      accessTier: 'CONTROLLED', // requires QUIZ_PASSED
+      emailDomainAllowlist: [],
+    });
+    certification.listOwnStatus.mockResolvedValue({
+      certificationType: 'data_ethics_v1',
+      active: true,
+      passedAt: new Date('2026-04-01').toISOString(),
+      expiresAt: new Date('2027-04-01').toISOString(),
+      history: [],
+    });
+    repo.create.mockResolvedValue({ id: REQUEST_ID });
+    const out = await service.create('rsna', validBody, user(REQUESTER_SUB));
+    expect(out.requesterIdentityScore).toBe('QUIZ_PASSED');
+    // CONTROLLED tier requires QUIZ_PASSED — score now meets it, so no tier conflict.
+    expect(out.matchStatus).toBe('MATCHED');
+  });
+
+  it('certification lookup failure is non-fatal — score stays at the conservative baseline', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: ['DUO_0000042'],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
+    });
+    certification.listOwnStatus.mockRejectedValue(new Error('cert service unavailable'));
+    repo.create.mockResolvedValue({ id: REQUEST_ID });
+    const out = await service.create('rsna', validBody, user(REQUESTER_SUB));
+    // Cert failure swallowed; row still persists; score reflects the email signal alone.
+    expect(out.requesterIdentityScore).toBe('EMAIL_ONLY');
+    expect(out.matchStatus).toBe('MATCHED'); // OPEN tier doesn't require more than EMAIL_ONLY
   });
 });
 
