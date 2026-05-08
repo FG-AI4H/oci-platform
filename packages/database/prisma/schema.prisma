@@ -46,6 +46,60 @@ model UserPreferences {
   @@schema("identity")
 }
 
+/// Click-wrap policy acceptance (#118, ADR-0003 Decision 4). One row
+/// per acceptance event; stores the policy text verbatim + its SHA-256
+/// hash so we can re-verify the binding even if the canonical policy
+/// document is later updated. Legally sufficient for SES (Simple
+/// Electronic Signature) tier under US ESIGN/UETA + EU eIDAS.
+///
+/// `userId` is a soft FK → identity.users.id (UUIDv5 from Cognito sub
+/// via subToUuid; same convention as UserPreferences).
+///
+/// `receiptSignature` is optional — when AWS KMS signing is configured
+/// (env `OCI_KMS_SIGNING_KEY_ARN`) the API signs a receipt blob
+/// (`{ id, userId, policyUrl, policyVersion, textSha256, acceptedAt }`)
+/// and stores the base64 signature. Tamper-evidence beyond the simple
+/// hash; a regulator audit can later present the receipt + signature
+/// to KMS Verify and confirm authenticity. Null on rows where KMS
+/// wasn't configured at acceptance time.
+model PolicyAcceptance {
+  id              String   @id @default(uuid()) @db.Uuid
+  /// Soft FK → identity.users.id.
+  userId          String   @map("user_id") @db.Uuid
+  /// Canonical URL for the policy document (e.g. https://oci.ai4h.net/policies/dua-research-v1).
+  policyUrl       String   @map("policy_url")
+  /// Version slug shown in the policy header (e.g. "v1.0", "2026-05"),
+  /// surfaced in the audit trail so a regulator can map the acceptance
+  /// to the canonical text-of-record at the time.
+  policyVersion   String   @map("policy_version")
+  /// Verbatim policy text the user clicked to accept. Stored so the
+  /// hash can be re-derived and so audit trails don't depend on the
+  /// canonical URL still resolving years later.
+  policyText      String   @map("policy_text")
+  /// Lower-case hex SHA-256 of `policyText`. The actual binding
+  /// artifact the API emits to caller as a receipt.
+  textSha256      String   @map("text_sha256") @db.Char(64)
+  /// Optional foreign reference: which workflow this acceptance
+  /// belongs to. e.g. `contextType=access_request, contextRef=<request id>`.
+  /// `null` for top-level platform-ToU acceptances.
+  contextType     String?  @map("context_type")
+  contextRef      String?  @map("context_ref")
+  /// KMS-signed receipt blob (base64 DER). Null when KMS signing was
+  /// not configured at acceptance time. The receipt's input shape is
+  /// fixed (see service code) so verification is deterministic.
+  receiptSignature String? @map("receipt_signature")
+  /// KMS key id used to produce `receiptSignature`. Stored alongside
+  /// the signature so a regulator can route Verify to the right key
+  /// even after rotations.
+  receiptKeyId    String?  @map("receipt_key_id")
+  acceptedAt      DateTime @default(now()) @map("accepted_at")
+
+  @@index([userId, acceptedAt])
+  @@index([contextType, contextRef])
+  @@map("policy_acceptances")
+  @@schema("identity")
+}
+
 // ==========================================================================
 // catalog — datasets, Croissant 1.1 / RAI / BIOCroissant manifests,
 //            versions, distributions, access requests. (DAP package, WS-1.)
