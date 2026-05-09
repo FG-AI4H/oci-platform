@@ -8,6 +8,7 @@ import { RemoteCatalogModule } from './modules/remote-catalog/remote-catalog.mod
 import { AccessRequestModule } from './modules/access-request/access-request.module.js';
 import { CertificationModule } from './modules/certification/certification.module.js';
 import { OrcidLinkModule } from './modules/orcid-link/orcid-link.module.js';
+import { PassportModule } from './modules/passport/passport.module.js';
 import { PolicyAcceptanceModule } from './modules/policy-acceptance/policy-acceptance.module.js';
 import { PreferencesModule } from './modules/preferences/preferences.module.js';
 import { RenewalModule } from './modules/renewal/renewal.module.js';
@@ -35,6 +36,7 @@ import { MeController } from './me/me.controller.js';
     PreferencesModule,
     CertificationModule,
     OrcidLinkModule,
+    PassportModule,
     PolicyAcceptanceModule,
     RenewalModule,
     // Phase B will continue to add: AnnotationModule

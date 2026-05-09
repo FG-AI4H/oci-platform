@@ -1331,6 +1331,90 @@ export interface OrcidLinkSummary {
   publicUrl: string;
 }
 
+// ==== GA4GH Passport relying party (#126, ADR-0003 Phase 2) ===============
+//
+// The platform ingests Visa JWTs from trusted issuers (ELIXIR AAI, NIH
+// RAS, Sage broker — admin-managed allowlist). A verified Visa lifts
+// the requester score in identity-context (`ResearcherStatus` →
+// `PASSPORT_VERIFIED`, top of the ladder) and surfaces on the host
+// inbox as "ResearcherStatus from <issuer>".
+//
+// Spec: https://ga4gh.github.io/data-security/ga4gh-passport
+// Visa JWT shape: standard JOSE-signed JWT with a `ga4gh_visa_v1`
+// claim carrying `{ type, asserted, value, source, by? }`.
+
+/**
+ * GA4GH Visa types we recognise. Open enum — the Passport spec
+ * permits issuer-defined types, but the platform only acts on the
+ * ones below. Other types are stored verbatim but ignored for
+ * identity-score lifts.
+ *
+ *   - `ResearcherStatus`        bona-fide researcher status — the score-lifting one
+ *   - `AffiliationAndRole`      institutional affiliation evidence
+ *   - `AcceptedTermsAndPolicies` consent / terms acknowledgement
+ *   - `ControlledAccessGrants`  prior controlled-access grants (informational)
+ *   - `LinkedIdentities`        identity-binding (e.g. ORCID ↔ Passport sub)
+ */
+export const GA4GHVisaTypeSchema = z.enum([
+  'ResearcherStatus',
+  'AffiliationAndRole',
+  'AcceptedTermsAndPolicies',
+  'ControlledAccessGrants',
+  'LinkedIdentities',
+]);
+export type GA4GHVisaType = z.infer<typeof GA4GHVisaTypeSchema>;
+
+/**
+ * `POST /v2/identity/passport/visas` request body. The web (or any
+ * downstream client) pushes a Passport JWT here for verification +
+ * persistence. The API validates against the trusted-issuer registry,
+ * verifies the signature against the issuer's JWKS, and persists on
+ * success. Returns the parsed visa summary.
+ */
+export const IngestPassportVisaRequestSchema = z.object({
+  /** Compact-form JWT. Base64url-encoded `header.payload.signature`. */
+  jwt: z.string().min(20).max(8000),
+});
+export type IngestPassportVisaRequest = z.infer<typeof IngestPassportVisaRequestSchema>;
+
+/**
+ * Public summary of one verified Visa. Surfaced on /settings/passport
+ * and on the host inbox alongside an access request.
+ */
+export interface PassportVisaSummary {
+  id: string;
+  /** Decoded visa type — see `GA4GHVisaTypeSchema` for the recognised set. */
+  visaType: string;
+  /** Issuer URL the JWT was signed by (e.g. https://login.elixir-czech.org/oidc/). */
+  issuer: string;
+  /** Human label of the issuer from the trusted-issuer registry. */
+  issuerDisplayName: string;
+  /** ISO-8601 timestamp the issuer asserted the visa. */
+  assertedAt: string;
+  /** ISO-8601 timestamp the visa expires. */
+  expiresAt: string;
+  /** ISO-8601 timestamp the platform verified + ingested. */
+  verifiedAt: string;
+  /** Decoded `ga4gh_visa_v1.value` — issuer-defined; for ResearcherStatus typically a URL or scope. */
+  value: string | null;
+  /** Decoded `ga4gh_visa_v1.source` — the asserting org. */
+  source: string | null;
+}
+
+/** `GET /v2/me/passport/visas` response. */
+export interface ListPassportVisasResponse {
+  items: PassportVisaSummary[];
+}
+
+/** Public view of a trusted issuer for admin UI / docs. */
+export interface PassportTrustedIssuerSummary {
+  id: string;
+  issuer: string;
+  displayName: string;
+  jwksUri: string | null;
+  active: boolean;
+}
+
 // ==== Click-wrap policy acceptance (#118, ADR-0003 Decision 4) ============
 //
 // SES-grade evidence for OPEN/REGISTERED tier flows. The API records

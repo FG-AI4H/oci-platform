@@ -96,12 +96,12 @@ Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116
 
 | Capability                                                                   | Status     | Tracked                                                    |
 | ---------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------- |
-| ORCID OAuth integration                                                      | 🚧 Planned | [#125](https://github.com/FG-AI4H/oci-platform/issues/125) |
-| GA4GH Passport relying party (verify Visas from ELIXIR AAI / NIH RAS / Sage) | 🚧 Planned | [#126](https://github.com/FG-AI4H/oci-platform/issues/126) |
+| ORCID OAuth integration                                                      | ✅ Live    | [#125](https://github.com/FG-AI4H/oci-platform/issues/125) |
+| GA4GH Passport relying party (verify Visas from ELIXIR AAI / NIH RAS / Sage) | ✅ Live    | [#126](https://github.com/FG-AI4H/oci-platform/issues/126) |
 | OCI as Passport issuer (JWKS endpoint, sign own Visas)                       | 🚧 Planned | [#127](https://github.com/FG-AI4H/oci-platform/issues/127) |
 | DocuSeal self-hosted on Fargate (AdES DUA signing)                           | 🚧 Planned | [#128](https://github.com/FG-AI4H/oci-platform/issues/128) |
 | DUA template engine (researcher + builder + LMIC variants)                   | 🚧 Planned | [#129](https://github.com/FG-AI4H/oci-platform/issues/129) |
-| Renewal cron (BullMQ) — 30-day pre-expiry email + auto-revoke                | 🚧 Planned | [#130](https://github.com/FG-AI4H/oci-platform/issues/130) |
+| Renewal cron (BullMQ) — 30-day pre-expiry email + auto-revoke                | ✅ Live    | [#130](https://github.com/FG-AI4H/oci-platform/issues/130) |
 
 ### Phase 3 (6–12 months, gated on demand)
 

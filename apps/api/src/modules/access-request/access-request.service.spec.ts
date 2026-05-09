@@ -43,10 +43,15 @@ interface OrcidMock {
   getMyLink: ReturnType<typeof vi.fn>;
 }
 
+interface PassportMock {
+  listActiveVisaTypesForUser: ReturnType<typeof vi.fn>;
+}
+
 let repo: RepoMock;
 let catalog: CatalogMock;
 let certification: CertificationMock;
 let orcid: OrcidMock;
+let passport: PassportMock;
 let service: AccessRequestService;
 
 beforeEach(() => {
@@ -71,11 +76,14 @@ beforeEach(() => {
   };
   // Default: no ORCID link; tests that need one override per-test.
   orcid = { getMyLink: vi.fn().mockResolvedValue(null) };
+  // Default: no Passport visas; tests that need them override per-test.
+  passport = { listActiveVisaTypesForUser: vi.fn().mockResolvedValue([]) };
   service = new AccessRequestService(
     repo as unknown as AccessRequestRepository,
     catalog as unknown as CatalogService,
     certification as unknown as import('../certification/certification.service.js').CertificationService,
     orcid as unknown as import('../orcid-link/orcid-link.service.js').OrcidLinkService,
+    passport as unknown as import('../passport/passport.service.js').PassportService,
   );
 });
 

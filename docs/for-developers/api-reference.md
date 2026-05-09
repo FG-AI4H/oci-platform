@@ -159,6 +159,38 @@ Caller's status + last 20 attempts.
 
 Response: `UserCertificationStatus` — `{ certificationType, active, passedAt, expiresAt, history: [{ attemptId, submittedAt, score, passed }] }`.
 
+## GA4GH Passport (#126)
+
+The platform is a Passport relying party — Visa JWTs from trusted
+issuers (ELIXIR AAI, NIH RAS) lift the requester's `identityScore` to
+`PASSPORT_VERIFIED`. Spec: <https://ga4gh.github.io/data-security/ga4gh-passport>.
+
+### `GET /v2/identity/passport/issuers`
+
+The active trust list. Public — no auth required.
+
+Response: `{ items: PassportTrustedIssuerSummary[] }` — `{ id, issuer, displayName, jwksUri, active }`.
+
+### `POST /v2/identity/passport/visas`
+
+Ingest a Visa JWT. The API decodes the `iss` claim, looks the issuer up in the trust list, fetches its JWKS, verifies signature + `exp` + `iss`, and persists the parsed visa. Re-ingest of the same `(user, issuer, visaType, jti)` is idempotent (updates `verifiedAt`).
+
+Body: `IngestPassportVisaRequest` — `{ jwt }` (compact-form JWT).
+
+Response (201): `PassportVisaSummary` — `{ id, visaType, issuer, issuerDisplayName, assertedAt, expiresAt, verifiedAt, value, source }`.
+
+Errors: 400 on malformed JWT / unknown issuer / verification failure.
+
+### `GET /v2/me/passport/visas`
+
+Caller's active (non-expired, non-revoked) visas.
+
+Response: `ListPassportVisasResponse` — `{ items: PassportVisaSummary[] }`.
+
+### `DELETE /v2/me/passport/visas/:id`
+
+Soft-delete (revoke) one of the caller's visas. Returns 204; audit row preserved.
+
 ## Click-wrap policy acceptances (#118)
 
 ### `POST /v2/identity/policy-acceptances`

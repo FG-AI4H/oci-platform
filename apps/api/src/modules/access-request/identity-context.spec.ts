@@ -111,6 +111,48 @@ describe('buildRequesterIdentityContext — score lift', () => {
     });
     expect(ctx.affiliation).toBeNull();
   });
+
+  it('Passport ResearcherStatus visa lifts EMAIL_ONLY → PASSPORT_VERIFIED (#126)', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: 'someone@gmail.com',
+      activeVisaTypes: ['ResearcherStatus'],
+    });
+    expect(ctx.identityScore).toBe('PASSPORT_VERIFIED');
+  });
+
+  it('Passport AffiliationAndRole visa also lifts to PASSPORT_VERIFIED', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: 'someone@gmail.com',
+      activeVisaTypes: ['AffiliationAndRole'],
+    });
+    expect(ctx.identityScore).toBe('PASSPORT_VERIFIED');
+  });
+
+  it('non-score-lifting visa types (AcceptedTermsAndPolicies) leave score at email-derived', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: 'researcher@stanford.edu',
+      activeVisaTypes: ['AcceptedTermsAndPolicies'],
+    });
+    expect(ctx.identityScore).toBe('EMAIL_DOMAIN_VERIFIED');
+  });
+
+  it('Passport visa beats every lower lift (ORCID + cert)', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: 'researcher@stanford.edu',
+      hasActiveOrcidLink: true,
+      hasActiveCertification: true,
+      activeVisaTypes: ['ResearcherStatus'],
+    });
+    expect(ctx.identityScore).toBe('PASSPORT_VERIFIED');
+  });
+
+  it('empty visa list is a no-op', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: 'researcher@stanford.edu',
+      activeVisaTypes: [],
+    });
+    expect(ctx.identityScore).toBe('EMAIL_DOMAIN_VERIFIED');
+  });
 });
 
 describe('buildRequesterIdentityContext — empty / future-PR slots', () => {
