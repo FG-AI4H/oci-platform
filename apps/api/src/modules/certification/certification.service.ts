@@ -16,12 +16,16 @@ import type {
   UserCertificationStatus,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
+import { PassportIssuerService } from '../passport-issuer/passport-issuer.service.js';
 import { CertificationRepository, type QuizAttemptRow } from './certification.repository.js';
 import { QUIZZES, type QuizDefinition } from './quiz-bank.js';
 
 @Injectable()
 export class CertificationService {
-  constructor(@Inject(CertificationRepository) private readonly repo: CertificationRepository) {}
+  constructor(
+    @Inject(CertificationRepository) private readonly repo: CertificationRepository,
+    @Inject(PassportIssuerService) private readonly passportIssuer: PassportIssuerService,
+  ) {}
 
   /** Public quiz shape for `GET /v2/certification/quizzes/:type`. */
   getDefinition(certificationType: string): QuizDefinitionPublic {
@@ -94,6 +98,27 @@ export class CertificationService {
       passed,
       answers: args.body.answers,
     });
+
+    // Auto-mint a `ResearcherStatus` Passport visa on a fresh pass
+    // (#127). Best-effort — a signing failure shouldn't block the
+    // attempt result; the user can re-trigger the visa via a future
+    // admin endpoint.
+    if (passed) {
+      try {
+        await this.passportIssuer.issueVisa({
+          userId,
+          visaType: 'ResearcherStatus',
+          value: def.certificationType,
+          source: this.passportIssuer.getIssuerUrl(),
+          validForDays: def.validityDays,
+          contextType: 'certification',
+          contextRef: def.certificationType,
+        });
+      } catch (err) {
+        // swallow; logged centrally
+        void err;
+      }
+    }
 
     return toResult(updated, def);
   }

@@ -23,7 +23,15 @@ beforeEach(() => {
     create: vi.fn(),
     listForUser: vi.fn(),
   };
-  service = new PolicyAcceptanceService(repo as unknown as PolicyAcceptanceRepository);
+  service = new PolicyAcceptanceService(
+    repo as unknown as PolicyAcceptanceRepository,
+    {
+      issueVisa: vi.fn().mockResolvedValue({}),
+      getIssuerUrl: () => 'https://oci.ai4h.net',
+      materializeJwt: vi.fn(),
+      listIssuedForUser: vi.fn(),
+    } as unknown as import('../passport-issuer/passport-issuer.service.js').PassportIssuerService,
+  );
   // Strip any KMS env so the signing path stays off in tests.
   delete process.env.OCI_KMS_SIGNING_KEY_ARN;
 });

@@ -1415,6 +1415,76 @@ export interface PassportTrustedIssuerSummary {
   active: boolean;
 }
 
+// ==== OCI as Passport issuer (#127, ADR-0003 Phase 2) =====================
+//
+// Counterpart to the relying-party module: the platform also signs
+// its own GA4GH Passport Visas for internal events:
+//   - quiz pass            → ResearcherStatus
+//   - click-wrap acceptance → AcceptedTermsAndPolicies
+//   - access approval      → ControlledAccessGrants
+//
+// Visa JWTs are minted on demand (we don't persist the signed JWT —
+// re-signing from the row is cheap and lets us rotate keys without
+// re-issuing every visa). Public keys live at /.well-known/jwks.json.
+
+/** Public-JWK shape published at `/.well-known/jwks.json`. RFC 7517. */
+export interface PublicJwk {
+  kty: 'RSA' | 'EC';
+  alg: string;
+  kid: string;
+  use: 'sig';
+  /** RSA modulus (base64url). Present when `kty === 'RSA'`. */
+  n?: string;
+  /** RSA exponent (base64url). Present when `kty === 'RSA'`. */
+  e?: string;
+  /** EC curve name. Present when `kty === 'EC'`. */
+  crv?: string;
+  /** EC X coordinate (base64url). Present when `kty === 'EC'`. */
+  x?: string;
+  /** EC Y coordinate (base64url). Present when `kty === 'EC'`. */
+  y?: string;
+}
+
+/** `GET /.well-known/jwks.json` response. RFC 7517 §5. */
+export interface JwksResponse {
+  keys: PublicJwk[];
+}
+
+/**
+ * Public summary of one OCI-issued visa held by the caller.
+ * `GET /v2/me/passport/issued` returns these. The signed JWT is
+ * regenerated on demand at `GET /v2/me/passport/issued/:id/jwt` so
+ * verifiers can be handed a fresh, currently-valid token.
+ */
+export interface IssuedPassportVisaSummary {
+  id: string;
+  visaType: string;
+  value: string;
+  source: string;
+  jti: string;
+  /** ISO-8601 timestamps. */
+  assertedAt: string;
+  expiresAt: string;
+  /** True when not revoked and not yet expired. */
+  active: boolean;
+  contextType: string | null;
+  contextRef: string | null;
+}
+
+/** `GET /v2/me/passport/issued` response. */
+export interface ListIssuedPassportVisasResponse {
+  items: IssuedPassportVisaSummary[];
+}
+
+/**
+ * `GET /v2/me/passport/issued/:id/jwt` response — a freshly-signed
+ * JWT for the row. The JWT is short-lived (matches `expiresAt` on
+ * the row) so the caller can present it to an external verifier.
+ */
+export interface IssuedPassportVisaJwt {
+  jwt: string;
+}
+
 // ==== Click-wrap policy acceptance (#118, ADR-0003 Decision 4) ============
 //
 // SES-grade evidence for OPEN/REGISTERED tier flows. The API records

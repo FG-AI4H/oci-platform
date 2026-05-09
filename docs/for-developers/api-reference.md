@@ -191,6 +191,40 @@ Response: `ListPassportVisasResponse` — `{ items: PassportVisaSummary[] }`.
 
 Soft-delete (revoke) one of the caller's visas. Returns 204; audit row preserved.
 
+## OCI as Passport issuer (#127)
+
+Counterpart to the relying-party module — the platform also signs its own GA4GH Visas for internal events. JWTs are minted on demand and verified against the platform's JWKS.
+
+Auto-mint hooks (no caller-driven endpoint needed):
+
+- Quiz pass → `ResearcherStatus` (validity matches `OCI_QUIZ_VALIDITY_DAYS`).
+- Click-wrap policy acceptance → `AcceptedTermsAndPolicies` (5-year long-lived).
+- Access-request approval → `ControlledAccessGrants` (1-year, mirrors AR expiry).
+
+### `GET /.well-known/jwks.json`
+
+RFC 7517 — public JWKS so external verifiers can validate visas signed by the platform. Returns `{ keys: PublicJwk[] }`. Mounted at the well-known prefix per JOSE convention.
+
+### `GET /v2/me/passport/issued`
+
+Caller's OCI-issued visa rows. Includes both active and expired (so the user can see what was issued historically).
+
+Response: `ListIssuedPassportVisasResponse` — `{ items: IssuedPassportVisaSummary[] }` with `active` flag.
+
+### `GET /v2/me/passport/issued/:id/jwt`
+
+Materialise a freshly-signed JWT for the row. The JWT is short-lived (matches `expiresAt`) so the caller can present it to an external verifier (e.g. another GA4GH-aware platform).
+
+Response: `IssuedPassportVisaJwt` — `{ jwt }`.
+
+Errors: 404 when the visa is missing, revoked, or past expiry.
+
+### Signing-key configuration
+
+Production: provision an AWS KMS RSA-2048 key (`RSASSA_PKCS1_V1_5_SHA_256`) and seed `passport_signing_keys` with the ARN before boot. Operator runbook in [`docs/runbooks/passport-issuer.md`](../runbooks/passport-issuer.md) (TBD).
+
+Dev: an ephemeral RSA keypair is generated on first boot when no ACTIVE row exists. Refused when `NODE_ENV=production`.
+
 ## Click-wrap policy acceptances (#118)
 
 ### `POST /v2/identity/policy-acceptances`

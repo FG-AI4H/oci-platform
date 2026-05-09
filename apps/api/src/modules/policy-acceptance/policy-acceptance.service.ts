@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { ForbiddenException, Inject, Injectable, Logger } from '@nestjs/common';
 import type { PolicyAcceptanceReceipt, RecordPolicyAcceptanceRequest } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
+import { PassportIssuerService } from '../passport-issuer/passport-issuer.service.js';
 import { PolicyAcceptanceRepository, toReceipt } from './policy-acceptance.repository.js';
 import { signAcceptanceReceipt } from './kms-signer.js';
 
@@ -28,6 +29,7 @@ export class PolicyAcceptanceService {
 
   constructor(
     @Inject(PolicyAcceptanceRepository) private readonly repo: PolicyAcceptanceRepository,
+    @Inject(PassportIssuerService) private readonly passportIssuer: PassportIssuerService,
   ) {}
 
   async record(
@@ -54,6 +56,27 @@ export class PolicyAcceptanceService {
       receiptSignature: null,
       receiptKeyId: null,
     });
+
+    // Auto-mint an `AcceptedTermsAndPolicies` Passport visa (#127).
+    // Best-effort — a signing failure shouldn't block the acceptance
+    // event; the receipt remains the legally-binding artefact under SES.
+    try {
+      await this.passportIssuer.issueVisa({
+        userId,
+        visaType: 'AcceptedTermsAndPolicies',
+        value: body.policyUrl,
+        source: this.passportIssuer.getIssuerUrl(),
+        validForDays: 365 * 5, // long-lived; acceptance doesn't expire
+        contextType: 'policy_acceptance',
+        contextRef: created.id,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Auto-mint AcceptedTermsAndPolicies visa failed for acceptance ${created.id}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
 
     // Try to sign. The canonical input shape MUST stay deterministic
     // — verifiers reconstruct it from the `PolicyAcceptanceReceipt`

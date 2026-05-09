@@ -36,7 +36,15 @@ beforeEach(() => {
     listForUser: vi.fn(),
     findActiveCertification: vi.fn(),
   };
-  service = new CertificationService(repo as unknown as CertificationRepository);
+  service = new CertificationService(
+    repo as unknown as CertificationRepository,
+    {
+      issueVisa: vi.fn().mockResolvedValue({}),
+      getIssuerUrl: () => 'https://oci.ai4h.net',
+      materializeJwt: vi.fn(),
+      listIssuedForUser: vi.fn(),
+    } as unknown as import('../passport-issuer/passport-issuer.service.js').PassportIssuerService,
+  );
 });
 
 describe('CertificationService.getDefinition', () => {
