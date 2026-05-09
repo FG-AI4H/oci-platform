@@ -92,6 +92,96 @@ model UserOrcidLink {
   @@schema("identity")
 }
 
+/// GA4GH Passport trusted issuer registry (#126, ADR-0003 Phase 2).
+/// Admin-managed allowlist of issuer URLs the platform will accept
+/// Visa JWTs from. Each issuer publishes a JWKS at
+/// `<issuer>/.well-known/jwks.json` (or the path declared in their
+/// OIDC discovery doc); the verifier fetches + caches keys lazily.
+///
+/// Trust roots seeded at deploy time (per `docs/passport-trust-list.md`):
+///   - https://login.elixir-czech.org/oidc/   (ELIXIR AAI — bioscience federation)
+///   - https://stsstg.nih.gov/                 (NIH RAS — researcher authentication)
+///
+/// Disabling an issuer doesn't delete past visas; their `verified` state
+/// is recomputed at next ingest. `revokedAt` is admin-set: a hard kill
+/// switch when an issuer is compromised — visas signed by that issuer
+/// fail verification regardless of expiry.
+model PassportTrustedIssuer {
+  id          String    @id @default(uuid()) @db.Uuid
+  /// Issuer URL — stable identifier from the `iss` JWT claim. Must end
+  /// without trailing slash to match the JWT claim verbatim.
+  issuer      String    @unique
+  /// Human label shown in the host inbox alongside ingested visas
+  /// (e.g. "ELIXIR AAI", "NIH RAS").
+  displayName String    @map("display_name")
+  /// Optional override for the JWKS URI. When null, the verifier
+  /// derives `<issuer>/.well-known/jwks.json` (Passport spec default).
+  jwksUri     String?   @map("jwks_uri")
+  /// Set when the issuer is taken out of trust — visas signed by
+  /// this issuer will fail verification. Audit history preserved.
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("passport_trusted_issuers")
+  @@schema("identity")
+}
+
+/// Verified GA4GH Visa (#126, ADR-0003 Phase 2). One row per
+/// (user, issuer, visaType, jti). The same user might hold a
+/// `ResearcherStatus` from ELIXIR and an `AffiliationAndRole` from
+/// NIH — both rows persist independently.
+///
+/// `userId` is a soft FK → identity.users.id (UUIDv5 from Cognito sub
+/// via subToUuid; same convention as other identity-schema rows).
+///
+/// Verification is performed at ingest: the JWT is validated against
+/// the issuer's JWKS (signature + iss + exp + nbf) and the trusted-
+/// issuer registry. Stored only on success.
+///
+/// `payload` carries the decoded `ga4gh_visa_v1` claim verbatim
+/// (`{ type, asserted, value, source, by? }`) for audit. The shape is
+/// fixed by the GA4GH spec; we don't normalise its sub-fields beyond
+/// extracting `visaType` for the index.
+///
+/// `expiresAt` mirrors the JWT `exp` claim. Identity-context queries
+/// filter by `expiresAt > now()` so expired visas drop off without
+/// requiring a delete pass.
+///
+/// `revokedAt` is set when the user explicitly removes a visa via
+/// `/me/passport/visas/:id` DELETE; soft-delete preserves the audit
+/// trail (regulators can still see what was once verified).
+model UserPassportVisa {
+  id         String    @id @default(uuid()) @db.Uuid
+  /// Soft FK → identity.users.id.
+  userId     String    @map("user_id") @db.Uuid
+  /// Trusted issuer URL the JWT was signed by — `iss` claim.
+  issuer     String
+  /// GA4GH Visa type — typically one of: `ResearcherStatus`,
+  /// `AffiliationAndRole`, `AcceptedTermsAndPolicies`,
+  /// `ControlledAccessGrants`, `LinkedIdentities`.
+  visaType   String    @map("visa_type")
+  /// JWT `jti` (or generated id when issuer omits it). Used to
+  /// detect re-ingest of the same visa idempotently.
+  jti        String
+  /// Decoded `ga4gh_visa_v1` claim — shape: `{ type, asserted, value, source, by? }`.
+  payload    Json
+  /// JWT `iat` claim — when the issuer asserted.
+  assertedAt DateTime  @map("asserted_at")
+  /// JWT `exp` claim — when the visa stops being trusted.
+  expiresAt  DateTime  @map("expires_at")
+  /// Server-side timestamp of successful verification + ingest.
+  verifiedAt DateTime  @default(now()) @map("verified_at")
+  /// Soft-delete: user-initiated removal. Preserves audit trail.
+  revokedAt  DateTime? @map("revoked_at")
+
+  @@unique([userId, issuer, visaType, jti])
+  @@index([userId, expiresAt])
+  @@index([visaType])
+  @@map("user_passport_visas")
+  @@schema("identity")
+}
+
 /// Certification quiz attempt (#117, ADR-0003 Phase 1). One row per
 /// attempt. An attempt is a unit of: requester opens the quiz, picks
 /// answers, submits. We store every attempt — including failed ones —

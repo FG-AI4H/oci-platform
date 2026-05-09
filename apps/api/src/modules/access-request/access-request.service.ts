@@ -21,6 +21,7 @@ import { CatalogService } from '../catalog/catalog.service.js';
 import { CertificationService } from '../certification/certification.service.js';
 import { ACTIVE_QUIZ_TYPE } from '../certification/quiz-bank.js';
 import { OrcidLinkService } from '../orcid-link/orcid-link.service.js';
+import { PassportService } from '../passport/passport.service.js';
 import { AccessRequestRepository } from './access-request.repository.js';
 import { matchDuoIntent } from './duo-matcher.js';
 import { buildRequesterIdentityContext, extractRequesterEmail } from './identity-context.js';
@@ -53,6 +54,7 @@ export class AccessRequestService {
     @Inject(CatalogService) private readonly catalog: CatalogService,
     @Inject(CertificationService) private readonly certification: CertificationService,
     @Inject(OrcidLinkService) private readonly orcid: OrcidLinkService,
+    @Inject(PassportService) private readonly passport: PassportService,
   ) {}
 
   async create(
@@ -102,12 +104,19 @@ export class AccessRequestService {
     } catch {
       // swallow; conservative default already in place
     }
+    let activeVisaTypes: readonly string[] = [];
+    try {
+      activeVisaTypes = await this.passport.listActiveVisaTypesForUser(user);
+    } catch {
+      // swallow; conservative default already in place
+    }
     const identityContext = buildRequesterIdentityContext({
       email: extractRequesterEmail(user as unknown as { sub?: string; email?: string }),
       datasetEmailDomainAllowlist: target.emailDomainAllowlist,
       hasActiveCertification,
       hasActiveOrcidLink,
       orcidAffiliation,
+      activeVisaTypes,
     });
 
     // Auto-match the requester's intended use against the dataset's
