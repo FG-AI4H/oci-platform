@@ -84,6 +84,12 @@ beforeEach(() => {
     certification as unknown as import('../certification/certification.service.js').CertificationService,
     orcid as unknown as import('../orcid-link/orcid-link.service.js').OrcidLinkService,
     passport as unknown as import('../passport/passport.service.js').PassportService,
+    {
+      issueVisa: vi.fn().mockResolvedValue({}),
+      getIssuerUrl: () => 'https://oci.ai4h.net',
+      materializeJwt: vi.fn(),
+      listIssuedForUser: vi.fn(),
+    } as unknown as import('../passport-issuer/passport-issuer.service.js').PassportIssuerService,
   );
 });
 

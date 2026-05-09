@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../auth/auth.module.js';
 import { PrismaService } from '../../prisma.service.js';
+import { PassportIssuerModule } from '../passport-issuer/passport-issuer.module.js';
 import { CertificationController, MyCertificationsController } from './certification.controller.js';
 import { CertificationRepository } from './certification.repository.js';
 import { CertificationService } from './certification.service.js';
@@ -17,7 +18,7 @@ import { CertificationService } from './certification.service.js';
  * cert?" — wired in a future PR (see PR description).
  */
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, PassportIssuerModule],
   controllers: [CertificationController, MyCertificationsController],
   providers: [PrismaService, CertificationService, CertificationRepository],
   exports: [CertificationService],

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../auth/auth.module.js';
 import { PrismaService } from '../../prisma.service.js';
+import { PassportIssuerModule } from '../passport-issuer/passport-issuer.module.js';
 import {
   MyPolicyAcceptancesController,
   PolicyAcceptanceController,
@@ -18,7 +19,7 @@ import { PolicyAcceptanceService } from './policy-acceptance.service.js';
  * alone (legally sufficient under SES) is the binding artifact.
  */
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, PassportIssuerModule],
   controllers: [PolicyAcceptanceController, MyPolicyAcceptancesController],
   providers: [PrismaService, PolicyAcceptanceService, PolicyAcceptanceRepository],
   exports: [PolicyAcceptanceService],
