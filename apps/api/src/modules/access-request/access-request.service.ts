@@ -21,6 +21,7 @@ import { CatalogService } from '../catalog/catalog.service.js';
 import { CertificationService } from '../certification/certification.service.js';
 import { ACTIVE_QUIZ_TYPE } from '../certification/quiz-bank.js';
 import { OrcidLinkService } from '../orcid-link/orcid-link.service.js';
+import { PassportIssuerService } from '../passport-issuer/passport-issuer.service.js';
 import { PassportService } from '../passport/passport.service.js';
 import { AccessRequestRepository } from './access-request.repository.js';
 import { matchDuoIntent } from './duo-matcher.js';
@@ -55,6 +56,7 @@ export class AccessRequestService {
     @Inject(CertificationService) private readonly certification: CertificationService,
     @Inject(OrcidLinkService) private readonly orcid: OrcidLinkService,
     @Inject(PassportService) private readonly passport: PassportService,
+    @Inject(PassportIssuerService) private readonly passportIssuer: PassportIssuerService,
   ) {}
 
   async create(
@@ -237,6 +239,29 @@ export class AccessRequestService {
       decidedById: userId,
       decisionNote: body.decisionNote ?? null,
     });
+
+    // Auto-mint a ControlledAccessGrants Passport visa on APPROVED
+    // (#127). Best-effort — bookkeeping shouldn't block the decision.
+    // The visa value is the dataset slug so external verifiers can
+    // map back to the canonical record.
+    if (body.status === 'APPROVED') {
+      try {
+        await this.passportIssuer.issueVisa({
+          userId: row.requesterId,
+          visaType: 'ControlledAccessGrants',
+          value: row.dataset.slug,
+          source: this.passportIssuer.getIssuerUrl(),
+          // Mirror the access-request expiry (1y default; renewal
+          // cron runs at 30d pre-expiry per #130).
+          validForDays: 365,
+          contextType: 'access_request',
+          contextRef: id,
+        });
+      } catch (err) {
+        // swallow — surfaced via logger inside the issuer service
+        void err;
+      }
+    }
   }
 }
 

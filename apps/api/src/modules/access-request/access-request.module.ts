@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma.service.js';
 import { CatalogModule } from '../catalog/catalog.module.js';
 import { CertificationModule } from '../certification/certification.module.js';
 import { OrcidLinkModule } from '../orcid-link/orcid-link.module.js';
+import { PassportIssuerModule } from '../passport-issuer/passport-issuer.module.js';
 import { PassportModule } from '../passport/passport.module.js';
 import { AccessRequestController } from './access-request.controller.js';
 import { AccessRequestRepository } from './access-request.repository.js';
@@ -21,7 +22,14 @@ import { AccessRequestService } from './access-request.service.js';
  * lift, and PassportModule (#126) for the PASSPORT_VERIFIED lift.
  */
 @Module({
-  imports: [AuthModule, CatalogModule, CertificationModule, OrcidLinkModule, PassportModule],
+  imports: [
+    AuthModule,
+    CatalogModule,
+    CertificationModule,
+    OrcidLinkModule,
+    PassportModule,
+    PassportIssuerModule,
+  ],
   controllers: [AccessRequestController],
   providers: [PrismaService, AccessRequestService, AccessRequestRepository],
   exports: [AccessRequestService],

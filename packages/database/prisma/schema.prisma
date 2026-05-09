@@ -182,6 +182,109 @@ model UserPassportVisa {
   @@schema("identity")
 }
 
+/// Visas issued by THIS platform (#127, ADR-0003 Phase 2). One row per
+/// visa minted for a user — `AcceptedTermsAndPolicies` on click-wrap,
+/// `ResearcherStatus` on quiz pass, `ControlledAccessGrants` on AR
+/// approval. The signed JWT is regenerable on demand from the row +
+/// the active signing key, so we don't persist the JWT itself —
+/// callers fetch a fresh JWT via the issued-visas endpoint.
+///
+/// `kid` records which signing key produced the visa so a verifier
+/// (us or anyone else fetching `/.well-known/jwks.json`) can
+/// disambiguate when key rotation overlaps active visas.
+///
+/// Why a separate table from `user_passport_visas`: the relying-party
+/// table holds *external* visas we ingested and verified; this table
+/// holds *internal* visas we issued. A self-loop where we ingest our
+/// own visas would be circular — internal visas are surfaced directly
+/// from this table on the identity-context lift path.
+model IssuedPassportVisa {
+  id          String    @id @default(uuid()) @db.Uuid
+  /// Soft FK → identity.users.id (UUIDv5 from Cognito sub via subToUuid).
+  userId      String    @map("user_id") @db.Uuid
+  /// Visa type — one of: ResearcherStatus, AffiliationAndRole,
+  /// AcceptedTermsAndPolicies, ControlledAccessGrants. Strictly the
+  /// GA4GH-spec set; custom types (`BuilderStatus`) require an
+  /// extension proposal first per ADR-0003 Phase 3.
+  visaType    String    @map("visa_type")
+  /// `value` field of the `ga4gh_visa_v1` claim — issuer-defined.
+  /// For ResearcherStatus: the certification slug (`data_ethics_v1`).
+  /// For ControlledAccessGrants: the dataset slug or DOI.
+  /// For AcceptedTermsAndPolicies: the policy URL.
+  value       String
+  /// `source` of the assertion — typically the OCI issuer URL.
+  source      String
+  /// JWT id — generated at mint time. Stable across re-issuance of
+  /// the same logical visa (e.g. if we re-mint with a new key the
+  /// jti stays so verifiers can dedupe).
+  jti         String    @unique
+  /// Key id of the signing key used at mint time. References
+  /// `passport_signing_keys.kid`.
+  kid         String
+  /// JWT `iat` — when we asserted.
+  assertedAt  DateTime  @map("asserted_at")
+  /// JWT `exp` — when verifiers should stop trusting.
+  expiresAt   DateTime  @map("expires_at")
+  /// Soft-delete: admin-side revocation (e.g. ToU breach). Visa fails
+  /// verification once set; the verifier checks the issued-visa
+  /// table before trusting our own signatures.
+  revokedAt   DateTime? @map("revoked_at")
+  /// Optional foreign reference for audit. e.g.
+  /// `(contextType=access_request, contextRef=<request id>)`.
+  contextType String?   @map("context_type")
+  contextRef  String?   @map("context_ref")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, visaType, expiresAt])
+  @@index([contextType, contextRef])
+  @@map("issued_passport_visas")
+  @@schema("identity")
+}
+
+/// Passport signing key registry (#127, ADR-0003 Phase 2). Tracks
+/// the signing keys the platform uses to mint visas. The `kid` is
+/// published in the JWKS endpoint so verifiers can pick the right
+/// public key.
+///
+/// Two activation modes (mutually exclusive — set one of):
+///   - KMS: `kmsKeyArn` set; the server signs via `KMS:Sign`.
+///   - Local-dev: `privateKeyPem` set; in-memory signing only.
+///                Operators must NOT use this in prod; the env-loader
+///                refuses to enable local-dev signing when NODE_ENV=production.
+///
+/// `publicJwk` is the spec-shape JWK (`{ kty, n, e, alg, kid, use }`).
+/// Cached on the row so the JWKS endpoint doesn't hit KMS on every
+/// request. Refreshed when the row is rotated.
+///
+/// Status lifecycle: ACTIVE → RETIRED. Retired keys stay in the JWKS
+/// for one rotation window so previously-minted visas keep verifying
+/// until they expire. `archivedAt` deletes from JWKS at the next
+/// pickup.
+model PassportSigningKey {
+  /// Key id — opaque short string used in JWT header. Generated at
+  /// rotate-time. e.g. `oci-issuer-2026-05-09`.
+  kid           String    @id
+  /// JWS algorithm — one of: RS256, ES256. RS256 is the default for
+  /// KMS RSA keys (`RSASSA_PKCS1_V1_5_SHA_256`).
+  alg           String
+  /// AWS KMS key ARN. Mutually exclusive with `privateKeyPem`.
+  kmsKeyArn     String?   @map("kms_key_arn")
+  /// Local-dev private key PEM. Refused in production. Mutually
+  /// exclusive with `kmsKeyArn`.
+  privateKeyPem String?   @map("private_key_pem")
+  /// JWK shape `{ kty, n, e, alg, kid, use:'sig' }` — published.
+  publicJwk     Json      @map("public_jwk")
+  /// ACTIVE keys are used for new signs; RETIRED keys stay in JWKS
+  /// until `archivedAt`.
+  status        String    @default("ACTIVE")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  retiredAt     DateTime? @map("retired_at")
+  archivedAt    DateTime? @map("archived_at")
+
+  @@map("passport_signing_keys")
+  @@schema("identity")
+}
+
 /// Certification quiz attempt (#117, ADR-0003 Phase 1). One row per
 /// attempt. An attempt is a unit of: requester opens the quiz, picks
 /// answers, submits. We store every attempt — including failed ones —
