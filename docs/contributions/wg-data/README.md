@@ -6,7 +6,7 @@ Documents here are **discussion contributions** — not formal deliverables. The
 
 ## Convention
 
-- **Filename**: `YYYY-MM-DD-<short-slug>.docx`. Date is the contribution date, not the meeting date.
+- **Filename**: `<DOC-NUMBER> — <Short title> — <YYYY-MM-DD>.docx`. Single canonical name for both the repo file and the email attachment, so what colleagues see in their inbox is exactly what's archived. Em-dashes (`—`, U+2014) separate the three segments. Example: `GI-AI4H-WGD-OCI-001 — BuilderStatus Visa proposal — 2026-05-09.docx`.
 - **Format**: produced by the [`oci-giai4h-contribution-doc`](../../../.claude/skills/oci-giai4h-contribution-doc/) skill via its `scripts/generate.py`. The script is the template — there is no `.docx` template file. The output is a clean, code-defined design (paragraph-based cover, accent-coloured headings, no legacy ITU-T tables).
 - **Page 2** (an official-deliverable inside cover with masthead, editors, contributors) is **not produced** by the generator. Discussion contributions only. Formal deliverables would require extending the generator.
 - **Source** field on the cover names "OCI Platform team" plus the lead editor.
@@ -15,9 +15,9 @@ Documents here are **discussion contributions** — not formal deliverables. The
 
 ## Contents
 
-| Date       | Title                                                                                                                                        | Track                                      |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| 2026-05-09 | [BuilderStatus — Proposed Visa Type extension to GA4GH Passport for AI builder accreditation](./2026-05-09-builderstatus-visa-proposal.docx) | OCI access governance → GA4GH WG-Data DURI |
+| Date       | Title                                                                                                                                                                  | Track                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| 2026-05-09 | [BuilderStatus — Proposed Visa Type extension to GA4GH Passport for AI builder accreditation](<./GI-AI4H-WGD-OCI-001 — BuilderStatus Visa proposal — 2026-05-09.docx>) | OCI access governance → GA4GH WG-Data DURI |
 
 ## How a contribution lands here
 
