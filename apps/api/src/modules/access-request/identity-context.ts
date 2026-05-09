@@ -51,6 +51,21 @@ export interface BuildRequesterIdentityContextInput {
    * passes the result here; the normalizer remains pure.
    */
   hasActiveCertification?: boolean;
+  /**
+   * Active ORCID iD link (#125). When `true`, the score lifts to
+   * `ORCID_LINKED` (rank 2) — but only when no higher signal is
+   * already in play (e.g. a quiz pass already at QUIZ_PASSED rank 3).
+   * The lift composes with the email lift: an institutional email
+   * (`EMAIL_DOMAIN_VERIFIED`, rank 1) + ORCID link → `ORCID_LINKED`.
+   */
+  hasActiveOrcidLink?: boolean;
+  /**
+   * Optional affiliation derived from the ORCID employment record
+   * (#125). When present, populates `RequesterIdentityContext.affiliation`
+   * with `source: 'orcid'`. Surfaces on the host inbox as a verified
+   * institutional binding.
+   */
+  orcidAffiliation?: string | null;
 }
 
 /**
@@ -88,6 +103,16 @@ export function buildRequesterIdentityContext(
   const emailDomainCategory: EmailDomainCategory = classification?.category ?? 'public';
   let identityScore: RequesterIdentityScore = scoreFromCategory(emailDomainCategory);
 
+  // ORCID lift (#125). Active link raises the score to ORCID_LINKED
+  // (rank 2) when nothing higher already applies. Composes with the
+  // email lift naturally — domain-verified + ORCID = ORCID_LINKED.
+  if (input.hasActiveOrcidLink) {
+    /* eslint-disable-next-line security/detect-object-injection -- typed enum keys */
+    if (REQUESTER_IDENTITY_SCORE_RANK[identityScore] < REQUESTER_IDENTITY_SCORE_RANK.ORCID_LINKED) {
+      identityScore = 'ORCID_LINKED';
+    }
+  }
+
   // Quiz lift (#117). An active certification raises the score to
   // QUIZ_PASSED — but only if it wouldn't *demote*. PI_COUNTERSIGNED
   // and PASSPORT_VERIFIED already exceed QUIZ_PASSED in rank; if a
@@ -104,7 +129,9 @@ export function buildRequesterIdentityContext(
   return {
     identityScore,
     visas: [],
-    affiliation: null,
+    affiliation: input.orcidAffiliation
+      ? { institution: input.orcidAffiliation, role: 'self', source: 'orcid' }
+      : null,
     emailDomainCategory,
     acceptedPolicies: [],
   };
