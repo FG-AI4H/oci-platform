@@ -39,9 +39,14 @@ interface CertificationMock {
   listOwnStatus: ReturnType<typeof vi.fn>;
 }
 
+interface OrcidMock {
+  getMyLink: ReturnType<typeof vi.fn>;
+}
+
 let repo: RepoMock;
 let catalog: CatalogMock;
 let certification: CertificationMock;
+let orcid: OrcidMock;
 let service: AccessRequestService;
 
 beforeEach(() => {
@@ -64,10 +69,13 @@ beforeEach(() => {
       history: [],
     }),
   };
+  // Default: no ORCID link; tests that need one override per-test.
+  orcid = { getMyLink: vi.fn().mockResolvedValue(null) };
   service = new AccessRequestService(
     repo as unknown as AccessRequestRepository,
     catalog as unknown as CatalogService,
     certification as unknown as import('../certification/certification.service.js').CertificationService,
+    orcid as unknown as import('../orcid-link/orcid-link.service.js').OrcidLinkService,
   );
 });
 
@@ -254,6 +262,43 @@ describe('AccessRequestService.create', () => {
     const out = await service.create('rsna', validBody, user(REQUESTER_SUB));
     expect(out.requesterIdentityScore).toBe('QUIZ_PASSED');
     // CONTROLLED tier requires QUIZ_PASSED — score now meets it, so no tier conflict.
+    expect(out.matchStatus).toBe('MATCHED');
+  });
+
+  it('lifts requester score to ORCID_LINKED when an ORCID link exists (#125)', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: ['DUO_0000042'],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
+    });
+    orcid.getMyLink.mockResolvedValue({
+      orcidId: '0000-0001-2345-6789',
+      fullName: 'Researcher Person',
+      primaryEmail: null,
+      affiliation: 'University of Geneva',
+      verifiedAt: new Date('2026-04-01').toISOString(),
+      publicUrl: 'https://orcid.org/0000-0001-2345-6789',
+    });
+    repo.create.mockResolvedValue({ id: REQUEST_ID });
+    const out = await service.create('rsna', validBody, user(REQUESTER_SUB));
+    expect(out.requesterIdentityScore).toBe('ORCID_LINKED');
+    expect(out.matchStatus).toBe('MATCHED');
+  });
+
+  it('ORCID lookup failure is non-fatal — score stays at the email-derived value', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: ['DUO_0000042'],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
+    });
+    orcid.getMyLink.mockRejectedValue(new Error('orcid service unavailable'));
+    repo.create.mockResolvedValue({ id: REQUEST_ID });
+    const out = await service.create('rsna', validBody, user(REQUESTER_SUB));
+    expect(out.requesterIdentityScore).toBe('EMAIL_ONLY');
     expect(out.matchStatus).toBe('MATCHED');
   });
 

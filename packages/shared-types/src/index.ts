@@ -1281,6 +1281,56 @@ export interface UserCertificationStatus {
   }>;
 }
 
+// ==== ORCID iD link (#125, ADR-0003 Phase 2) ==============================
+//
+// Verified scholarly identifier. The OAuth dance is started on the API
+// (`GET /v2/identity/orcid/authorize`) and finishes via the web's
+// `/orcid/callback` route, which posts the code back to the API. The
+// platform stores a thin link summary; tokens aren't persisted because
+// we use `/authenticate` scope only.
+
+/**
+ * Canonical ORCID iD format — 16 digits in groups of 4 separated by
+ * hyphens. The 16th character may also be 'X' (a checksum digit).
+ * Validated server-side; the form-side only renders / displays.
+ */
+export const OrcidIdSchema = z
+  .string()
+  .regex(/^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/, 'expected ORCID iD format 0000-0000-0000-0000');
+export type OrcidId = z.infer<typeof OrcidIdSchema>;
+
+/** `GET /v2/identity/orcid/authorize` response — where to redirect the user. */
+export interface OrcidAuthorizeResponse {
+  /** Full ORCID OAuth authorize URL (with client_id, scope, redirect_uri, state). */
+  authorizeUrl: string;
+  /** Opaque state value the API expects on the callback. The web stores it briefly to validate the redirect. */
+  state: string;
+}
+
+/** `POST /v2/identity/orcid/callback` request body. */
+export const OrcidCallbackRequestSchema = z.object({
+  /** OAuth authorization code from the ORCID redirect. */
+  code: z.string().min(1).max(2000),
+  /** Opaque state echoed back by ORCID; must match the one issued on authorize. */
+  state: z.string().min(1).max(200),
+});
+export type OrcidCallbackRequest = z.infer<typeof OrcidCallbackRequestSchema>;
+
+/**
+ * Public summary of a user's linked ORCID. `GET /v2/me/orcid` returns
+ * this (or null when not linked). Surfaced on /settings.
+ */
+export interface OrcidLinkSummary {
+  orcidId: OrcidId;
+  fullName: string | null;
+  primaryEmail: string | null;
+  affiliation: string | null;
+  /** ISO-8601 timestamp the link was first established or last refreshed. */
+  verifiedAt: string;
+  /** Convenience — `https://orcid.org/<orcidId>`. */
+  publicUrl: string;
+}
+
 // ==== Click-wrap policy acceptance (#118, ADR-0003 Decision 4) ============
 //
 // SES-grade evidence for OPEN/REGISTERED tier flows. The API records
