@@ -66,7 +66,19 @@ export interface BuildRequesterIdentityContextInput {
    * institutional binding.
    */
   orcidAffiliation?: string | null;
+  /**
+   * Active GA4GH Passport visa types held by the requester (#126).
+   * `ResearcherStatus` and `AffiliationAndRole` lift the score to
+   * `PASSPORT_VERIFIED` (rank 5 — top of the ladder) per ADR-0003
+   * Decision 3. Other types (`AcceptedTermsAndPolicies`,
+   * `ControlledAccessGrants`, `LinkedIdentities`) are stored but
+   * don't lift the score on their own.
+   */
+  activeVisaTypes?: readonly string[];
 }
+
+/** Visa types that lift the score to `PASSPORT_VERIFIED` (#126). */
+const SCORE_LIFTING_VISA_TYPES = new Set(['ResearcherStatus', 'AffiliationAndRole']);
 
 /**
  * Build the context. Pure, synchronous; no DB or network IO.
@@ -123,6 +135,19 @@ export function buildRequesterIdentityContext(
     const have = REQUESTER_IDENTITY_SCORE_RANK[identityScore];
     if (have < REQUESTER_IDENTITY_SCORE_RANK.QUIZ_PASSED) {
       identityScore = 'QUIZ_PASSED';
+    }
+  }
+
+  // Passport lift (#126). A verified ResearcherStatus or
+  // AffiliationAndRole visa lifts the score to PASSPORT_VERIFIED —
+  // top of the ladder. Multiple lifts compose monotonically; we only
+  // raise, never lower.
+  const visaLift = (input.activeVisaTypes ?? []).some((t) => SCORE_LIFTING_VISA_TYPES.has(t));
+  if (visaLift) {
+    // eslint-disable-next-line security/detect-object-injection -- typed enum keys
+    const have = REQUESTER_IDENTITY_SCORE_RANK[identityScore];
+    if (have < REQUESTER_IDENTITY_SCORE_RANK.PASSPORT_VERIFIED) {
+      identityScore = 'PASSPORT_VERIFIED';
     }
   }
 
