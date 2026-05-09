@@ -65,6 +65,52 @@ describe('buildRequesterIdentityContext — score lift', () => {
     });
     expect(ctx.identityScore).toBe('EMAIL_DOMAIN_VERIFIED');
   });
+
+  it('active ORCID link lifts EMAIL_ONLY → ORCID_LINKED (#125)', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: 'someone@gmail.com',
+      hasActiveOrcidLink: true,
+    });
+    expect(ctx.identityScore).toBe('ORCID_LINKED');
+  });
+
+  it('active ORCID link lifts EMAIL_DOMAIN_VERIFIED → ORCID_LINKED', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: 'researcher@stanford.edu',
+      hasActiveOrcidLink: true,
+    });
+    expect(ctx.identityScore).toBe('ORCID_LINKED');
+  });
+
+  it('quiz pass beats ORCID link when both are present (QUIZ_PASSED > ORCID_LINKED)', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: 'someone@gmail.com',
+      hasActiveOrcidLink: true,
+      hasActiveCertification: true,
+    });
+    expect(ctx.identityScore).toBe('QUIZ_PASSED');
+  });
+
+  it('ORCID affiliation populates the context as source=orcid', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: null,
+      hasActiveOrcidLink: true,
+      orcidAffiliation: 'University of Geneva',
+    });
+    expect(ctx.affiliation).toEqual({
+      institution: 'University of Geneva',
+      role: 'self',
+      source: 'orcid',
+    });
+  });
+
+  it('ORCID link without orcidAffiliation leaves affiliation null', () => {
+    const ctx = buildRequesterIdentityContext({
+      email: null,
+      hasActiveOrcidLink: true,
+    });
+    expect(ctx.affiliation).toBeNull();
+  });
 });
 
 describe('buildRequesterIdentityContext — empty / future-PR slots', () => {

@@ -46,6 +46,52 @@ model UserPreferences {
   @@schema("identity")
 }
 
+/// Verified ORCID iD link (#125, ADR-0003 Phase 2). One row per user
+/// — a Cognito identity has at most one linked ORCID. Re-linking
+/// (different ORCID iD on the same account) updates the row in place.
+///
+/// `userId` is a soft FK → identity.users.id (UUIDv5 from Cognito sub
+/// via subToUuid; same convention as other identity-schema rows).
+///
+/// `orcidId` is the canonical 16-digit form (e.g. `0000-0001-2345-6789`)
+/// — that's the format ORCID returns in its OAuth `id_token`. Stored
+/// without protocol prefix so `https://orcid.org/<id>` is reconstructed
+/// at render time.
+///
+/// Identity-context normalizer reads `userId` to lift the score to
+/// `ORCID_LINKED` when present (rank 2 — between EMAIL_DOMAIN_VERIFIED
+/// and QUIZ_PASSED).
+///
+/// Storage hygiene: we deliberately DON'T persist the OAuth tokens.
+/// The platform uses `/authenticate` scope only — the token is a
+/// proof-of-link at consent time and isn't needed afterward. Skipping
+/// it removes a credential-rotation surface and reduces blast radius
+/// on a hypothetical breach.
+model UserOrcidLink {
+  /// Soft FK → identity.users.id; primary key here so a user has at
+  /// most one ORCID link (uniqueness enforced by PK).
+  userId       String   @id @map("user_id") @db.Uuid
+  /// 16-digit ORCID iD with hyphens — `0000-0001-2345-6789`.
+  orcidId      String   @unique @map("orcid_id")
+  /// Display name as ORCID returned it. Free-form; not authoritative
+  /// for any access-control decision.
+  fullName     String?  @map("full_name")
+  /// Verified primary email at ORCID. May differ from the user's
+  /// platform email — that's fine; both are signal.
+  primaryEmail String?  @map("primary_email")
+  /// Most recent employment institution from the ORCID employment
+  /// record. Used for the `affiliation` slot on `RequesterIdentityContext`.
+  /// Free-form text; only updated on link / re-link.
+  affiliation  String?
+  /// When the link was first established. Renewed on every callback
+  /// re-confirmation so a regulator can show "verified within last
+  /// 90 days" if asked.
+  verifiedAt   DateTime @default(now()) @map("verified_at")
+
+  @@map("user_orcid_links")
+  @@schema("identity")
+}
+
 /// Certification quiz attempt (#117, ADR-0003 Phase 1). One row per
 /// attempt. An attempt is a unit of: requester opens the quiz, picks
 /// answers, submits. We store every attempt — including failed ones —
