@@ -6,15 +6,7 @@ This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-o
 
 ## Provisioning
 
-1. **Pre-flight**: confirm the per-env Aurora cluster has an `oci_docuseal` logical database. Either via the DB migration runbook (TBD) or one-shot:
-
-   ```sql
-   CREATE DATABASE oci_docuseal OWNER oci;
-   ```
-
-   Run from a bastion with access to the Aurora endpoint. The DocuSeal container won't auto-create databases (Rails expects an existing one).
-
-2. **Deploy the stack**:
+1. **Deploy the stack**:
 
    ```bash
    pnpm --filter @oci/cdk exec cdk deploy oci-<env>-docuseal --context env=<env>
@@ -22,6 +14,7 @@ This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-o
 
    This provisions:
    - The Fargate service (1 task, x86_64).
+   - A one-shot **DB-bootstrap task definition** (used in step 2 below).
    - An EFS volume mounted at `/data/docuseal` for blob storage.
    - Three Secrets Manager secrets:
      - `OciDevDocusealDocusealSecretKeyBase-*` — Rails cookie/session key.
@@ -30,7 +23,21 @@ This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-o
    - An ALB listener rule at priority 60 routing `/docuseal/*` to the DocuSeal target group.
    - SSM parameters under `/oci/<env>/docuseal/*` so the API stack can find the secrets without a CFN cross-stack export.
 
-3. **Wait for the task to be healthy** — first boot runs the Rails migrations against `oci_docuseal`. Takes ~30 seconds. Watch the CloudWatch log group (same one as the API) under the `docuseal/` log stream prefix.
+   The DocuSeal task itself will fail its first boot until step 2 completes (Rails can't connect to a non-existent database).
+
+2. **Create the `oci_docuseal` logical database** — one-shot Fargate task baked into the stack. Idempotent (no-op if the database already exists):
+
+   ```bash
+   aws ecs run-task --region eu-central-1 --cli-input-json "$(
+     aws ssm get-parameter --region eu-central-1 \
+       --name /oci/<env>/docuseal/db-bootstrap-launch-spec \
+       --query Parameter.Value --output text
+   )"
+   ```
+
+   The task uses the same Aurora secret the DocuSeal service uses, runs `psql -c 'CREATE DATABASE oci_docuseal'` if the database is missing, and exits 0. Logs land in the shared API log group under the `docuseal-db-bootstrap/` stream prefix. Re-runs (e.g. after a stack redeploy that changes the task ARN) are safe.
+
+3. **Wait for the DocuSeal task to be healthy** — first boot runs the Rails migrations against `oci_docuseal`. Takes ~30 seconds after step 2 finishes. Watch the CloudWatch log group (same one as the API) under the `docuseal/` log stream prefix. If the service stays unhealthy, check the bootstrap task logs to confirm the database was created.
 
 ## First-time admin bootstrap
 
