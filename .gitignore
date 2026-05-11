@@ -57,6 +57,7 @@ packages/database/src/generated/
 CLAUDE.md
 
 # Internal companion repo (FG-AI4H/oci-platform-internal — private).
-# Wire up via `./scripts/setup-internal.sh` after cloning.
-docs/briefings/
-docs/research/
+# Wire up via `./scripts/setup-internal.sh` after cloning. Matches
+# both real directories (legacy) and symlinks created by the script.
+docs/briefings
+docs/research
