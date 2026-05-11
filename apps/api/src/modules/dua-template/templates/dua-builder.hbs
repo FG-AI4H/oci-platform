@@ -1,0 +1,114 @@
+# Data Use Agreement — AI Builder
+
+**Dataset**: {{dataset.name}} (`{{dataset.slug}}`)
+**Host**: {{host.institution}}
+**Builder**: {{requester.name}} ({{requester.institution}})
+**Effective**: {{generation.date}}
+
+## 1. Purpose
+
+This agreement governs the builder's access to the dataset for the
+purpose of **developing, training, validating, or evaluating an
+AI / ML model intended for commercial or product deployment**. The
+output of this work is anticipated to be a **product** (a model,
+service, or device), not solely a publication.
+
+## 2. Statement of intended use
+
+{{requester.intendedUse}}
+
+{{#if regulatoryPathway}}
+**Anticipated regulatory pathway**: {{regulatoryPathway}}
+{{/if}}
+{{#if deploymentCountry}}
+**Primary deployment jurisdiction**: {{deploymentCountry}}
+{{/if}}
+
+## 3. Permitted uses (DUO terms)
+
+The host has marked the dataset with the following Data Use
+Ontology permissions. The builder's use must remain within these
+boundaries:
+
+{{#each dataset.duoTerms}}
+- **{{this.code}}** — {{this.label}}
+{{/each}}
+
+{{#if dataset.commercialUseTerms}}
+The dataset's commercial-use terms are: **{{dataset.commercialUseTerms.label}}**.
+The builder agrees to abide by the commercial clauses attached to
+the dataset; royalty and licensing terms are recorded in Annex A.
+{{/if}}
+
+## 4. Obligations of the builder
+
+The builder agrees to:
+
+1. Use the data only for the purpose described in §2, including
+   model training, validation, and evaluation against the
+   regulatory pathway named in §2.
+2. Not attempt to re-identify any individual whose data appears in
+   the dataset.
+3. Apply industry-standard secure-development practices to any
+   model artefact derived from the dataset, including (where
+   applicable) ISO/IEC 27001 controls, AWS / GCP / Azure shared-
+   responsibility-model adherence, and documented incident response.
+4. **Provide a Statement of Model Provenance** to the host upon
+   first commercial deployment, identifying the dataset's role in
+   training/validation.
+5. **Post-market monitoring**: where the deployed model is used in
+   a clinical or safety context, the builder will share aggregated
+   performance signals with the host on a six-month cadence, scoped
+   to the data slices covered by the dataset.
+6. Destroy any raw copy of the dataset within
+   {{dataset.retentionDays}} days of regulatory submission OR
+   model deprecation, whichever is earlier. Derived model weights
+   are not subject to this destruction obligation; the raw data is.
+7. Report any actual or suspected security incident affecting the
+   dataset to the host within 72 hours of discovery.
+
+## 5. Royalty and revenue terms
+
+{{#if dataset.commercialUseTerms.requiresRoyalty}}
+The dataset's terms include a royalty obligation. The specific
+percentage and accounting cadence are negotiated separately and
+attached as **Annex A** to this agreement before signature.
+{{else}}
+The dataset's terms do **not** include a royalty obligation. The
+builder retains commercial rights to model artefacts derived from
+the dataset, subject to the obligations in §4.
+{{/if}}
+
+## 6. Audit and inspection
+
+The host reserves the right to request, on no more than an annual
+basis and with 30 days' notice, evidence that the builder is
+operating within the obligations in §4 and §5. The builder will
+provide such evidence in a form proportionate to the request.
+
+## 7. Liability and warranty
+
+The dataset is provided "as is". The host disclaims warranty as to
+the fitness of the dataset for any clinical, diagnostic, or
+treatment decision. The builder bears sole responsibility for
+clinical validation and regulatory compliance of any model
+deployed in a clinical setting.
+
+## 8. Term and termination
+
+This agreement is effective from the date above and continues for
+the duration of the access grant or until terminated by either
+party in writing. The obligations under §4(2), §4(4), §4(5), and
+§5 survive termination indefinitely.
+
+## 9. Governing law
+
+This agreement is governed by the law of the host institution's
+primary place of establishment. Disputes are subject to the
+exclusive jurisdiction of that court.
+
+---
+
+**Host signature** (DocuSeal field placeholder)
+
+**Builder signature** (DocuSeal field placeholder)

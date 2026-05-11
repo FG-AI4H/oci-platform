@@ -1,0 +1,82 @@
+# Data Use Agreement — Researcher
+
+**Dataset**: {{dataset.name}} (`{{dataset.slug}}`)
+**Host**: {{host.institution}}
+**Requester**: {{requester.name}} ({{requester.institution}})
+**Effective**: {{generation.date}}
+
+## 1. Purpose
+
+This agreement governs the requester's access to the dataset
+identified above. The dataset is provided for **non-commercial
+research** purposes only. Use that does not contribute to academic
+or peer-reviewed publication, public health practice, or
+educational research falls outside the scope of this agreement.
+
+## 2. Statement of intended use
+
+{{requester.intendedUse}}
+
+## 3. Permitted uses (DUO terms)
+
+The host has marked the dataset with the following Data Use
+Ontology permissions. The requester's use must remain within these
+boundaries:
+
+{{#each dataset.duoTerms}}
+- **{{this.code}}** — {{this.label}}
+{{/each}}
+
+## 4. Obligations of the requester
+
+The requester agrees to:
+
+1. Use the data only for the purpose described in §2.
+2. Not attempt to re-identify any individual whose data appears in
+   the dataset, whether directly or through linkage attack.
+3. Maintain the data under access controls equivalent to those
+   required by the host's IRB or equivalent ethics body.
+4. Cite the dataset in any resulting publication per the host's
+   preferred citation form (provided separately on the dataset
+   landing page).
+5. Report any actual or suspected security incident affecting the
+   dataset to the host within 72 hours of discovery, consistent
+   with GDPR Article 33 notification obligations where applicable.
+6. Destroy the data within {{dataset.retentionDays}} days of project
+   completion, or sooner upon written request from the host.
+
+## 5. Publication and pre-publication review
+
+The requester will provide the host with **at least 30 days'
+notice** before submission of any manuscript that uses the dataset.
+The host may not block publication, but may request:
+
+- correction of factual errors regarding the dataset's provenance,
+- a citation form change,
+- redaction of any inadvertently-included identifying detail.
+
+## 6. Liability and warranty
+
+The dataset is provided "as is", without warranty of completeness,
+accuracy, or fitness for any particular purpose. The host's
+liability for any consequence of the requester's use of the data
+is limited to the maximum extent permitted by applicable law.
+
+## 7. Term and termination
+
+This agreement is effective from the date above and continues until
+all data has been destroyed under §4(6), unless terminated earlier
+by either party in writing. The obligations under §4(2) and §4(5)
+survive termination indefinitely.
+
+## 8. Governing law
+
+This agreement is governed by the law of the host institution's
+primary place of establishment. Disputes are subject to the
+exclusive jurisdiction of that court.
+
+---
+
+**Host signature** (DocuSeal field placeholder)
+
+**Requester signature** (DocuSeal field placeholder)

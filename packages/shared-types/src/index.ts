@@ -1485,6 +1485,64 @@ export interface IssuedPassportVisaJwt {
   jwt: string;
 }
 
+// ==== DUA template engine (#129, ADR-0003 Decision 8) ====================
+//
+// Produces the prose of a Data Use Agreement that the host and
+// requester will sign (via DocuSeal — #128). The engine is pure:
+// inputs (audience, dataset DUO terms, host institution, intended
+// use, LMIC toggle) → text. Two base templates:
+//   - `RESEARCHER` — publication-as-output. Default for academic /
+//     non-commercial requesters.
+//   - `BUILDER` — product-as-output. AI builders / commercial use.
+//     Includes regulatory-pathway, deployment-country, royalty-terms,
+//     and post-market-data-flow clauses.
+//
+// An LMIC addendum is appended when the host has marked the dataset
+// as royalty-free for LMIC public-sector deployment.
+
+/** Which DUA template variant to render. Drives clauses + tone. */
+export const DuaTemplateAudienceSchema = z.enum(['RESEARCHER', 'BUILDER']);
+export type DuaTemplateAudience = z.infer<typeof DuaTemplateAudienceSchema>;
+
+/**
+ * `POST /v2/dua/preview` body. The host or requester can call this
+ * during the access-request flow to preview the DUA before signing
+ * — the same inputs the AR creation flow would feed at sign time.
+ */
+export const PreviewDuaRequestSchema = z.object({
+  /** Slug of the target dataset (canonical id resolves host institution + DUO terms). */
+  datasetSlug: DatasetSlugSchema,
+  /** Researcher vs builder variant — drives clauses + signature lines. */
+  audience: DuaTemplateAudienceSchema,
+  /** Plain-text rationale that lands in the "Statement of Use" section. */
+  intendedUse: z.string().min(20).max(4000),
+  /** Requester's institution / organisation. Falls back to "Independent". */
+  requesterInstitution: z.string().min(1).max(200).optional(),
+  /** Requester's full name (will be filled in by DocuSeal at sign time). */
+  requesterName: z.string().min(1).max(200).optional(),
+  /** Builder-only — regulatory pathway (e.g. "CE marking", "FDA 510(k)"). */
+  regulatoryPathway: z.string().max(200).optional(),
+  /** Builder-only — primary deployment country (ISO 3166-1 alpha-2). */
+  deploymentCountry: z
+    .string()
+    .length(2)
+    .regex(/^[A-Z]{2}$/, 'expected ISO 3166-1 alpha-2 country code')
+    .optional(),
+  /** Forces the LMIC addendum even when the dataset isn't marked royalty-free (preview only). */
+  forceLmicAddendum: z.boolean().optional(),
+});
+export type PreviewDuaRequest = z.infer<typeof PreviewDuaRequestSchema>;
+
+/** `POST /v2/dua/preview` response. */
+export interface PreviewDuaResponse {
+  /** Selected template variant id (`dua-researcher`, `dua-builder`). */
+  templateId: string;
+  /** Whether the LMIC addendum was appended. */
+  lmicAddendumIncluded: boolean;
+  /** Rendered DUA body — Markdown. The PDF/DOCX rendering is downstream (DocuSeal). */
+  markdown: string;
+}
+
 // ==== Click-wrap policy acceptance (#118, ADR-0003 Decision 4) ============
 //
 // SES-grade evidence for OPEN/REGISTERED tier flows. The API records

@@ -225,6 +225,29 @@ Production: provision an AWS KMS RSA-2048 key (`RSASSA_PKCS1_V1_5_SHA_256`) and 
 
 Dev: an ephemeral RSA keypair is generated on first boot when no ACTIVE row exists. Refused when `NODE_ENV=production`.
 
+## DUA template engine (#129)
+
+Renders the prose of a Data Use Agreement for the given dataset + audience + intended-use. Pure render — no persistence side-effects. The signing surface (DocuSeal, #128) calls into the same service to produce the document payload at sign time.
+
+Two starter templates ship with the API binary:
+
+- `dua-researcher.hbs` — non-commercial / publication-as-output.
+- `dua-builder.hbs` — commercial / product-as-output. Includes regulatory-pathway, deployment-country, post-market-monitoring clauses.
+
+One conditional addendum:
+
+- `addendum-lmic.hbs` — WHO-aligned LMIC public-sector carve-out, appended when the dataset's commercial-use terms are `NON_COMMERCIAL_ONLY` (so a separate LMIC route is the only commercial pathway).
+
+Operators can override templates per-deployment by mounting an alternative directory and pointing `OCI_DUA_TEMPLATE_DIR` at it.
+
+### `POST /v2/dua/preview`
+
+Body: `PreviewDuaRequest` — `{ datasetSlug, audience, intendedUse, requesterInstitution?, requesterName?, regulatoryPathway?, deploymentCountry?, forceLmicAddendum? }`.
+
+Response: `PreviewDuaResponse` — `{ templateId, lmicAddendumIncluded, markdown }`.
+
+Errors: 404 when the dataset doesn't exist; 400 on validation failure.
+
 ## Click-wrap policy acceptances (#118)
 
 ### `POST /v2/identity/policy-acceptances`

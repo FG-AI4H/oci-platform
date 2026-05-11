@@ -5,7 +5,7 @@
   "description": "OCI Platform NestJS API — modular monolith covering Identity, Catalog, Storage, Annotation, Prediction, Evaluation, Reporting modules",
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && mkdir -p dist/modules/dua-template/templates && cp src/modules/dua-template/templates/*.hbs dist/modules/dua-template/templates/",
     "dev": "tsx watch src/main.ts",
     "start:prod": "node dist/main.js",
     "lint": "eslint . --max-warnings=0",
@@ -41,6 +41,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "fastify": "^5.8.5",
+    "handlebars": "^4.7.9",
     "ioredis": "^5.6.0",
     "jose": "^6.2.3",
     "passport": "^0.7.0",
