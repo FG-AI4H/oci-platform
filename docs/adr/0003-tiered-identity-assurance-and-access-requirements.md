@@ -73,7 +73,7 @@ Concretely:
 
 8. **Two parallel request-form templates and DUA templates**, sharing the same identity-tier and DUO-matching infrastructure but tuned to their respective audiences:
    - **Researcher form / DUA** — assumes publication-as-output. Asks IRB approval, project description, output type (`PUBLICATION` / `MODEL_WEIGHTS` / `DERIVATIVE_DATASET` / etc.), retention period.
-   - **AI-builder form / DUA** — assumes product-as-output. Asks legal entity, deployment country / region, regulatory pathway (FDA 510(k) / De Novo / EU MDR class / national equivalent), WHO health-priority alignment, WHO Innovation Hub or national-MoH accreditation, royalty / commercialisation plan, post-market data flow.
+   - **AI-builder form / DUA** — assumes product-as-output. Asks legal entity, deployment country / region, regulatory pathway (FDA 510(k) / De Novo / EU MDR class / national equivalent), WHO health-priority alignment, any accreditation or programme membership (free-text — weighed manually by host, no automatic gate today), royalty / commercialisation plan, post-market data flow.
 
    The form a requester sees is selected by their declared use category (`Commercial research` / `Product development` / `Clinical care` route to the builder template; `Non-commercial research` / `Educational` route to the researcher template). Both flows share the same back-end approval state machine and the same OCI Passport Visa issuance.
 
@@ -84,7 +84,7 @@ Concretely:
 
    GI-AI4H curated datasets are tagged `commercial OK` by default, with optional `royalty-free for LMIC public-sector deployment` clauses where the curating institution has set those terms (modelled loosely on GAVI / vaccine-pricing tiered-licensing precedent).
 
-10. **Pre-grants for accredited LMIC actors** — a startup registered with the WHO Innovation Hub or accredited by a national MoH innovation programme can be pre-granted access to GI-AI4H curated datasets. The accreditation is recorded as a Visa-equivalent identity claim (`ResearcherStatus` extended with a `BuilderStatus` Visa Type — proposed extension to the GA4GH Visa vocabulary, raised as a discussion item in WG-Data); the dataset's `accessTier` rules honour it; the request collapses to a click-wrap.
+10. **Architectural hook for accreditation-based pre-grants — design exploration only.** The identity-context model is shaped to accept an entity-level accreditation as a Visa-equivalent claim (the proposed `BuilderStatus` Visa Type — see [`#141`](https://github.com/FG-AI4H/oci-platform/issues/141)) so that if a recognised accreditor (a national MoH digital-health innovation programme, a development-finance-backed initiative, the WHO Innovation Hub, or another body in GI-AI4H's network) chose to issue Passport-shaped credentials, the dataset's `accessTier` rules could honour them and the request could collapse to a click-wrap. **No such accreditor has been engaged**, and this ADR does not commit to a specific issuer. The architectural readiness is the decision; concrete pre-grants are deferred until a candidate issuer materialises and is brought to GI-AI4H steering for endorsement.
 
 The phased rollout is recorded below in _Consequences → Neutral_; this ADR commits to the architectural shape, not the dates.
 

@@ -105,13 +105,13 @@ Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116
 
 ### Phase 3 (6–12 months, gated on demand)
 
-| Capability                                               | Status     | Tracked                                                    |
-| -------------------------------------------------------- | ---------- | ---------------------------------------------------------- |
-| Yousign QES via AWS Marketplace (SENSITIVE-tier signing) | 🚧 Planned | [#131](https://github.com/FG-AI4H/oci-platform/issues/131) |
-| eduGAIN SP via SWITCHaai (academic SAML SSO)             | 🚧 Planned | [#132](https://github.com/FG-AI4H/oci-platform/issues/132) |
-| OCI ACT operator review UI (SENSITIVE-tier inbox)        | 🚧 Planned | [#133](https://github.com/FG-AI4H/oci-platform/issues/133) |
-| Validated User flow (ID-document review pipeline)        | 🚧 Planned | [#134](https://github.com/FG-AI4H/oci-platform/issues/134) |
-| WHO Innovation Hub accreditation pre-grant Visa          | 🚧 Planned | [#135](https://github.com/FG-AI4H/oci-platform/issues/135) |
+| Capability                                               | Status                                       | Tracked                                                                                                                 |
+| -------------------------------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Yousign QES via AWS Marketplace (SENSITIVE-tier signing) | 🚧 Planned                                   | [#131](https://github.com/FG-AI4H/oci-platform/issues/131)                                                              |
+| eduGAIN SP via SWITCHaai (academic SAML SSO)             | 🚧 Planned                                   | [#132](https://github.com/FG-AI4H/oci-platform/issues/132)                                                              |
+| OCI ACT operator review UI (SENSITIVE-tier inbox)        | 🚧 Planned                                   | [#133](https://github.com/FG-AI4H/oci-platform/issues/133)                                                              |
+| Validated User flow (ID-document review pipeline)        | 🚧 Planned                                   | [#134](https://github.com/FG-AI4H/oci-platform/issues/134)                                                              |
+| `BuilderStatus` Visa Type (design exploration only)      | 🔬 Speculative — no candidate issuer engaged | [#141](https://github.com/FG-AI4H/oci-platform/issues/141) · [#135](https://github.com/FG-AI4H/oci-platform/issues/135) |
 
 ### Steering decisions blocking advanced phases
 

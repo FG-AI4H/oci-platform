@@ -57,7 +57,7 @@ The catalogue can be filtered by:
 
 - **An OCI account.** Today, accounts are provisioned via your country's GI-AI4H contact or via direct WHO/ITU programme onboarding. Self-service signup is on the roadmap.
 - **Company / organisation details.** Your legal entity, registration jurisdiction, primary contact.
-- **WHO Innovation Hub registration or national-MoH accreditation** if you have one — this can pre-grant access to GI-AI4H curated datasets and significantly shorten your review path. Not required, but it's the cleanest credential to bring.
+- **Any accreditation or programme membership you hold** (national MoH digital-health innovation track, multilateral-backed initiative, development-finance grant) — declare it on the request form as supporting evidence. Hosts weigh it during review. Today there's no scheme the OCI Platform has agreed with any external body to translate accreditation into automatic dataset access; if/when one emerges, declaring it now positions you for it.
 - **Your project's regulatory plan.** Even a draft. Reviewers want to see that you've thought about it.
 - **Your deployment plan, by country / health-system.** The DUA template will lock terms based on this.
 
@@ -92,7 +92,7 @@ Three things make this AI-builder flow distinct from the researcher flow:
 
 - **Your country's GI-AI4H contact.** Each member-state programme has a focal point.
 - **Email**: `oci-platform@itu.int` _(TODO confirm operator address)_.
-- **WHO Innovation Hub**: for accreditation that pre-grants access to curated datasets.
+- **WHO Innovation Hub / WHO programme offices**: for guidance on aligning your work with WHO health priorities. Note: as of 2026-05, the OCI Platform team has not engaged any WHO programme office as an accrediting body for dataset access — there's no pre-grant pathway you can rely on today.
 
 ## What's in scope here vs elsewhere
 

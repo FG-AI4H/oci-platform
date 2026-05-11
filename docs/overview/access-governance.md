@@ -227,7 +227,7 @@ A commercial requester is required to declare:
 - Their **intended deployment country / region** (LMIC public-sector deployment may unlock royalty-free clauses).
 - Their **regulatory pathway** (medical device, software-as-a-medical-device class, in-vitro diagnostic, advisory tool).
 - Their **WHO health-priority alignment** (free-text + reference to a WHO-published priority list where applicable).
-- Whether they are **registered with the WHO Innovation Hub** or accredited by a national MoH innovation programme — these can pre-grant access to GI-AI4H curated datasets via OCI's identity tier system.
+- Any **accreditation or programme membership** they hold (a national MoH digital-health innovation track, a multilateral-backed initiative, a development-finance grant). Today this is a free-text signal that host reviewers weigh manually — no accrediting body has yet been engaged to issue GA4GH Passport-shaped credentials, so the OCI does not automatically gate access on it. A `BuilderStatus` Visa Type that would formalise this remains a design exploration (see [ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md) and [`#141`](https://github.com/FG-AI4H/oci-platform/issues/141)).
 
 These declarations live alongside (not instead of) the standard IRB / institutional / DUO checks. A WHO-priority-aligned LMIC startup gets a smoother path; a commercial actor with no clear public-health alignment gets the same scrutiny as a high-risk research request.
 
