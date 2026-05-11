@@ -1,6 +1,6 @@
 # Feature status
 
-The live capability matrix. Updated on every shipped feature (per the [orchestrator skill's docs step](../../.claude/skills/oci-fullstack-feature-scaffold/SKILL.md#9-update-the-audience-documentation)).
+The live capability matrix. Updated on every shipped feature — docs deltas are part of definition-of-done.
 
 Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116/#117/#118/#119/#120 all live).
 
@@ -94,14 +94,14 @@ Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116
 
 ### Phase 2 (1–3 months)
 
-| Capability                                                                   | Status     | Tracked                                                    |
-| ---------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------- |
-| ORCID OAuth integration                                                      | ✅ Live    | [#125](https://github.com/FG-AI4H/oci-platform/issues/125) |
-| GA4GH Passport relying party (verify Visas from ELIXIR AAI / NIH RAS / Sage) | ✅ Live    | [#126](https://github.com/FG-AI4H/oci-platform/issues/126) |
-| OCI as Passport issuer (JWKS endpoint, sign own Visas)                       | ✅ Live    | [#127](https://github.com/FG-AI4H/oci-platform/issues/127) |
-| DocuSeal self-hosted on Fargate (AdES DUA signing)                           | 🚧 Planned | [#128](https://github.com/FG-AI4H/oci-platform/issues/128) |
-| DUA template engine (researcher + builder + LMIC variants)                   | ✅ Live    | [#129](https://github.com/FG-AI4H/oci-platform/issues/129) |
-| Renewal cron (BullMQ) — 30-day pre-expiry email + auto-revoke                | ✅ Live    | [#130](https://github.com/FG-AI4H/oci-platform/issues/130) |
+| Capability                                                                   | Status                      | Tracked                                                    |
+| ---------------------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------- |
+| ORCID OAuth integration                                                      | ✅ Live                     | [#125](https://github.com/FG-AI4H/oci-platform/issues/125) |
+| GA4GH Passport relying party (verify Visas from ELIXIR AAI / NIH RAS / Sage) | ✅ Live                     | [#126](https://github.com/FG-AI4H/oci-platform/issues/126) |
+| OCI as Passport issuer (JWKS endpoint, sign own Visas)                       | ✅ Live                     | [#127](https://github.com/FG-AI4H/oci-platform/issues/127) |
+| DocuSeal self-hosted on Fargate (AdES DUA signing)                           | ✅ Live (API)<br />🚧 Infra | [#128](https://github.com/FG-AI4H/oci-platform/issues/128) |
+| DUA template engine (researcher + builder + LMIC variants)                   | ✅ Live                     | [#129](https://github.com/FG-AI4H/oci-platform/issues/129) |
+| Renewal cron (BullMQ) — 30-day pre-expiry email + auto-revoke                | ✅ Live                     | [#130](https://github.com/FG-AI4H/oci-platform/issues/130) |
 
 ### Phase 3 (6–12 months, gated on demand)
 
@@ -169,11 +169,9 @@ Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116
 
 ## Tooling & governance
 
-| Capability                                                             | Status       | Shipped in                                                           |
-| ---------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------- |
-| `/roadmap-audit` skill — doc/board/feature-status reconciliation       | ✅ Live      | (project-scoped skill, gitignored)                                   |
-| GitHub issue templates (feature / follow-up / steering / adr-blocked)  | 🚧 In flight | [#143](https://github.com/FG-AI4H/oci-platform/issues/143) → PR #145 |
-| `feedback_track_tasks_in_github` rule (memory) — every task → GH issue | ✅ Live      | (memory-only; project-scoped rule for all sessions)                  |
+| Capability                                                            | Status       | Shipped in                                                           |
+| --------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------- |
+| GitHub issue templates (feature / follow-up / steering / adr-blocked) | 🚧 In flight | [#143](https://github.com/FG-AI4H/oci-platform/issues/143) → PR #145 |
 
 ## Legend
 
@@ -185,8 +183,7 @@ Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116
 
 ## How this matrix stays accurate
 
-1. The `oci-fullstack-feature-scaffold` orchestrator skill mandates updating this table when a feature ships.
-2. The `roadmap-audit` skill cross-checks this matrix against the GitHub project board, ADRs, and merged PRs to surface drift.
-3. The `feedback_track_tasks_in_github` rule ensures every task discussed in a Claude Code session lands as a GitHub issue, so the matrix has something concrete to point to.
+1. Updating this table is part of definition-of-done for every shipped feature.
+2. The matrix is cross-checked against the GitHub project board, ADRs, and merged PRs periodically; drift surfaces as `[follow-up]` issues.
 
-If you spot drift, file a `[follow-up]` issue (template available) and tag `documentation`.
+If you spot drift, file a `[follow-up]` issue and tag `documentation`.

@@ -386,6 +386,61 @@ model PolicyAcceptance {
   @@schema("identity")
 }
 
+/// AdES-grade DUA signature via self-hosted DocuSeal (#128, ADR-0003
+/// Decision 5). One row per Data Use Agreement signing request.
+/// Used for `CONTROLLED`-tier access; `OPEN`/`REGISTERED` continue to
+/// use click-wrap (#118) which is SES-grade; `SENSITIVE` uses QES
+/// (Yousign, future #131).
+///
+/// Lifecycle: PENDING (created when AR is APPROVED at CONTROLLED tier)
+/// → SIGNED (DocuSeal webhook fires) or DECLINED (signer rejected).
+///
+/// `documentSha256` is computed over the Markdown body rendered by the
+/// DUA template engine (#129). Stored so a regulator audit can
+/// re-derive the hash from the persisted `documentText` and confirm
+/// the signed document is the one the user actually saw.
+///
+/// `signedPdfUrl` is the DocuSeal-hosted PDF after completion; we
+/// don't ingest the PDF bytes (DocuSeal retains them in its volume).
+/// On a future evidentiary need the URL resolves to the audit-grade
+/// PDF with embedded signature certificate.
+///
+/// `userId` is a soft FK → identity.users.id. `accessRequestId` is a
+/// soft FK → catalog.access_requests.id — the AR this signature
+/// authorises. Required: every signature exists in the context of
+/// an approved AR.
+model DuaSignature {
+  id                String    @id @default(uuid()) @db.Uuid
+  /// Soft FK → identity.users.id (UUIDv5 from Cognito sub).
+  userId            String    @map("user_id") @db.Uuid
+  /// Soft FK → catalog.access_requests.id.
+  accessRequestId   String    @map("access_request_id") @db.Uuid
+  /// PENDING | SIGNED | DECLINED | EXPIRED.
+  status            String    @default("PENDING")
+  /// DocuSeal submission id — the canonical reference for inspecting
+  /// the envelope state on the DocuSeal side.
+  docusealSubmissionId String? @map("docuseal_submission_id")
+  /// URL the signer follows to complete the signing dance.
+  signerUrl         String?   @map("signer_url")
+  /// Markdown body rendered by the DUA template engine. Persisted
+  /// verbatim so a regulator audit can re-verify the hash even if
+  /// the template engine drifts later.
+  documentText      String    @map("document_text")
+  /// Lower-case hex SHA-256 of `documentText`. Audit anchor.
+  documentSha256    String    @map("document_sha256") @db.Char(64)
+  /// DocuSeal-hosted PDF of the completed envelope.
+  signedPdfUrl      String?   @map("signed_pdf_url")
+  /// Server-side timestamps.
+  createdAt         DateTime  @default(now()) @map("created_at")
+  signedAt          DateTime? @map("signed_at")
+  declinedAt        DateTime? @map("declined_at")
+
+  @@index([userId, createdAt])
+  @@index([accessRequestId])
+  @@map("dua_signatures")
+  @@schema("identity")
+}
+
 // ==========================================================================
 // catalog — datasets, Croissant 1.1 / RAI / BIOCroissant manifests,
 //            versions, distributions, access requests. (DAP package, WS-1.)

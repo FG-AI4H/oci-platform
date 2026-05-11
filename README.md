@@ -23,7 +23,6 @@ infra/
   cdk/           AWS CDK — VPC, Cognito, Aurora, ECS, ALB, CloudFront, WAF, S3, Logs
 .github/workflows/  CI + dev/int/prod deploy via OIDC
 docs/             Architecture, getting-started, security, deployment, ADRs, migration plan
-.claude/skills/   Project-scoped Claude Code skills (security review, ADR, scaffold, migrations, …)
 scripts/          Bootstrap & maintenance
 ```
 

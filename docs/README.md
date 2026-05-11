@@ -22,7 +22,7 @@ This documentation is organised by **audience**. Pick the entry point that match
 - Each audience folder has a **README** that's the index, plus topic pages.
 - Cross-cutting reference material (architecture, security, ADRs) lives at the repository root under `docs/` and is linked from the relevant audience pages — read once, referenced often.
 - We use [Architecture Decision Records](./adr/) for decisions that change a workstream-wide concern.
-- Doc updates are part of the **definition of done** for every shipped feature — see the orchestrator skill at `.claude/skills/oci-fullstack-feature-scaffold/`.
+- Doc updates are part of the **definition of done** for every shipped feature.
 
 ## What's shipped today
 

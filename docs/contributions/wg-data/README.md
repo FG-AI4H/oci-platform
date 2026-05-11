@@ -7,7 +7,7 @@ Documents here are **discussion contributions** — not formal deliverables. The
 ## Convention
 
 - **Filename**: `<DOC-NUMBER> — <Short title> — <YYYY-MM-DD>.docx`. Single canonical name for both the repo file and the email attachment, so what colleagues see in their inbox is exactly what's archived. Em-dashes (`—`, U+2014) separate the three segments. Example: `GI-AI4H-WGD-OCI-001 — BuilderStatus Visa proposal — 2026-05-09.docx`.
-- **Format**: produced by the [`oci-giai4h-contribution-doc`](../../../.claude/skills/oci-giai4h-contribution-doc/) skill via its `scripts/generate.py`. The script is the template — there is no `.docx` template file. The output is a clean, code-defined design (paragraph-based cover, accent-coloured headings, no legacy ITU-T tables).
+- **Format**: produced from a code-defined template (no `.docx` template file). The output is a clean, code-defined design — paragraph-based cover, accent-coloured headings, no legacy ITU-T tables.
 - **Page 2** (an official-deliverable inside cover with masthead, editors, contributors) is **not produced** by the generator. Discussion contributions only. Formal deliverables would require extending the generator.
 - **Source** field on the cover names "OCI Platform team" plus the lead editor.
 - **Purpose** is `Discussion` for contributions in this folder.
@@ -22,10 +22,9 @@ Documents here are **discussion contributions** — not formal deliverables. The
 ## How a contribution lands here
 
 1. Author drafts the document content (typically as a comment thread on a tracking issue under `FG-AI4H/oci-platform` — the GitHub org name retains the legacy `FG-AI4H` for continuity, even though the operating body is now GI-AI4H).
-2. Author runs the `oci-giai4h-contribution-doc` skill, which calls `scripts/generate.py` with the abstract + body content + cover metadata.
-3. The generator produces the `.docx` and reminds the author to add a row to this README.
-4. Author commits the `.docx` + the README update via PR.
-5. Author circulates the document to WG-Data — typically by attaching to the WG-Data mailing list or by uploading to the GI-AI4H document repository (when applicable). **Generation alone does not ship the contribution.**
+2. Author renders the `.docx` from the source content (the rendering tool sits outside this repo).
+3. Author commits the `.docx` + this README update via PR.
+4. Author circulates the document to WG-Data — typically by attaching to the WG-Data mailing list or by uploading to the GI-AI4H document repository. **Generation alone does not ship the contribution.**
 
 ## Tracking
 
@@ -35,4 +34,3 @@ Each contribution document references its tracking issue on the OCI Platform boa
 
 - [`docs/standards/`](../../standards/) — when a contribution becomes an internal OCI standard, it moves there.
 - [`docs/adr/`](../../adr/) — architectural decisions that motivated a contribution.
-- The [`oci-giai4h-contribution-doc`](../../../.claude/skills/oci-giai4h-contribution-doc/) skill — automates docx generation from a simple Markdown-lite body.

@@ -135,5 +135,3 @@ before, no behaviour change.
 - `docs/security.md` — TLS-only mandate.
 - AWS docs:
   [CloudFront ACM cert region requirement](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html#https-requirements-aws-region)
-- Phase A2-2 deploy memory:
-  `~/.claude/projects/-Users-mlecoultre-src-oci-platform/memory/project_phase_a2_status.md`

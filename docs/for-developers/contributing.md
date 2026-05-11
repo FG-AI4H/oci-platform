@@ -8,21 +8,6 @@ Pull requests welcome. The project enforces a strict verification gate but the c
 2. Set up locally — see [local-setup.md](./local-setup.md).
 3. Find an issue you want to work on, or open one for what you have in mind.
 
-## The orchestrator skills
-
-We have project-scoped Claude Code skills that scaffold features following our conventions. Even when working manually, they're the best reference for "the right way to do this":
-
-- [`.claude/skills/oci-feature-scaffold/`](../../.claude/skills/oci-feature-scaffold/) — new NestJS module (apps/api).
-- [`.claude/skills/oci-web-feature-scaffold/`](../../.claude/skills/oci-web-feature-scaffold/) — new Next.js route (apps/web).
-- [`.claude/skills/oci-fullstack-feature-scaffold/`](../../.claude/skills/oci-fullstack-feature-scaffold/) — orchestrate both halves with a shared contract.
-- [`.claude/skills/db-migration/`](../../.claude/skills/db-migration/) — Prisma schema + migration.
-- [`.claude/skills/cdk-stack-add/`](../../.claude/skills/cdk-stack-add/) — new AWS resource.
-- [`.claude/skills/security-review/`](../../.claude/skills/security-review/) — pre-merge security check.
-- [`.claude/skills/ui-ux-expert/`](../../.claude/skills/ui-ux-expert/) — visual + a11y audit.
-- [`.claude/skills/adr-create/`](../../.claude/skills/adr-create/) — Architecture Decision Record.
-
-Even if you don't run them, read the SKILL.md — it captures the patterns you should follow.
-
 ## Conventions
 
 - **TypeScript strict.** `strict: true`, `noUncheckedIndexedAccess: true`. No `any` without an `@ts-expect-error` and an issue link.
@@ -30,7 +15,6 @@ Even if you don't run them, read the SKILL.md — it captures the patterns you s
 - **Repository pattern.** Prisma calls live only in `*.repository.ts`. Services are pure-ish; controllers are thin.
 - **Errors as typed exceptions.** `BadRequestException`, `NotFoundException`, `ForbiddenException`, `ConflictException`. The global filter maps to RFC 7807.
 - **Tests co-located.** `*.spec.ts` next to source. Vitest for unit, Playwright for E2E. Integration against real Postgres via Testcontainers (where applicable).
-- **Co-author attribution.** PRs that used Claude Code include `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>`.
 
 ## The verification gate
 
@@ -45,7 +29,7 @@ pnpm --filter @oci/web lint
 pnpm --filter @oci/web exec playwright test
 ```
 
-If you touched UI: also run `/ui-ux-expert` and confirm axe deltas are flat or improved. If you touched docs-relevant flows: update the audience docs (the orchestrator skill's step 9 enumerates which audience).
+If you touched UI: run a visual + a11y audit (axe-core deltas must be flat or improved). If you touched docs-relevant flows: update the relevant audience docs (`docs/for-*/`).
 
 CI re-runs everything plus Trivy + Gitleaks + CycloneDX SBOM. PRs don't merge unless CI is green.
 
@@ -73,7 +57,7 @@ Open one when:
 - You're picking between multiple reasonable options and want the rationale recorded.
 - You're locking in a third-party dependency that's hard to swap.
 
-Use the [`adr-create` skill](../../.claude/skills/adr-create/), or copy [`docs/adr/0000-template.md`](../adr/0000-template.md). ADRs are sequentially numbered and immutable once accepted.
+Copy [`docs/adr/0000-template.md`](../adr/0000-template.md). ADRs are sequentially numbered and immutable once accepted.
 
 ## What we don't accept
 
