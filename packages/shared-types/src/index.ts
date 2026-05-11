@@ -1543,6 +1543,111 @@ export interface PreviewDuaResponse {
   markdown: string;
 }
 
+// ==== AdES DUA signing via DocuSeal (#128, ADR-0003 Decision 5) ===========
+//
+// One step up from click-wrap (#118 / SES). Required for `CONTROLLED`
+// access tier per the matrix. The flow:
+//
+//   1. Host approves an AR for a CONTROLLED-tier dataset →
+//      `POST /v2/dua/sign-requests` (called by the AR service or by
+//      the requester explicitly).
+//   2. Server renders the DUA via the template engine (#129), hashes
+//      it, persists the row, calls DocuSeal to create the signing
+//      envelope, stores the submission id + signer URL.
+//   3. Requester follows the signer URL, signs, DocuSeal POSTs back
+//      to `/v2/dua/webhook/docuseal`.
+//   4. Webhook handler stamps `SIGNED`, mints an
+//      `AcceptedTermsAndPolicies` GA4GH visa with the DUA URL.
+//
+// Activation: env `OCI_DOCUSEAL_BASE_URL` + `OCI_DOCUSEAL_API_TOKEN`
+// + `OCI_DOCUSEAL_WEBHOOK_SECRET`. When unset, the signing endpoints
+// return 503; everything else (template preview, click-wrap) still
+// works.
+
+export const DuaSignatureStatusSchema = z.enum(['PENDING', 'SIGNED', 'DECLINED', 'EXPIRED']);
+export type DuaSignatureStatus = z.infer<typeof DuaSignatureStatusSchema>;
+
+/**
+ * `POST /v2/dua/sign-requests` body. The caller asks the platform to
+ * mint a signing envelope for the given access-request id. Auth
+ * required; only the requester or the dataset host can create one
+ * (admin override allowed).
+ */
+export const CreateDuaSigningRequestSchema = z.object({
+  /** UUID of the AccessRequest this DUA applies to. */
+  accessRequestId: z.string().uuid(),
+  /** Researcher vs builder template variant. Drives clause selection. */
+  audience: DuaTemplateAudienceSchema,
+  /**
+   * Signer email — required by DocuSeal to send the signing link.
+   * The platform doesn't always have the requester's email on hand
+   * (Cognito access tokens omit it in production), so the form
+   * collects it explicitly.
+   */
+  signerEmail: z.string().email(),
+  /** Signer display name shown on the signing page + audit. */
+  signerName: z.string().min(1).max(200),
+});
+export type CreateDuaSigningRequest = z.infer<typeof CreateDuaSigningRequestSchema>;
+
+/** Public summary of one DUA signature row. */
+export interface DuaSignatureSummary {
+  id: string;
+  accessRequestId: string;
+  status: DuaSignatureStatus;
+  /** SHA-256 of the rendered DUA body the requester saw. */
+  documentSha256: string;
+  /** URL the signer follows to complete signing. Null after signed/declined. */
+  signerUrl: string | null;
+  /** DocuSeal-hosted PDF after completion. Null until signed. */
+  signedPdfUrl: string | null;
+  /** ISO-8601 timestamps. */
+  createdAt: string;
+  signedAt: string | null;
+  declinedAt: string | null;
+}
+
+/** `POST /v2/dua/sign-requests` response. */
+export interface CreateDuaSigningRequestResponse {
+  signature: DuaSignatureSummary;
+}
+
+/** `GET /v2/me/dua-signatures` response. */
+export interface ListDuaSignaturesResponse {
+  items: DuaSignatureSummary[];
+}
+
+/**
+ * DocuSeal webhook payload — `POST /v2/dua/webhook/docuseal`.
+ *
+ * The actual DocuSeal hook envelope is richer (audit metadata,
+ * signer details, IP). We narrow to the fields the platform acts on
+ * + carry the rest opaquely for the audit trail.
+ *
+ * The HMAC signature header (`X-Docuseal-Signature`) is validated
+ * before the body is parsed; this schema is post-validation.
+ */
+export const DocusealWebhookEventSchema = z.object({
+  /** `form.completed` | `form.declined` | `form.expired`. */
+  event_type: z.string(),
+  /** The submission whose state changed. */
+  data: z.object({
+    id: z.union([z.string(), z.number()]),
+    /** ISO-8601 completion timestamp. Present on completed/declined. */
+    completed_at: z.string().nullable().optional(),
+    /** DocuSeal-hosted PDF URL of the completed envelope. */
+    documents: z
+      .array(
+        z.object({
+          name: z.string().optional(),
+          url: z.string().optional(),
+        }),
+      )
+      .optional(),
+  }),
+});
+export type DocusealWebhookEvent = z.infer<typeof DocusealWebhookEventSchema>;
+
 // ==== Click-wrap policy acceptance (#118, ADR-0003 Decision 4) ============
 //
 // SES-grade evidence for OPEN/REGISTERED tier flows. The API records

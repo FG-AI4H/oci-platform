@@ -42,7 +42,7 @@ This documentation is read by stakeholders who can't easily verify claims by rea
 
 - **Not overstating shipped capabilities.** [overview/feature-status.md](../overview/feature-status.md) is the authoritative live capability matrix; this section's strategic narrative is reconciled against it.
 - **Not understating risks.** [risks.md](./risks.md) is candid about what could go wrong.
-- **Updating in lockstep with the platform.** Every shipped feature touches this section if it changes the strategic picture (per the [orchestrator skill's docs step](../../.claude/skills/oci-fullstack-feature-scaffold/SKILL.md#9-update-the-audience-documentation)).
+- **Updating in lockstep with the platform.** Every shipped feature touches this section if it changes the strategic picture — doc updates are part of definition-of-done.
 
 ## How to engage
 

@@ -42,7 +42,7 @@ pnpm format              # prettier --write
 ## Adding a feature
 
 1. Open the relevant epic in [GitHub Project #3](https://github.com/orgs/FG-AI4H/projects/3) and pick a task.
-2. If it's a new domain module, run the **`oci-feature-scaffold`** Claude Code skill (defined under `.claude/skills/`) to scaffold module + service + controller + tests + DTO.
+2. If it's a new domain module, follow the structure under `apps/api/src/modules/<feature>/` — see `catalog/` or `access-request/` as reference.
 3. Write the test first (Vitest for unit, Playwright for E2E).
 4. Implement.
 5. Open a PR — CI runs lint + typecheck + test + build + Trivy + Gitleaks + SBOM.

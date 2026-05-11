@@ -20,8 +20,11 @@ import { execFileSync } from 'node:child_process';
  *
  * Skip with `PW_NO_RESET=1` for cases where you actually want suite
  * runs to accumulate (debugging, repeated screenshot capture).
+ *
+ * The reset logic is exported as `resetTestRows` so `global-teardown`
+ * can call it symmetrically without duplicating the SQL.
  */
-export default async function globalSetup(): Promise<void> {
+export function resetTestRows(): void {
   if (process.env.PW_NO_RESET) return;
 
   const sql = `
@@ -46,9 +49,10 @@ export default async function globalSetup(): Promise<void> {
     // runs from a clean shell hit this before docker compose is up.
     // The test failures will surface the real problem; this is just
     // best-effort hygiene.
-    console.warn(
-      '[playwright] global-setup DB reset skipped:',
-      err instanceof Error ? err.message : err,
-    );
+    console.warn('[playwright] DB reset skipped:', err instanceof Error ? err.message : err);
   }
+}
+
+export default async function globalSetup(): Promise<void> {
+  resetTestRows();
 }

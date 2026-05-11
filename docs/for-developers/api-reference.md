@@ -248,6 +248,44 @@ Response: `PreviewDuaResponse` — `{ templateId, lmicAddendumIncluded, markdown
 
 Errors: 404 when the dataset doesn't exist; 400 on validation failure.
 
+## AdES DUA signing via DocuSeal (#128)
+
+One step up from click-wrap. Required for `CONTROLLED` access tier per the matrix. Click-wrap (#118) handles `OPEN` and `REGISTERED`; this handles `CONTROLLED`; Yousign QES (#131, Phase 3) will handle `SENSITIVE`.
+
+### Activation
+
+Env vars (all three required):
+
+- `OCI_DOCUSEAL_BASE_URL` — internal DocuSeal endpoint, e.g. `https://docuseal.dev.oci.ai4h.net`.
+- `OCI_DOCUSEAL_API_TOKEN` — issued by the DocuSeal admin UI.
+- `OCI_DOCUSEAL_WEBHOOK_SECRET` — HMAC-SHA256 secret for verifying webhook payloads.
+
+When unset, signing endpoints return 503; click-wrap and template preview keep working.
+
+### `POST /v2/dua/sign-requests`
+
+Mint a DocuSeal envelope for an APPROVED access request. Idempotent on `(accessRequestId, status=PENDING)` — calling twice returns the same in-flight envelope so the requester's signer URL doesn't get invalidated.
+
+Auth required. Caller must be the requester, the dataset host, or an admin.
+
+Body: `CreateDuaSigningRequest` — `{ accessRequestId, audience: 'RESEARCHER' | 'BUILDER', signerEmail, signerName }`.
+
+Response (201): `CreateDuaSigningRequestResponse` — `{ signature: DuaSignatureSummary }` with status `PENDING` and a `signerUrl` to redirect the requester to.
+
+Errors: 404 unknown AR; 400 AR not APPROVED; 403 caller not authorised; 503 DocuSeal unreachable.
+
+### `POST /v2/dua/webhook/docuseal`
+
+Unauthenticated webhook called by DocuSeal on `form.completed` / `form.declined` / `form.expired`. HMAC-validated against `OCI_DOCUSEAL_WEBHOOK_SECRET` via the `X-Docuseal-Signature` header. On `completed`, the platform stamps the row `SIGNED` and mints an `AcceptedTermsAndPolicies` Passport visa pointing at the signed PDF URL.
+
+### `GET /v2/me/dua-signatures`
+
+Caller's signing history. Returns `ListDuaSignaturesResponse` — `{ items: DuaSignatureSummary[] }` most-recent first.
+
+### `GET /v2/me/dua-signatures/:id`
+
+One row. 404 when the row belongs to another user.
+
 ## Click-wrap policy acceptances (#118)
 
 ### `POST /v2/identity/policy-acceptances`

@@ -78,19 +78,19 @@ pnpm --filter @oci/web exec playwright test
 
 ### Add a database column
 
-Use the [db-migration skill](../../.claude/skills/db-migration/) (or by hand): edit `packages/database/prisma/schema.prisma`, generate a migration via `pnpm --filter @oci/database db:migrate:dev --name <descriptive>`, regenerate the client (`pnpm --filter @oci/database build`).
+Edit `packages/database/prisma/schema.prisma`, generate a migration via `pnpm --filter @oci/database db:migrate:dev --name <descriptive>`, regenerate the client (`pnpm --filter @oci/database build`).
 
 ### Add a new API endpoint
 
-Use the [oci-feature-scaffold skill](../../.claude/skills/oci-feature-scaffold/). It generates the module / service / controller / DTO / repo / spec / OpenAPI tag with the project's conventions.
+Follow the existing module structure under `apps/api/src/modules/<feature>/`: `<feature>.module.ts` + `.service.ts` + `.controller.ts` + `.repository.ts` + `.service.spec.ts`. Request bodies use Zod schemas exported from `@oci/shared-types`; responses are plain TS interfaces. See the `catalog/` or `access-request/` modules as reference.
 
 ### Add a new web page
 
-Use the [oci-web-feature-scaffold skill](../../.claude/skills/oci-web-feature-scaffold/). Server-component page + server action + Playwright spec + axe-clean defaults.
+Add a route folder under `apps/web/src/app/<path>/` with a server-component `page.tsx`. Forms use server actions with Zod parsing (re-using the same schema as the API). Add a Playwright spec under `apps/web/e2e/` covering the happy path and at least one error state.
 
 ### Add a fullstack feature
 
-Use the [oci-fullstack-feature-scaffold skill](../../.claude/skills/oci-fullstack-feature-scaffold/) — orchestrates contract → API → web → E2E → /ui-ux-expert audit → docs update.
+Define the shared Zod schema in `packages/shared-types/src/index.ts` first, then implement the API side, then the web side. End with a Playwright spec that exercises the real API (no mocks) plus an axe-core check on the new page.
 
 ## Troubleshooting
 
