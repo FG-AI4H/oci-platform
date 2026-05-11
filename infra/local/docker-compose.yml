@@ -74,6 +74,64 @@ services:
         echo 'minio bucket ready'
       "
 
+  # DocuSeal — self-hosted e-signature for the AdES DUA signing flow
+  # (#128). The API talks to this on http://localhost:3010 (or
+  # http://docuseal:3000 from inside the compose network); DocuSeal
+  # POSTs completion events back to the API at
+  # http://host.docker.internal:3000/v2/dua/webhook/docuseal.
+  #
+  # First-boot setup (one-time, per fresh docker volume):
+  #   1. Open http://localhost:3010 → create the admin user.
+  #   2. Settings → API → generate a token. Copy it.
+  #   3. Settings → Webhooks → add http://host.docker.internal:3000/v2/dua/webhook/docuseal
+  #      with the same secret that's in apps/api/.env.local for
+  #      OCI_DOCUSEAL_WEBHOOK_SECRET (default `local-dev-secret`).
+  #   4. Write the token into apps/api/.env.local:
+  #        OCI_DOCUSEAL_API_TOKEN=<token from step 2>
+  #        OCI_DOCUSEAL_BASE_URL=http://localhost:3010
+  #        OCI_DOCUSEAL_WEBHOOK_SECRET=local-dev-secret
+  #   5. Restart `pnpm --filter @oci/api dev`.
+  #
+  # SECRET_KEY_BASE is Rails-style cookie/session key; auto-set per
+  # compose tear-down (rotates on docker compose down -v).
+  docuseal:
+    image: docuseal/docuseal:latest
+    container_name: oci-docuseal
+    environment:
+      SECRET_KEY_BASE: local-dev-secret-key-base-rotate-on-volume-reset
+      FORCE_SSL: 'false'
+      DATABASE_URL: postgresql://oci:oci@postgres:5432/oci_docuseal
+    ports:
+      - '3010:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      docuseal-bootstrap:
+        condition: service_completed_successfully
+    volumes:
+      - oci-docuseal-data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/up >/dev/null 2>&1 || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # One-shot DB bootstrap — DocuSeal expects an existing database;
+  # create oci_docuseal alongside oci_dev. Idempotent.
+  docuseal-bootstrap:
+    image: postgres:17-alpine
+    container_name: oci-docuseal-bootstrap
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        PGPASSWORD=oci psql -h postgres -U oci -d oci_dev -tc \"SELECT 1 FROM pg_database WHERE datname = 'oci_docuseal'\" | grep -q 1 ||
+        PGPASSWORD=oci psql -h postgres -U oci -d oci_dev -c 'CREATE DATABASE oci_docuseal OWNER oci;' &&
+        echo 'docuseal database ready'
+      "
+
 volumes:
   oci-postgres-data:
   oci-minio-data:
+  oci-docuseal-data:

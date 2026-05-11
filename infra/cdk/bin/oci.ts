@@ -7,6 +7,7 @@ import { NetworkStack } from '../lib/network-stack.js';
 import { DataStack } from '../lib/data-stack.js';
 import { IdentityStack } from '../lib/identity-stack.js';
 import { ApiStack } from '../lib/api-stack.js';
+import { DocusealStack } from '../lib/docuseal-stack.js';
 import { WebStack } from '../lib/web-stack.js';
 import { ObservabilityStack } from '../lib/observability-stack.js';
 import { resolveEnvironment } from '../lib/environments.js';
@@ -91,6 +92,22 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
 // declare the deploy-order dep explicitly since CDK can no longer infer
 // it from props.
 api.addDependency(identity);
+
+// DocuSeal stack — self-hosted e-signature for AdES DUA flow (#128).
+// Shares cluster + ALB with the API; routes /docuseal/* via a priority-60
+// listener rule (between API's 50 and Web's catch-all 100). Provisions the
+// API/webhook secrets the API task consumes via SSM-by-name imports.
+const docuseal = new DocusealStack(app, `oci-${envName}-docuseal`, {
+  env: cfg.env,
+  cfg,
+  tags,
+  vpc: network.vpc,
+  cluster: api.cluster,
+  httpsListener: api.httpsListener,
+  database: data.database,
+  logGroup: observability.apiLogGroup,
+});
+docuseal.addDependency(api);
 
 // Web stack — Next.js Fargate service sharing the API's cluster + ALB.
 // Path-based routing on the existing HTTPS listener: ApiStack owns the

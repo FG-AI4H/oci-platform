@@ -10,6 +10,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
@@ -156,6 +157,14 @@ export class ApiStack extends cdk.Stack {
           // bucket to multipart-upload + presign against. Region
           // already injected above.
           OCI_DATASETS_BUCKET: props.datasetsBucket.bucketName,
+          // DocuSeal endpoint (#128). Plain env var resolved at deploy
+          // time via SSM substitution; docuseal-stack writes the
+          // parameter. Activates the AdES signing endpoints only when
+          // present (the service treats unset as 503).
+          OCI_DOCUSEAL_BASE_URL: ssm.StringParameter.valueForStringParameter(
+            this,
+            `/oci/${props.cfg.envName}/docuseal/base-url`,
+          ),
         },
         // Aurora credential secrets — same per-field injection as the
         // migrate task. The API composes DATABASE_URL at boot from these
@@ -169,6 +178,30 @@ export class ApiStack extends cdk.Stack {
           DB_HOST: ecs.Secret.fromSecretsManager(props.database.secret!, 'host'),
           DB_PORT: ecs.Secret.fromSecretsManager(props.database.secret!, 'port'),
           DB_NAME: ecs.Secret.fromSecretsManager(props.database.secret!, 'dbname'),
+          // DocuSeal credentials (#128). docuseal-stack writes the
+          // secret ARNs into SSM as plain parameters; we import the
+          // Secret by ARN here so re-rotating the operator-managed
+          // values doesn't require a docuseal-stack redeploy.
+          OCI_DOCUSEAL_API_TOKEN: ecs.Secret.fromSecretsManager(
+            secretsmanager.Secret.fromSecretCompleteArn(
+              this,
+              'DocusealApiTokenImport',
+              ssm.StringParameter.valueForStringParameter(
+                this,
+                `/oci/${props.cfg.envName}/docuseal/api-token-secret-arn`,
+              ),
+            ),
+          ),
+          OCI_DOCUSEAL_WEBHOOK_SECRET: ecs.Secret.fromSecretsManager(
+            secretsmanager.Secret.fromSecretCompleteArn(
+              this,
+              'DocusealWebhookSecretImport',
+              ssm.StringParameter.valueForStringParameter(
+                this,
+                `/oci/${props.cfg.envName}/docuseal/webhook-secret-arn`,
+              ),
+            ),
+          ),
         },
         logDriver: ecs.LogDrivers.awsLogs({ streamPrefix: 'api', logGroup: props.logGroup }),
       },
