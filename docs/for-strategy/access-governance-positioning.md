@@ -128,5 +128,5 @@ Items 2–5 are the path-clearing decisions that engineering cannot make alone. 
 - [overview/access-governance.md](../overview/access-governance.md) — plain-English explainer
 - [for-governance/duo-and-dua.md](../for-governance/duo-and-dua.md) — the policy-audience deep-dive
 - [adr/0003-tiered-identity-assurance-and-access-requirements.md](../adr/0003-tiered-identity-assurance-and-access-requirements.md) — the architectural decision record
-- [research/access-governance-2026-05-08.md](../research/access-governance-2026-05-08.md) — the field-research synthesis that fed the ADR
+- `docs/research/access-governance-2026-05-08.md` _(internal companion repo)_ — the field-research synthesis that fed the ADR
 - [for-strategy/alignment-with-mandates.md](./alignment-with-mandates.md) — broader ITU/WHO/WIPO mandate-fit context

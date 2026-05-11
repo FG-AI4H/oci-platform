@@ -221,7 +221,7 @@ Errors: 404 when the visa is missing, revoked, or past expiry.
 
 ### Signing-key configuration
 
-Production: provision an AWS KMS RSA-2048 key (`RSASSA_PKCS1_V1_5_SHA_256`) and seed `passport_signing_keys` with the ARN before boot. Operator runbook in [`docs/runbooks/passport-issuer.md`](../runbooks/passport-issuer.md) (TBD).
+Production: provision an AWS KMS RSA-2048 key (`RSASSA_PKCS1_V1_5_SHA_256`) and seed `passport_signing_keys` with the ARN before boot. Operator runbook at `docs/runbooks/passport-issuer.md` _(not yet written)_.
 
 Dev: an ephemeral RSA keypair is generated on first boot when no ACTIVE row exists. Refused when `NODE_ENV=production`.
 

@@ -17,7 +17,7 @@ Two pressures are forcing the model to evolve:
 
 3. **Mission scope** — OCI is not just an academic-research catalogue. The platform's distinctive mandate under GI-AI4H is to **enable AI solutions for WHO public-health priorities, especially in LMICs**, and that work is largely done by commercial actors (LMIC startups, MedTech vendors, academic spin-offs commercialising research models, development-finance-backed initiatives). Peer platforms (Synapse, EGA, dbGaP) skew toward an academic-non-commercial-research default that excludes exactly the AI-builder population OCI exists to serve. The access-governance architecture must therefore treat **commercial use as a first-class scenario**, not a corner case — with a DUA template that supports product / deployment use, request-form fields tuned to deployment country and regulatory pathway, and a path that doesn't require a US R1 university affiliation.
 
-Background research synthesising what Synapse, dbGaP, EGA, and UK Biobank do, plus the eIDAS framing, is captured in [docs/research/access-governance-2026-05-08.md](../research/access-governance-2026-05-08.md). This ADR records the architectural choice; the research doc records _why we believe what we believe_ about the field.
+Background research synthesising what Synapse, dbGaP, EGA, and UK Biobank do, plus the eIDAS framing, is captured in `docs/research/access-governance-2026-05-08.md` _(internal — held in the OCI Platform companion repo, not public)_. This ADR records the architectural choice; the research doc records _why we believe what we believe_ about the field.
 
 The forces in tension:
 
@@ -155,7 +155,7 @@ The phased rollout is recorded below in _Consequences → Neutral_; this ADR com
 
 ## References
 
-- Research synthesis: [docs/research/access-governance-2026-05-08.md](../research/access-governance-2026-05-08.md)
+- Research synthesis: `docs/research/access-governance-2026-05-08.md` _(internal companion repo)_
 - Existing access-request implementation: PR F ([#75](https://github.com/FG-AI4H/oci-platform/pull/75)), PR J.1 ([#93](https://github.com/FG-AI4H/oci-platform/pull/93)), PR L.3 ([#99](https://github.com/FG-AI4H/oci-platform/pull/99))
 - Related modules: `apps/api/src/modules/access-request/`, `packages/croissant/src/duo/`, `apps/web/src/app/catalog/[slug]/access-cta.tsx`
 - GA4GH Passport spec: https://ga4gh.github.io/data-security/ga4gh-passport

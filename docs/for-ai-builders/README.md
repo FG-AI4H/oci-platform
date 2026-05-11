@@ -33,12 +33,12 @@ The OCI exists in part to serve you. The platform's distinctive mandate under GI
 
 ## Where to start
 
-| Guide                                                                              | Read when                                                                                                                      |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| [How access works (overview)](../overview/access-governance.md)                    | First time. Plain-English explainer of identity tiers, DUO, DUA, e-signatures, GA4GH Passports.                                |
-| [Requesting access for commercial / deployment use](./accessing-data.md)           | You've found a dataset and need to file a request that covers your commercial deployment scenario.                             |
-| [Choosing a dataset for AI development](./choosing-a-dataset.md)                   | You're scoping a project and need to filter by WHO priority, deployment region, commercial-use status. _(Coming with Phase 1)_ |
-| [Citation & traceability for regulatory submissions](./regulatory-traceability.md) | You're preparing an FDA / EMA / national-MoH submission and need stable dataset references. _(Coming with Phase C)_            |
+| Guide                                                                      | Read when                                                                                              |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [How access works (overview)](../overview/access-governance.md)            | First time. Plain-English explainer of identity tiers, DUO, DUA, e-signatures, GA4GH Passports.        |
+| [Requesting access for commercial / deployment use](./accessing-data.md)   | You've found a dataset and need to file a request that covers your commercial deployment scenario.     |
+| Choosing a dataset for AI development _(coming with Phase 1)_              | You're scoping a project and need to filter by WHO priority, deployment region, commercial-use status. |
+| Citation & traceability for regulatory submissions _(coming with Phase C)_ | You're preparing an FDA / EMA / national-MoH submission and need stable dataset references.            |
 
 ## Quick orientation
 

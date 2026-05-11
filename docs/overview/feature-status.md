@@ -70,7 +70,7 @@ Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116
 
 ### Architectural commitment landed (ADR-0003, 2026-05-08)
 
-[ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md) commits the platform to a tiered identity assurance + GA4GH-Passport-first model, with researchers AND AI solution developers as first-class audiences. Plain-English explainer at [overview/access-governance.md](./access-governance.md). Strategy positioning at [for-strategy/access-governance-positioning.md](../for-strategy/access-governance-positioning.md). Field research at [research/access-governance-2026-05-08.md](../research/access-governance-2026-05-08.md).
+[ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md) commits the platform to a tiered identity assurance + GA4GH-Passport-first model, with researchers AND AI solution developers as first-class audiences. Plain-English explainer at [overview/access-governance.md](./access-governance.md). Strategy positioning at [for-strategy/access-governance-positioning.md](../for-strategy/access-governance-positioning.md). Field research at `docs/research/access-governance-2026-05-08.md` _(internal companion repo)_.
 
 ### Phase 1 (delivered 2026-05-09)
 
@@ -141,7 +141,7 @@ Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116
 | AI-builder audience folder (`docs/for-ai-builders/`)                               | ✅ Live            | PR M ([#144](https://github.com/FG-AI4H/oci-platform/pull/144)) |
 | Plain-English access-governance master at `docs/overview/access-governance.md`     | ✅ Live            | PR M                                                            |
 | ADR-0003: tiered identity assurance + GA4GH-first                                  | ✅ Live (proposed) | PR M                                                            |
-| Field research synthesis at `docs/research/access-governance-2026-05-08.md`        | ✅ Live            | PR M                                                            |
+| Field research synthesis (internal companion repo, see ADR-0003 ref)               | ✅ Live            | PR M                                                            |
 | Strategy positioning brief at `docs/for-strategy/access-governance-positioning.md` | ✅ Live            | PR M                                                            |
 
 ## Annotation, evaluation, reporting
