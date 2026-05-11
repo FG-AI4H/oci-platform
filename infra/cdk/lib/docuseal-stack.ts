@@ -265,6 +265,89 @@ export class DocusealStack extends cdk.Stack {
       action: elbv2.ListenerAction.forward([targetGroup]),
     });
 
+    // --- One-shot DB-bootstrap task ----------------------------------
+    //
+    // Creates the `oci_docuseal` logical database on the shared Aurora
+    // cluster. DocuSeal's container assumes the DB already exists
+    // (Rails migrations run on first boot, but `CREATE DATABASE` isn't
+    // one of them). We can't put `CREATE DATABASE` in the main
+    // container's entrypoint because the DocuSeal image doesn't ship
+    // psql; a separate one-shot task with `postgres:17-alpine` does.
+    //
+    // The operator runs this task once after `cdk deploy`:
+    //
+    //   aws ecs run-task --cli-input-json "$(
+    //     aws ssm get-parameter \
+    //       --name /oci/<env>/docuseal/db-bootstrap-launch-spec \
+    //       --query Parameter.Value --output text
+    //   )"
+    //
+    // The task is idempotent (uses `CREATE DATABASE IF NOT EXISTS`-equivalent
+    // via a `SELECT 1 FROM pg_database` guard). Re-running it is a no-op.
+
+    const bootstrapTaskDef = new ecs.FargateTaskDefinition(this, 'DocusealDbBootstrapTaskDef', {
+      cpu: 256,
+      memoryLimitMiB: 512,
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.ARM64,
+        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+      },
+    });
+    bootstrapTaskDef.addContainer('db-bootstrap', {
+      image: ecs.ContainerImage.fromRegistry('postgres:17-alpine'),
+      essential: true,
+      entryPoint: ['sh', '-c'],
+      command: [
+        // PGPASSWORD comes from the secret injection; check-then-create
+        // so a re-run on an already-bootstrapped cluster exits 0.
+        [
+          'set -e',
+          'echo "Bootstrap: checking for oci_docuseal database on $PGHOST..."',
+          'EXISTS=$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -tAc "SELECT 1 FROM pg_database WHERE datname = \'oci_docuseal\'")',
+          'if [ "$EXISTS" = "1" ]; then echo "Database oci_docuseal already exists — no-op."; exit 0; fi',
+          'echo "Creating oci_docuseal database..."',
+          'psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" -c "CREATE DATABASE oci_docuseal OWNER \\"$PGUSER\\""',
+          'echo "Database oci_docuseal created."',
+        ].join(' && '),
+      ],
+      secrets: {
+        PGUSER: ecs.Secret.fromSecretsManager(props.database.secret!, 'username'),
+        PGPASSWORD: ecs.Secret.fromSecretsManager(props.database.secret!, 'password'),
+        PGHOST: ecs.Secret.fromSecretsManager(props.database.secret!, 'host'),
+        PGPORT: ecs.Secret.fromSecretsManager(props.database.secret!, 'port'),
+        PGDATABASE: ecs.Secret.fromSecretsManager(props.database.secret!, 'dbname'),
+      },
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'docuseal-db-bootstrap',
+        logGroup: props.logGroup,
+      }),
+    });
+
+    // Aggregate the launch parameters into one SSM string so the
+    // operator command is `aws ecs run-task --cli-input-json "$(aws ssm
+    // get-parameter ...)"`. Mirrors the api-stack migrate-task pattern.
+    const bootstrapLaunchSpec = JSON.stringify({
+      cluster: props.cluster.clusterArn,
+      taskDefinition: bootstrapTaskDef.taskDefinitionArn,
+      launchType: 'FARGATE',
+      networkConfiguration: {
+        awsvpcConfiguration: {
+          subnets: props.vpc.privateSubnets.map((s) => s.subnetId),
+          securityGroups: [serviceSg.securityGroupId],
+          assignPublicIp: 'DISABLED',
+        },
+      },
+    });
+    new ssm.StringParameter(this, 'DocusealDbBootstrapLaunchSpecParam', {
+      parameterName: `/oci/${env}/docuseal/db-bootstrap-launch-spec`,
+      stringValue: bootstrapLaunchSpec,
+      description: `aws ecs run-task --cli-input-json payload for the DocuSeal DB bootstrap in ${env}. Idempotent — re-run safely.`,
+    });
+    new cdk.CfnOutput(this, 'DocusealDbBootstrapTaskDefArn', {
+      value: bootstrapTaskDef.taskDefinitionArn,
+      description: 'DocuSeal DB-bootstrap one-shot task definition ARN.',
+    });
+
     // --- Exports ------------------------------------------------------
 
     // api-stack reads these by name (SSM dynamic resolution + Secrets
