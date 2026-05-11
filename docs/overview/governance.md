@@ -49,13 +49,13 @@ The OCI is operated under **WG-Data** as the implementation of the **Data and Mo
 
 ## Decision-making
 
-| Decision class                                                                              | Who decides                                                       | Recorded where                                                                                            |
-| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Cross-cutting architecture / pattern** (auth model, validation pattern, error envelope)   | OCI maintainers + WG-Data lead, with notice to Steering Committee | [`docs/adr/`](../adr/)                                                                                    |
-| **Operational** (deploy gates, security baseline, dependency upgrades)                      | OCI maintainers                                                   | Pull-request review trail; CHANGELOG.                                                                     |
-| **Standards alignment** (which version of Croissant; which DUO terms to surface)            | WG-Data, in coordination with MLCommons / GA4GH where applicable  | ADR + change in `@oci/croissant`.                                                                         |
-| **Compliance posture** (what jurisdictions are supported, what audit artefacts are emitted) | WG-Ethics & governance + Steering Committee                       | [`docs/for-governance/compliance.md`](../for-governance/compliance.md) and per-environment runbooks.      |
-| **Roadmap & prioritisation** (which Phase ships first, which Topic Group is supported)      | Steering Committee, advised by Joint Secretariat                  | The public GitHub Project board ([FG-AI4H/projects/3](https://github.com/orgs/FG-AI4H/projects/3)).       |
+| Decision class                                                                              | Who decides                                                       | Recorded where                                                                                       |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Cross-cutting architecture / pattern** (auth model, validation pattern, error envelope)   | OCI maintainers + WG-Data lead, with notice to Steering Committee | [`docs/adr/`](../adr/)                                                                               |
+| **Operational** (deploy gates, security baseline, dependency upgrades)                      | OCI maintainers                                                   | Pull-request review trail; CHANGELOG.                                                                |
+| **Standards alignment** (which version of Croissant; which DUO terms to surface)            | WG-Data, in coordination with MLCommons / GA4GH where applicable  | ADR + change in `@oci/croissant`.                                                                    |
+| **Compliance posture** (what jurisdictions are supported, what audit artefacts are emitted) | WG-Ethics & governance + Steering Committee                       | [`docs/for-governance/compliance.md`](../for-governance/compliance.md) and per-environment runbooks. |
+| **Roadmap & prioritisation** (which Phase ships first, which Topic Group is supported)      | Steering Committee, advised by Joint Secretariat                  | The public GitHub Project board ([FG-AI4H/projects/3](https://github.com/orgs/FG-AI4H/projects/3)).  |
 
 ## Operating principles
 
