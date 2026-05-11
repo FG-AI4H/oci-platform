@@ -59,11 +59,11 @@ Every Docker image build runs:
 
 - Alarms → SNS → email + (Phase A2) PagerDuty rotation.
 - Runbooks in [`docs/runbooks/`](./runbooks/).
-- Quarterly Security Hub remediation cadence (continued from current OCI eval platform; see `docs/security-remediation-2026-03-02.md`).
+- Quarterly Security Hub remediation cadence (continued from the legacy OCI eval platform).
 
 ## What you must NOT do
 
-- Don't disable `BlockPublicAccess` on S3 buckets, ever. (One affected access point in March 2026; see remediation doc.)
+- Don't disable `BlockPublicAccess` on S3 buckets, ever.
 - Don't run certbot on a host (current eval platform pattern); use ACM via CDK.
 - Don't store AWS credentials in `.env`. The current eval platform's history of AWS credential expiration issues comes from this anti-pattern.
 - Don't commit Cognito user-pool IDs or client IDs into hard-coded source — pull from CDK outputs / SSM at runtime.

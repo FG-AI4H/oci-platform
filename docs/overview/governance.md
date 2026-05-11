@@ -55,7 +55,7 @@ The OCI is operated under **WG-Data** as the implementation of the **Data and Mo
 | **Operational** (deploy gates, security baseline, dependency upgrades)                      | OCI maintainers                                                   | Pull-request review trail; CHANGELOG.                                                                     |
 | **Standards alignment** (which version of Croissant; which DUO terms to surface)            | WG-Data, in coordination with MLCommons / GA4GH where applicable  | ADR + change in `@oci/croissant`.                                                                         |
 | **Compliance posture** (what jurisdictions are supported, what audit artefacts are emitted) | WG-Ethics & governance + Steering Committee                       | [`docs/for-governance/compliance.md`](../for-governance/compliance.md) and per-environment runbooks.      |
-| **Roadmap & prioritisation** (which Phase ships first, which Topic Group is supported)      | Steering Committee, advised by Joint Secretariat                  | [`docs/oci-milestones-2026-2027.md`](../oci-milestones-2026-2027.md) and the public GitHub Project board. |
+| **Roadmap & prioritisation** (which Phase ships first, which Topic Group is supported)      | Steering Committee, advised by Joint Secretariat                  | The public GitHub Project board ([FG-AI4H/projects/3](https://github.com/orgs/FG-AI4H/projects/3)).       |
 
 ## Operating principles
 
@@ -77,5 +77,4 @@ The OCI is operated under **WG-Data** as the implementation of the **Data and Mo
 
 - [GI-AI4H AI for Good webinar — Data Standards for Health AI (March 2026)](https://aiforgood.itu.int/event/data-standards-for-health-ai-benchmarking-metadata-and-federated-data-discovery/)
 - [`docs/WG-Data_Terms_of_Reference.docx`](../WG-Data_Terms_of_Reference.docx) — formal WG-Data ToR.
-- [`docs/oci-milestones-2026-2027.md`](../oci-milestones-2026-2027.md) — published milestone plan.
-- [`docs/platform-modernization-assessment.md`](../platform-modernization-assessment.md) — the strategy doc that drove the current architecture.
+- [`docs/adr/`](../adr/) — Architecture Decision Records, including the platform's foundational choices.

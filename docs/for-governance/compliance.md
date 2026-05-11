@@ -116,4 +116,4 @@ See [`docs/security.md`](../security.md) for the platform's STRIDE-aligned threa
 - [WHO ethics and governance guidance for AI in health](https://www.who.int/publications/i/item/9789240029200)
 - [GA4GH Framework for Responsible Sharing of Genomic and Health-Related Data](https://www.ga4gh.org/framework/)
 - [European Health Data Space (EHDS) regulation](https://www.european-health-data-space.com/)
-- [`docs/security.md`](../security.md), [`docs/security-remediation-2026-03-02.md`](../security-remediation-2026-03-02.md)
+- [`docs/security.md`](../security.md)

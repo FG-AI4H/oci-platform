@@ -1,7 +1,6 @@
 # OCI Platform — Architecture
 
-> **Source-of-truth strategy doc:** [`platform-modernization-assessment.md`](./platform-modernization-assessment.md)
-> This page is a developer-facing summary; read the assessment for context, decisions, and rationale.
+> Developer-facing summary. Cross-cutting decisions are recorded in the [ADRs](./adr/); the migration playbook lives in [`migration/strangler-plan.md`](./migration/strangler-plan.md).
 
 ## High-level
 
@@ -91,7 +90,6 @@ need national data-residency (multi-region active-passive via Aurora Global Data
 
 ## See also
 
-- [`platform-modernization-assessment.md`](./platform-modernization-assessment.md) — deep-dive
-- [`oci-milestones-2026-2027.md`](./oci-milestones-2026-2027.md) — package roadmap
 - [`migration/strangler-plan.md`](./migration/strangler-plan.md) — cutover plan
 - [`adr/`](./adr/) — Architecture Decision Records
+- [`overview/feature-status.md`](./overview/feature-status.md) — live capability matrix

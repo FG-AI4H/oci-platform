@@ -74,7 +74,7 @@ Domain terms used throughout the OCI documentation.
 - **Phase D**: Reporting & regulator portal. _(Planned.)_
 - **Phase E**: DMXP v1.0, federation worker, MedEval-GI. _(Down-payment shipped; full rollout planned.)_
 
-See [`docs/migration/strangler-plan.md`](../migration/strangler-plan.md) and [`docs/oci-milestones-2026-2027.md`](../oci-milestones-2026-2027.md) for the long-form plan.
+See [`docs/migration/strangler-plan.md`](../migration/strangler-plan.md) for the long-form plan.
 
 ## External references
 

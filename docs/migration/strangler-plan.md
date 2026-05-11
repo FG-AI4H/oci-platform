@@ -1,6 +1,6 @@
 # Strangler-fig migration plan
 
-This is the operational playbook that complements [`platform-modernization-assessment.md §3`](../platform-modernization-assessment.md). 5 phases over 12-18 months. The legacy stack keeps running until each context is fully migrated.
+This is the operational playbook for absorbing the legacy stacks into the new monorepo. 5 phases over 12-18 months. The legacy stack keeps running until each context is fully migrated.
 
 ## Legacy systems being absorbed
 
