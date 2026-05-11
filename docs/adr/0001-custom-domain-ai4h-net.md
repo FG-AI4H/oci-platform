@@ -132,8 +132,6 @@ before, no behaviour change.
 
 ## References
 
-- `docs/platform-modernization-assessment.md` — original
-  `oci.aiaudit.org` plan (now superseded by this ADR).
 - `docs/security.md` — TLS-only mandate.
 - AWS docs:
   [CloudFront ACM cert region requirement](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html#https-requirements-aws-region)

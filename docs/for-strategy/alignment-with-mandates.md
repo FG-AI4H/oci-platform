@@ -65,6 +65,6 @@ The OCI most directly contributes to:
 ## Reference deliverables
 
 - **WG-Data Terms of Reference** (formal): [`docs/WG-Data_Terms_of_Reference.docx`](../WG-Data_Terms_of_Reference.docx).
-- **OCI milestones 2026–2027** (published plan): [`docs/oci-milestones-2026-2027.md`](../oci-milestones-2026-2027.md).
-- **Platform modernization assessment** (the strategy doc that drove the architecture): [`docs/platform-modernization-assessment.md`](../platform-modernization-assessment.md).
+- **GitHub Project board** (live roadmap): [FG-AI4H/projects/3](https://github.com/orgs/FG-AI4H/projects/3).
+- **Architecture Decision Records**: [`docs/adr/`](../adr/) — the foundational choices that drove the architecture.
 - **AI for Good webinar — March 2026**: [Data Standards for Health AI: Benchmarking, Metadata and Federated Data Discovery](https://aiforgood.itu.int/event/data-standards-for-health-ai-benchmarking-metadata-and-federated-data-discovery/).

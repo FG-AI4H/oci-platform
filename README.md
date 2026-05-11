@@ -39,13 +39,10 @@ This monorepo replaces three legacy stacks (originally built under the FG-AI4H F
 
 The plan is a 5-phase strangler-fig migration over 12-18 months. See:
 
-- [`docs/platform-modernization-assessment.md`](./docs/platform-modernization-assessment.md) — strategy
 - [`docs/architecture.md`](./docs/architecture.md) — current architecture summary
 - [`docs/migration/strangler-plan.md`](./docs/migration/strangler-plan.md) — operational plan
-- [`docs/oci-milestones-2026-2027.md`](./docs/oci-milestones-2026-2027.md) — package roadmap aligned with WG-Data
 - [`docs/security.md`](./docs/security.md) — security baseline (non-negotiable)
 - [`docs/deployment.md`](./docs/deployment.md) — dev/int/prod via GHA OIDC
-- [`docs/links.md`](./docs/links.md) — every reference
 
 ## Quick start
 
@@ -70,7 +67,7 @@ Full setup details: [`docs/getting-started.md`](./docs/getting-started.md).
 - **AWS CDK 2.252** — IaC for VPC, Cognito, Aurora Serverless v2, ECS Fargate (ARM64), ALB, CloudFront, WAFv2, S3, KMS, CloudWatch
 - **GitHub Actions OIDC** for dev/int/prod deploy. No static AWS keys, anywhere.
 
-Why these choices: see [`docs/platform-modernization-assessment.md`](./docs/platform-modernization-assessment.md) §2.1.
+Why these choices: see [`docs/architecture.md`](./docs/architecture.md) and the ADRs under [`docs/adr/`](./docs/adr/).
 
 ## Security
 
