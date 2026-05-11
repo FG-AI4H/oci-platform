@@ -1,0 +1,107 @@
+# DocuSeal — operator runbook
+
+DocuSeal is a self-hosted e-signature service that the OCI Platform uses to capture AdES-grade Data Use Agreement (DUA) signatures for the `CONTROLLED` access tier. It runs as a Fargate task in the same cluster as the API, behind the same ALB at the `/docuseal/*` path.
+
+This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-off — DocuSeal manages its own database schema migrations on container start, and operator-managed secrets are stored in Secrets Manager so token rotation doesn't need an infra redeploy.
+
+## Provisioning
+
+1. **Pre-flight**: confirm the per-env Aurora cluster has an `oci_docuseal` logical database. Either via the DB migration runbook (TBD) or one-shot:
+
+   ```sql
+   CREATE DATABASE oci_docuseal OWNER oci;
+   ```
+
+   Run from a bastion with access to the Aurora endpoint. The DocuSeal container won't auto-create databases (Rails expects an existing one).
+
+2. **Deploy the stack**:
+
+   ```bash
+   pnpm --filter @oci/cdk exec cdk deploy oci-<env>-docuseal --context env=<env>
+   ```
+
+   This provisions:
+   - The Fargate service (1 task, x86_64).
+   - An EFS volume mounted at `/data/docuseal` for blob storage.
+   - Three Secrets Manager secrets:
+     - `OciDevDocusealDocusealSecretKeyBase-*` — Rails cookie/session key.
+     - `OciDevDocusealDocusealApiToken-*` — API token stub.
+     - `OciDevDocusealDocusealWebhookSecret-*` — HMAC secret.
+   - An ALB listener rule at priority 60 routing `/docuseal/*` to the DocuSeal target group.
+   - SSM parameters under `/oci/<env>/docuseal/*` so the API stack can find the secrets without a CFN cross-stack export.
+
+3. **Wait for the task to be healthy** — first boot runs the Rails migrations against `oci_docuseal`. Takes ~30 seconds. Watch the CloudWatch log group (same one as the API) under the `docuseal/` log stream prefix.
+
+## First-time admin bootstrap
+
+Once the task is healthy, open `https://<env>.oci.ai4h.net/docuseal` in a browser:
+
+1. **Create the admin user** — DocuSeal's first-run flow asks for an email + password. Use a shared `oci-act@ai4h.net` distribution-list address (TBD with the OCI Access & Compliance Team) so handover doesn't require a password reset.
+
+2. **Generate the API token**:
+   - `Settings → API → Generate token`.
+   - Copy the token value.
+   - Open AWS Secrets Manager → find the secret named `OciDevDocusealDocusealApiToken-*` (or `int` / `prod` variant).
+   - `Retrieve secret value → Edit → paste`. Save.
+   - Restart the API service so the task picks up the new value:
+     ```bash
+     aws ecs update-service --cluster oci-<env>-api --service api --force-new-deployment --region eu-central-1
+     ```
+
+3. **Configure the webhook**:
+   - `Settings → Webhooks → Add webhook`.
+   - URL: `https://<env>.oci.ai4h.net/v2/dua/webhook/docuseal`.
+   - Secret: open the `OciDevDocusealDocusealWebhookSecret-*` secret in Secrets Manager, copy the value, paste here.
+   - Events: `submission.completed`, `submission.declined`, `submission.expired`.
+   - Save.
+
+4. **Smoke-test**: from the requester's perspective on the API, hit `POST /v2/dua/sign-requests` for an APPROVED CONTROLLED-tier access request. Follow the returned `signerUrl`. Sign in DocuSeal. Within seconds, `/me/dua-signatures/<id>` should flip to `SIGNED` and a fresh `AcceptedTermsAndPolicies` GA4GH visa should appear at `/me/passport/issued`.
+
+## Token rotation
+
+1. In DocuSeal admin UI, generate a new token.
+2. Update the Secrets Manager secret value (step 2 above).
+3. Force a new API deployment.
+
+The old token remains valid in DocuSeal until you revoke it in the admin UI. Recommended: keep both valid for 24h to ride out in-flight requests, then revoke the old one.
+
+## Webhook-secret rotation
+
+1. Generate a new random secret (`openssl rand -hex 32`).
+2. Update both:
+   - The Secrets Manager secret value (`OciDev/Int/Prod-DocusealWebhookSecret-*`).
+   - The DocuSeal Webhooks settings.
+3. Force a new API deployment.
+
+Both sides need the same value or the HMAC check fails and webhooks are rejected with 503.
+
+## Disaster recovery
+
+- **Lost admin password**: DocuSeal exposes a `bin/rails docuseal:admin:reset_password` rake task. Run it via ECS exec on the task:
+
+  ```bash
+  aws ecs execute-command --cluster oci-<env>-api --task <task-arn> \
+    --container docuseal --interactive --command "bundle exec rails docuseal:admin:reset_password"
+  ```
+
+  `enableExecuteCommand` is on for `dev` only — for `int` / `prod` you'll need to temporarily flip it on, redeploy, run, flip off.
+
+- **EFS volume corrupted**: restore from an AWS Backup snapshot of the EFS file system (snapshots configured separately under the `oci-<env>-data` stack's backup plan). DocuSeal's Postgres schema lives on Aurora; both halves need to be restored to the same point-in-time.
+
+- **`oci_docuseal` database lost**: DocuSeal's Rails migrations will re-create the schema on next task start, but all signed-envelope metadata is gone. Restore from Aurora's PITR.
+
+## Local development
+
+The `infra/local/docker-compose.yml` ships a DocuSeal service with a one-shot Postgres-bootstrap container that creates `oci_docuseal` on the local instance. First-boot setup mirrors the AWS path (admin user → API token → webhook), with these values plugged into `apps/api/.env.local`:
+
+```bash
+OCI_DOCUSEAL_BASE_URL=http://localhost:3010
+OCI_DOCUSEAL_API_TOKEN=<from the local DocuSeal admin UI>
+OCI_DOCUSEAL_WEBHOOK_SECRET=local-dev-secret
+```
+
+The webhook URL DocuSeal posts back to is `http://host.docker.internal:3000/v2/dua/webhook/docuseal` — the API runs on the host (via `pnpm dev`), not in compose.
+
+## When DocuSeal is unconfigured
+
+If `OCI_DOCUSEAL_BASE_URL` / `OCI_DOCUSEAL_API_TOKEN` / `OCI_DOCUSEAL_WEBHOOK_SECRET` are missing, the API's signing endpoints return `503 ServiceUnavailable` and the webhook handler returns 503 (no shared secret means no HMAC validation, which is fail-closed). The rest of the platform — click-wrap (#118), DUA template preview (#129), Passport visas (#126/#127) — continues to work. CONTROLLED-tier access requests simply can't progress past approval until DocuSeal is back.
