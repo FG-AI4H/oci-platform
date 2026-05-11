@@ -8,7 +8,7 @@ You're here to **find a dataset, request access, and use it**. These guides walk
 | [Finding datasets](./finding-datasets.md)                       | You don't know what's out there yet — search, filter, federation.                                                    |
 | [Requesting access](./requesting-access.md)                     | You found a RESTRICTED dataset and need to file a structured access request.                                         |
 | [Using the data](./using-data.md)                               | Your access has been approved; you want to download responsibly.                                                     |
-| [Citing a dataset](./citing.md)                                 | You're publishing and need to cite the dataset version in a stable, machine-readable way.                            |
+| Citing a dataset _(not yet written)_                            | You're publishing and need to cite the dataset version in a stable, machine-readable way.                            |
 
 ## Quick orientation
 

@@ -78,5 +78,5 @@ Postgres query.
 
 ## Pinned tooling versions
 
-See [`CLAUDE.md`](../CLAUDE.md) and `package.json`. Anything that pins must also be present in
+See `package.json` (authoritative) and `.nvmrc`. Anything that pins must also be present in
 `.github/workflows/_deploy-env.yml`.

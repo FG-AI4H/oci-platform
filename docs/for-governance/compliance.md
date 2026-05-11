@@ -36,7 +36,7 @@ The OCI is designed to be **configured for your jurisdiction**, not to claim one
 - WAFv2 on `int` and `prod`. AWS managed rule sets + custom rules.
 - CSRF mitigation via SameSite cookies + CSRF tokens on state-changing routes.
 - CSP via `@fastify/helmet` (configurable per deployment; default-deny).
-- Dependency upgrades require ADR + 48h dev soak before promotion (per [`CLAUDE.md`](../../CLAUDE.md)).
+- Dependency upgrades require ADR + 48h dev soak before promotion (project rule; see the [Architecture Decision Records](../adr/) for cross-cutting decisions).
 
 ### Operational
 

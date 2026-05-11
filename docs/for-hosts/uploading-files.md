@@ -87,6 +87,6 @@ The "cancel" button per file aborts the in-flight `fetch` and the API issues `Ab
 
 ## Troubleshooting
 
-- **"Failed to fetch" mid-upload.** Usually a CORS preflight failure — the browser can't reach MinIO/S3 directly. Check that the OCI instance is configured (see [for-operators/deployment.md](../for-operators/deployment.md)).
+- **"Failed to fetch" mid-upload.** Usually a CORS preflight failure — the browser can't reach MinIO/S3 directly. Check that the OCI instance is configured correctly (see [`docs/deployment.md`](../deployment.md)).
 - **"The specified bucket does not exist."** The OCI's S3 bucket env vars aren't wired up correctly on this deployment. Talk to your operator.
 - **Upload reaches 100% but stays "uploading".** Likely `complete` failed silently. The `cancel` button still works; cancel and retry. If it persists, check the API logs.

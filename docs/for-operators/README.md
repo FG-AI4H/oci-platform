@@ -2,13 +2,13 @@
 
 You're deploying or running an OCI instance. The platform is designed to run as a fleet — the global instance at `oci.ai4h.net`, plus member-state and regional-office instances that federate with it.
 
-| Guide                                        | Read when                                                       |
-| -------------------------------------------- | --------------------------------------------------------------- |
-| [Deployment](../deployment.md)               | First-time deploy of a new environment.                         |
-| [Architecture](../architecture.md)           | High-level reference for what's where.                          |
-| [Security baseline](../security.md)          | The controls expected on every instance (KMS, WAF, OIDC, etc.). |
-| [Runbooks](../runbooks/)                     | Day-2 operations: incidents, rotations, restores.               |
-| [Observability](./observability.md) _(stub)_ | What to wire to your CloudWatch / X-Ray / Grafana.              |
+| Guide                               | Read when                                                       |
+| ----------------------------------- | --------------------------------------------------------------- |
+| [Deployment](../deployment.md)      | First-time deploy of a new environment.                         |
+| [Architecture](../architecture.md)  | High-level reference for what's where.                          |
+| [Security baseline](../security.md) | The controls expected on every instance (KMS, WAF, OIDC, etc.). |
+| [Runbooks](../runbooks/)            | Day-2 operations: incidents, rotations, restores.               |
+| Observability _(not yet written)_   | What to wire to your CloudWatch / X-Ray / Grafana.              |
 
 ## Trust model summary
 

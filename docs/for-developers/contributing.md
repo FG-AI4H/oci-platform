@@ -4,7 +4,7 @@ Pull requests welcome. The project enforces a strict verification gate but the c
 
 ## Before you start
 
-1. Read the project [`CLAUDE.md`](../../CLAUDE.md) — the hard rules (latest stable deps, no secrets in repo, AWS only via CDK, three environments, strict TypeScript, ADR for cross-cutting decisions).
+1. Internalise the project hard rules — latest stable deps, no secrets in repo, AWS only via CDK, three environments (`dev` / `int` / `prod`), strict TypeScript, an [ADR](../adr/) for any cross-cutting decision.
 2. Set up locally — see [local-setup.md](./local-setup.md).
 3. Find an issue you want to work on, or open one for what you have in mind.
 

@@ -71,7 +71,7 @@ Every Docker image build runs:
 
 ## Threat model
 
-We track an STRIDE-style threat model in [`docs/security-threat-model.md`](./security-threat-model.md) (Phase A1 deliverable).
+We track an STRIDE-style threat model at `docs/security-threat-model.md` _(Phase A1 deliverable — not yet written)_.
 
 ## Standards alignment
 

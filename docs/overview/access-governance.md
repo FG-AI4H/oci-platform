@@ -4,7 +4,7 @@
 
 This page is the **plain-English master explainer**. Audience-specific guides (how to _request_ access, how to _review_ it, what the _governance policy_ is) link back here. If you read one access-governance page, read this one.
 
-For the architectural decision behind the model, see [ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md). For the field research that fed the decision, see [docs/research/access-governance-2026-05-08.md](../research/access-governance-2026-05-08.md).
+For the architectural decision behind the model, see [ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md). The field research that fed the decision is held at `docs/research/access-governance-2026-05-08.md` in the internal companion repo.
 
 ## The airport analogy
 
@@ -269,7 +269,7 @@ These declarations live alongside (not instead of) the standard IRB / institutio
 ## Further reading
 
 - The architectural decision: [ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md)
-- The field-research write-up that fed it: [docs/research/access-governance-2026-05-08.md](../research/access-governance-2026-05-08.md)
+- The field-research write-up that fed it: `docs/research/access-governance-2026-05-08.md` _(internal companion repo)_
 - GA4GH Passport spec: https://ga4gh.github.io/data-security/ga4gh-passport
 - GA4GH DUO product: https://www.ga4gh.org/product/data-use-ontology-duo/
 - Synapse User Account Tiers: https://help.synapse.org/docs/User-Account-Tiers.2007072795.html
