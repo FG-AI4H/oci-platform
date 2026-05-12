@@ -6,7 +6,7 @@ This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-o
 
 ## Provisioning
 
-1. **Deploy the stack**:
+1. **Deploy the stack** (the docuseal-stack depends on api-stack for cluster + listener; the api-stack also reads docuseal SSM/Secrets but only when `--context docusealEnabled=true`, so this deploy works on a greenfield):
 
    ```bash
    pnpm --filter @oci/cdk exec cdk deploy oci-<env>-docuseal --context env=<env>
@@ -50,7 +50,11 @@ Once the task is healthy, open `https://<env>.oci.ai4h.net/docuseal` in a browse
    - Copy the token value.
    - Open AWS Secrets Manager → find the secret named `OciDevDocusealDocusealApiToken-*` (or `int` / `prod` variant).
    - `Retrieve secret value → Edit → paste`. Save.
-   - Restart the API service so the task picks up the new value:
+   - **Re-deploy the api-stack with the docuseal-enabled flag** — this is when the API task definition first gets the three OCI*DOCUSEAL*\* env vars wired in:
+     ```bash
+     pnpm --filter @oci/cdk exec cdk deploy oci-<env>-api --context env=<env> --context docusealEnabled=true
+     ```
+     Subsequent token rotations just need a `force-new-deployment` (the task definition already references the secret):
      ```bash
      aws ecs update-service --cluster oci-<env>-api --service api --force-new-deployment --region eu-central-1
      ```
