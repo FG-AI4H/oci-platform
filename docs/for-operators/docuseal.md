@@ -17,9 +17,11 @@ This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-o
    - A one-shot **DB-bootstrap task definition** (used in step 2 below).
    - An EFS volume mounted at `/data/docuseal` for blob storage.
    - Three Secrets Manager secrets:
-     - `OciDevDocusealDocusealSecretKeyBase-*` — Rails cookie/session key.
-     - `OciDevDocusealDocusealApiToken-*` — API token stub.
-     - `OciDevDocusealDocusealWebhookSecret-*` — HMAC secret.
+     - `DocusealSecretKeyBase*` — Rails cookie/session key (CFN-generated name).
+     - `DocusealApiToken*` — API token stub (operator updates this).
+     - `DocusealWebhookSecret*` — HMAC secret (operator pastes the value into DocuSeal's Webhooks settings).
+
+     CFN appends a random suffix (e.g. `DocusealApiToken2B950881-3ba9BTwNN4ll`); search "Docuseal" in the Secrets Manager console to find them all. The names are stable per stack so you can save the ARNs once and reuse.
    - An ACM cert + Route53 alias for `docuseal.<env>.oci.ai4h.net` and an ALB listener rule at priority 60 routing that host to the DocuSeal target group.
    - SSM parameters under `/oci/<env>/docuseal/*` so the API stack can find the secrets without a CFN cross-stack export.
 
@@ -55,7 +57,7 @@ Once the task is healthy, open `https://docuseal.<env>.oci.ai4h.net` in a browse
 2. **Generate the API token**:
    - `Settings → API → Generate token`.
    - Copy the token value.
-   - Open AWS Secrets Manager → find the secret named `OciDevDocusealDocusealApiToken-*` (or `int` / `prod` variant).
+   - Open AWS Secrets Manager → search "Docuseal" → find the secret with description "DocuSeal API token (OCI_DOCUSEAL_API_TOKEN)" (its physical name starts with `DocusealApiToken` and has a random suffix; one such secret exists per env).
    - `Retrieve secret value → Edit → paste`. Save.
    - **Re-deploy the api-stack with the docuseal-enabled flag** — this is when the API task definition first gets the three OCI*DOCUSEAL*\* env vars wired in:
      ```bash
@@ -69,7 +71,7 @@ Once the task is healthy, open `https://docuseal.<env>.oci.ai4h.net` in a browse
 3. **Configure the webhook**:
    - `Settings → Webhooks → Add webhook`.
    - URL: `https://<env>.oci.ai4h.net/v2/dua/webhook/docuseal` (this stays on the API host — DocuSeal posts back to the OCI API, not to itself).
-   - Secret: open the `OciDevDocusealDocusealWebhookSecret-*` secret in Secrets Manager, copy the value, paste here.
+   - Secret: in Secrets Manager find the secret with description "DocuSeal webhook HMAC secret" (physical name starts with `DocusealWebhookSecret`), copy its value, paste here.
    - Events: `submission.completed`, `submission.declined`, `submission.expired`.
    - Save.
 
@@ -87,7 +89,7 @@ The old token remains valid in DocuSeal until you revoke it in the admin UI. Rec
 
 1. Generate a new random secret (`openssl rand -hex 32`).
 2. Update both:
-   - The Secrets Manager secret value (`OciDev/Int/Prod-DocusealWebhookSecret-*`).
+   - The Secrets Manager secret value (the `DocusealWebhookSecret*` secret for the env).
    - The DocuSeal Webhooks settings.
 3. Force a new API deployment.
 
