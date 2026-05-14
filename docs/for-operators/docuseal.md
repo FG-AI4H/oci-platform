@@ -22,6 +22,7 @@ This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-o
      - `DocusealWebhookSecret*` — HMAC secret (operator pastes the value into DocuSeal's Webhooks settings).
 
      CFN appends a random suffix (e.g. `DocusealApiToken2B950881-3ba9BTwNN4ll`); search "Docuseal" in the Secrets Manager console to find them all. The names are stable per stack so you can save the ARNs once and reuse.
+
    - An ACM cert + Route53 alias for `docuseal.<env>.oci.ai4h.net` and an ALB listener rule at priority 60 routing that host to the DocuSeal target group.
    - SSM parameters under `/oci/<env>/docuseal/*` so the API stack can find the secrets without a CFN cross-stack export.
 
