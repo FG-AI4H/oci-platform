@@ -165,13 +165,15 @@ export class DocusealStack extends cdk.Stack {
     );
 
     const container = taskDef.addContainer('docuseal', {
-      // Pinned: `:latest` (2.5.3, published 2026-05-11) ships a
-      // Rails 8.1 initializer that calls `has_many_inversing=` —
-      // a config option Rails 8.1 dropped, so the container
-      // crashes on boot. `:2.4.4` is the previous-major's latest
-      // patch (Rails 7.x compatible). Bump deliberately after
-      // testing future tags.
-      image: ecs.ContainerImage.fromRegistry('docuseal/docuseal:2.4.4'),
+      // Pinned: recent docuseal tags (latest=2.5.3, also 2.4.4)
+      // bundle Rails 8.1.3, which has dropped the
+      // `has_many_inversing` config setter — but DocuSeal's
+      // config still sets it via `load_defaults 7.x`. Container
+      // crashes at boot with `NoMethodError`. `:2.3.7`
+      // (2026-03-09) is the last 2.3 release, bundles Rails 7.x.
+      // Bump deliberately once DocuSealCo ships a Rails-8.1-clean
+      // build (track https://github.com/docusealco/docuseal/releases).
+      image: ecs.ContainerImage.fromRegistry('docuseal/docuseal:2.3.7'),
       environment: {
         FORCE_SSL: 'true',
         // DocuSeal Rails app expects HOST so it can construct absolute
