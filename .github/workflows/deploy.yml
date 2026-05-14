@@ -392,11 +392,18 @@ jobs:
           if [[ -n "${{ needs.build-images.outputs.migrate-image }}" ]]; then
             MIGRATE_CTX="--context migrateImage=${{ needs.build-images.outputs.migrate-image }}"
           fi
+          # docusealEnabled=true wires DocuSeal env vars into api-stack +
+          # keeps the docuseal-stack service at desiredCount=1. On the
+          # very first deploy of an env this needs to be `false` (or
+          # absent) so the service starts at 0 while the operator runs
+          # the DB-bootstrap one-shot. Switch to `true` after that
+          # one-time bootstrap; for dev that's already done.
           pnpm cdk deploy $STACKS --require-approval $APPROVAL \
             --context env=$ENV \
             --context apiImage=${{ needs.build-images.outputs.api-image }} \
             --context webImage=${{ needs.build-images.outputs.web-image }} \
             --context ingestImage=${{ needs.build-images.outputs.ingest-image }} \
+            --context docusealEnabled=${{ vars.DOCUSEAL_ENABLED || 'false' }} \
             $MIGRATE_CTX
 
       - name: DB migrate

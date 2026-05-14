@@ -23,7 +23,7 @@ This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-o
    - An ALB listener rule at priority 60 routing `/docuseal/*` to the DocuSeal target group.
    - SSM parameters under `/oci/<env>/docuseal/*` so the API stack can find the secrets without a CFN cross-stack export.
 
-   The DocuSeal task itself will fail its first boot until step 2 completes (Rails can't connect to a non-existent database).
+   On a greenfield (no prior docuseal-stack), the Fargate service is created with `desiredCount: 0` — CFN finishes the deploy in a few minutes without waiting for a service that has nothing to connect to. Step 3 below lifts it to 1.
 
 2. **Create the `oci_docuseal` logical database** — one-shot Fargate task baked into the stack. Idempotent (no-op if the database already exists):
 
@@ -37,7 +37,14 @@ This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-o
 
    The task uses the same Aurora secret the DocuSeal service uses, runs `psql -c 'CREATE DATABASE oci_docuseal'` if the database is missing, and exits 0. Logs land in the shared API log group under the `docuseal-db-bootstrap/` stream prefix. Re-runs (e.g. after a stack redeploy that changes the task ARN) are safe.
 
-3. **Wait for the DocuSeal task to be healthy** — first boot runs the Rails migrations against `oci_docuseal`. Takes ~30 seconds after step 2 finishes. Watch the CloudWatch log group (same one as the API) under the `docuseal/` log stream prefix. If the service stays unhealthy, check the bootstrap task logs to confirm the database was created.
+3. **Re-deploy with `docusealEnabled=true`** — this scales the DocuSeal service from 0 to 1 and (simultaneously) wires the OCI*DOCUSEAL*\* env vars into the api-stack task:
+
+   ```bash
+   pnpm --filter @oci/cdk exec cdk deploy oci-<env>-docuseal oci-<env>-api \
+     --context env=<env> --context docusealEnabled=true
+   ```
+
+   Wait ~30 seconds for the DocuSeal Rails app to run its schema migrations against `oci_docuseal` and reach the ALB health check. Watch the CloudWatch log group (same one as the API) under the `docuseal/` log stream prefix.
 
 ## First-time admin bootstrap
 
