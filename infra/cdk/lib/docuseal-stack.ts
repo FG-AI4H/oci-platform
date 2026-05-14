@@ -195,14 +195,19 @@ export class DocusealStack extends cdk.Stack {
         DATABASE_PORT: ecs.Secret.fromSecretsManager(props.database.secret!, 'port'),
       },
       // Override BOTH entryPoint and command so we control the full
-      // container start sequence. The DocuSeal image's default
-      // ENTRYPOINT is at a path that we don't want to call into —
-      // simpler to compose DATABASE_URL from the per-field Aurora
-      // secrets and exec `bundle exec rails server` directly. Working
-      // dir comes from the image's own WORKDIR (DocuSeal Rails app).
+      // container start sequence. We compose DATABASE_URL from the
+      // per-field Aurora secrets, then exec the Rails app directly.
+      //
+      // workingDirectory pins us at /app — that's where the DocuSeal
+      // image puts the Rails source + Gemfile. Required because
+      // overriding entryPoint can drop the image's default WORKDIR
+      // resolution; without this, `bundle exec` errors with
+      // "Could not locate Gemfile".
+      //
       // NB: `oci_docuseal` is a logical database the operator creates
       // on the Aurora cluster via the bootstrap one-shot. Rails
       // migrations populate the schema on first boot.
+      workingDirectory: '/app',
       entryPoint: ['sh', '-c'],
       command: [
         'export DATABASE_URL="postgresql://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/oci_docuseal" && exec bundle exec rails server -b 0.0.0.0 -p 3000',
