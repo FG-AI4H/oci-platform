@@ -83,8 +83,20 @@ export interface TrustedIssuerLookup {
 @Injectable()
 export class PassportVerifier {
   private readonly logger = new Logger(PassportVerifier.name);
+  // Field initializer — NestJS DI calls a zero-arg constructor. The
+  // previous shape took JwksResolver as a constructor param with a
+  // default value; NestJS read the type metadata and tried to inject
+  // a (non-existent) JwksResolver provider, blowing up at boot.
+  // Tests override this field via `setJwksResolver`.
+  private jwks: JwksResolver = new DefaultJwksResolver();
 
-  constructor(private readonly jwks: JwksResolver = new DefaultJwksResolver()) {}
+  /**
+   * Test-only seam: replace the default JWKS resolver with a stub
+   * before calling `verify`. Production code never calls this.
+   */
+  setJwksResolver(resolver: JwksResolver): void {
+    this.jwks = resolver;
+  }
 
   /**
    * Decode the JWT header + payload without verifying. Used to read

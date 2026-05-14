@@ -99,7 +99,8 @@ describe('PassportVerifier', () => {
   describe('verify', () => {
     it('returns the parsed visa for a valid JWT', async () => {
       const km = await makeKey();
-      const verifier = new PassportVerifier(stubResolver(km.publicJwk));
+      const verifier = new PassportVerifier();
+      verifier.setJwksResolver(stubResolver(km.publicJwk));
       const jwt = await makeVisaJwt({ privateKey: km.privateKey, iss: ISSUER, jti: 'abc' });
       const result = await verifier.verify(jwt, { issuer: ISSUER, jwksUri: JWKS_URI });
       expect(result).not.toBeNull();
@@ -113,7 +114,8 @@ describe('PassportVerifier', () => {
     it('returns null when the JWT is signed by the wrong key', async () => {
       const km1 = await makeKey();
       const km2 = await makeKey();
-      const verifier = new PassportVerifier(stubResolver(km1.publicJwk));
+      const verifier = new PassportVerifier();
+      verifier.setJwksResolver(stubResolver(km1.publicJwk));
       const jwt = await makeVisaJwt({ privateKey: km2.privateKey, iss: ISSUER });
       const result = await verifier.verify(jwt, { issuer: ISSUER, jwksUri: JWKS_URI });
       expect(result).toBeNull();
@@ -121,7 +123,8 @@ describe('PassportVerifier', () => {
 
     it('returns null when the issuer claim does not match', async () => {
       const km = await makeKey();
-      const verifier = new PassportVerifier(stubResolver(km.publicJwk));
+      const verifier = new PassportVerifier();
+      verifier.setJwksResolver(stubResolver(km.publicJwk));
       const jwt = await makeVisaJwt({
         privateKey: km.privateKey,
         iss: 'https://attacker.example/oidc/',
@@ -132,7 +135,8 @@ describe('PassportVerifier', () => {
 
     it('returns null when the JWT has expired', async () => {
       const km = await makeKey();
-      const verifier = new PassportVerifier(stubResolver(km.publicJwk));
+      const verifier = new PassportVerifier();
+      verifier.setJwksResolver(stubResolver(km.publicJwk));
       const jwt = await makeVisaJwt({
         privateKey: km.privateKey,
         iss: ISSUER,
@@ -144,7 +148,8 @@ describe('PassportVerifier', () => {
 
     it('returns null when the ga4gh_visa_v1 claim is missing', async () => {
       const km = await makeKey();
-      const verifier = new PassportVerifier(stubResolver(km.publicJwk));
+      const verifier = new PassportVerifier();
+      verifier.setJwksResolver(stubResolver(km.publicJwk));
       const jwt = await makeVisaJwt({ privateKey: km.privateKey, iss: ISSUER, omitVisa: true });
       const result = await verifier.verify(jwt, { issuer: ISSUER, jwksUri: JWKS_URI });
       expect(result).toBeNull();
