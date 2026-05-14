@@ -194,17 +194,18 @@ export class DocusealStack extends cdk.Stack {
         DATABASE_HOST: ecs.Secret.fromSecretsManager(props.database.secret!, 'host'),
         DATABASE_PORT: ecs.Secret.fromSecretsManager(props.database.secret!, 'port'),
       },
+      // Override BOTH entryPoint and command so we control the full
+      // container start sequence. The DocuSeal image's default
+      // ENTRYPOINT is at a path that we don't want to call into —
+      // simpler to compose DATABASE_URL from the per-field Aurora
+      // secrets and exec `bundle exec rails server` directly. Working
+      // dir comes from the image's own WORKDIR (DocuSeal Rails app).
+      // NB: `oci_docuseal` is a logical database the operator creates
+      // on the Aurora cluster via the bootstrap one-shot. Rails
+      // migrations populate the schema on first boot.
+      entryPoint: ['sh', '-c'],
       command: [
-        'sh',
-        '-c',
-        // Compose DATABASE_URL at container start, then exec the
-        // upstream entrypoint. DocuSeal's image ships a Rails app +
-        // its own dockerfile entrypoint; we wrap to inject the
-        // connection string without rebuilding the image.
-        // NB: `oci_docuseal` is a logical database that the operator
-        // creates on the Aurora cluster (see the runbook). The
-        // Rails migrations on first boot populate the schema.
-        'export DATABASE_URL="postgresql://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/oci_docuseal" && exec /docker-entrypoint.sh bundle exec rails server -b 0.0.0.0 -p 3000',
+        'export DATABASE_URL="postgresql://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/oci_docuseal" && exec bundle exec rails server -b 0.0.0.0 -p 3000',
       ],
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'docuseal', logGroup: props.logGroup }),
       portMappings: [{ containerPort: 3000, protocol: ecs.Protocol.TCP }],
