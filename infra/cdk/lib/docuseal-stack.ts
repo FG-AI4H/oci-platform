@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as efs from 'aws-cdk-lib/aws-efs';
@@ -6,6 +7,8 @@ import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
@@ -18,12 +21,18 @@ export interface DocusealStackProps extends cdk.StackProps {
   vpc: ec2.IVpc;
   /** Existing ECS cluster from the API stack — DocuSeal shares it. */
   cluster: ecs.ICluster;
-  /** Existing ALB HTTPS listener from the API stack — DocuSeal adds a routing rule. */
+  /** Existing ALB from the API stack — DocuSeal adds a host-based listener rule + alias record. */
+  alb: elbv2.IApplicationLoadBalancer;
+  /** Existing ALB HTTPS listener from the API stack — DocuSeal adds a routing rule + extra cert. */
   httpsListener: elbv2.IApplicationListener;
   /** Aurora cluster — DocuSeal gets its own logical DB (`oci_docuseal`). */
   database: rds.DatabaseCluster;
   /** Shared CloudWatch log group for the DocuSeal container. */
   logGroup: logs.ILogGroup;
+  /** Route53 hosted zone that owns props.cfg.domainName — used for DNS validation + alias record. */
+  hostedZoneId: string;
+  /** Hosted zone name (e.g. `dev.oci.ai4h.net`). */
+  zoneName: string;
 }
 
 /**
@@ -37,10 +46,16 @@ export interface DocusealStackProps extends cdk.StackProps {
  *   - Postgres backing store on the existing Aurora cluster — a separate
  *     logical database (`oci_docuseal`) on the same instance. DocuSeal
  *     manages its own schema migrations; the API never reaches into it.
- *   - ALB rule at priority 60 on the existing HTTPS listener routes
- *     `/docuseal/*` to the DocuSeal target group. The admin UI lives at
- *     `https://<env>.oci.ai4h.net/docuseal/admin`; the signer URL the
- *     API hands the requester is `https://<env>.oci.ai4h.net/docuseal/s/<token>`.
+ *   - Host-based ALB routing: a Route53 alias record points
+ *     `docuseal.<env>.oci.ai4h.net` at the shared ALB, and a host-header
+ *     listener rule on the API's HTTPS listener forwards that vhost to
+ *     the DocuSeal target group. DocuSeal's Rails app mounts all routes
+ *     at the host root (`/up`, `/admin`, `/api/...`, `/s/<token>`) — it
+ *     has no `relative_url_root` support, so a path prefix like
+ *     `/docuseal/*` returns 404. The admin UI is therefore at
+ *     `https://docuseal.<env>.oci.ai4h.net/admin`; the signer URL the
+ *     API hands the requester is
+ *     `https://docuseal.<env>.oci.ai4h.net/s/<token>`.
  *   - Three secrets in Secrets Manager:
  *       - `SECRET_KEY_BASE` — Rails cookie/session key, auto-generated.
  *       - `OCI_DOCUSEAL_API_TOKEN` — auto-generated stub. The operator
@@ -66,6 +81,7 @@ export class DocusealStack extends cdk.Stack {
     Object.entries(props.tags).forEach(([k, v]) => cdk.Tags.of(this).add(k, v));
 
     const env = props.cfg.envName;
+    const docusealHost = `docuseal.${props.cfg.domainName}`;
 
     // First-time deploy chicken-and-egg: the DocuSeal Rails container
     // needs the `oci_docuseal` database to exist on Aurora, which is
@@ -257,13 +273,10 @@ export class DocusealStack extends cdk.Stack {
       environment: {
         FORCE_SSL: 'true',
         // DocuSeal Rails app uses HOST when constructing absolute URLs
-        // in emails / signer pages.
-        HOST: props.cfg.domainName,
-        // Rails-standard env var — serves all routes under /docuseal
-        // so the ALB's priority-60 listener rule (/docuseal/*) routes
-        // them correctly. Picked up by the Rails app at boot via
-        // `config.action_controller.relative_url_root`.
-        RAILS_RELATIVE_URL_ROOT: '/docuseal',
+        // in emails / signer pages. The vhost is the dedicated
+        // `docuseal.<domain>` — Rails serves routes at the host root,
+        // no sub-path support (see class docstring).
+        HOST: docusealHost,
       },
       secrets: {
         SECRET_KEY_BASE: ecs.Secret.fromSecretsManager(secretKeyBase),
@@ -332,7 +345,9 @@ export class DocusealStack extends cdk.Stack {
       protocol: elbv2.ApplicationProtocol.HTTP,
       targetType: elbv2.TargetType.IP,
       healthCheck: {
-        path: '/docuseal/up',
+        // Rails 7.1+ health endpoint mounted at root by DocuSeal
+        // (`get 'up' => 'rails/health#show'`). No sub-path prefix.
+        path: '/up',
         healthyHttpCodes: '200',
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(10),
@@ -342,15 +357,46 @@ export class DocusealStack extends cdk.Stack {
     });
     service.attachToApplicationTargetGroup(targetGroup);
 
+    // Dedicated cert for the DocuSeal vhost. The shared ALB listener
+    // was created in api-stack with a cert scoped to the API hostname;
+    // we attach an additional cert via SNI here.
+    const hostedZone = route53.HostedZone.fromHostedZoneAttributes(this, 'Zone', {
+      hostedZoneId: props.hostedZoneId,
+      zoneName: props.zoneName,
+    });
+    const docusealCert = new acm.Certificate(this, 'DocusealCert', {
+      domainName: docusealHost,
+      validation: acm.CertificateValidation.fromDns(hostedZone),
+    });
+    new elbv2.ApplicationListenerCertificate(this, 'DocusealListenerCert', {
+      listener: props.httpsListener,
+      certificates: [docusealCert],
+    });
+
     // Priority 60: between API (50) and Web catch-all (100). DocuSeal's
-    // signer URL lives at `/docuseal/s/<token>`; admin UI at
-    // `/docuseal/admin`. The webhook DocuSeal sends back to us hits
-    // `/v2/dua/webhook/docuseal` and is owned by the API rule (priority 50).
+    // routes (admin UI, signer URLs, API) all live at the host root of
+    // `docuseal.<domain>`. The DocuSeal → OCI webhook goes the other
+    // direction and still lands on the API at
+    // `https://<api-host>/v2/dua/webhook/docuseal` (api-stack rule, prio 50).
     new elbv2.ApplicationListenerRule(this, 'DocusealRoute', {
       listener: props.httpsListener,
       priority: 60,
-      conditions: [elbv2.ListenerCondition.pathPatterns(['/docuseal', '/docuseal/*'])],
+      conditions: [elbv2.ListenerCondition.hostHeaders([docusealHost])],
       action: elbv2.ListenerAction.forward([targetGroup]),
+    });
+
+    // Route53 alias → ALB. The hosted zone is the apex (`ai4h.net`); the
+    // subdomain lives under `<env>.oci.ai4h.net.`. We pass the full FQDN
+    // so CDK uses it as-is rather than appending the zone name.
+    new route53.ARecord(this, 'DocusealAliasA', {
+      zone: hostedZone,
+      recordName: docusealHost,
+      target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(props.alb)),
+    });
+    new route53.AaaaRecord(this, 'DocusealAliasAaaa', {
+      zone: hostedZone,
+      recordName: docusealHost,
+      target: route53.RecordTarget.fromAlias(new route53Targets.LoadBalancerTarget(props.alb)),
     });
 
     // --- One-shot DB-bootstrap task ----------------------------------
@@ -443,7 +489,7 @@ export class DocusealStack extends cdk.Stack {
     this.baseUrlParamName = `/oci/${env}/docuseal/base-url`;
     new ssm.StringParameter(this, 'DocusealBaseUrlParam', {
       parameterName: this.baseUrlParamName,
-      stringValue: `https://${props.cfg.domainName}/docuseal`,
+      stringValue: `https://${docusealHost}`,
       description:
         'OCI_DOCUSEAL_BASE_URL — DocuSeal public endpoint URL, consumed by the API task.',
     });
@@ -459,7 +505,7 @@ export class DocusealStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'DocusealBaseUrl', {
-      value: `https://${props.cfg.domainName}/docuseal`,
+      value: `https://${docusealHost}`,
       description: 'DocuSeal admin URL — operator bootstrap entry point.',
     });
 
@@ -481,7 +527,7 @@ export class DocusealStack extends cdk.Stack {
         {
           id: 'AwsSolutions-ECS2',
           reason:
-            'Plaintext envs (FORCE_SSL, HOST, RAILS_RELATIVE_URL_ROOT) are non-secret routing config. All credentials (SECRET_KEY_BASE, DATABASE_*) come from Secrets Manager.',
+            'Plaintext envs (FORCE_SSL, HOST) are non-secret routing config. All credentials (SECRET_KEY_BASE, DATABASE_URL) come from Secrets Manager.',
         },
         {
           id: 'AwsSolutions-ELB2',

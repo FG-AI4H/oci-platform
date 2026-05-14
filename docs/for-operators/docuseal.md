@@ -1,6 +1,6 @@
 # DocuSeal — operator runbook
 
-DocuSeal is a self-hosted e-signature service that the OCI Platform uses to capture AdES-grade Data Use Agreement (DUA) signatures for the `CONTROLLED` access tier. It runs as a Fargate task in the same cluster as the API, behind the same ALB at the `/docuseal/*` path.
+DocuSeal is a self-hosted e-signature service that the OCI Platform uses to capture AdES-grade Data Use Agreement (DUA) signatures for the `CONTROLLED` access tier. It runs as a Fargate task in the same cluster as the API, behind the same ALB on a dedicated vhost — `https://docuseal.<env>.oci.ai4h.net` — because DocuSeal's Rails app mounts routes at the host root and has no relative-URL-root support.
 
 This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-off — DocuSeal manages its own database schema migrations on container start, and operator-managed secrets are stored in Secrets Manager so token rotation doesn't need an infra redeploy.
 
@@ -20,7 +20,7 @@ This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-o
      - `OciDevDocusealDocusealSecretKeyBase-*` — Rails cookie/session key.
      - `OciDevDocusealDocusealApiToken-*` — API token stub.
      - `OciDevDocusealDocusealWebhookSecret-*` — HMAC secret.
-   - An ALB listener rule at priority 60 routing `/docuseal/*` to the DocuSeal target group.
+   - An ACM cert + Route53 alias for `docuseal.<env>.oci.ai4h.net` and an ALB listener rule at priority 60 routing that host to the DocuSeal target group.
    - SSM parameters under `/oci/<env>/docuseal/*` so the API stack can find the secrets without a CFN cross-stack export.
 
    On a greenfield (no prior docuseal-stack), the Fargate service is created with `desiredCount: 0` — CFN finishes the deploy in a few minutes without waiting for a service that has nothing to connect to. Step 3 below lifts it to 1.
@@ -48,7 +48,7 @@ This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-o
 
 ## First-time admin bootstrap
 
-Once the task is healthy, open `https://<env>.oci.ai4h.net/docuseal` in a browser:
+Once the task is healthy, open `https://docuseal.<env>.oci.ai4h.net` in a browser:
 
 1. **Create the admin user** — DocuSeal's first-run flow asks for an email + password. Use a shared `oci-act@ai4h.net` distribution-list address (TBD with the OCI Access & Compliance Team) so handover doesn't require a password reset.
 
@@ -68,7 +68,7 @@ Once the task is healthy, open `https://<env>.oci.ai4h.net/docuseal` in a browse
 
 3. **Configure the webhook**:
    - `Settings → Webhooks → Add webhook`.
-   - URL: `https://<env>.oci.ai4h.net/v2/dua/webhook/docuseal`.
+   - URL: `https://<env>.oci.ai4h.net/v2/dua/webhook/docuseal` (this stays on the API host — DocuSeal posts back to the OCI API, not to itself).
    - Secret: open the `OciDevDocusealDocusealWebhookSecret-*` secret in Secrets Manager, copy the value, paste here.
    - Events: `submission.completed`, `submission.declined`, `submission.expired`.
    - Save.
