@@ -104,6 +104,30 @@ export class DocusealStack extends cdk.Stack {
       this.node.tryGetContext('docusealEnabled') === true ||
       this.node.tryGetContext('docusealEnabled') === 'true';
 
+    // `--context mailEnabled=true` wires SES SMTP credentials from the
+    // mail-stack into the DocuSeal task so outbound signing emails route
+    // through SES. Gate on context so this can be added after the mail-stack
+    // is deployed without redeploying DocuSeal from scratch.
+    // Operator deploy order:
+    //   1. cdk deploy oci-<env>-mail --context env=<env>
+    //   2. (operator activates receipt rule set + verifies forward address)
+    //   3. cdk deploy oci-<env>-docuseal --context env=<env>
+    //        --context docusealEnabled=true --context mailEnabled=true
+    const mailEnabled =
+      this.node.tryGetContext('mailEnabled') === true ||
+      this.node.tryGetContext('mailEnabled') === 'true';
+
+    const smtpCredsSecretRef = mailEnabled
+      ? secretsmanager.Secret.fromSecretCompleteArn(
+          this,
+          'SmtpCredsSecret',
+          ssm.StringParameter.valueForStringParameter(
+            this,
+            `/oci/${env}/mail/smtp-creds-secret-arn`,
+          ),
+        )
+      : null;
+
     // --- Secrets -------------------------------------------------------
 
     const secretKeyBase = new secretsmanager.Secret(this, 'DocusealSecretKeyBase', {
@@ -277,12 +301,33 @@ export class DocusealStack extends cdk.Stack {
         // `docuseal.<domain>` — Rails serves routes at the host root,
         // no sub-path support (see class docstring).
         HOST: docusealHost,
+        // SMTP sender identity. Only injected when mailEnabled=true;
+        // DocuSeal falls back to built-in Postmark config when absent.
+        // Operator must set the From email + name in the admin UI too:
+        // Settings → Sending emails → From email / From name.
+        ...(mailEnabled
+          ? {
+              SMTP_FROM_EMAIL: `oci-act@${props.cfg.domainName}`,
+              SMTP_FROM_NAME: 'OCI Platform',
+            }
+          : {}),
       },
       secrets: {
         SECRET_KEY_BASE: ecs.Secret.fromSecretsManager(secretKeyBase),
         // Composed at deploy time by the DocuSealDatabaseUrlComposer
         // Lambda above — single env var, as the image expects.
         DATABASE_URL: ecs.Secret.fromSecretsManager(databaseUrlSecret),
+        // SES SMTP credentials — only injected when mailEnabled=true.
+        // mail-stack writes host/port/username/password into a single
+        // JSON secret; we extract each field here.
+        ...(smtpCredsSecretRef
+          ? {
+              SMTP_ADDRESS: ecs.Secret.fromSecretsManager(smtpCredsSecretRef, 'host'),
+              SMTP_PORT: ecs.Secret.fromSecretsManager(smtpCredsSecretRef, 'port'),
+              SMTP_USERNAME: ecs.Secret.fromSecretsManager(smtpCredsSecretRef, 'username'),
+              SMTP_PASSWORD: ecs.Secret.fromSecretsManager(smtpCredsSecretRef, 'password'),
+            }
+          : {}),
       },
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'docuseal', logGroup: props.logGroup }),
       portMappings: [{ containerPort: 3000, protocol: ecs.Protocol.TCP }],

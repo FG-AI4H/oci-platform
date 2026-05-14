@@ -3,8 +3,10 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ses from 'aws-cdk-lib/aws-ses';
+import * as sesActions from 'aws-cdk-lib/aws-ses-actions';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
@@ -18,6 +20,13 @@ export interface MailStackProps extends cdk.StackProps {
   zoneName: string;
   /** Aggregate-report destination for DMARC (`rua` / `ruf`). */
   dmarcReportTo: string;
+  /**
+   * Email address to forward inbound `oci-act@<env>.oci.ai4h.net` mail to.
+   * SES sandbox: this address must be verified via
+   *   aws sesv2 create-email-identity --email-identity <addr> --region eu-central-1
+   * before forwarding will succeed. In production (post-sandbox) any address works.
+   */
+  inboundForwardTo: string;
 }
 
 /**
@@ -272,6 +281,128 @@ export class MailStack extends cdk.Stack {
       },
     });
 
+    // --- Inbound: MX + S3 + forwarder Lambda + receipt rule set ------
+    //
+    // Receives mail at @identityDomain, stores raw RFC 2822 in S3, then
+    // a Lambda rewrites the envelope headers and re-sends via SES to
+    // props.inboundForwardTo.
+    //
+    // Two manual operator steps after first deploy:
+    //   1. Activate the rule set (singleton per region/account):
+    //        aws ses set-active-receipt-rule-set \
+    //          --rule-set-name oci-<env>-inbound --region eu-central-1
+    //   2. (sandbox only) Verify the forward-to address so SES allows sends:
+    //        aws sesv2 create-email-identity \
+    //          --email-identity <inboundForwardTo> --region eu-central-1
+    //      Then click the verification link in the email.
+    // See docs/for-operators/ses.md § Inbound forwarder.
+
+    new route53.MxRecord(this, 'InboundMxRecord', {
+      zone,
+      recordName: identityDomain,
+      values: [{ priority: 10, hostName: `inbound-smtp.${this.region}.amazonaws.com` }],
+    });
+
+    const inboundBucket = new s3.Bucket(this, 'InboundBucket', {
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: props.cfg.removalPolicy,
+      autoDeleteObjects: props.cfg.removalPolicy === cdk.RemovalPolicy.DESTROY,
+      lifecycleRules: [{ expiration: cdk.Duration.days(7) }],
+    });
+
+    // SES needs explicit PutObject permission on the bucket.
+    inboundBucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowSesDelivery',
+        principals: [new iam.ServicePrincipal('ses.amazonaws.com')],
+        actions: ['s3:PutObject'],
+        resources: [`${inboundBucket.bucketArn}/inbound/*`],
+        conditions: { StringEquals: { 'aws:Referer': this.account } },
+      }),
+    );
+
+    // Forwarder: reads raw email from S3, rewrites From/To/Subject/Reply-To,
+    // re-sends via SES. Uses commonHeaders from the SES event to extract
+    // original sender and subject without complex MIME parsing.
+    const forwarderFn = new lambda.Function(this, 'InboundForwarderFn', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      timeout: cdk.Duration.seconds(30),
+      logRetention: logs.RetentionDays.ONE_WEEK,
+      environment: {
+        BUCKET_NAME: inboundBucket.bucketName,
+        FROM_ADDRESS: `oci-act@${identityDomain}`,
+        FORWARD_TO: props.inboundForwardTo,
+      },
+      code: lambda.Code.fromInline(`
+        const{S3Client,GetObjectCommand}=require('@aws-sdk/client-s3');
+        const{SESClient,SendRawEmailCommand}=require('@aws-sdk/client-ses');
+        const s3c=new S3Client({});const sec=new SESClient({});
+        async function buf(s){const c=[];for await(const k of s)c.push(Buffer.isBuffer(k)?k:Buffer.from(k));return Buffer.concat(c);}
+        exports.handler=async(ev)=>{
+          for(const r of ev.Records||[]){
+            const m=r.ses&&r.ses.mail;if(!m)continue;
+            const obj=await s3c.send(new GetObjectCommand({Bucket:process.env.BUCKET_NAME,Key:'inbound/'+m.messageId}));
+            const raw=(await buf(obj.Body)).toString('utf8');
+            const fr=((m.commonHeaders&&m.commonHeaders.from)||[])[0]||m.source||'';
+            const sub=(m.commonHeaders&&m.commonHeaders.subject)||'(no subject)';
+            const fa=process.env.FROM_ADDRESS;const ft=process.env.FORWARD_TO;
+            const si=raw.search(/\\r?\\n\\r?\\n/);
+            if(si<0){console.error('No sep',m.messageId);continue;}
+            const hdr=raw.slice(0,si);const bdy=raw.slice(si);
+            const nl=[];let skip=false;
+            for(const ln of hdr.split(/\\r?\\n/)){
+              const lo=ln.toLowerCase();const isc=/^[ \\t]/.test(ln);
+              if(isc){if(!skip)nl.push(ln);continue;}
+              skip=false;
+              if(lo.startsWith('from:')){nl.push('From: OCI Platform <'+fa+'>');nl.push('Reply-To: '+fr);skip=true;}
+              else if(lo.startsWith('to:')){nl.push('To: '+ft);skip=true;}
+              else if(lo.startsWith('reply-to:')||lo.startsWith('bcc:')||lo.startsWith('cc:')){skip=true;}
+              else if(lo.startsWith('subject:')){nl.push('Subject: '+(sub.startsWith('[Fwd]')?sub:'[Fwd] '+sub));skip=true;}
+              else nl.push(ln);
+            }
+            const email=nl.join('\\r\\n')+bdy;
+            await sec.send(new SendRawEmailCommand({Source:fa,Destinations:[ft],RawMessage:{Data:Buffer.from(email)}}));
+            console.log('Forwarded',m.messageId,'to',ft);
+          }
+          return{status:'ok'};
+        };
+      `),
+    });
+
+    inboundBucket.grantRead(forwarderFn);
+    forwarderFn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['ses:SendRawEmail'],
+        resources: [emailIdentity.emailIdentityArn],
+      }),
+    );
+
+    // SES invokes the Lambda async on each receipt-rule match.
+    // sesActions.Lambda adds the resource-based policy automatically.
+    const inboundRuleSet = new ses.ReceiptRuleSet(this, 'InboundRuleSet', {
+      receiptRuleSetName: `oci-${env}-inbound`,
+    });
+    inboundRuleSet.addRule('ForwardRule', {
+      recipients: [identityDomain],
+      scanEnabled: true,
+      tlsPolicy: ses.TlsPolicy.REQUIRE,
+      actions: [
+        new sesActions.S3({ bucket: inboundBucket, objectKeyPrefix: 'inbound/' }),
+        new sesActions.Lambda({
+          function: forwarderFn,
+          invocationType: sesActions.LambdaInvocationType.EVENT,
+        }),
+      ],
+    });
+
+    new cdk.CfnOutput(this, 'InboundRuleSetName', {
+      value: `oci-${env}-inbound`,
+      description:
+        'SES receipt rule set name — operator must activate: aws ses set-active-receipt-rule-set --rule-set-name oci-<env>-inbound',
+    });
+
     // --- Cross-stack exports -----------------------------------------
 
     this.smtpCredsSecretArnParamName = `/oci/${env}/mail/smtp-creds-secret-arn`;
@@ -316,6 +447,16 @@ export class MailStack extends cdk.Stack {
           id: 'AwsSolutions-SMG4',
           reason:
             'Secret rotation is handled out-of-band by bumping RotationVersion on the CustomResource. Auto-rotation would churn SMTP credentials on every CFN deploy, which would invalidate DocuSeal sends mid-flight.',
+        },
+        {
+          id: 'AwsSolutions-S1',
+          reason:
+            'Inbound email bucket is not internet-accessible (SES write + Lambda read only). Server-access logging adds cost for no security benefit at this traffic volume.',
+        },
+        {
+          id: 'AwsSolutions-S10',
+          reason:
+            'SES delivery requires PutObject without enforced TLS at the bucket-policy level (SES uses its own transport security). The bucket is not publicly accessible.',
         },
       ],
       true,
