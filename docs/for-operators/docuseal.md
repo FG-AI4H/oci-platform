@@ -71,7 +71,7 @@ Once the task is healthy, open `https://docuseal.<env>.oci.ai4h.net` in a browse
 3. **Configure the webhook**:
    - `Settings → Webhooks → Add webhook`.
    - URL: `https://<env>.oci.ai4h.net/v2/dua/webhook/docuseal` (this stays on the API host — DocuSeal posts back to the OCI API, not to itself).
-   - Secret: in Secrets Manager find the secret with description "DocuSeal webhook HMAC secret" (physical name starts with `DocusealWebhookSecret`), copy its value, paste here.
+   - Click `Security` → switch to the **HMAC** tab (the default "Secret" tab adds a static header, which is not what we want). Paste the value of the `DocusealWebhookSecret*` Secrets Manager secret as the HMAC secret. DocuSeal will sign each webhook body with HMAC-SHA256 and send the hex digest in the `X-Docuseal-Signature` header, which the API verifies in constant time.
    - Events: tick `form.completed`, `form.declined`, `submission.completed`, `submission.expired`. DocuSeal splits the lifecycle into per-form (per-signer) and per-submission (envelope) events; there is no `submission.declined` — the API handles `form.declined` instead. `submission.completed` is redundant for single-signer DUAs but harmless to enable.
    - Save.
 
