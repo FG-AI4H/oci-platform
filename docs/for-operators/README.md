@@ -9,6 +9,7 @@ You're deploying or running an OCI instance. The platform is designed to run as 
 | [Security baseline](../security.md) | The controls expected on every instance (KMS, WAF, OIDC, etc.). |
 | [Runbooks](../runbooks/)            | Day-2 operations: incidents, rotations, restores.               |
 | [DocuSeal bootstrap](./docuseal.md) | First-time DocuSeal admin / API-token / webhook configuration.  |
+| [SES mail](./ses.md)                | Domain identity, SMTP-credential rotation, DMARC tightening.    |
 | Observability _(not yet written)_   | What to wire to your CloudWatch / X-Ray / Grafana.              |
 
 ## Trust model summary

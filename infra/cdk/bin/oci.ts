@@ -8,6 +8,7 @@ import { DataStack } from '../lib/data-stack.js';
 import { IdentityStack } from '../lib/identity-stack.js';
 import { ApiStack } from '../lib/api-stack.js';
 import { DocusealStack } from '../lib/docuseal-stack.js';
+import { MailStack } from '../lib/mail-stack.js';
 import { WebStack } from '../lib/web-stack.js';
 import { ObservabilityStack } from '../lib/observability-stack.js';
 import { resolveEnvironment } from '../lib/environments.js';
@@ -114,6 +115,23 @@ const docuseal = new DocusealStack(app, `oci-${envName}-docuseal`, {
   zoneName: HOSTED_ZONE_NAME,
 });
 docuseal.addDependency(api);
+
+// Mail stack — Amazon SES per-env outbound identity + SMTP creds
+// (#193, ADR-0004). Independent of every other runtime stack at deploy
+// time; sits between docuseal and web in the order purely so its log
+// lines appear near related infra. DocuSeal will pull SMTP creds from
+// this stack's Secrets Manager secret via SSM-by-name in a follow-up
+// PR; until then the secret is provisioned but unused.
+const _mail = new MailStack(app, `oci-${envName}-mail`, {
+  env: cfg.env,
+  cfg,
+  tags,
+  hostedZoneId: HOSTED_ZONE_ID,
+  zoneName: HOSTED_ZONE_NAME,
+  // DMARC aggregate-report mailbox. ADR-0004 picked the operator's
+  // personal address; revisit when a team alias exists.
+  dmarcReportTo: 'ml@mllab.ai',
+});
 
 // Web stack — Next.js Fargate service sharing the API's cluster + ALB.
 // Path-based routing on the existing HTTPS listener: ApiStack owns the
