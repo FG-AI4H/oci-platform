@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma.service.js';
 import { MyPassportController, PassportController } from './passport.controller.js';
 import { PassportRepository } from './passport.repository.js';
 import { PassportService } from './passport.service.js';
+import { PassportVerifier } from './passport-verifier.js';
 
 /**
  * GA4GH Passport relying party (#126, ADR-0003 Phase 2).
@@ -20,7 +21,7 @@ import { PassportService } from './passport.service.js';
 @Module({
   imports: [AuthModule],
   controllers: [PassportController, MyPassportController],
-  providers: [PrismaService, PassportService, PassportRepository],
+  providers: [PrismaService, PassportService, PassportRepository, PassportVerifier],
   exports: [PassportService],
 })
 export class PassportModule {}

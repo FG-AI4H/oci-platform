@@ -38,14 +38,11 @@ import { PassportVerifier } from './passport-verifier.js';
 @Injectable()
 export class PassportService {
   private readonly logger = new Logger(PassportService.name);
-  private readonly verifier: PassportVerifier;
 
   constructor(
     @Inject(PassportRepository) private readonly repo: PassportRepository,
-    verifier?: PassportVerifier,
-  ) {
-    this.verifier = verifier ?? new PassportVerifier();
-  }
+    @Inject(PassportVerifier) private readonly verifier: PassportVerifier,
+  ) {}
 
   async ingestVisa(
     body: IngestPassportVisaRequest,
