@@ -66,6 +66,27 @@ export class DocusealStack extends cdk.Stack {
 
     const env = props.cfg.envName;
 
+    // First-time deploy chicken-and-egg: the DocuSeal Rails container
+    // needs the `oci_docuseal` database to exist on Aurora, which is
+    // created by the one-shot DB-bootstrap task (defined later in this
+    // stack). On a greenfield, the operator deploys this stack first,
+    // then runs the bootstrap task, then scales the service. Until the
+    // operator confirms the bootstrap has happened, we keep
+    // desiredCount=0 so CFN doesn't wait for a service that can't reach
+    // steady state.
+    //
+    // Operator deploy order:
+    //   1. cdk deploy oci-<env>-docuseal --context env=<env>
+    //   2. aws ecs run-task --cli-input-json "$(...db-bootstrap-launch-spec...)"
+    //   3. cdk deploy oci-<env>-docuseal --context env=<env> --context docusealEnabled=true
+    //
+    // Step 3 lifts desiredCount to 1; the service now starts cleanly
+    // because the database exists. Subsequent deploys keep
+    // docusealEnabled=true.
+    const docusealEnabled =
+      this.node.tryGetContext('docusealEnabled') === true ||
+      this.node.tryGetContext('docusealEnabled') === 'true';
+
     // --- Secrets -------------------------------------------------------
 
     const secretKeyBase = new secretsmanager.Secret(this, 'DocusealSecretKeyBase', {
@@ -227,7 +248,9 @@ export class DocusealStack extends cdk.Stack {
     const service = new ecs.FargateService(this, 'DocusealService', {
       cluster: props.cluster,
       taskDefinition: taskDef,
-      desiredCount: 1,
+      // 0 on first deploy (no DB yet); 1 after operator runs the
+      // bootstrap task + re-deploys with --context docusealEnabled=true.
+      desiredCount: docusealEnabled ? 1 : 0,
       assignPublicIp: false,
       securityGroups: [serviceSg],
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
