@@ -360,8 +360,6 @@ jobs:
         # below for rationale. Diff target == deploy target.
         run: |
           ENV='${{ inputs.target || 'dev' }}'
-          # mail deploys before api/docuseal so the SMTP creds SSM param exists
-          # when docuseal-stack reads it with --context mailEnabled=true.
           STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-mail oci-$ENV-api oci-$ENV-docuseal oci-$ENV-web"
           MIGRATE_CTX=""
           if [[ -n "${{ needs.build-images.outputs.migrate-image }}" ]]; then
@@ -389,26 +387,17 @@ jobs:
           APPROVAL=never
           if [[ "$ENV" == "prod" ]]; then APPROVAL=broadening; fi
           if [[ "$ENV" == "int" ]]; then APPROVAL=any-change; fi
-          # mail deploys before api/docuseal so the SMTP creds SSM param exists
-          # when docuseal-stack reads it with --context mailEnabled=true.
           STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-mail oci-$ENV-api oci-$ENV-docuseal oci-$ENV-web"
           MIGRATE_CTX=""
           if [[ -n "${{ needs.build-images.outputs.migrate-image }}" ]]; then
             MIGRATE_CTX="--context migrateImage=${{ needs.build-images.outputs.migrate-image }}"
           fi
-          # docusealEnabled=true: wires DocuSeal env vars into api-stack +
-          # keeps docuseal-stack service at desiredCount=1.
-          # mailEnabled=true: wires SES SMTP creds into docuseal-stack so
-          # DocuSeal sends signing emails via SES. Activate after:
-          #   (1) mail-stack deployed, (2) rule set activated, (3) forward
-          #   address verified in SES sandbox (see docs/for-operators/ses.md).
           pnpm cdk deploy $STACKS --require-approval $APPROVAL \
             --context env=$ENV \
             --context apiImage=${{ needs.build-images.outputs.api-image }} \
             --context webImage=${{ needs.build-images.outputs.web-image }} \
             --context ingestImage=${{ needs.build-images.outputs.ingest-image }} \
             --context docusealEnabled=${{ vars.DOCUSEAL_ENABLED || 'false' }} \
-            --context mailEnabled=${{ vars.MAIL_ENABLED || 'false' }} \
             $MIGRATE_CTX
 
       - name: DB migrate

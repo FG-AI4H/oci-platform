@@ -1,10 +1,16 @@
 # Amazon SES — operator runbook
 
-The OCI Platform sends outbound mail via Amazon SES on a per-environment domain identity (`dev.oci.ai4h.net`, `int.oci.ai4h.net`, `oci.ai4h.net`). DocuSeal is the first sender; the OCI API will join later. Inbound mail addressed to `oci-act@<env>.oci.ai4h.net` is captured by SES and forwarded to the operator mailbox by a Lambda.
+The OCI Platform sends outbound mail via Amazon SES on a per-environment domain identity (`dev.oci.ai4h.net`, `int.oci.ai4h.net`, `oci.ai4h.net`). Inbound mail addressed to `oci-act@<env>.oci.ai4h.net` is captured by SES and forwarded to the operator mailbox by a Lambda.
 
-This runbook covers the parts CDK doesn't automate: SES production-access requests, activating the inbound receipt rule set, SMTP-credential rotation, DMARC tightening, troubleshooting bounces. Day-to-day, the stack is hands-off — DKIM rotates inside SES, the DMARC posture stays where you set it, and the SMTP creds only churn on explicit `RotationVersion` bumps.
+This runbook covers the parts CDK doesn't automate: SES production-access requests, activating the inbound receipt rule set, DMARC tightening, and troubleshooting bounces. Day-to-day, the stack is hands-off — DKIM rotates inside SES and the DMARC posture stays where you set it.
 
 The architecture rationale lives in [ADR-0004](../adr/0004-ses-mail-per-env-identity.md).
+
+## SES SMTP credentials — SCP constraint
+
+The AWS organisation SCP (`p-onj7rgr2`) explicitly blocks `iam:CreateUser` for **all** principals in account `601883093460`, including the CloudFormation execution role. SES SMTP requires IAM user access keys for credential derivation (HMAC-SHA256 of the secret key), which means SES SMTP wiring via CDK is not possible in this account.
+
+**DocuSeal uses its built-in Postmark integration for outbound mail.** If SES SMTP is needed in future, the SCP must first be amended at the organisation level.
 
 ## Provisioning
 
@@ -16,9 +22,6 @@ Provisions:
 
 - `AWS::SES::EmailIdentity` for `<env>.oci.ai4h.net` with Easy-DKIM and a `bounce.<env>.oci.ai4h.net` mail-from subdomain.
 - 3× DKIM CNAME records + SPF (`v=spf1 include:amazonses.com -all`) + DMARC (`p=none` to start) + MX record (SES inbound) on the `ai4h.net` hosted zone.
-- IAM user `oci-<env>-ses-smtp` with `ses:SendRawEmail` + `ses:SendEmail` scoped to the identity.
-- Lambda-backed CustomResource that creates an IAM access key, derives the SES SMTP password (HMAC-SHA256, version byte 0x04, base64), and writes `{host,port,username,password,iamAccessKeyId,iamSecretAccessKey}` JSON into Secrets Manager `OciDev/Int/Prod-SesSmtpCreds-*`.
-- SSM parameter `/oci/<env>/mail/smtp-creds-secret-arn` so DocuSeal (and the API later) can import by name.
 - S3 bucket `oci-<env>-ses-inbound` (7-day lifecycle) + inbound-forwarder Lambda + SES receipt rule set `oci-<env>-inbound`.
 
 CFN takes ~3–5 minutes including DNS-record propagation; SES finishes verifying the identity within ~15 minutes of the records appearing in Route53.
@@ -77,27 +80,6 @@ Send a test email to `oci-act@dev.oci.ai4h.net`. Within a few seconds:
 - The Lambda log group (`/aws/lambda/...InboundForwarderFn...`) shows `Forwarded <messageId> to ml@mllab.ai`.
 - `ml@mllab.ai` receives the message with `Subject: [Fwd] …` and `Reply-To: <original sender>`.
 
-## Wire DocuSeal outbound to SES SMTP
-
-DocuSeal sends signing invitation emails and completion notifications. By default it uses its built-in Postmark integration. The SES SMTP route is wired in via `--context mailEnabled=true` on the docuseal-stack deploy:
-
-```bash
-pnpm --filter @oci/cdk exec cdk deploy oci-<env>-docuseal \
-  --context env=<env> \
-  --context docusealEnabled=true \
-  --context mailEnabled=true
-```
-
-This injects four Secrets Manager-backed env vars into the DocuSeal task (`SMTP_ADDRESS`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`) plus two plaintext vars (`SMTP_FROM_EMAIL=oci-act@<env>.oci.ai4h.net`, `SMTP_FROM_NAME=OCI Platform`).
-
-After the service rolls out (~2 minutes), verify in the DocuSeal admin UI:
-
-1. `Settings → Sending emails` — the host/port/username should match what's in the `OciDev…SesSmtpCreds*` Secrets Manager secret.
-2. Set **From name** to `OCI Platform` and **From email** to `oci-act@<env>.oci.ai4h.net` if the admin UI overrides the env vars.
-3. **Send test email** → confirm delivery to a verified address (sandbox) or any address (production).
-
-In CI, `vars.MAIL_ENABLED` controls the flag (GitHub Actions repository variable, default `false`). Set it to `true` in Settings → Environments → dev after the above one-time steps are complete.
-
 ## Production access (leaving the SES sandbox)
 
 By default every region starts in **SES sandbox**: 200 sends/day, recipient addresses must be verified individually, no real-customer mail. Lifting the gate is a manual support case per region/account:
@@ -131,28 +113,11 @@ new route53.TxtRecord(this, 'DmarcRecord', {
 });
 ```
 
-## Rotating SMTP credentials
-
-The CustomResource that writes the secret keys its behaviour on a `RotationVersion` resource property (currently `'1'`). To rotate:
-
-1. Edit `infra/cdk/lib/mail-stack.ts` and bump `RotationVersion` (e.g. `'1'` → `'2'`).
-2. Open a PR; merge; the deploy pipeline applies it.
-3. On `Update` the Lambda deletes the existing access key, creates a new one, and writes a new SMTP password into the same secret.
-4. Force a new DocuSeal deployment so it picks up the new value:
-   ```bash
-   aws ecs update-service \
-     --cluster oci-<env>-api \
-     --service $(aws ecs list-services --cluster oci-<env>-api --region eu-central-1 --query 'serviceArns[?contains(@, `Docuseal`)]' --output text) \
-     --force-new-deployment --region eu-central-1
-   ```
-5. Verify a fresh outbound mail (e.g. invite a test signer) lands without being bounced.
-
 ## When mail goes wrong
 
 - **Hard bounces immediately on send**: check SES sandbox status (above). New identities outside the sandbox can still bounce on recipients with strict reputation policies — verify the receiving domain's MX / DMARC.
 - **Mail goes to spam**: verify DKIM signing in the message headers (`Authentication-Results: ... dkim=pass`). If DKIM is failing, run `aws ses get-identity-dkim-attributes` and re-check the CNAMEs resolve.
-- **DocuSeal silently doesn't send**: check the DocuSeal admin UI → Settings → Email Settings. The form here is plain SMTP — username/password/host/port. After the wire-up PR lands these will be populated automatically from the Secrets Manager secret; before then, the operator pastes them manually.
-- **CFN deploy fails with `CredentialReportNotPresent`** or similar IAM error on the SMTP user: usually means a prior stack delete didn't clean up the access keys. Use `aws iam list-access-keys --user-name oci-<env>-ses-smtp` then `aws iam delete-access-key` to clear them, then re-deploy.
+- **Inbound forwarder Lambda not firing**: check that the receipt rule set is active (`aws ses describe-active-receipt-rule-set`). The Lambda log group (`/aws/lambda/...InboundForwarderFn...`) shows per-message results.
 
 ## When SES is unconfigured
 
