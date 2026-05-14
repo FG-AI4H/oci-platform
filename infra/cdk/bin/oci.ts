@@ -94,18 +94,24 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
 api.addDependency(identity);
 
 // DocuSeal stack — self-hosted e-signature for AdES DUA flow (#128).
-// Shares cluster + ALB with the API; routes /docuseal/* via a priority-60
-// listener rule (between API's 50 and Web's catch-all 100). Provisions the
-// API/webhook secrets the API task consumes via SSM-by-name imports.
+// Shares cluster + ALB with the API but on its own vhost
+// (`docuseal.<env>.oci.ai4h.net`) since DocuSeal's Rails app mounts all
+// routes at the host root and does not support a relative_url_root
+// prefix. Priority-60 host-header listener rule (between API's 50 and
+// Web's catch-all 100). Provisions the API/webhook secrets the API
+// task consumes via SSM-by-name imports.
 const docuseal = new DocusealStack(app, `oci-${envName}-docuseal`, {
   env: cfg.env,
   cfg,
   tags,
   vpc: network.vpc,
   cluster: api.cluster,
+  alb: api.alb,
   httpsListener: api.httpsListener,
   database: data.database,
   logGroup: observability.apiLogGroup,
+  hostedZoneId: HOSTED_ZONE_ID,
+  zoneName: HOSTED_ZONE_NAME,
 });
 docuseal.addDependency(api);
 
