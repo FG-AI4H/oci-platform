@@ -17,9 +17,12 @@ This runbook covers first-time bootstrap. Day-to-day operation is mostly hands-o
    - A one-shot **DB-bootstrap task definition** (used in step 2 below).
    - An EFS volume mounted at `/data/docuseal` for blob storage.
    - Three Secrets Manager secrets:
-     - `OciDevDocusealDocusealSecretKeyBase-*` — Rails cookie/session key.
-     - `OciDevDocusealDocusealApiToken-*` — API token stub.
-     - `OciDevDocusealDocusealWebhookSecret-*` — HMAC secret.
+     - `DocusealSecretKeyBase*` — Rails cookie/session key (CFN-generated name).
+     - `DocusealApiToken*` — API token stub (operator updates this).
+     - `DocusealWebhookSecret*` — HMAC secret (operator pastes the value into DocuSeal's Webhooks settings).
+
+     CFN appends a random suffix (e.g. `DocusealApiToken2B950881-3ba9BTwNN4ll`); search "Docuseal" in the Secrets Manager console to find them all. The names are stable per stack so you can save the ARNs once and reuse.
+
    - An ACM cert + Route53 alias for `docuseal.<env>.oci.ai4h.net` and an ALB listener rule at priority 60 routing that host to the DocuSeal target group.
    - SSM parameters under `/oci/<env>/docuseal/*` so the API stack can find the secrets without a CFN cross-stack export.
 
@@ -55,7 +58,7 @@ Once the task is healthy, open `https://docuseal.<env>.oci.ai4h.net` in a browse
 2. **Generate the API token**:
    - `Settings → API → Generate token`.
    - Copy the token value.
-   - Open AWS Secrets Manager → find the secret named `OciDevDocusealDocusealApiToken-*` (or `int` / `prod` variant).
+   - Open AWS Secrets Manager → search "Docuseal" → find the secret with description "DocuSeal API token (OCI_DOCUSEAL_API_TOKEN)" (its physical name starts with `DocusealApiToken` and has a random suffix; one such secret exists per env).
    - `Retrieve secret value → Edit → paste`. Save.
    - **Re-deploy the api-stack with the docuseal-enabled flag** — this is when the API task definition first gets the three OCI*DOCUSEAL*\* env vars wired in:
      ```bash
@@ -69,8 +72,15 @@ Once the task is healthy, open `https://docuseal.<env>.oci.ai4h.net` in a browse
 3. **Configure the webhook**:
    - `Settings → Webhooks → Add webhook`.
    - URL: `https://<env>.oci.ai4h.net/v2/dua/webhook/docuseal` (this stays on the API host — DocuSeal posts back to the OCI API, not to itself).
-   - Secret: open the `OciDevDocusealDocusealWebhookSecret-*` secret in Secrets Manager, copy the value, paste here.
-   - Events: `submission.completed`, `submission.declined`, `submission.expired`.
+   - Click `Security` → switch to the **HMAC** tab (the default "Secret" tab adds a static header, which is not what we want). DocuSeal **owns the HMAC secret** — the value is read-only here; copy it. The pre-generated value in `DocusealWebhookSecret*` was just a placeholder; overwrite it with DocuSeal's value: AWS Secrets Manager → `DocusealWebhookSecret*` → Retrieve → Edit → paste → Save. Then force a new API deployment so the task picks up the rotated value:
+     ```bash
+     aws ecs update-service --cluster oci-<env>-api \
+       --service $(aws ecs list-services --cluster oci-<env>-api --region eu-central-1 \
+         --query 'serviceArns[?contains(@, `ApiService`)]' --output text) \
+       --force-new-deployment --region eu-central-1
+     ```
+     DocuSeal will sign each webhook body with HMAC-SHA256 and send the hex digest in the `X-Docuseal-Signature` header, which the API verifies in constant time.
+   - Events: tick `form.completed`, `form.declined`, `submission.completed`, `submission.expired`. DocuSeal splits the lifecycle into per-form (per-signer) and per-submission (envelope) events; there is no `submission.declined` — the API handles `form.declined` instead. `submission.completed` is redundant for single-signer DUAs but harmless to enable.
    - Save.
 
 4. **Smoke-test**: from the requester's perspective on the API, hit `POST /v2/dua/sign-requests` for an APPROVED CONTROLLED-tier access request. Follow the returned `signerUrl`. Sign in DocuSeal. Within seconds, `/me/dua-signatures/<id>` should flip to `SIGNED` and a fresh `AcceptedTermsAndPolicies` GA4GH visa should appear at `/me/passport/issued`.
@@ -87,7 +97,7 @@ The old token remains valid in DocuSeal until you revoke it in the admin UI. Rec
 
 1. Generate a new random secret (`openssl rand -hex 32`).
 2. Update both:
-   - The Secrets Manager secret value (`OciDev/Int/Prod-DocusealWebhookSecret-*`).
+   - The Secrets Manager secret value (the `DocusealWebhookSecret*` secret for the env).
    - The DocuSeal Webhooks settings.
 3. Force a new API deployment.
 
