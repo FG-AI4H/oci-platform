@@ -143,11 +143,15 @@ export class MailStack extends cdk.Stack {
     // Forwarder: reads raw email from S3, rewrites From/To/Subject/Reply-To,
     // re-sends via SES. Uses commonHeaders from the SES event to extract
     // original sender and subject without complex MIME parsing.
+    const forwarderLogGroup = new logs.LogGroup(this, 'InboundForwarderLogGroup', {
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: props.cfg.removalPolicy,
+    });
     const forwarderFn = new lambda.Function(this, 'InboundForwarderFn', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
       timeout: cdk.Duration.seconds(30),
-      logRetention: logs.RetentionDays.ONE_WEEK,
+      logGroup: forwarderLogGroup,
       environment: {
         BUCKET_NAME: inboundBucket.bucketName,
         FROM_ADDRESS: `oci-act@${identityDomain}`,
