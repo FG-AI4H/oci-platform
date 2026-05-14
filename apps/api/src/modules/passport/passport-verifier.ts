@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload, type JWTVerifyResult } from 'jose';
 
 /**
@@ -80,6 +80,7 @@ export interface TrustedIssuerLookup {
   jwksUri: string;
 }
 
+@Injectable()
 export class PassportVerifier {
   private readonly logger = new Logger(PassportVerifier.name);
 
