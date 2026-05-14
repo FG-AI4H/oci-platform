@@ -94,6 +94,20 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
 // it from props.
 api.addDependency(identity);
 
+// Mail stack — Amazon SES per-env outbound identity + SMTP creds + inbound
+// forwarder (#193, ADR-0004). Must deploy BEFORE DocuSeal so the SMTP creds
+// SSM param exists when docuseal-stack reads it with --context mailEnabled=true.
+const mail = new MailStack(app, `oci-${envName}-mail`, {
+  env: cfg.env,
+  cfg,
+  tags,
+  hostedZoneId: HOSTED_ZONE_ID,
+  zoneName: HOSTED_ZONE_NAME,
+  // DMARC aggregate-report mailbox + inbound-forward destination.
+  dmarcReportTo: 'ml@mllab.ai',
+  inboundForwardTo: 'ml@mllab.ai',
+});
+
 // DocuSeal stack — self-hosted e-signature for AdES DUA flow (#128).
 // Shares cluster + ALB with the API but on its own vhost
 // (`docuseal.<env>.oci.ai4h.net`) since DocuSeal's Rails app mounts all
@@ -101,6 +115,8 @@ api.addDependency(identity);
 // prefix. Priority-60 host-header listener rule (between API's 50 and
 // Web's catch-all 100). Provisions the API/webhook secrets the API
 // task consumes via SSM-by-name imports.
+// SMTP creds are wired in via --context mailEnabled=true after mail-stack
+// is deployed and the receipt rule set is activated.
 const docuseal = new DocusealStack(app, `oci-${envName}-docuseal`, {
   env: cfg.env,
   cfg,
@@ -114,24 +130,10 @@ const docuseal = new DocusealStack(app, `oci-${envName}-docuseal`, {
   hostedZoneId: HOSTED_ZONE_ID,
   zoneName: HOSTED_ZONE_NAME,
 });
+// Depends on api for cluster/alb; depends on mail so its SSM param for
+// SMTP creds exists when --context mailEnabled=true is passed.
 docuseal.addDependency(api);
-
-// Mail stack — Amazon SES per-env outbound identity + SMTP creds
-// (#193, ADR-0004). Independent of every other runtime stack at deploy
-// time; sits between docuseal and web in the order purely so its log
-// lines appear near related infra. DocuSeal will pull SMTP creds from
-// this stack's Secrets Manager secret via SSM-by-name in a follow-up
-// PR; until then the secret is provisioned but unused.
-const _mail = new MailStack(app, `oci-${envName}-mail`, {
-  env: cfg.env,
-  cfg,
-  tags,
-  hostedZoneId: HOSTED_ZONE_ID,
-  zoneName: HOSTED_ZONE_NAME,
-  // DMARC aggregate-report mailbox. ADR-0004 picked the operator's
-  // personal address; revisit when a team alias exists.
-  dmarcReportTo: 'ml@mllab.ai',
-});
+docuseal.addDependency(mail);
 
 // Web stack — Next.js Fargate service sharing the API's cluster + ALB.
 // Path-based routing on the existing HTTPS listener: ApiStack owns the
