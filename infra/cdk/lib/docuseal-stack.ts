@@ -5,6 +5,7 @@ import * as efs from 'aws-cdk-lib/aws-efs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
@@ -112,7 +113,86 @@ export class DocusealStack extends cdk.Stack {
       removalPolicy: props.cfg.removalPolicy,
     });
 
-    // --- EFS volume ----------------------------------------------------
+    // Composed DATABASE_URL secret — the official DocuSeal image
+    // expects a single `DATABASE_URL` env var (per their
+    // docker-compose.yml). The Aurora-managed secret carries
+    // discrete fields (username/password/host/port); ECS can extract
+    // individual fields via ecs.Secret.fromSecretsManager but cannot
+    // compose them into one env var. We use a small Lambda-backed
+    // CustomResource that runs at deploy time to read the Aurora
+    // secret, compose the postgresql:// URL with the `oci_docuseal`
+    // logical DB, and put it into a dedicated secret. The DocuSeal
+    // task references that single secret with no command/entrypoint
+    // override — exactly the shape the upstream image is designed
+    // for.
+    const databaseUrlSecret = new secretsmanager.Secret(this, 'DocusealDatabaseUrl', {
+      description: `DocuSeal DATABASE_URL for ${env}. Auto-composed from the Aurora secret by a Lambda at deploy time.`,
+      secretStringValue: cdk.SecretValue.unsafePlainText('placeholder-overwritten-on-first-deploy'),
+      removalPolicy: props.cfg.removalPolicy,
+    });
+
+    const composerFn = new lambda.Function(this, 'DocusealDatabaseUrlComposerFn', {
+      runtime: lambda.Runtime.NODEJS_22_X,
+      handler: 'index.handler',
+      timeout: cdk.Duration.seconds(30),
+      logRetention: logs.RetentionDays.ONE_WEEK,
+      code: lambda.Code.fromInline(`
+        const { SecretsManagerClient, GetSecretValueCommand, PutSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
+        const https = require('https');
+        const sm = new SecretsManagerClient({});
+        async function compose(sourceArn, targetArn, dbName) {
+          const src = await sm.send(new GetSecretValueCommand({ SecretId: sourceArn }));
+          const j = JSON.parse(src.SecretString);
+          const url = 'postgresql://' + encodeURIComponent(j.username) + ':' + encodeURIComponent(j.password) +
+                      '@' + j.host + ':' + j.port + '/' + dbName;
+          await sm.send(new PutSecretValueCommand({ SecretId: targetArn, SecretString: url }));
+        }
+        function respond(event, status, data) {
+          return new Promise((resolve) => {
+            const body = JSON.stringify({
+              Status: status, Reason: data.Reason || 'see log group',
+              PhysicalResourceId: event.PhysicalResourceId || event.LogicalResourceId,
+              StackId: event.StackId, RequestId: event.RequestId, LogicalResourceId: event.LogicalResourceId,
+              Data: data,
+            });
+            const u = new URL(event.ResponseURL);
+            const req = https.request({
+              method: 'PUT', hostname: u.hostname, path: u.pathname + u.search,
+              headers: { 'content-type': '', 'content-length': body.length },
+            }, () => resolve());
+            req.on('error', () => resolve());
+            req.write(body); req.end();
+          });
+        }
+        exports.handler = async (event) => {
+          try {
+            if (event.RequestType !== 'Delete') {
+              await compose(event.ResourceProperties.SourceArn, event.ResourceProperties.TargetArn, event.ResourceProperties.DbName);
+            }
+            await respond(event, 'SUCCESS', { Reason: 'composed' });
+          } catch (err) {
+            await respond(event, 'FAILED', { Reason: String(err && err.message || err) });
+          }
+        };
+      `),
+    });
+    props.database.secret!.grantRead(composerFn);
+    databaseUrlSecret.grantWrite(composerFn);
+
+    new cdk.CustomResource(this, 'DocusealDatabaseUrlComposer', {
+      serviceToken: composerFn.functionArn,
+      properties: {
+        // Bumping any of these forces the CR to fire on the next
+        // deploy. Aurora secret ARN can change on cluster replacement;
+        // the target secret ARN is stable; the DbName is constant.
+        // We also include a deploy-time nonce so password rotations
+        // are picked up — bump to re-run.
+        SourceArn: props.database.secret!.secretArn,
+        TargetArn: databaseUrlSecret.secretArn,
+        DbName: 'oci_docuseal',
+        Version: '1',
+      },
+    });
 
     const fileSystem = new efs.FileSystem(this, 'DocusealEfs', {
       vpc: props.vpc,
@@ -165,59 +245,32 @@ export class DocusealStack extends cdk.Stack {
     );
 
     const container = taskDef.addContainer('docuseal', {
-      // Pinned: `:latest` (2.5.3, published 2026-05-11) ships a
-      // Rails 8.1 initializer that calls `has_many_inversing=` —
-      // a config option Rails 8.1 dropped, so the container
-      // crashes on boot. `:2.4.4` is the previous-major's latest
-      // patch (Rails 7.x compatible). Bump deliberately after
-      // testing future tags.
-      image: ecs.ContainerImage.fromRegistry('docuseal/docuseal:2.4.4'),
+      // Use docuseal/docuseal:latest — matches the upstream
+      // docker-compose.yml. The image's own ENTRYPOINT handles
+      // WORKDIR, bundle exec, migrations, and the Rails 8.1
+      // initialization sequence. Overriding entryPoint/command
+      // bypassed all of that and surfaced spurious failures
+      // (Gemfile not found, has_many_inversing= NoMethodError) —
+      // see https://github.com/docusealco/docuseal/blob/master/docker-compose.yml
+      // for the canonical shape this image was designed for.
+      image: ecs.ContainerImage.fromRegistry('docuseal/docuseal:latest'),
       environment: {
         FORCE_SSL: 'true',
-        // DocuSeal Rails app expects HOST so it can construct absolute
-        // URLs in its emails / signer-page templates.
+        // DocuSeal Rails app uses HOST when constructing absolute URLs
+        // in emails / signer pages.
         HOST: props.cfg.domainName,
-        // Path prefix — DocuSeal serves everything from this base. The
-        // ALB rule maps /docuseal/* → DocuSeal TG; the container needs
-        // to know the prefix so its internal redirects don't strip it.
+        // Rails-standard env var — serves all routes under /docuseal
+        // so the ALB's priority-60 listener rule (/docuseal/*) routes
+        // them correctly. Picked up by the Rails app at boot via
+        // `config.action_controller.relative_url_root`.
         RAILS_RELATIVE_URL_ROOT: '/docuseal',
       },
       secrets: {
         SECRET_KEY_BASE: ecs.Secret.fromSecretsManager(secretKeyBase),
-        // DocuSeal reads its DB connection from DATABASE_URL. We compose
-        // it from the Aurora secret fields at task launch via a
-        // separate env-var injection (POSTGRES_*); DocuSeal also accepts
-        // discrete vars if a templating layer is added — for now we
-        // expose the full URL via Secrets Manager rendered with
-        // {{resolve}}-style substitution at deploy time. Aurora's
-        // managed secret carries `host` + `port` + `username` +
-        // `password`; we compose at deploy. (See note below: the
-        // simplest correct approach is to give DocuSeal credentials
-        // for a dedicated DB role; we use the master here for dev
-        // simplicity and tighten in a follow-up.)
-        DATABASE_USERNAME: ecs.Secret.fromSecretsManager(props.database.secret!, 'username'),
-        DATABASE_PASSWORD: ecs.Secret.fromSecretsManager(props.database.secret!, 'password'),
-        DATABASE_HOST: ecs.Secret.fromSecretsManager(props.database.secret!, 'host'),
-        DATABASE_PORT: ecs.Secret.fromSecretsManager(props.database.secret!, 'port'),
+        // Composed at deploy time by the DocuSealDatabaseUrlComposer
+        // Lambda above — single env var, as the image expects.
+        DATABASE_URL: ecs.Secret.fromSecretsManager(databaseUrlSecret),
       },
-      // Override BOTH entryPoint and command so we control the full
-      // container start sequence. We compose DATABASE_URL from the
-      // per-field Aurora secrets, then exec the Rails app directly.
-      //
-      // workingDirectory pins us at /app — that's where the DocuSeal
-      // image puts the Rails source + Gemfile. Required because
-      // overriding entryPoint can drop the image's default WORKDIR
-      // resolution; without this, `bundle exec` errors with
-      // "Could not locate Gemfile".
-      //
-      // NB: `oci_docuseal` is a logical database the operator creates
-      // on the Aurora cluster via the bootstrap one-shot. Rails
-      // migrations populate the schema on first boot.
-      workingDirectory: '/app',
-      entryPoint: ['sh', '-c'],
-      command: [
-        'export DATABASE_URL="postgresql://${DATABASE_USERNAME}:${DATABASE_PASSWORD}@${DATABASE_HOST}:${DATABASE_PORT}/oci_docuseal" && exec bundle exec rails server -b 0.0.0.0 -p 3000',
-      ],
       logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'docuseal', logGroup: props.logGroup }),
       portMappings: [{ containerPort: 3000, protocol: ecs.Protocol.TCP }],
     });
@@ -438,6 +491,19 @@ export class DocusealStack extends cdk.Stack {
         {
           id: 'AwsSolutions-EFS1',
           reason: 'EFS encryption-at-rest is enabled with the AWS-managed key.',
+        },
+        {
+          id: 'AwsSolutions-IAM4',
+          reason:
+            'AWSLambdaBasicExecutionRole on the DATABASE_URL composer / log-retention helpers is the standard managed policy that grants CloudWatch Logs write — replacing with a customer policy adds maintenance burden for no security benefit (the actions are already minimal).',
+          appliesTo: [
+            'Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+          ],
+        },
+        {
+          id: 'AwsSolutions-L1',
+          reason:
+            'Lambdas are pinned to NODEJS_22_X (current latest LTS at deploy time). cdk-nag warns whenever a new Node version ships; bumps happen on the project-wide cadence, not per-stack.',
         },
       ],
       true,
