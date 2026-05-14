@@ -72,7 +72,7 @@ Once the task is healthy, open `https://docuseal.<env>.oci.ai4h.net` in a browse
    - `Settings → Webhooks → Add webhook`.
    - URL: `https://<env>.oci.ai4h.net/v2/dua/webhook/docuseal` (this stays on the API host — DocuSeal posts back to the OCI API, not to itself).
    - Secret: in Secrets Manager find the secret with description "DocuSeal webhook HMAC secret" (physical name starts with `DocusealWebhookSecret`), copy its value, paste here.
-   - Events: `submission.completed`, `submission.declined`, `submission.expired`.
+   - Events: tick `form.completed`, `form.declined`, `submission.completed`, `submission.expired`. DocuSeal splits the lifecycle into per-form (per-signer) and per-submission (envelope) events; there is no `submission.declined` — the API handles `form.declined` instead. `submission.completed` is redundant for single-signer DUAs but harmless to enable.
    - Save.
 
 4. **Smoke-test**: from the requester's perspective on the API, hit `POST /v2/dua/sign-requests` for an APPROVED CONTROLLED-tier access request. Follow the returned `signerUrl`. Sign in DocuSeal. Within seconds, `/me/dua-signatures/<id>` should flip to `SIGNED` and a fresh `AcceptedTermsAndPolicies` GA4GH visa should appear at `/me/passport/issued`.
