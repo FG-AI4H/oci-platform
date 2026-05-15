@@ -2,7 +2,7 @@
 
 The live capability matrix. Updated on every shipped feature — docs deltas are part of definition-of-done.
 
-Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116/#117/#118/#119/#120 all live).
+Last update: **2026-05-15** (SMTP-to-SES relay live in dev — ADR-0005 + PR #203, closes the in-AWS outbound mail loop).
 
 ## At a glance
 
@@ -11,7 +11,8 @@ Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116
 - ✅ **Access governance (Phase B basics)** shipped: structured intended-use form, DUO matcher, status-aware access CTA, post-submit confirmation flow.
 - ✅ **User UI preferences** shipped: dark mode + density + locale (PR M, #144).
 - ✅ **Access governance (Phase B Phase-1)** shipped: tiered access model (#115), email-domain classifier (#116), certification quiz (#117), click-wrap with SHA-256 + KMS receipt (#118), commercial-use terms (#119), builder-vs-researcher form variants (#120). All committed in [ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md).
-- 🚧 **Access governance (Phase B Phase-2)** — ORCID, GA4GH Passport (RP + issuer), DocuSeal AdES + DUA templates, renewal cron. Tracked as #125-130.
+- ✅ **Access governance (Phase B Phase-2)** shipped: ORCID (#125), GA4GH Passport RP + issuer (#126/#127), DocuSeal AdES (#128), DUA template engine (#129), renewal cron (#130).
+- ✅ **Outbound + inbound mail in AWS Frankfurt** — SES per-env identity + inbound forwarder + SMTP-to-SES relay (ADR-0004 / ADR-0005). DocuSeal signing emails verified end-to-end in dev.
 - 🚧 **Phase C (evaluation)** — Django port not yet started.
 - 🚧 **Phase D (reporting)** — not yet started.
 - 🚧 **Phase E (DMXP / federation v1.0)** — DMXP v0.1 design in progress; full v1.0 in Phase E.
@@ -166,6 +167,15 @@ Last update: **2026-05-09** (after the six-PR DAP-foundation slice — #115/#116
 | OIDC-only deploys (no static AWS keys)                                 | ✅ Live    | Phase A    |
 | Deploy hygiene — Node 24 actions + `@oci/croissant` build in web image | ✅ Live    | PR #102    |
 | OpenTelemetry / X-Ray instrumentation                                  | 🚧 Partial | Ongoing    |
+
+## Mail & operator notifications
+
+| Capability                                                                                           | Status  | Shipped in                                                                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SES per-env domain identity (`<env>.oci.ai4h.net`) — Easy-DKIM + SPF + DMARC + mail-from             | ✅ Live | [ADR-0004](../adr/0004-ses-mail-per-env-identity.md) · PR [#194](https://github.com/FG-AI4H/oci-platform/pull/194) · runbook [docs/for-operators/ses.md](../for-operators/ses.md)                                                                                                       |
+| SES inbound forwarder — `oci-act@<env>.oci.ai4h.net` → operator mailbox via S3 + Lambda              | ✅ Live | PR [#197](https://github.com/FG-AI4H/oci-platform/pull/197) (+ fixes in [#199](https://github.com/FG-AI4H/oci-platform/pull/199) / [#200](https://github.com/FG-AI4H/oci-platform/pull/200))                                                                                            |
+| SMTP-to-SES relay — in-VPC Fargate service so DocuSeal (and future senders) reach SES via plain SMTP | ✅ Live | [ADR-0005](../adr/0005-smtp-to-ses-bridge-for-docuseal.md) · PR [#203](https://github.com/FG-AI4H/oci-platform/pull/203) (+ fixes through [#209](https://github.com/FG-AI4H/oci-platform/pull/209)) · all outbound notifications stay inside AWS Frankfurt (no third-party mail vendor) |
+| SES production access (out of sandbox in eu-central-1)                                               | ✅ Live | AWS Support case (one-time, account-wide)                                                                                                                                                                                                                                               |
 
 ## Tooling & governance
 
