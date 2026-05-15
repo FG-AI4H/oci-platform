@@ -290,14 +290,24 @@ export class DocusealStack extends cdk.Stack {
         // no sub-path support (see class docstring).
         HOST: docusealHost,
         // Outbound mail via the in-VPC SMTP-to-SES relay (ADR-0005).
-        // DocuSeal's Rails app reads SMTP_FROM (not SMTP_FROM_EMAIL —
-        // the env-var name is documented inconsistently upstream;
-        // SMTP_FROM matches what the container actually consults).
-        // The relay accepts any credentials, but DocuSeal's Settings UI
-        // requires a non-empty username/password; CDK leaves them
-        // unset so the operator-saved UI values take precedence.
+        // DocuSeal reads these env vars in config/environments/
+        // production.rb and constructs ActionMailer::Base.smtp_settings.
+        //
+        // SMTP_ENABLE_STARTTLS=false is load-bearing: the relay does not
+        // advertise STARTTLS (a publicly-trusted cert for an internal-only
+        // hostname is impractical without an internal NLB + ACM cert,
+        // and DocuSeal's "Noverify" option does not gracefully fall back
+        // when STARTTLS is missing — it still raises
+        // Net::SMTPUnsupportedCommand). Setting `false` makes Rails set
+        // `enable_starttls: false`, which Net::SMTP interprets as
+        // `:never` (skip STARTTLS entirely). The VPC SG-to-SG ingress
+        // and the relay's own auth-accept-anything stance are the
+        // security boundary; plain SMTP on the in-VPC hop is fine.
+        // SES outbound (the public-internet hop) still goes over HTTPS
+        // via the AWS SDK from the relay.
         SMTP_ADDRESS: props.smtpRelayHost,
         SMTP_PORT: String(props.smtpRelayPort),
+        SMTP_ENABLE_STARTTLS: 'false',
         SMTP_FROM: props.smtpFromEmail,
         SMTP_FROM_NAME: 'OCI Platform',
       },
