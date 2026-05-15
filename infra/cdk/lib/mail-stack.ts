@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cloudmap from 'aws-cdk-lib/aws-servicediscovery';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -12,6 +13,7 @@ import * as sesActions from 'aws-cdk-lib/aws-ses-actions';
 import { NagSuppressions } from 'cdk-nag';
 import { Construct } from 'constructs';
 import type { OciEnvConfig } from './environments.js';
+import { grantGuardDutyAgentEcrPull } from './api-stack.js';
 
 export interface MailStackProps extends cdk.StackProps {
   cfg: OciEnvConfig;
@@ -308,10 +310,13 @@ export class MailStack extends cdk.Stack {
     );
 
     // Local fallback so `cdk synth` works offline. CI passes the real
-    // SHA-tagged URI via context (see deploy.yml). Matches the same
-    // pattern as api/web/worker-ingest.
+    // SHA-tagged URI via context (see deploy.yml). For the real path we
+    // use `fromEcrRepository` (not `fromRegistry`) so CDK auto-grants
+    // ECR pull permissions on the task execution role — `fromRegistry`
+    // leaves the role empty and the task fails at startup with
+    // `ecr:GetAuthorizationToken AccessDenied`. Same shape as api-stack.
     const relayImage = props.smtpRelayImage
-      ? ecs.ContainerImage.fromRegistry(props.smtpRelayImage)
+      ? resolveSmtpRelayImage(this, props.smtpRelayImage)
       : ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/alpine:3.20');
 
     relayTaskDef.addContainer('smtp-relay', {
@@ -350,6 +355,11 @@ export class MailStack extends cdk.Stack {
     // Suppress unused warning while keeping a handle for future
     // CloudWatch alarms on RunningCount / desiredCount drift.
     void relayService;
+
+    // GuardDuty Runtime Monitoring is enabled account-wide; ECS injects
+    // the agent as a sidecar and the task execution role needs to pull
+    // its image from a cross-account ECR (same pattern as api/web).
+    grantGuardDutyAgentEcrPull(relayTaskDef);
 
     // Cross-stack handles for docuseal-stack (SG ingress, env vars).
     this.relaySecurityGroup = relaySg;
@@ -416,8 +426,36 @@ export class MailStack extends cdk.Stack {
           reason:
             'Relay env vars (PORT, AWS_REGION, LOG_LEVEL) are non-secret routing config — same pattern as api/docuseal stacks. The relay holds no secrets; AWS credentials come from the task IAM role at runtime, not from the task definition.',
         },
+        {
+          id: 'AwsSolutions-IAM5',
+          reason:
+            'ECR pull permissions: ecr:GetAuthorizationToken cannot be resource-scoped (AWS API limitation). Per-repo actions are scoped by fromEcrRepository to the oci-smtp-relay repo ARN. GuardDuty agent grant is scoped to the AWS-managed cross-account ARN.',
+          appliesTo: ['Resource::*', 'Action::ecr:GetAuthorizationToken'],
+        },
       ],
       true,
     );
   }
+}
+
+/**
+ * Resolve a `<account>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>` URI
+ * into an `ecs.ContainerImage` via `fromEcrRepository`. CDK uses the
+ * resolved Repository handle to auto-grant ECR pull permissions on the
+ * task execution role — `ecs.ContainerImage.fromRegistry` does not, and
+ * the task would fail to pull with `ecr:GetAuthorizationToken
+ * AccessDenied`. Same parsing rule as api-stack's resolveApiImage.
+ */
+function resolveSmtpRelayImage(scope: Construct, image: string): ecs.ContainerImage {
+  const colon = image.lastIndexOf(':');
+  const slash = image.lastIndexOf('/');
+  if (colon <= slash) {
+    throw new Error(
+      `smtpRelayImage "${image}" is missing a tag; expected "<account>.dkr.ecr.<region>.amazonaws.com/<repo>:<tag>"`,
+    );
+  }
+  const tag = image.slice(colon + 1);
+  const repoName = image.slice(slash + 1, colon);
+  const repo = ecr.Repository.fromRepositoryName(scope, 'SmtpRelayRepoRef', repoName);
+  return ecs.ContainerImage.fromEcrRepository(repo, tag);
 }
