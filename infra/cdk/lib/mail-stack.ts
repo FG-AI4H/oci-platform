@@ -182,6 +182,10 @@ export class MailStack extends cdk.Stack {
         const{S3Client,GetObjectCommand}=require('@aws-sdk/client-s3');
         const{SESClient,SendRawEmailCommand}=require('@aws-sdk/client-ses');
         const s3c=new S3Client({});const sec=new SESClient({});
+        // Transit headers that SES regenerates on SendRawEmail. Keeping
+        // any of these on the re-sent message causes SES to reject with
+        // "Duplicate header" (most commonly DKIM-Signature).
+        const STRIP=new Set(['dkim-signature','received','return-path','received-spf','authentication-results','arc-seal','arc-message-signature','arc-authentication-results','message-id','feedback-id'].concat(['x-ses-spam-verdict','x-ses-virus-verdict','x-ses-receipt','x-ses-dkim-signature','x-ses-outgoing']));
         async function buf(s){const c=[];for await(const k of s)c.push(Buffer.isBuffer(k)?k:Buffer.from(k));return Buffer.concat(c);}
         exports.handler=async(ev)=>{
           for(const r of ev.Records||[]){
@@ -196,13 +200,16 @@ export class MailStack extends cdk.Stack {
             const hdr=raw.slice(0,si);const bdy=raw.slice(si);
             const nl=[];let skip=false;
             for(const ln of hdr.split(/\\r?\\n/)){
-              const lo=ln.toLowerCase();const isc=/^[ \\t]/.test(ln);
+              const isc=/^[ \\t]/.test(ln);
               if(isc){if(!skip)nl.push(ln);continue;}
+              const colon=ln.indexOf(':');
+              const name=colon>0?ln.slice(0,colon).toLowerCase():'';
               skip=false;
-              if(lo.startsWith('from:')){nl.push('From: OCI Platform <'+fa+'>');nl.push('Reply-To: '+fr);skip=true;}
-              else if(lo.startsWith('to:')){nl.push('To: '+ft);skip=true;}
-              else if(lo.startsWith('reply-to:')||lo.startsWith('bcc:')||lo.startsWith('cc:')){skip=true;}
-              else if(lo.startsWith('subject:')){nl.push('Subject: '+(sub.startsWith('[Fwd]')?sub:'[Fwd] '+sub));skip=true;}
+              if(name==='from'){nl.push('From: OCI Platform <'+fa+'>');nl.push('Reply-To: '+fr);skip=true;}
+              else if(name==='to'){nl.push('To: '+ft);skip=true;}
+              else if(name==='reply-to'||name==='bcc'||name==='cc'){skip=true;}
+              else if(name==='subject'){nl.push('Subject: '+(sub.startsWith('[Fwd]')?sub:'[Fwd] '+sub));skip=true;}
+              else if(STRIP.has(name)){skip=true;}
               else nl.push(ln);
             }
             const email=nl.join('\\r\\n')+bdy;
