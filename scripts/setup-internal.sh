@@ -2,10 +2,10 @@
 # setup-internal.sh — wire the private companion repo into this checkout.
 #
 # The public oci-platform repo no longer ships `.claude/`,
-# `docs/briefings/`, or `docs/research/`. Those live in
-# https://github.com/FG-AI4H/oci-platform-internal (private).
+# `docs/briefings/`, `docs/research/`, or `docs/planning/`. Those live
+# in https://github.com/FG-AI4H/oci-platform-internal (private).
 #
-# This script clones that repo as a sibling and symlinks the three
+# This script clones that repo as a sibling and symlinks the four
 # directories into the current checkout. Idempotent — re-running on
 # an already-wired checkout is a no-op.
 #
@@ -24,6 +24,7 @@ readonly LINKS=(
   ".claude"
   "docs/briefings"
   "docs/research"
+  "docs/planning"
 )
 
 info()  { printf '\033[1;34m▸\033[0m %s\n' "$*"; }
