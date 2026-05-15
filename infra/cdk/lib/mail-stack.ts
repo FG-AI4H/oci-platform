@@ -71,8 +71,12 @@ export class MailStack extends cdk.Stack {
     });
 
     // SES exposes the 3 Easy-DKIM CNAME records as
-    // `dkimDnsTokenName{1,2,3}` / `dkimDnsTokenValue{1,2,3}`. We add
-    // them as records in the apex hosted zone.
+    // `dkimDnsTokenName{1,2,3}` / `dkimDnsTokenValue{1,2,3}`. SES returns
+    // these as FQDNs (e.g. `{token}._domainkey.dev.oci.ai4h.net`), but
+    // because they are CFN tokens (unresolved at synth time) CDK's
+    // route53 FQDN-detection can't see that they already end with the
+    // zone name. We strip the `.{zoneName}` suffix at deploy time so
+    // CDK appends it back correctly.
     const dkimTokens = [
       { name: emailIdentity.dkimDnsTokenName1, value: emailIdentity.dkimDnsTokenValue1 },
       { name: emailIdentity.dkimDnsTokenName2, value: emailIdentity.dkimDnsTokenValue2 },
@@ -81,7 +85,7 @@ export class MailStack extends cdk.Stack {
     dkimTokens.forEach((t, i) => {
       new route53.CnameRecord(this, `DkimRecord${i + 1}`, {
         zone,
-        recordName: t.name,
+        recordName: cdk.Fn.select(0, cdk.Fn.split(`.${props.zoneName}`, t.name)),
         domainName: t.value,
       });
     });
@@ -98,6 +102,23 @@ export class MailStack extends cdk.Stack {
       values: [
         `v=DMARC1; p=none; rua=mailto:${props.dmarcReportTo}; ruf=mailto:${props.dmarcReportTo}; fo=1; adkim=r; aspf=r`,
       ],
+    });
+
+    // Mail-from subdomain (`bounce.<identity>`) DNS records — SES requires
+    // an MX pointing at the regional feedback endpoint plus an SPF TXT
+    // record so bounce/complaint mail can be delivered back to SES.
+    // Without these the mail-from domain stays in `Pending` and outbound
+    // sends use the default `amazonses.com` envelope-from instead of
+    // `bounce.<identity>`, which weakens DMARC alignment.
+    new route53.MxRecord(this, 'MailFromMxRecord', {
+      zone,
+      recordName: mailFromDomain,
+      values: [{ priority: 10, hostName: `feedback-smtp.${this.region}.amazonses.com` }],
+    });
+    new route53.TxtRecord(this, 'MailFromSpfRecord', {
+      zone,
+      recordName: mailFromDomain,
+      values: ['v=spf1 include:amazonses.com -all'],
     });
 
     // --- Inbound: MX + S3 + forwarder Lambda + receipt rule set ------
@@ -143,11 +164,15 @@ export class MailStack extends cdk.Stack {
     // Forwarder: reads raw email from S3, rewrites From/To/Subject/Reply-To,
     // re-sends via SES. Uses commonHeaders from the SES event to extract
     // original sender and subject without complex MIME parsing.
+    const forwarderLogGroup = new logs.LogGroup(this, 'InboundForwarderLogGroup', {
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: props.cfg.removalPolicy,
+    });
     const forwarderFn = new lambda.Function(this, 'InboundForwarderFn', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
       timeout: cdk.Duration.seconds(30),
-      logRetention: logs.RetentionDays.ONE_WEEK,
+      logGroup: forwarderLogGroup,
       environment: {
         BUCKET_NAME: inboundBucket.bucketName,
         FROM_ADDRESS: `oci-act@${identityDomain}`,

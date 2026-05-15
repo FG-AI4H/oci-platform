@@ -147,11 +147,15 @@ export class DocusealStack extends cdk.Stack {
       removalPolicy: props.cfg.removalPolicy,
     });
 
+    const composerLogGroup = new logs.LogGroup(this, 'DocusealDatabaseUrlComposerLogGroup', {
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: props.cfg.removalPolicy,
+    });
     const composerFn = new lambda.Function(this, 'DocusealDatabaseUrlComposerFn', {
       runtime: lambda.Runtime.NODEJS_22_X,
       handler: 'index.handler',
       timeout: cdk.Duration.seconds(30),
-      logRetention: logs.RetentionDays.ONE_WEEK,
+      logGroup: composerLogGroup,
       code: lambda.Code.fromInline(`
         const { SecretsManagerClient, GetSecretValueCommand, PutSecretValueCommand } = require('@aws-sdk/client-secrets-manager');
         const https = require('https');
