@@ -76,6 +76,6 @@ The relay lives in its own CDK construct inside `mail-stack` (the SES identity o
 
 - [ADR-0004](./0004-ses-mail-per-env-identity.md) — the SES per-env design this ADR builds on; its SMTP-IAM-user decision is the part this amends
 - Issue: [FG-AI4H/oci-platform#193](https://github.com/FG-AI4H/oci-platform/issues/193) — original SES rollout
-- Issue: this ADR's implementation issue (to be filed after merge)
+- Issue: [FG-AI4H/oci-platform#202](https://github.com/FG-AI4H/oci-platform/issues/202) — implementation tracking
 - `docs/for-operators/ses.md` § "SES SMTP credentials — SCP constraint"
 - AWS docs — [SES SendRawEmail API](https://docs.aws.amazon.com/ses/latest/APIReference/API_SendRawEmail.html), [Cloud Map service discovery for ECS](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-discovery.html)
