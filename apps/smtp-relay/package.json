@@ -16,6 +16,7 @@
   "dependencies": {
     "@aws-sdk/client-ses": "^3.1047.0",
     "pino": "^9.5.0",
+    "selfsigned": "^5.5.0",
     "smtp-server": "^3.18.4"
   },
   "devDependencies": {
