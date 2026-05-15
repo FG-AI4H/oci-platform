@@ -1,6 +1,5 @@
 import { SendRawEmailCommand, SESClient } from '@aws-sdk/client-ses';
 import pino from 'pino';
-import { generate as generateSelfsigned } from 'selfsigned';
 import { SMTPServer } from 'smtp-server';
 
 /**
@@ -61,38 +60,26 @@ async function readStream(stream: NodeJS.ReadableStream): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-// STARTTLS support — DocuSeal's Rails UI refuses to save SMTP settings
-// unless the server advertises STARTTLS (even with "Noverify" selected,
-// the validator probes EHLO and rejects servers without STARTTLS). The
-// VPC is already a closed network, so the actual TLS handshake adds no
-// security benefit — but we have to play along. A self-signed cert
-// generated at startup is sufficient: DocuSeal connects with
-// `openssl_verify_mode = NONE`, so the cert chain is not validated.
-const tlsNotAfter = new Date();
-tlsNotAfter.setFullYear(tlsNotAfter.getFullYear() + 10);
-const tlsPair = await generateSelfsigned(
-  [
-    { name: 'commonName', value: 'smtp-relay.oci.internal' },
-    { name: 'organizationName', value: 'OCI Platform' },
-  ],
-  { notAfterDate: tlsNotAfter, keySize: 2048, algorithm: 'sha256' },
-);
-
 const server = new SMTPServer({
   authOptional: true,
-  // AUTH stays advertised so SMTP clients that REQUIRE a username/
-  // password in their config form (e.g. DocuSeal's Rails UI) can save
-  // settings. The relay accepts any non-empty credentials in `onAuth`
-  // below; the real boundary is the SG-to-SG ingress on the relay's
-  // ENI. STARTTLS is advertised so DocuSeal's settings validator
-  // succeeds; the in-VPC TLS handshake is theatrical.
+  // AUTH stays advertised so SMTP clients that require a username/
+  // password in their config (e.g. DocuSeal) can connect; the relay
+  // accepts any non-empty credentials in `onAuth` below. The real
+  // boundary is the SG-to-SG ingress on the relay's ENI.
+  //
+  // STARTTLS stays disabled — a self-signed cert is the only option
+  // for a `.internal` Cloud Map name, and DocuSeal's `Noverify` SMTP
+  // option does not actually skip chain validation (passes 'none'
+  // as a string where Net::SMTP wants the integer constant), so the
+  // validator still rejects self-signed certs. Plain SMTP on the
+  // in-VPC hop is fine; SES outbound (the public-internet hop) goes
+  // over HTTPS via the AWS SDK. DocuSeal's mailer at runtime uses
+  // env vars (SMTP_ADDRESS / SMTP_PORT / SMTP_FROM) directly — the
+  // Email SMTP admin page is cosmetic.
+  disabledCommands: ['STARTTLS'],
+  hideSTARTTLS: true,
   size: MAX_MESSAGE_KB * 1024,
-  key: tlsPair.private,
-  cert: tlsPair.cert,
   banner: 'OCI SMTP relay (ADR-0005)',
-  // VPC-internal traffic only — the SES outbound hop (the part that
-  // crosses the public Internet boundary) goes over HTTPS via the
-  // AWS SDK.
   onAuth(auth, session, callback) {
     // Accept any credentials. AUTH is advertised purely to satisfy SMTP
     // clients that require credentials in their config UI; the relay
