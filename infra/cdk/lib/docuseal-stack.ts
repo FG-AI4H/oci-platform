@@ -33,6 +33,14 @@ export interface DocusealStackProps extends cdk.StackProps {
   hostedZoneId: string;
   /** Hosted zone name (e.g. `dev.oci.ai4h.net`). */
   zoneName: string;
+  /** Cloud Map private DNS host for the SMTP-to-SES relay (ADR-0005). */
+  smtpRelayHost: string;
+  /** TCP port the SMTP-to-SES relay listens on. */
+  smtpRelayPort: number;
+  /** SG of the SMTP-to-SES relay ENI — DocuSeal SG egress is opened to this. */
+  smtpRelaySecurityGroup: ec2.ISecurityGroup;
+  /** Plaintext From: address DocuSeal uses for outbound signing mail. */
+  smtpFromEmail: string;
 }
 
 /**
@@ -281,6 +289,14 @@ export class DocusealStack extends cdk.Stack {
         // `docuseal.<domain>` — Rails serves routes at the host root,
         // no sub-path support (see class docstring).
         HOST: docusealHost,
+        // Outbound mail via the in-VPC SMTP-to-SES relay (ADR-0005).
+        // No SMTP_USERNAME / SMTP_PASSWORD — the relay authenticates
+        // to SES via its own task IAM role, and the SG-to-SG ingress
+        // is the boundary for who can use the relay.
+        SMTP_ADDRESS: props.smtpRelayHost,
+        SMTP_PORT: String(props.smtpRelayPort),
+        SMTP_FROM_EMAIL: props.smtpFromEmail,
+        SMTP_FROM_NAME: 'OCI Platform',
       },
       secrets: {
         SECRET_KEY_BASE: ecs.Secret.fromSecretsManager(secretKeyBase),
@@ -324,6 +340,19 @@ export class DocusealStack extends cdk.Stack {
         description: 'DocuSeal to Aurora',
       });
     }
+
+    // SMTP relay ingress — DocuSeal connects to the relay over TCP at the
+    // relay's listening port (2525). Same CfnSecurityGroupIngress pattern
+    // as Aurora so the reference flows docuseal -> mail (we already depend
+    // on mail above).
+    new ec2.CfnSecurityGroupIngress(this, 'SmtpRelayIngressFromDocuseal', {
+      groupId: props.smtpRelaySecurityGroup.securityGroupId,
+      ipProtocol: 'tcp',
+      fromPort: props.smtpRelayPort,
+      toPort: props.smtpRelayPort,
+      sourceSecurityGroupId: serviceSg.securityGroupId,
+      description: 'DocuSeal to SMTP-to-SES relay',
+    });
 
     // --- Service ------------------------------------------------------
 

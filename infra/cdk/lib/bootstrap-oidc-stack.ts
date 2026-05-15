@@ -17,8 +17,9 @@ export interface BootstrapOidcStackProps extends cdk.StackProps {
  *
  * - The `gha-oci-deploy-{env}` IAM role assumable from `FG-AI4H/oci-platform`
  *   when running under GitHub Environment `{env}`.
- * - ECR repositories `oci-api`, `oci-web`, `oci-worker-ingest` (image
- *   scanning on push, IMMUTABLE tags, KMS).
+ * - ECR repositories `oci-api`, `oci-web`, `oci-worker-ingest`,
+ *   `oci-migrate`, `oci-smtp-relay` (image scanning on push, IMMUTABLE
+ *   tags, KMS).
  *
  * The OIDC provider this role trusts is account-scoped and lives in
  * `SharedBootstrapStack`. This stack only LOOKS UP the provider by its
@@ -39,6 +40,7 @@ export class BootstrapOidcStack extends cdk.Stack {
   public readonly webRepo: ecr.Repository;
   public readonly workerIngestRepo: ecr.Repository;
   public readonly migrateRepo: ecr.Repository;
+  public readonly smtpRelayRepo: ecr.Repository;
 
   constructor(scope: Construct, id: string, props: BootstrapOidcStackProps) {
     super(scope, id, props);
@@ -192,11 +194,17 @@ export class BootstrapOidcStack extends cdk.Stack {
       repositoryName: 'oci-migrate',
     });
 
+    this.smtpRelayRepo = new ecr.Repository(this, 'SmtpRelayRepo', {
+      ...repoDefaults,
+      repositoryName: 'oci-smtp-relay',
+    });
+
     new cdk.CfnOutput(this, 'DeployRoleArn', { value: this.deployRole.roleArn });
     new cdk.CfnOutput(this, 'ApiRepoUri', { value: this.apiRepo.repositoryUri });
     new cdk.CfnOutput(this, 'WebRepoUri', { value: this.webRepo.repositoryUri });
     new cdk.CfnOutput(this, 'WorkerIngestRepoUri', { value: this.workerIngestRepo.repositoryUri });
     new cdk.CfnOutput(this, 'MigrateRepoUri', { value: this.migrateRepo.repositoryUri });
+    new cdk.CfnOutput(this, 'SmtpRelayRepoUri', { value: this.smtpRelayRepo.repositoryUri });
 
     NagSuppressions.addResourceSuppressions(
       this.deployRole,

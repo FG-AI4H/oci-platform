@@ -29,6 +29,7 @@ const apiImage = app.node.tryGetContext('apiImage') as string | undefined;
 const webImage = app.node.tryGetContext('webImage') as string | undefined;
 const migrateImage = app.node.tryGetContext('migrateImage') as string | undefined;
 const workerIngestImage = app.node.tryGetContext('workerIngestImage') as string | undefined;
+const smtpRelayImage = app.node.tryGetContext('smtpRelayImage') as string | undefined;
 
 // Route 53 hosted zone for ai4h.net (ADR-0001). Single account-wide zone
 // shared with other FG-AI4H tenants; OCI Platform records all live under
@@ -94,9 +95,11 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
 // it from props.
 api.addDependency(identity);
 
-// Mail stack — Amazon SES per-env outbound identity + SMTP creds + inbound
-// forwarder (#193, ADR-0004). Must deploy BEFORE DocuSeal so the SMTP creds
-// SSM param exists when docuseal-stack reads it with --context mailEnabled=true.
+// Mail stack — Amazon SES per-env outbound identity + inbound forwarder
+// (#193, ADR-0004) + SMTP-to-SES relay (#202, ADR-0005). Deploys AFTER api
+// because it shares the api cluster + log group for the relay service, and
+// BEFORE docuseal so docuseal can read the relay endpoint + SG for env vars
+// and SG egress.
 const mail = new MailStack(app, `oci-${envName}-mail`, {
   env: cfg.env,
   cfg,
@@ -106,7 +109,12 @@ const mail = new MailStack(app, `oci-${envName}-mail`, {
   // DMARC aggregate-report mailbox + inbound-forward destination.
   dmarcReportTo: 'ml@mllab.ai',
   inboundForwardTo: 'ml@mllab.ai',
+  vpc: network.vpc,
+  cluster: api.cluster,
+  logGroup: observability.apiLogGroup,
+  smtpRelayImage,
 });
+mail.addDependency(api);
 
 // DocuSeal stack — self-hosted e-signature for AdES DUA flow (#128).
 // Shares cluster + ALB with the API but on its own vhost
@@ -115,8 +123,11 @@ const mail = new MailStack(app, `oci-${envName}-mail`, {
 // prefix. Priority-60 host-header listener rule (between API's 50 and
 // Web's catch-all 100). Provisions the API/webhook secrets the API
 // task consumes via SSM-by-name imports.
-// SMTP creds are wired in via --context mailEnabled=true after mail-stack
-// is deployed and the receipt rule set is activated.
+//
+// Outbound mail: DocuSeal's task connects via SMTP to the in-VPC
+// SMTP-to-SES relay shipped by mail-stack (#202, ADR-0005). docuseal-stack
+// reads the relay endpoint host/port + security-group via cross-stack
+// refs from `mail`.
 const docuseal = new DocusealStack(app, `oci-${envName}-docuseal`, {
   env: cfg.env,
   cfg,
@@ -129,9 +140,12 @@ const docuseal = new DocusealStack(app, `oci-${envName}-docuseal`, {
   logGroup: observability.apiLogGroup,
   hostedZoneId: HOSTED_ZONE_ID,
   zoneName: HOSTED_ZONE_NAME,
+  smtpRelayHost: mail.relayEndpointHost,
+  smtpRelayPort: mail.relayEndpointPort,
+  smtpRelaySecurityGroup: mail.relaySecurityGroup,
+  smtpFromEmail: `oci-act@${cfg.domainName}`,
 });
-// Depends on api for cluster/alb; depends on mail so its SSM param for
-// SMTP creds exists when --context mailEnabled=true is passed.
+// Depends on api for cluster/alb; depends on mail for the SMTP relay refs.
 docuseal.addDependency(api);
 docuseal.addDependency(mail);
 
