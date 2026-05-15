@@ -94,6 +94,7 @@ jobs:
       web-image: ${{ steps.resolve.outputs.web }}
       ingest-image: ${{ steps.resolve.outputs.ingest }}
       migrate-image: ${{ steps.resolve.outputs.migrate }}
+      smtp-relay-image: ${{ steps.resolve.outputs.smtp_relay }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -163,6 +164,13 @@ jobs:
             migrate:
               - 'apps/migrate/**'
               - 'packages/database/prisma/**'
+            smtp_relay:
+              - 'apps/smtp-relay/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - 'package.json'
+              - 'pnpm-workspace.yaml'
+              - '.nvmrc'
 
       - name: Decide build vs reuse per image
         id: decide
@@ -211,16 +219,17 @@ jobs:
             fi
           }
 
-          decide api     oci-api            "${{ steps.changes.outputs.api }}"
-          decide web     oci-web            "${{ steps.changes.outputs.web }}"
-          decide ingest  oci-worker-ingest  "${{ steps.changes.outputs.ingest }}"
-          decide migrate oci-migrate        "${{ steps.changes.outputs.migrate }}"
+          decide api        oci-api            "${{ steps.changes.outputs.api }}"
+          decide web        oci-web            "${{ steps.changes.outputs.web }}"
+          decide ingest     oci-worker-ingest  "${{ steps.changes.outputs.ingest }}"
+          decide migrate    oci-migrate        "${{ steps.changes.outputs.migrate }}"
+          decide smtp_relay oci-smtp-relay     "${{ steps.changes.outputs.smtp_relay }}"
 
       # buildx for parity with the previous QEMU-based pipeline (cache
       # support, --push behaviour). On a native ARM64 runner the
       # --platform linux/arm64 build is a no-op architecturally.
       - name: Setup Docker Buildx
-        if: steps.decide.outputs.api == 'true' || steps.decide.outputs.web == 'true' || steps.decide.outputs.ingest == 'true' || steps.decide.outputs.migrate == 'true'
+        if: steps.decide.outputs.api == 'true' || steps.decide.outputs.web == 'true' || steps.decide.outputs.ingest == 'true' || steps.decide.outputs.migrate == 'true' || steps.decide.outputs.smtp_relay == 'true'
         uses: docker/setup-buildx-action@v4
 
       - name: Compute image tags for build
@@ -232,6 +241,7 @@ jobs:
           echo "web=$REG/oci-web:$SHA"              >> "$GITHUB_OUTPUT"
           echo "ingest=$REG/oci-worker-ingest:$SHA" >> "$GITHUB_OUTPUT"
           echo "migrate=$REG/oci-migrate:$SHA"      >> "$GITHUB_OUTPUT"
+          echo "smtp_relay=$REG/oci-smtp-relay:$SHA" >> "$GITHUB_OUTPUT"
           echo "registry=$REG"                       >> "$GITHUB_OUTPUT"
 
       - name: Build & push API image (arm64)
@@ -274,6 +284,16 @@ jobs:
             --push \
             .
 
+      - name: Build & push smtp-relay image (arm64)
+        if: steps.decide.outputs.smtp_relay == 'true'
+        run: |
+          docker buildx build \
+            --platform linux/arm64 \
+            -f apps/smtp-relay/Dockerfile \
+            -t "${{ steps.meta.outputs.smtp_relay }}" \
+            --push \
+            .
+
       # Trivy needs an explicit platform now that we publish ARM64-only
       # images (PR #29). Without TRIVY_PLATFORM, Trivy looks for a
       # linux/amd64 child in the manifest and fails.
@@ -312,6 +332,17 @@ jobs:
           exit-code: '1'
           ignore-unfixed: true
 
+      - name: Trivy image scan (SMTP relay)
+        if: steps.decide.outputs.smtp_relay == 'true'
+        uses: aquasecurity/trivy-action@master
+        env:
+          TRIVY_PLATFORM: linux/arm64
+        with:
+          image-ref: ${{ steps.meta.outputs.smtp_relay }}
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          ignore-unfixed: true
+
       # Resolve the URIs cdk-deploy will pass to the relevant stacks.
       # With ECR-aware decide, the SHA tag is always present after this
       # job (either because the image was just rebuilt and pushed, or
@@ -326,6 +357,7 @@ jobs:
             echo "web=${{ steps.meta.outputs.web }}"
             echo "ingest=${{ steps.meta.outputs.ingest }}"
             echo "migrate=${{ steps.meta.outputs.migrate }}"
+            echo "smtp_relay=${{ steps.meta.outputs.smtp_relay }}"
           } >> "$GITHUB_OUTPUT"
 
   cdk-deploy:
@@ -360,7 +392,7 @@ jobs:
         # below for rationale. Diff target == deploy target.
         run: |
           ENV='${{ inputs.target || 'dev' }}'
-          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-mail oci-$ENV-api oci-$ENV-docuseal oci-$ENV-web"
+          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-mail oci-$ENV-docuseal oci-$ENV-web"
           MIGRATE_CTX=""
           if [[ -n "${{ needs.build-images.outputs.migrate-image }}" ]]; then
             MIGRATE_CTX="--context migrateImage=${{ needs.build-images.outputs.migrate-image }}"
@@ -369,6 +401,7 @@ jobs:
             --context env=$ENV \
             --context apiImage=${{ needs.build-images.outputs.api-image }} \
             --context webImage=${{ needs.build-images.outputs.web-image }} \
+            --context smtpRelayImage=${{ needs.build-images.outputs.smtp-relay-image }} \
             $MIGRATE_CTX || true
 
       - name: cdk deploy
@@ -387,7 +420,7 @@ jobs:
           APPROVAL=never
           if [[ "$ENV" == "prod" ]]; then APPROVAL=broadening; fi
           if [[ "$ENV" == "int" ]]; then APPROVAL=any-change; fi
-          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-mail oci-$ENV-api oci-$ENV-docuseal oci-$ENV-web"
+          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-mail oci-$ENV-docuseal oci-$ENV-web"
           MIGRATE_CTX=""
           if [[ -n "${{ needs.build-images.outputs.migrate-image }}" ]]; then
             MIGRATE_CTX="--context migrateImage=${{ needs.build-images.outputs.migrate-image }}"
@@ -397,6 +430,7 @@ jobs:
             --context apiImage=${{ needs.build-images.outputs.api-image }} \
             --context webImage=${{ needs.build-images.outputs.web-image }} \
             --context ingestImage=${{ needs.build-images.outputs.ingest-image }} \
+            --context smtpRelayImage=${{ needs.build-images.outputs.smtp-relay-image }} \
             --context docusealEnabled=${{ vars.DOCUSEAL_ENABLED || 'false' }} \
             $MIGRATE_CTX
 

@@ -1,4 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
+import * as cloudmap from 'aws-cdk-lib/aws-servicediscovery';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -25,6 +28,18 @@ export interface MailStackProps extends cdk.StackProps {
    * before forwarding will succeed. In production (post-sandbox) any address works.
    */
   inboundForwardTo: string;
+  /** Existing VPC from network-stack — the SMTP relay runs inside it. */
+  vpc: ec2.IVpc;
+  /** Existing ECS cluster from api-stack — the SMTP relay shares it. */
+  cluster: ecs.ICluster;
+  /** Shared CloudWatch log group for relay container logs. */
+  logGroup: logs.ILogGroup;
+  /**
+   * Container image URI for the SMTP relay (`apps/smtp-relay`). Built and
+   * pushed by the Deploy workflow. Undefined locally — synth falls back
+   * to a public placeholder so `cdk synth` works without auth.
+   */
+  smtpRelayImage?: string;
 }
 
 /**
@@ -36,17 +51,21 @@ export interface MailStackProps extends cdk.StackProps {
  * set) that delivers mail addressed to `oci-act@<env>.oci.ai4h.net` to
  * props.inboundForwardTo.
  *
- * SMTP credentials for outbound DocuSeal mail are NOT managed by CDK:
- * the AWS organisation SCP blocks `iam:CreateUser` for all principals in
- * this account, including the CFN execution role and the
- * AdministratorAccessRole. Outbound DocuSeal email currently uses DocuSeal's
- * built-in Postmark integration. A follow-up PR will revisit SMTP once
- * the SCP constraint is resolved or an alternative path (e.g. SES API via
- * task role, or a dedicated SMTP relay using IAM roles) is available.
+ * Outbound mail from DocuSeal (and future SES senders) goes through a
+ * small SMTP-to-SES relay (Fargate, ADR-0005) that ships in this stack.
+ * The org SCP `p-onj7rgr2` denies `iam:CreateUser`, so SES SMTP via an
+ * IAM user is not deployable. The relay calls `ses:SendRawEmail` via
+ * its task IAM role and is reachable only inside the VPC.
  *
  * Operator runbook: docs/for-operators/ses.md.
  */
 export class MailStack extends cdk.Stack {
+  /** Security group of the SMTP relay ENI — DocuSeal opens egress to this. */
+  public readonly relaySecurityGroup: ec2.ISecurityGroup;
+  /** Cloud Map endpoint DocuSeal uses for SMTP_ADDRESS (e.g. `smtp-relay.oci-dev.internal`). */
+  public readonly relayEndpointHost: string;
+  /** TCP port the relay listens on (2525 — unprivileged so the container runs as nonroot). */
+  public readonly relayEndpointPort: number;
   constructor(scope: Construct, id: string, props: MailStackProps) {
     super(scope, id, props);
     Object.entries(props.tags).forEach(([k, v]) => cdk.Tags.of(this).add(k, v));
@@ -245,6 +264,106 @@ export class MailStack extends cdk.Stack {
           invocationType: sesActions.LambdaInvocationType.EVENT,
         }),
       ],
+    });
+
+    // --- Outbound SMTP-to-SES relay (ADR-0005) ----------------------------
+    //
+    // The org SCP `p-onj7rgr2` denies iam:CreateUser, so SES SMTP via an
+    // IAM user is not deployable. Instead, a tiny Fargate service
+    // (`apps/smtp-relay`) accepts SMTP from DocuSeal inside the VPC and
+    // calls `ses:SendRawEmail` via its task IAM role. DocuSeal connects
+    // through a Cloud Map private DNS name and never carries SMTP
+    // credentials.
+
+    const relayPort = 2525;
+    const relayServiceName = 'smtp-relay';
+    const relayNamespaceName = `oci-${env}.internal`;
+
+    const relayNamespace = new cloudmap.PrivateDnsNamespace(this, 'RelayNamespace', {
+      name: relayNamespaceName,
+      vpc: props.vpc,
+      description: `Private DNS for OCI ${env} internal services (SMTP relay, future intra-VPC).`,
+    });
+
+    const relaySg = new ec2.SecurityGroup(this, 'RelaySg', {
+      vpc: props.vpc,
+      description: 'OCI SMTP-to-SES relay ENI',
+      allowAllOutbound: true,
+    });
+
+    const relayTaskDef = new ecs.FargateTaskDefinition(this, 'RelayTaskDef', {
+      cpu: 256,
+      memoryLimitMiB: 512,
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.ARM64,
+        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+      },
+    });
+    relayTaskDef.taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        sid: 'SesSendRawEmail',
+        actions: ['ses:SendRawEmail'],
+        resources: [emailIdentity.emailIdentityArn],
+      }),
+    );
+
+    // Local fallback so `cdk synth` works offline. CI passes the real
+    // SHA-tagged URI via context (see deploy.yml). Matches the same
+    // pattern as api/web/worker-ingest.
+    const relayImage = props.smtpRelayImage
+      ? ecs.ContainerImage.fromRegistry(props.smtpRelayImage)
+      : ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/alpine:3.20');
+
+    relayTaskDef.addContainer('smtp-relay', {
+      image: relayImage,
+      environment: {
+        PORT: String(relayPort),
+        AWS_REGION: this.region,
+        LOG_LEVEL: env === 'prod' ? 'info' : 'debug',
+      },
+      logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'smtp-relay', logGroup: props.logGroup }),
+      portMappings: [{ containerPort: relayPort, protocol: ecs.Protocol.TCP }],
+    });
+
+    // dev: single task (acceptable downtime during task replacement);
+    // int/prod: HA pair across AZs.
+    const desiredRelayCount = env === 'dev' ? 1 : 2;
+
+    const relayService = new ecs.FargateService(this, 'RelayService', {
+      cluster: props.cluster,
+      taskDefinition: relayTaskDef,
+      desiredCount: desiredRelayCount,
+      assignPublicIp: false,
+      securityGroups: [relaySg],
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      minHealthyPercent: env === 'dev' ? 0 : 100,
+      maxHealthyPercent: 200,
+      cloudMapOptions: {
+        cloudMapNamespace: relayNamespace,
+        name: relayServiceName,
+        dnsRecordType: cloudmap.DnsRecordType.A,
+        dnsTtl: cdk.Duration.seconds(15),
+        // Cloud Map only marks the instance healthy once the task
+        // reports steady state; no separate health-check needed.
+      },
+    });
+    // Suppress unused warning while keeping a handle for future
+    // CloudWatch alarms on RunningCount / desiredCount drift.
+    void relayService;
+
+    // Cross-stack handles for docuseal-stack (SG ingress, env vars).
+    this.relaySecurityGroup = relaySg;
+    this.relayEndpointHost = `${relayServiceName}.${relayNamespaceName}`;
+    this.relayEndpointPort = relayPort;
+
+    new cdk.CfnOutput(this, 'SmtpRelayEndpoint', {
+      value: `${relayServiceName}.${relayNamespaceName}:${relayPort}`,
+      description: 'Cloud Map service discovery endpoint for the SMTP-to-SES relay.',
+    });
+    new cdk.CfnOutput(this, 'SmtpRelaySecurityGroupId', {
+      value: relaySg.securityGroupId,
+      description:
+        'Security-group ID of the relay ENI — DocuSeal SG egress is opened to this in docuseal-stack.',
     });
 
     // --- Outputs ---------------------------------------------------------

@@ -6,11 +6,43 @@ This runbook covers the parts CDK doesn't automate: SES production-access reques
 
 The architecture rationale lives in [ADR-0004](../adr/0004-ses-mail-per-env-identity.md).
 
-## SES SMTP credentials — SCP constraint
+## Outbound mail — SMTP-to-SES relay (ADR-0005)
 
-The AWS organisation SCP (`p-onj7rgr2`) explicitly blocks `iam:CreateUser` for **all** principals in account `601883093460`, including the CloudFormation execution role. SES SMTP requires IAM user access keys for credential derivation (HMAC-SHA256 of the secret key), which means SES SMTP wiring via CDK is not possible in this account.
+The AWS organisation SCP (`p-onj7rgr2`) blocks `iam:CreateUser`, so SES SMTP via an IAM user is not deployable. Instead, mail-stack ships a small Fargate service (`apps/smtp-relay`) that accepts SMTP from inside the VPC and forwards every message to SES via the task IAM role. DocuSeal connects to it via Cloud Map service discovery — no SMTP credentials, no secrets rotation.
 
-**DocuSeal uses its built-in Postmark integration for outbound mail.** If SES SMTP is needed in future, the SCP must first be amended at the organisation level.
+### Architecture
+
+```
+DocuSeal task ──SMTP/TCP 2525──▶ smtp-relay.oci-<env>.internal ──ses:SendRawEmail──▶ SES Frankfurt
+```
+
+- Endpoint: `smtp-relay.oci-<env>.internal:2525` (private DNS via AWS Cloud Map).
+- Auth: none — SG-to-SG ingress is the boundary. Only DocuSeal's task SG can connect.
+- Sizing: 1 task on `dev`, 2-task HA pair on `int` / `prod`.
+
+### Health checks
+
+```bash
+# Relay running?
+AWS_PROFILE=ai4h aws ecs list-services --cluster oci-<env>-api --region eu-central-1 \
+  --query 'serviceArns[?contains(@, `RelayService`)]' --output text
+
+# Relay logs (most recent forwarded messages)
+AWS_PROFILE=ai4h aws logs tail /oci/<env>/api --filter-pattern 'relay:forwarded' \
+  --region eu-central-1 --since 30m --format short
+```
+
+A successful forward logs `relay:forwarded` with the from/to/bytes/elapsedMs envelope. Failures log `relay:failed` with the SES error message; DocuSeal retries on the next signing event because the relay surfaces SES errors as SMTP `451 4.3.0` (transient) rather than permanent rejections.
+
+### Cost
+
+~$7/month (single task, ARM/Graviton) on `dev`; ~$15/month (2-task HA) on `int` / `prod`. SES outbound itself stays within the 62k/month in-AWS-sender free tier at expected volume.
+
+### When the relay is unhealthy
+
+- **`smtp-relay.oci-<env>.internal` doesn't resolve from inside the VPC** → Cloud Map registration missing. Check `aws servicediscovery list-services --region eu-central-1` and the relay's ECS service for `RUNNING` tasks.
+- **DocuSeal logs `Connection refused`** → task is RUNNING but listener died (rare). Force a new deployment: `aws ecs update-service --cluster oci-<env>-api --service <RelayService-…> --force-new-deployment`.
+- **SES says `Email address is not verified`** → DocuSeal's `SMTP_FROM_EMAIL` env var is set to `oci-act@<env>.oci.ai4h.net` by CDK; verify that the identity is `VerifiedForSendingStatus: true` per the section above.
 
 ## Provisioning
 

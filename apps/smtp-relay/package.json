@@ -1,0 +1,29 @@
+{
+  "name": "@oci/smtp-relay",
+  "version": "0.0.0",
+  "private": true,
+  "description": "SMTP-to-SES relay — accepts SMTP from DocuSeal (VPC-internal) and forwards via ses:SendRawEmail using the task IAM role. See ADR-0005.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start:prod": "node dist/main.js",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ses": "^3.1047.0",
+    "pino": "^9.5.0",
+    "smtp-server": "^3.18.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/smtp-server": "^3.5.13",
+    "eslint": "^9.39.4",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
+  }
+}
