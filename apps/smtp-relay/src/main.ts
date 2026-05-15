@@ -1,5 +1,6 @@
 import { SendRawEmailCommand, SESClient } from '@aws-sdk/client-ses';
 import pino from 'pino';
+import { generate as generateSelfsigned } from 'selfsigned';
 import { SMTPServer } from 'smtp-server';
 
 /**
@@ -60,23 +61,38 @@ async function readStream(stream: NodeJS.ReadableStream): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+// STARTTLS support — DocuSeal's Rails UI refuses to save SMTP settings
+// unless the server advertises STARTTLS (even with "Noverify" selected,
+// the validator probes EHLO and rejects servers without STARTTLS). The
+// VPC is already a closed network, so the actual TLS handshake adds no
+// security benefit — but we have to play along. A self-signed cert
+// generated at startup is sufficient: DocuSeal connects with
+// `openssl_verify_mode = NONE`, so the cert chain is not validated.
+const tlsNotAfter = new Date();
+tlsNotAfter.setFullYear(tlsNotAfter.getFullYear() + 10);
+const tlsPair = await generateSelfsigned(
+  [
+    { name: 'commonName', value: 'smtp-relay.oci.internal' },
+    { name: 'organizationName', value: 'OCI Platform' },
+  ],
+  { notAfterDate: tlsNotAfter, keySize: 2048, algorithm: 'sha256' },
+);
+
 const server = new SMTPServer({
   authOptional: true,
-  // STARTTLS only — AUTH stays advertised so SMTP clients that REQUIRE
-  // a username/password in their config form (e.g. DocuSeal's Rails UI)
-  // can authenticate. The relay accepts any non-empty credentials in
-  // `onAuth` below; the real boundary is the SG-to-SG ingress on the
-  // relay's ENI.
-  disabledCommands: ['STARTTLS'],
+  // AUTH stays advertised so SMTP clients that REQUIRE a username/
+  // password in their config form (e.g. DocuSeal's Rails UI) can save
+  // settings. The relay accepts any non-empty credentials in `onAuth`
+  // below; the real boundary is the SG-to-SG ingress on the relay's
+  // ENI. STARTTLS is advertised so DocuSeal's settings validator
+  // succeeds; the in-VPC TLS handshake is theatrical.
   size: MAX_MESSAGE_KB * 1024,
-  hideSTARTTLS: true,
+  key: tlsPair.private,
+  cert: tlsPair.cert,
   banner: 'OCI SMTP relay (ADR-0005)',
-  // VPC-internal traffic only — no per-connection TLS handshake.
-  // The connection is over RFC 1918 IPs inside an awsvpc ENI; AWS
-  // does not let traffic leave the VPC unencrypted (and even within
-  // the VPC, ENI-to-ENI traffic is encrypted on Graviton hardware).
-  // SES outbound (the part that actually crosses the public Internet
-  // boundary) goes over HTTPS.
+  // VPC-internal traffic only — the SES outbound hop (the part that
+  // crosses the public Internet boundary) goes over HTTPS via the
+  // AWS SDK.
   onAuth(auth, session, callback) {
     // Accept any credentials. AUTH is advertised purely to satisfy SMTP
     // clients that require credentials in their config UI; the relay
