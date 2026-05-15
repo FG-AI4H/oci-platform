@@ -411,6 +411,11 @@ export class MailStack extends cdk.Stack {
           reason:
             'SES delivery requires PutObject without enforced TLS at the bucket-policy level (SES uses its own transport security). The bucket is not publicly accessible.',
         },
+        {
+          id: 'AwsSolutions-ECS2',
+          reason:
+            'Relay env vars (PORT, AWS_REGION, LOG_LEVEL) are non-secret routing config — same pattern as api/docuseal stacks. The relay holds no secrets; AWS credentials come from the task IAM role at runtime, not from the task definition.',
+        },
       ],
       true,
     );
