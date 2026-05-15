@@ -62,7 +62,12 @@ async function readStream(stream: NodeJS.ReadableStream): Promise<Buffer> {
 
 const server = new SMTPServer({
   authOptional: true,
-  disabledCommands: ['AUTH', 'STARTTLS'],
+  // STARTTLS only — AUTH stays advertised so SMTP clients that REQUIRE
+  // a username/password in their config form (e.g. DocuSeal's Rails UI)
+  // can authenticate. The relay accepts any non-empty credentials in
+  // `onAuth` below; the real boundary is the SG-to-SG ingress on the
+  // relay's ENI.
+  disabledCommands: ['STARTTLS'],
   size: MAX_MESSAGE_KB * 1024,
   hideSTARTTLS: true,
   banner: 'OCI SMTP relay (ADR-0005)',
@@ -72,6 +77,14 @@ const server = new SMTPServer({
   // the VPC, ENI-to-ENI traffic is encrypted on Graviton hardware).
   // SES outbound (the part that actually crosses the public Internet
   // boundary) goes over HTTPS.
+  onAuth(auth, session, callback) {
+    // Accept any credentials. AUTH is advertised purely to satisfy SMTP
+    // clients that require credentials in their config UI; the relay
+    // performs no credential verification (there's nothing to verify
+    // against — the SG-to-SG ingress is the security boundary).
+    logger.debug({ method: auth.method, user: auth.username }, 'auth:accepted');
+    callback(null, { user: auth.username ?? 'anonymous' });
+  },
   onData(stream, session, callback) {
     void (async () => {
       const startedAt = Date.now();

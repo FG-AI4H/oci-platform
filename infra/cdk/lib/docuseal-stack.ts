@@ -290,12 +290,15 @@ export class DocusealStack extends cdk.Stack {
         // no sub-path support (see class docstring).
         HOST: docusealHost,
         // Outbound mail via the in-VPC SMTP-to-SES relay (ADR-0005).
-        // No SMTP_USERNAME / SMTP_PASSWORD — the relay authenticates
-        // to SES via its own task IAM role, and the SG-to-SG ingress
-        // is the boundary for who can use the relay.
+        // DocuSeal's Rails app reads SMTP_FROM (not SMTP_FROM_EMAIL —
+        // the env-var name is documented inconsistently upstream;
+        // SMTP_FROM matches what the container actually consults).
+        // The relay accepts any credentials, but DocuSeal's Settings UI
+        // requires a non-empty username/password; CDK leaves them
+        // unset so the operator-saved UI values take precedence.
         SMTP_ADDRESS: props.smtpRelayHost,
         SMTP_PORT: String(props.smtpRelayPort),
-        SMTP_FROM_EMAIL: props.smtpFromEmail,
+        SMTP_FROM: props.smtpFromEmail,
         SMTP_FROM_NAME: 'OCI Platform',
       },
       secrets: {
