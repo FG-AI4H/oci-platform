@@ -12,6 +12,7 @@ You're deploying or running an OCI instance. The platform is designed to run as 
 | [SES mail](./ses.md)                                     | Domain identity, SMTP-credential rotation, DMARC tightening.              |
 | [Admin: users & groups](./admin-user-management.md)      | Granting / revoking Cognito group membership (campaign-manager, host, …). |
 | [Admin: platform settings](./admin-platform-settings.md) | Maintenance banner, tool registry (future), license defaults (future).    |
+| [Demo-data seed](./demo-seed.md)                         | How baseline rows reach dev/int on every deploy; how to add new entities. |
 | Observability _(not yet written)_                        | What to wire to your CloudWatch / X-Ray / Grafana.                        |
 
 ## Trust model summary
