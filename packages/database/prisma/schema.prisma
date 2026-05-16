@@ -929,5 +929,112 @@ model RemoteDataset {
   @@schema("catalog")
 }
 
-// Phase B will port full models for: annotation, prediction,
-// evaluation, reporting from the legacy annotation-tool / EvalAI schemas.
+// ==========================================================================
+// annotation — campaigns, tasks, tool-integration registry (AP package)
+// Phase B.A.1 lands the Campaign entity + a minimal AnnotationToolIntegration
+// stub registry (full contract per ADR-0007 lands as sub-epic #214). Task,
+// TaskAssignment, Annotation, audit event log land in Phase B.A.2+ per
+// ADR-0006/0008/0009.
+// ==========================================================================
+
+/// Annotation-tool adapter registry stub (sub-epic #214 will replace this
+/// with the full typed capability matrix + versioned schemaProfile per
+/// ADR-0007). Phase B.A.1 seeds two stub rows (`monai-label`, `visian`)
+/// so the campaign-create UI has tool options to bind to.
+model AnnotationToolIntegration {
+  id        String   @id @default(uuid()) @db.Uuid
+  /// URL-safe identifier, e.g. "monai-label". Unique.
+  slug      String   @unique
+  name      String
+  vendor    String
+  /// Latest semver of the adapter (per ADR-0007 versioning).
+  version   String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  campaigns AnnotationCampaign[]
+
+  @@map("annotation_tool_integrations")
+  @@schema("annotation")
+}
+
+/// Annotation campaign — the unit of orchestration for the 3-gate SOP
+/// (ADR-0006 Decision 3). Phase B.A.1 only writes DRAFT status; the
+/// state machine (ADR-0006 + ADR-0011) lands with sub-epic #215.
+///
+/// Foreign keys per ADR-0006 Decision 6: `datasetId` references
+/// catalog.datasets.id; `toolIntegrationId` references the registry
+/// above. Both are validated at insert time; full FK with cascade
+/// policy lands when the related schemas are connected at the Prisma
+/// level (Phase B.A.2 / B.A.3).
+model AnnotationCampaign {
+  id          String                @id @default(uuid()) @db.Uuid
+  /// URL-safe identifier, unique within campaigns. Same shape as Dataset.slug.
+  slug        String                @unique
+  name        String
+  description String?
+  status      CampaignStatus        @default(DRAFT)
+  taskKind    CampaignTaskKind      @map("task_kind")
+
+  /// Soft FK → catalog.datasets.id (ADR-0006 Decision 6). Hard FK lands
+  /// in B.A.2 along with manifest-version pinning.
+  datasetId   String                @map("dataset_id") @db.Uuid
+  /// Real FK to annotation_tool_integrations.id.
+  toolIntegrationId String          @map("tool_integration_id") @db.Uuid
+
+  /// Output license for the resulting annotation distribution (ADR-0012
+  /// Decision 3). SPDX identifier or `custom-restricted`. Immutable
+  /// once status transitions out of DRAFT.
+  outputLicense   CampaignOutputLicense @map("output_license")
+
+  /// JSONB workflow config (ADR-0009 Decisions 2 + 4). Phase B.A.1 only
+  /// stores `{ nAnnotators: number }`. Full shape per ADR-0009 lands
+  /// with E4 (#216).
+  workflowConfig Json @map("workflow_config")
+
+  /// Soft FK → identity.users.id. The campaign manager who created it.
+  createdById String @map("created_by_id") @db.Uuid
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  completedAt DateTime? @map("completed_at")
+
+  toolIntegration AnnotationToolIntegration @relation(fields: [toolIntegrationId], references: [id])
+
+  @@index([status])
+  @@index([datasetId])
+  @@index([createdById])
+  @@map("annotation_campaigns")
+  @@schema("annotation")
+}
+
+enum CampaignStatus {
+  DRAFT
+  READY
+  RUNNING
+  COMPLETED
+  ARCHIVED
+
+  @@schema("annotation")
+}
+
+enum CampaignTaskKind {
+  CLASSIFICATION
+  DETECTION
+  SEGMENTATION
+  LOCALIZATION
+  MULTI_MODAL
+
+  @@schema("annotation")
+}
+
+enum CampaignOutputLicense {
+  CC_BY_4_0      @map("CC-BY-4.0")
+  CC_BY_NC_4_0   @map("CC-BY-NC-4.0")
+  CC_BY_SA_4_0   @map("CC-BY-SA-4.0")
+  CC0_1_0        @map("CC0-1.0")
+  CUSTOM_RESTRICTED @map("custom-restricted")
+
+  @@schema("annotation")
+}

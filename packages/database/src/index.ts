@@ -104,4 +104,9 @@ export type {
   DatasetVisibility,
   DatasetStatus,
   AccessRequestStatus,
+  AnnotationCampaign,
+  AnnotationToolIntegration,
+  CampaignStatus,
+  CampaignTaskKind,
+  CampaignOutputLicense,
 } from './generated/client/index.js';
