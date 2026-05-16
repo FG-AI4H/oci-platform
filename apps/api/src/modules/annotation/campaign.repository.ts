@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service.js';
 import type {
   AnnotationCampaign,
@@ -14,7 +14,7 @@ import type {
  */
 @Injectable()
 export class CampaignRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async findBySlug(
     slug: string,
@@ -38,6 +38,13 @@ export class CampaignRepository {
 
   async findToolIntegrationById(id: string): Promise<AnnotationToolIntegration | null> {
     return this.prisma.client.annotationToolIntegration.findUnique({ where: { id } });
+  }
+
+  async listActiveToolIntegrations(): Promise<AnnotationToolIntegration[]> {
+    return this.prisma.client.annotationToolIntegration.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async create(args: {

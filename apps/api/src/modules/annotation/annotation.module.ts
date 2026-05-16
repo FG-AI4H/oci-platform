@@ -5,6 +5,7 @@ import { CampaignController } from './campaign.controller.js';
 import { CampaignService } from './campaign.service.js';
 import { CampaignRepository } from './campaign.repository.js';
 import { AnnotationRolesGuard } from './roles.guard.js';
+import { ToolIntegrationController } from './tool-integration.controller.js';
 
 /**
  * Annotation module — Phase B.A.1 surface (Campaign CRUD + stub
@@ -18,7 +19,7 @@ import { AnnotationRolesGuard } from './roles.guard.js';
  */
 @Module({
   imports: [AuthModule],
-  controllers: [CampaignController],
+  controllers: [CampaignController, ToolIntegrationController],
   providers: [PrismaService, CampaignService, CampaignRepository, AnnotationRolesGuard],
   exports: [CampaignService],
 })

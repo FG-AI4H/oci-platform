@@ -1,10 +1,12 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  AnnotationToolIntegrationSummary,
   CampaignDetail,
   CampaignSummary,
   CampaignOutputLicense,
@@ -17,6 +19,7 @@ import type {
   AnnotationToolIntegration,
   CampaignOutputLicense as PrismaOutputLicense,
 } from '@oci/database';
+import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { CampaignRepository } from './campaign.repository.js';
 
 /**
@@ -27,7 +30,21 @@ import { CampaignRepository } from './campaign.repository.js';
  */
 @Injectable()
 export class CampaignService {
-  constructor(private readonly repo: CampaignRepository) {}
+  // `emitDecoratorMetadata` does not surface constructor parameter types
+  // to Nest's reflector, so type-only injection silently passes
+  // `undefined`. The explicit token works in both tsx and tsc paths.
+  constructor(@Inject(CampaignRepository) private readonly repo: CampaignRepository) {}
+
+  async listToolIntegrations(): Promise<AnnotationToolIntegrationSummary[]> {
+    const rows = await this.repo.listActiveToolIntegrations();
+    return rows.map((t) => ({
+      id: t.id,
+      slug: t.slug,
+      name: t.name,
+      vendor: t.vendor,
+      version: t.version,
+    }));
+  }
 
   async list(): Promise<ListCampaignsResponse> {
     const [items, total] = await Promise.all([this.repo.listRecent(25), this.repo.countAll()]);
@@ -82,7 +99,7 @@ export class CampaignService {
       toolIntegrationId: body.toolIntegrationId,
       outputLicense: this.toPrismaLicense(outputLicense),
       workflowConfig: body.workflowConfig ?? { nAnnotators: 3 },
-      createdById: user.sub,
+      createdById: cognitoSubAsUuid(user.sub),
     });
 
     return this.toDetail(created, created.toolIntegration);

@@ -212,6 +212,26 @@ test.describe('ui/ux diagnostic', () => {
     sections.push({ label: 'catalog-publish-invalid', runs });
   });
 
+  test('annotation campaigns list (signed in)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'annotation-campaigns-list', async (page) => {
+      await signInAs(page, 'cm', 'campaign-manager');
+      await page.goto('/annotation/campaigns');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'annotation-campaigns-list', runs });
+  });
+
+  test('annotation campaign — new (campaign-manager)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'annotation-campaigns-new', async (page) => {
+      await signInAs(page, 'cm', 'campaign-manager');
+      await page.goto('/annotation/campaigns/new');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'annotation-campaigns-new', runs });
+  });
+
   test('print combined summary', async () => {
     const lines: string[] = [];
     lines.push('# UI/UX audit summary\n');
