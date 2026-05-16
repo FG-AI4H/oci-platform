@@ -144,6 +144,24 @@ export class IdentityStack extends cdk.Stack {
 
     this.userPoolDomain = this.userPool.addDomain('Domain', {
       cognitoDomain: { domainPrefix: `oci-${props.cfg.envName}` },
+      // Managed Login (the new branded sign-in UI, GA Nov 2024) needs
+      // the domain provisioned with version 2. Version 1 = the legacy
+      // Hosted UI (very limited CSS customisation). The branding
+      // resource below targets this domain.
+      managedLoginVersion: cognito.ManagedLoginVersion.NEWER_MANAGED_LOGIN,
+    });
+
+    // Managed Login Branding — platform palette + lockup applied to
+    // the hosted sign-in page (#240). Settings shape is the JSON the
+    // Cognito branding designer surfaces; values come from the OCI
+    // design tokens (see packages/ui/src/theme.css for the canonical
+    // hex codes). Light + dark variants both wired so the page honours
+    // the visitor's colour-scheme preference.
+    new cognito.CfnManagedLoginBranding(this, 'ManagedLoginBranding', {
+      userPoolId: this.userPool.userPoolId,
+      clientId: this.userPoolClient.userPoolClientId,
+      useCognitoProvidedValues: false,
+      settings: ociBrandingSettings(),
     });
 
     new cdk.CfnOutput(this, 'UserPoolId', { value: this.userPool.userPoolId });
@@ -208,4 +226,113 @@ export class IdentityStack extends cdk.Stack {
       ],
     );
   }
+}
+
+/**
+ * Settings JSON for the Cognito Managed Login Branding designer
+ * (#240). Mirrors the OCI design-token palette (see
+ * `packages/ui/src/theme.css`) so the hosted sign-in page reads as a
+ * continuation of the rest of the app.
+ *
+ * Cognito accepts a deeply-nested settings object where every leaf is
+ * either a `valueType` + `value` pair (for primitives) or a typed
+ * object. The shape is documented at
+ * https://docs.aws.amazon.com/cognito/latest/developerguide/managed-login-branding-designer.html
+ * — categories surface common knobs (brand colour, foreground,
+ * components.form.backgroundColor, …). We keep this minimal: brand
+ * palette + Inter font; the rest stays at Cognito defaults so the
+ * page still feels native rather than over-customised.
+ *
+ * Light + dark variants are both supplied so the page honours the
+ * visitor's colour-scheme preference, same as the rest of the app.
+ *
+ * IMPORTANT: changing the values requires re-deploying the stack;
+ * Cognito holds the snapshot per (user-pool, app-client) and serves
+ * it on the hosted page. There's no separate cache to purge.
+ */
+function ociBrandingSettings(): Record<string, unknown> {
+  // Colours from packages/ui/src/theme.css (oklch in app source;
+  // hex equivalents here for Cognito's parser).
+  const oci = {
+    primary: '#0F766E', // teal-700
+    primaryHover: '#0E5E58',
+    foreground: '#0A1F2C',
+    background: '#FFFFFF',
+    card: '#FFFFFF',
+    border: '#D0DBE3',
+    mutedForeground: '#4D6577',
+    danger: '#B91C1C',
+    // Dark scheme — matches the app's data-theme="dark" set.
+    darkForeground: '#E6EFF5',
+    darkBackground: '#0A1F2C',
+    darkCard: '#102A38',
+    darkBorder: '#1F3949',
+    darkMutedForeground: '#A6B8C5',
+    darkPrimary: '#2DD4BF',
+  };
+
+  return {
+    categories: {
+      global: {
+        colorSchemeMode: 'LIGHT', // default — visitor's prefers-color-scheme upgrades to DARK
+      },
+      auth: {
+        // Hide the "powered by Amazon Cognito" footer if the env lets
+        // us; Cognito still requires showing it in some regions, so we
+        // omit the override rather than fight the platform.
+      },
+      form: {
+        location: { horizontal: 'CENTER', vertical: 'CENTER' },
+        backgroundColor: oci.card,
+        backgroundImage: { enabled: false },
+        borderColor: oci.border,
+        borderRadius: '8',
+      },
+      pageBackground: {
+        color: oci.background,
+        image: { enabled: false },
+      },
+      pageHeader: {
+        backgroundColor: oci.background,
+        textColor: oci.foreground,
+      },
+      pageFooter: {
+        backgroundColor: oci.background,
+        textColor: oci.mutedForeground,
+      },
+      buttons: {
+        primary: {
+          backgroundColor: oci.primary,
+          textColor: '#FFFFFF',
+          hoverBackgroundColor: oci.primaryHover,
+          borderRadius: '6',
+        },
+      },
+      links: {
+        color: oci.primary,
+        hoverColor: oci.primaryHover,
+      },
+      darkMode: {
+        pageBackground: { color: oci.darkBackground },
+        pageHeader: { backgroundColor: oci.darkBackground, textColor: oci.darkForeground },
+        pageFooter: { backgroundColor: oci.darkBackground, textColor: oci.darkMutedForeground },
+        form: {
+          backgroundColor: oci.darkCard,
+          borderColor: oci.darkBorder,
+        },
+        buttons: {
+          primary: {
+            backgroundColor: oci.darkPrimary,
+            textColor: oci.darkBackground,
+          },
+        },
+        links: { color: oci.darkPrimary },
+      },
+    },
+    componentClasses: {
+      buttons: { borderRadius: '6' },
+      inputDescription: { textColor: oci.mutedForeground },
+      input: { borderRadius: '6', borderColor: oci.border },
+    },
+  };
 }
