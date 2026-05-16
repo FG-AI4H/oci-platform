@@ -71,6 +71,8 @@ It explicitly **does not own** modality-specific viewers/editors. Those plug in 
 ## Amendments
 
 - **2026-05-16 — Extended by [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md).** ADR-0009 locks the task-routing algorithm (referenced from Decision 2) and the N-annotator defaults + bounds (referenced from Decision 3). It also clarifies that "FDA mandates N=7" — a claim that had been circulating internally — is not supported by any current FDA guidance.
+- **2026-05-16 — Extended by [ADR-0011](./0011-annotation-sample-rejection.md).** Task state machine acquires `REJECTED_PENDING_REVIEW` (non-terminal, awaiting supervisor disposition) and `REJECTED` (terminal). Rejection is a first-class annotator action with a structured reason taxonomy + 48 h supervisor SLA + catalog-host feedback loop.
+- **2026-05-16 — Extended by [ADR-0012](./0012-annotation-rights-licensing-annotator-agreement.md).** Campaign config acquires an immutable `outputLicense` field declared at campaign creation (SPDX identifier or `custom-restricted`); defaults vary by access tier per [ADR-0003](./0003-tiered-identity-assurance-and-access-requirements.md). Annotators sign a work-for-hire / contributor-licence agreement (delivered via DocuSeal AdES, [#128](https://github.com/FG-AI4H/oci-platform/issues/128)) before joining any campaign.
 
 ## References
 
