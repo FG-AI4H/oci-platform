@@ -25,6 +25,10 @@ COPY apps/migrate/package.json ./package.json
 COPY apps/migrate/entrypoint.sh ./entrypoint.sh
 COPY apps/migrate/prisma.config.ts ./prisma.config.ts
 COPY packages/database/prisma ./prisma
+# Demo-data seed file. Replayed by the entrypoint after migrate when
+# OCI_ENV != 'prod'. Idempotent — every INSERT uses ON CONFLICT DO
+# NOTHING. See packages/database/seed/demo.sql for the contract.
+COPY packages/database/seed ./seed
 
 # Install only the prisma CLI (no @prisma/client at runtime — we're not
 # making queries, just shelling out to the migrate engine). --omit=dev
