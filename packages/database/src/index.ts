@@ -110,4 +110,5 @@ export type {
   CampaignTaskKind,
   CampaignOutputLicense,
   IdentityAdminAuditEvent,
+  PlatformSetting,
 } from './generated/client/index.js';

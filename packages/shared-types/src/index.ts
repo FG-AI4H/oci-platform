@@ -1952,6 +1952,49 @@ export interface AdminUserDetail extends AdminUserSummary {
   recentAuditEvents: AdminGroupAuditEntry[];
 }
 
+// ---------------------------------------------------------------------------
+// Admin — platform settings (#242).
+//
+// Single-row settings store. The MVP exposes only a maintenance
+// banner; subsequent issues (#214 tool registry, #235 phase 2 tier-
+// aware license defaults) will extend this shape.
+// ---------------------------------------------------------------------------
+
+export const MaintenanceBannerToneSchema = z.enum(['info', 'warning', 'danger']);
+export type MaintenanceBannerTone = z.infer<typeof MaintenanceBannerToneSchema>;
+
+export const MaintenanceBannerSchema = z.object({
+  /** Plain-text message rendered above the site header. <= 280 chars. */
+  message: z.string().min(1).max(280),
+  tone: MaintenanceBannerToneSchema,
+  /** ISO timestamp the banner becomes visible. */
+  visibleFrom: z.string().datetime(),
+  /**
+   * ISO timestamp the banner stops being visible. Must be strictly
+   * after `visibleFrom`. The public `/banner` endpoint hides the
+   * banner once `now > visibleUntil`.
+   */
+  visibleUntil: z.string().datetime(),
+});
+export type MaintenanceBanner = z.infer<typeof MaintenanceBannerSchema>;
+
+export const PlatformSettingsSchema = z.object({
+  maintenanceBanner: MaintenanceBannerSchema.nullable(),
+});
+export type PlatformSettings = z.infer<typeof PlatformSettingsSchema>;
+
+export interface PlatformSettingsResponse extends PlatformSettings {
+  /** ISO timestamp of the last update. Null when settings are at default. */
+  updatedAt: string | null;
+  /** Cognito username of the admin who applied the most recent change. */
+  updatedBy: string | null;
+}
+
+/** Public-facing banner payload exposed by `/v2/platform-settings/banner`. */
+export interface PublicBannerResponse {
+  banner: MaintenanceBanner | null;
+}
+
 export const tokens = {
   /** Phase B.A.1 added: Campaign, AnnotationToolIntegration (stub registry). */
   /** Phase B.A.2 will add: Task, TaskAssignment, Annotation, gate decisions. */

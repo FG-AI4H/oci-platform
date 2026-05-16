@@ -262,6 +262,16 @@ test.describe('ui/ux diagnostic', () => {
     sections.push({ label: 'admin-user-detail', runs });
   });
 
+  test('admin settings (admin)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'admin-settings', async (page) => {
+      await signInAs(page, 'alice', 'admin');
+      await page.goto('/admin/settings');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'admin-settings', runs });
+  });
+
   test('print combined summary', async () => {
     const lines: string[] = [];
     lines.push('# UI/UX audit summary\n');

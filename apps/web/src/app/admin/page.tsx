@@ -9,6 +9,7 @@ import {
   Section,
   UserIcon,
   GlobeIcon,
+  FlowIcon,
 } from '@oci/ui';
 import { auth } from '../../auth';
 import { requireAdmin } from '../../lib/groups';
@@ -43,6 +44,14 @@ export default async function AdminIndexPage() {
               title="User & group management"
               description="Browse Cognito users, view group membership, grant or revoke roles."
               icon={<UserIcon size={20} />}
+            />
+          </li>
+          <li>
+            <AdminTile
+              href="/admin/settings"
+              title="Platform settings"
+              description="Site-wide parameters. Currently: maintenance banner. Tool registry (#214) + license defaults (#235) land here next."
+              icon={<FlowIcon size={20} />}
             />
           </li>
           <li>
