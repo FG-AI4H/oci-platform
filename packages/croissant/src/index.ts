@@ -54,4 +54,5 @@ export {
   type DuoCategory,
 } from './duo/registry.js';
 export { extractDuoTerms } from './duo/extract.js';
+export { extractModalities } from './biocroissant/extract.js';
 export { manifestWizardInputToCroissant } from './wizard/builder.js';

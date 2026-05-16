@@ -40,6 +40,33 @@ export class CampaignRepository {
     return this.prisma.client.annotationToolIntegration.findUnique({ where: { id } });
   }
 
+  /**
+   * Look up the modality labels denormalised on the Dataset row (#247).
+   * Used by the campaign-create guard to reject incompatible
+   * (modality × taskKind) combos with a 400 — mirrors the form's
+   * disabled-radios behaviour for defence in depth.
+   *
+   * Returns null when the dataset id doesn't exist (the caller then
+   * surfaces its own 400 — a typo'd dataset id should fail cleanly
+   * before tripping a deferred FK violation at INSERT). An empty
+   * `modalities` array (host hasn't declared) is a legitimate value
+   * and is treated as "allow all task kinds" in the guard.
+   */
+  async findDatasetModalities(
+    datasetId: string,
+  ): Promise<{ id: string; slug: string; modalities: string[] } | null> {
+    const ds = await this.prisma.client.dataset.findUnique({
+      where: { id: datasetId },
+      select: { id: true, slug: true, modalities: true },
+    });
+    if (!ds) return null;
+    return {
+      id: ds.id,
+      slug: ds.slug,
+      modalities: ds.modalities ?? [],
+    };
+  }
+
   async listActiveToolIntegrations(): Promise<AnnotationToolIntegration[]> {
     return this.prisma.client.annotationToolIntegration.findMany({
       where: { isActive: true },

@@ -24,6 +24,13 @@ import { test, expect, type Page } from '@playwright/test';
 /** Seed-data slug — PUBLIC, visible to all roles. */
 const SEED_DATASET_SLUG = 'rsna-pneumonia-2018';
 
+/**
+ * Text-only seed dataset (#247). Picking it must disable the spatial
+ * task-kind radios (DETECTION / SEGMENTATION / LOCALIZATION) and keep
+ * CLASSIFICATION + MULTI_MODAL enabled.
+ */
+const SEED_TEXT_DATASET_SLUG = 'demo-clinical-notes-2024';
+
 async function signInAs(page: Page, user: string, roles: string) {
   await page.goto('/signin?callbackUrl=%2Fdashboard');
   await page.getByLabel('User').fill(user);
@@ -177,5 +184,31 @@ test.describe('annotation campaign — header + form', () => {
     await signInAs(page, 'eve', 'participant');
     await page.goto(`/catalog/${SEED_DATASET_SLUG}`);
     await expect(page.getByRole('link', { name: /create.*annotation campaign/i })).toHaveCount(0);
+  });
+
+  test('text-only dataset disables spatial task-kind radios (#247)', async ({ page }) => {
+    await signInAs(page, 'cm', 'campaign-manager');
+    await page.goto('/annotation/campaigns/new');
+
+    // Before picking a dataset every radio is enabled — no constraint
+    // applies yet (form falls back to "allow all" when modalities are
+    // unknown).
+    await expect(page.getByRole('radio', { name: 'Segmentation' })).toBeEnabled();
+
+    // Pick the text-only dataset.
+    await pickDataset(page, SEED_TEXT_DATASET_SLUG);
+
+    // Spatial task kinds disabled with rationale visible.
+    await expect(page.getByRole('radio', { name: 'Segmentation' })).toBeDisabled();
+    await expect(page.getByRole('radio', { name: 'Detection' })).toBeDisabled();
+    await expect(page.getByRole('radio', { name: 'Localisation' })).toBeDisabled();
+    await expect(page.getByText(/isn'?t supported for Text data/i).first()).toBeVisible();
+
+    // Classification + Multi-modal remain enabled.
+    await expect(page.getByRole('radio', { name: 'Classification' })).toBeEnabled();
+    await expect(page.getByRole('radio', { name: 'Multi-modal' })).toBeEnabled();
+
+    // The summary text under the heading lists the dataset modality.
+    await expect(page.getByText(/Filtered against the dataset modality/i)).toBeVisible();
   });
 });

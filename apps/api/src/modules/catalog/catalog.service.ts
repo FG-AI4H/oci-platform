@@ -8,7 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@oci/database';
-import { validate as validateCroissant, extractDuoTerms } from '@oci/croissant';
+import { validate as validateCroissant, extractDuoTerms, extractModalities } from '@oci/croissant';
 import type {
   AccessTier,
   CommercialUseTerms,
@@ -50,6 +50,8 @@ export class CatalogService {
     hostId: string;
     visibility: 'PRIVATE' | 'RESTRICTED' | 'PUBLIC';
     duoTerms: string[];
+    /** #247: modality labels; surfaced for the annotation campaign guard. */
+    modalities: string[];
     accessTier: AccessTier;
     emailDomainAllowlist: string[];
     commercialUseTerms: CommercialUseTerms;
@@ -269,6 +271,15 @@ export class CatalogService {
     // the source of truth — re-publishing rewrites the column.
     const duoTerms = extractDuoTerms(req.croissant);
 
+    // Modality labels (#247). Sourced from BIOCroissant's
+    // `bio:imagingModality` / `bio:dataModality` slots. Drives the
+    // task-kind constraint on the campaign-create form and the
+    // matching server-side guard. Empty when the host hasn't declared
+    // modality metadata — the campaign-create flow then falls back to
+    // allowing all task kinds and the API logs a warning rather than
+    // blocking the manager.
+    const modalities = extractModalities(req.croissant);
+
     // Fail closed for non-PUBLIC datasets without DUO terms (decision
     // #2 in the J.1 design). RESTRICTED + PRIVATE need a declared use
     // policy because access requests for them go through the matcher;
@@ -303,6 +314,7 @@ export class CatalogService {
         conformanceVersion,
         distributions,
         duoTerms,
+        modalities,
       });
     } catch (err: unknown) {
       // Unique constraint on (dataset_id, version) — re-publishing the

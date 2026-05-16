@@ -51,6 +51,7 @@ interface RepoMock {
   countAll: ReturnType<typeof vi.fn>;
   findToolIntegrationById: ReturnType<typeof vi.fn>;
   listActiveToolIntegrations: ReturnType<typeof vi.fn>;
+  findDatasetModalities: ReturnType<typeof vi.fn>;
   create: ReturnType<typeof vi.fn>;
   updateStatus: ReturnType<typeof vi.fn>;
 }
@@ -69,16 +70,32 @@ beforeEach(() => {
     countAll: vi.fn(),
     findToolIntegrationById: vi.fn(),
     listActiveToolIntegrations: vi.fn(),
+    findDatasetModalities: vi.fn(),
     create: vi.fn(),
     updateStatus: vi.fn(),
   };
   service = new CampaignService(repo as unknown as CampaignRepository);
 });
 
+/**
+ * Wire the modality lookup the campaign service performs after the
+ * tool-integration check (#247). Tests that don't care about the
+ * constraint just hand back a permissive dataset (X-ray → all four
+ * imaging task kinds).
+ */
+function mockDatasetModalities(modalities: string[], slug = 'chest-xr-pilot') {
+  repo.findDatasetModalities.mockResolvedValue({
+    id: 'ds-1',
+    slug,
+    modalities,
+  });
+}
+
 describe('CampaignService.create', () => {
   it('persists a draft campaign with default outputLicense + workflowConfig', async () => {
     repo.findBySlug.mockResolvedValue(null);
     repo.findToolIntegrationById.mockResolvedValue(TOOL);
+    mockDatasetModalities(['X-ray']);
     repo.create.mockResolvedValue(ROW);
 
     const out = await service.create(
@@ -155,6 +172,145 @@ describe('CampaignService.create', () => {
           datasetId: 'ds-1',
           toolIntegrationId: TOOL.id,
           taskKind: 'DETECTION',
+        },
+        user(SUB_UUID),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Modality → allowed task-kinds server-side guard (#247). Mirrors the
+ * disabled-radios behaviour on the campaign-create form for defence in
+ * depth. The curated mapping lives in @oci/shared-types/modality-task-kinds.
+ */
+describe('CampaignService.create — modality → task-kind guard (#247)', () => {
+  it('X-ray dataset + CLASSIFICATION passes', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue(TOOL);
+    mockDatasetModalities(['X-ray']);
+    repo.create.mockResolvedValue(ROW);
+
+    await expect(
+      service.create(
+        {
+          slug: 'chest-xr-pilot',
+          name: 'Chest XR Pilot',
+          datasetId: 'ds-1',
+          toolIntegrationId: TOOL.id,
+          taskKind: 'CLASSIFICATION',
+        },
+        user(SUB_UUID),
+      ),
+    ).resolves.toBeDefined();
+    expect(repo.create).toHaveBeenCalled();
+  });
+
+  it('text dataset + SEGMENTATION is rejected with 400', async () => {
+    const TEXT_TOOL: AnnotationToolIntegration = {
+      ...TOOL,
+      supportedTaskKinds: ['SEGMENTATION', 'CLASSIFICATION', 'MULTI_MODAL'],
+    } as AnnotationToolIntegration;
+
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue(TEXT_TOOL);
+    mockDatasetModalities(['Text']);
+
+    await expect(
+      service.create(
+        {
+          slug: 'notes-pilot',
+          name: 'Clinical notes pilot',
+          datasetId: 'ds-1',
+          toolIntegrationId: TEXT_TOOL.id,
+          taskKind: 'SEGMENTATION',
+        },
+        user(SUB_UUID),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('timeseries dataset + DETECTION is rejected with 400', async () => {
+    const TS_TOOL: AnnotationToolIntegration = {
+      ...TOOL,
+      supportedTaskKinds: ['DETECTION', 'CLASSIFICATION'],
+    } as AnnotationToolIntegration;
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue(TS_TOOL);
+    mockDatasetModalities(['ECG']);
+
+    await expect(
+      service.create(
+        {
+          slug: 'ecg-pilot',
+          name: 'ECG pilot',
+          datasetId: 'ds-1',
+          toolIntegrationId: TS_TOOL.id,
+          taskKind: 'DETECTION',
+        },
+        user(SUB_UUID),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('text dataset + CLASSIFICATION passes (Text allows CLASSIFICATION + MULTI_MODAL)', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue(TOOL);
+    mockDatasetModalities(['Text']);
+    repo.create.mockResolvedValue(ROW);
+
+    await expect(
+      service.create(
+        {
+          slug: 'notes-pilot',
+          name: 'Clinical notes pilot',
+          datasetId: 'ds-1',
+          toolIntegrationId: TOOL.id,
+          taskKind: 'CLASSIFICATION',
+        },
+        user(SUB_UUID),
+      ),
+    ).resolves.toBeDefined();
+    expect(repo.create).toHaveBeenCalled();
+  });
+
+  it('dataset with no modalities declared falls back to "allow all" (does not block)', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue(TOOL);
+    mockDatasetModalities([]);
+    repo.create.mockResolvedValue(ROW);
+
+    await expect(
+      service.create(
+        {
+          slug: 'mystery-pilot',
+          name: 'Mystery pilot',
+          datasetId: 'ds-1',
+          toolIntegrationId: TOOL.id,
+          taskKind: 'SEGMENTATION', // would be blocked if modalities said "Text"
+        },
+        user(SUB_UUID),
+      ),
+    ).resolves.toBeDefined();
+    expect(repo.create).toHaveBeenCalled();
+  });
+
+  it('unknown datasetId yields a 400 (not a deferred FK violation)', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue(TOOL);
+    repo.findDatasetModalities.mockResolvedValue(null);
+
+    await expect(
+      service.create(
+        {
+          slug: 'nope',
+          name: 'No such dataset',
+          datasetId: '00000000-0000-4000-8000-000000000999',
+          toolIntegrationId: TOOL.id,
+          taskKind: 'CLASSIFICATION',
         },
         user(SUB_UUID),
       ),
