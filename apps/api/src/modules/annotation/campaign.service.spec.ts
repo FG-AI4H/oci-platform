@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import type { AnnotationCampaign, AnnotationToolIntegration } from '@oci/database';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -45,11 +50,17 @@ interface RepoMock {
   listRecent: ReturnType<typeof vi.fn>;
   countAll: ReturnType<typeof vi.fn>;
   findToolIntegrationById: ReturnType<typeof vi.fn>;
+  listActiveToolIntegrations: ReturnType<typeof vi.fn>;
   create: ReturnType<typeof vi.fn>;
+  updateStatus: ReturnType<typeof vi.fn>;
 }
 
 let repo: RepoMock;
 let service: CampaignService;
+
+function withStatus(status: AnnotationCampaign['status']): typeof ROW {
+  return { ...ROW, status };
+}
 
 beforeEach(() => {
   repo = {
@@ -57,7 +68,9 @@ beforeEach(() => {
     listRecent: vi.fn(),
     countAll: vi.fn(),
     findToolIntegrationById: vi.fn(),
+    listActiveToolIntegrations: vi.fn(),
     create: vi.fn(),
+    updateStatus: vi.fn(),
   };
   service = new CampaignService(repo as unknown as CampaignRepository);
 });
@@ -144,5 +157,134 @@ describe('CampaignService.detail', () => {
     repo.findBySlug.mockResolvedValue(null);
 
     await expect(service.detail('nope')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('CampaignService.transition (lifecycle state machine, #215 slice 1)', () => {
+  it('DRAFT → READY via mark-ready stamps no timestamp', async () => {
+    repo.findBySlug.mockResolvedValue(withStatus('DRAFT'));
+    repo.updateStatus.mockResolvedValue(withStatus('READY'));
+
+    const out = await service.transition('chest-xr-pilot', 'mark-ready', undefined, user(SUB_UUID));
+
+    expect(out.status).toBe('READY');
+    expect(repo.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ nextStatus: 'READY' }),
+    );
+    expect(repo.updateStatus).toHaveBeenCalledWith(
+      expect.not.objectContaining({ stampStartedAt: true }),
+    );
+  });
+
+  it('READY → RUNNING via start stamps startedAt', async () => {
+    repo.findBySlug.mockResolvedValue(withStatus('READY'));
+    repo.updateStatus.mockResolvedValue(withStatus('RUNNING'));
+
+    await service.transition('chest-xr-pilot', 'start', undefined, user(SUB_UUID));
+
+    expect(repo.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ nextStatus: 'RUNNING', stampStartedAt: true }),
+    );
+  });
+
+  it('RUNNING → COMPLETED via complete stamps completedAt', async () => {
+    repo.findBySlug.mockResolvedValue(withStatus('RUNNING'));
+    repo.updateStatus.mockResolvedValue(withStatus('COMPLETED'));
+
+    await service.transition('chest-xr-pilot', 'complete', undefined, user(SUB_UUID));
+
+    expect(repo.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ nextStatus: 'COMPLETED', stampCompletedAt: true }),
+    );
+  });
+
+  it('COMPLETED → ARCHIVED via archive is allowed without a reason', async () => {
+    repo.findBySlug.mockResolvedValue(withStatus('COMPLETED'));
+    repo.updateStatus.mockResolvedValue(withStatus('ARCHIVED'));
+
+    await service.transition('chest-xr-pilot', 'archive', undefined, user(SUB_UUID));
+
+    expect(repo.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ nextStatus: 'ARCHIVED' }),
+    );
+  });
+
+  it('READY → DRAFT via revert-to-draft REQUIRES a reason', async () => {
+    repo.findBySlug.mockResolvedValue(withStatus('READY'));
+
+    await expect(
+      service.transition('chest-xr-pilot', 'revert-to-draft', undefined, user(SUB_UUID)),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.updateStatus).not.toHaveBeenCalled();
+
+    repo.updateStatus.mockResolvedValue(withStatus('DRAFT'));
+    await service.transition('chest-xr-pilot', 'revert-to-draft', 'mistyped slug', user(SUB_UUID));
+    expect(repo.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ nextStatus: 'DRAFT' }),
+    );
+  });
+
+  it('RUNNING → ARCHIVED via archive REQUIRES a reason (emergency stop)', async () => {
+    repo.findBySlug.mockResolvedValue(withStatus('RUNNING'));
+
+    await expect(
+      service.transition('chest-xr-pilot', 'archive', undefined, user(SUB_UUID)),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    repo.updateStatus.mockResolvedValue(withStatus('ARCHIVED'));
+    await service.transition('chest-xr-pilot', 'archive', 'data leak found', user(SUB_UUID));
+    expect(repo.updateStatus).toHaveBeenCalledWith(
+      expect.objectContaining({ nextStatus: 'ARCHIVED' }),
+    );
+  });
+
+  it('illegal transition (DRAFT → start) is 400', async () => {
+    repo.findBySlug.mockResolvedValue(withStatus('DRAFT'));
+
+    await expect(
+      service.transition('chest-xr-pilot', 'start', undefined, user(SUB_UUID)),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('illegal transition (ARCHIVED → anything) is 400', async () => {
+    repo.findBySlug.mockResolvedValue(withStatus('ARCHIVED'));
+
+    await expect(
+      service.transition('chest-xr-pilot', 'complete', undefined, user(SUB_UUID)),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('404s when the slug is unknown', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+
+    await expect(
+      service.transition('nope', 'mark-ready', undefined, user(SUB_UUID)),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('mark-ready preflight rejects a deactivated tool integration', async () => {
+    const deactivated: AnnotationToolIntegration = { ...TOOL, isActive: false };
+    repo.findBySlug.mockResolvedValue({
+      ...withStatus('DRAFT'),
+      toolIntegration: deactivated,
+    });
+
+    await expect(
+      service.transition('chest-xr-pilot', 'mark-ready', undefined, user(SUB_UUID)),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(repo.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('mark-ready preflight rejects nAnnotators outside [1, 12]', async () => {
+    repo.findBySlug.mockResolvedValue({
+      ...withStatus('DRAFT'),
+      workflowConfig: { nAnnotators: 99 },
+    });
+
+    await expect(
+      service.transition('chest-xr-pilot', 'mark-ready', undefined, user(SUB_UUID)),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.updateStatus).not.toHaveBeenCalled();
   });
 });

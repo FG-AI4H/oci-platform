@@ -9,6 +9,7 @@ You're integrating with the OCI, contributing to the platform, or both. The plat
 | [API reference](./api-reference.md)                            | Calling the OCI from outside. Endpoints, auth, payload shapes.           |
 | [Croissant manifest reference](./croissant-manifest.md)        | Authoring or parsing manifests. Validator quirks.                        |
 | [Contributing](./contributing.md)                              | PR conventions, project structure, the verification gate.                |
+| [Annotation module](./annotation-module.md)                    | Campaign lifecycle state machine + the rest of the annotation track.     |
 | [Strangler-fig migration plan](../migration/strangler-plan.md) | Why the legacy Spring Boot + Django are being replaced module by module. |
 
 ## Quick orientation

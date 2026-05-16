@@ -998,6 +998,10 @@ model AnnotationCampaign {
 
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+  /// Set when the campaign transitions to RUNNING (#215, slice 1).
+  /// Null while DRAFT / READY / ARCHIVED-before-start; persists once
+  /// set so completed campaigns retain the start timestamp.
+  startedAt   DateTime? @map("started_at")
   completedAt DateTime? @map("completed_at")
 
   toolIntegration AnnotationToolIntegration @relation(fields: [toolIntegrationId], references: [id])

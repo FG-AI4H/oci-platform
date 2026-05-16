@@ -1824,6 +1824,10 @@ export const CampaignSummarySchema = z.object({
   outputLicense: CampaignOutputLicenseSchema,
   createdAt: z.string(), // ISO 8601
   updatedAt: z.string(),
+  /** ISO 8601 timestamp set when the campaign transitions to RUNNING. */
+  startedAt: z.string().nullable(),
+  /** ISO 8601 timestamp set when the campaign transitions to COMPLETED. */
+  completedAt: z.string().nullable(),
 });
 export type CampaignSummary = z.infer<typeof CampaignSummarySchema>;
 
@@ -1864,6 +1868,85 @@ export const ListCampaignsResponseSchema = z.object({
   totalEstimate: z.number().int(),
 });
 export type ListCampaignsResponse = z.infer<typeof ListCampaignsResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Campaign lifecycle state machine (#215, slice 1).
+//
+// Allowed transitions per ADR-0006 Decision 1:
+//   DRAFT      --mark-ready--->   READY        (pre-flight pass)
+//   READY      --revert-to-draft->DRAFT        (reason required; manager mistake recovery)
+//   READY      --start---------->  RUNNING      (sets startedAt; locks dataset / tool)
+//   RUNNING    --complete------->  COMPLETED    (sets completedAt; tasks all done in slice ≥ 2)
+//   RUNNING    --archive-------->  ARCHIVED     (reason required; emergency stop)
+//   COMPLETED  --archive-------->  ARCHIVED     (no reason needed; tidy-up of old work)
+//
+// Slice 1 of #215 implements the action-vocabulary + service-layer state
+// guard + denormalised `startedAt` / `completedAt` columns. Task
+// generation, queue routing, and the per-task gate state machine arrive
+// in slice 2 of the same issue.
+// ---------------------------------------------------------------------------
+
+export const CampaignTransitionActionSchema = z.enum([
+  'mark-ready',
+  'revert-to-draft',
+  'start',
+  'complete',
+  'archive',
+]);
+export type CampaignTransitionAction = z.infer<typeof CampaignTransitionActionSchema>;
+
+export const TransitionCampaignRequestSchema = z.object({
+  action: CampaignTransitionActionSchema,
+  /**
+   * Operator-supplied reason; required for `revert-to-draft` and for
+   * `archive` from the RUNNING state. Stored on the campaign row for
+   * audit / display until the dedicated transition-history table lands
+   * in slice 2.
+   */
+  reason: z.string().max(500).optional(),
+});
+export type TransitionCampaignRequest = z.infer<typeof TransitionCampaignRequestSchema>;
+
+/**
+ * Lookup table of legal transitions per source status. Shared between
+ * the API (state-machine guard) and the web (button visibility +
+ * reason-required prompts). Keep in sync with the Mermaid diagram in
+ * `docs/for-developers/annotation-module.md`.
+ */
+const CAMPAIGN_TRANSITIONS: Record<
+  CampaignStatus,
+  ReadonlyArray<{ action: CampaignTransitionAction; reasonRequired: boolean }>
+> = {
+  DRAFT: [{ action: 'mark-ready', reasonRequired: false }],
+  READY: [
+    { action: 'revert-to-draft', reasonRequired: true },
+    { action: 'start', reasonRequired: false },
+  ],
+  RUNNING: [
+    { action: 'complete', reasonRequired: false },
+    { action: 'archive', reasonRequired: true },
+  ],
+  COMPLETED: [{ action: 'archive', reasonRequired: false }],
+  ARCHIVED: [],
+};
+
+/** Actions legal from the given status — drives UI button visibility. */
+export function availableCampaignActions(
+  status: CampaignStatus,
+): ReadonlyArray<CampaignTransitionAction> {
+  // eslint-disable-next-line security/detect-object-injection -- typed enum keys
+  return (CAMPAIGN_TRANSITIONS[status] ?? []).map((r) => r.action);
+}
+
+/** True when the given action from the given status requires a reason. */
+export function campaignActionRequiresReason(
+  status: CampaignStatus,
+  action: CampaignTransitionAction,
+): boolean {
+  // eslint-disable-next-line security/detect-object-injection -- typed enum keys
+  const rules = CAMPAIGN_TRANSITIONS[status] ?? [];
+  return rules.find((r) => r.action === action)?.reasonRequired ?? false;
+}
 
 // ---------------------------------------------------------------------------
 // Admin — Cognito group management (#241).
