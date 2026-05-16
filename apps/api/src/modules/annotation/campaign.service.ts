@@ -43,6 +43,7 @@ export class CampaignService {
       name: t.name,
       vendor: t.vendor,
       version: t.version,
+      supportedTaskKinds: t.supportedTaskKinds,
     }));
   }
 
@@ -79,6 +80,16 @@ export class CampaignService {
     if (!tool || !tool.isActive) {
       throw new BadRequestException(
         `toolIntegrationId '${body.toolIntegrationId}' is not a registered active integration`,
+      );
+    }
+
+    // Defence-in-depth: the form filters the tool dropdown by
+    // supportedTaskKinds, but enforce the same constraint server-side
+    // so a hand-crafted POST can't bypass the UI.
+    if (!tool.supportedTaskKinds.includes(body.taskKind)) {
+      throw new BadRequestException(
+        `Tool '${tool.slug}' does not support taskKind '${body.taskKind}' ` +
+          `(supports: ${tool.supportedTaskKinds.join(', ') || 'none'})`,
       );
     }
 
@@ -137,6 +148,7 @@ export class CampaignService {
         name: tool.name,
         vendor: tool.vendor,
         version: tool.version,
+        supportedTaskKinds: tool.supportedTaskKinds,
       },
       createdById: row.createdById,
     };

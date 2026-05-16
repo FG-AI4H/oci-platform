@@ -11,20 +11,56 @@ import {
   Container,
   Section,
 } from '@oci/ui';
-import type { AnnotationToolIntegrationSummary } from '@oci/shared-types';
+import type { AnnotationToolIntegrationSummary, DatasetDetail } from '@oci/shared-types';
 import { auth } from '../../../../auth';
 import { apiFetch } from '../../../../lib/api';
 import { requireCampaignManager } from '../../../../lib/groups';
-import { NewCampaignForm } from './new-campaign-form';
+import { NewCampaignForm, type PreselectedDataset } from './new-campaign-form';
 
 export const metadata = {
   title: 'New campaign — OCI Annotation',
   robots: { index: false, follow: false },
 };
 
-export default async function NewCampaignPage() {
+interface NewCampaignPageProps {
+  /**
+   * Optional `?datasetSlug=` (preferred, set by the catalog detail
+   * page's "Create annotation campaign" CTA) or legacy `?datasetId=`
+   * (still parsed for back-compat — never produced by the platform).
+   */
+  searchParams: Promise<{ datasetSlug?: string; datasetId?: string }>;
+}
+
+export default async function NewCampaignPage({ searchParams }: NewCampaignPageProps) {
   const session = await auth();
   requireCampaignManager(session);
+
+  const { datasetSlug, datasetId } = await searchParams;
+
+  // Resolve the slug to a full dataset summary server-side so the
+  // form can render with the picker already populated. Visibility is
+  // enforced by the API — if the manager isn't authorised to see the
+  // dataset they get a 404 here, and we fall back to the empty
+  // picker.
+  let preselected: PreselectedDataset | null = null;
+  if (datasetSlug) {
+    const ds = await apiFetch<DatasetDetail>(
+      `/v2/catalog/datasets/${encodeURIComponent(datasetSlug)}`,
+      { session, revalidate: 0 },
+    );
+    if (ds) {
+      preselected = {
+        id: ds.id,
+        slug: ds.slug,
+        name: ds.name,
+        accessTier: ds.accessTier ?? 'OPEN',
+      };
+    }
+  } else if (datasetId) {
+    // Legacy `?datasetId=` (no longer minted by the platform). The
+    // form will try to resolve it client-side via the typeahead.
+    preselected = null;
+  }
 
   const tools =
     (await apiFetch<AnnotationToolIntegrationSummary[]>('/v2/annotation/tool-integrations', {
@@ -66,7 +102,7 @@ export default async function NewCampaignPage() {
             <CardTitle>Draft details</CardTitle>
           </CardHeader>
           <CardContent>
-            <NewCampaignForm toolIntegrations={tools} />
+            <NewCampaignForm toolIntegrations={tools} preselectedDataset={preselected} />
           </CardContent>
         </Card>
       </Section>

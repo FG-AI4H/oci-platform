@@ -18,7 +18,7 @@ const TOOL: AnnotationToolIntegration = {
   vendor: 'NVIDIA / Project MONAI',
   version: '0.8',
   isActive: true,
-  capabilityMatrix: {},
+  supportedTaskKinds: ['SEGMENTATION', 'CLASSIFICATION'],
   createdAt: new Date('2026-05-01T00:00:00Z'),
   updatedAt: new Date('2026-05-01T00:00:00Z'),
 } as unknown as AnnotationToolIntegration;
@@ -122,6 +122,26 @@ describe('CampaignService.create', () => {
           datasetId: 'ds-1',
           toolIntegrationId: 'tool-does-not-exist',
           taskKind: 'CLASSIFICATION',
+        },
+        user(SUB_UUID),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a tool that does not support the requested taskKind', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+    // MONAI Label supports SEGMENTATION + CLASSIFICATION, not DETECTION.
+    repo.findToolIntegrationById.mockResolvedValue(TOOL);
+
+    await expect(
+      service.create(
+        {
+          slug: 'chest-xr-pilot',
+          name: 'Chest XR Pilot',
+          datasetId: 'ds-1',
+          toolIntegrationId: TOOL.id,
+          taskKind: 'DETECTION',
         },
         user(SUB_UUID),
       ),

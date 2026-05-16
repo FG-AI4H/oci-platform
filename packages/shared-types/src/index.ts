@@ -1803,6 +1803,13 @@ export const AnnotationToolIntegrationSummarySchema = z.object({
   vendor: z.string(),
   /** Latest available version string (semver per ADR-0007). */
   version: z.string(),
+  /**
+   * Task kinds this tool can handle. Drives the tool-picker filter on
+   * `/annotation/campaigns/new`. The full per-task capability matrix
+   * lands with #214; this minimal slice is enough for the form to be
+   * safe today.
+   */
+  supportedTaskKinds: z.array(CampaignTaskKindSchema),
 });
 export type AnnotationToolIntegrationSummary = z.infer<
   typeof AnnotationToolIntegrationSummarySchema

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Badge, Button } from '@oci/ui';
 import { auth, signOut } from '../auth';
-import { isAdmin, isCampaignManager, isHost } from '../lib/groups';
+import { isAdmin, isHost } from '../lib/groups';
 import { BrandLockup } from './brand-mark';
 
 function envTone(env: string): 'info' | 'warning' | 'neutral' {
@@ -24,7 +24,6 @@ export async function SiteHeader() {
   const showHostNav = isHost(session);
   const showAdminNav = isAdmin(session);
   const showAnnotationNav = session?.user != null;
-  const showCampaignManagerNav = isCampaignManager(session);
   const showEnvBadge = env !== 'prod';
 
   return (
@@ -40,10 +39,6 @@ export async function SiteHeader() {
           <nav aria-label="Primary" className="hidden sm:flex items-center gap-5">
             <NavLink href="/catalog">Catalog</NavLink>
             {showAnnotationNav ? <NavLink href="/annotation/campaigns">Annotation</NavLink> : null}
-            {showHostNav ? <NavLink href="/catalog/new">New dataset</NavLink> : null}
-            {showCampaignManagerNav ? (
-              <NavLink href="/annotation/campaigns/new">New campaign</NavLink>
-            ) : null}
             {showHostNav ? <NavLink href="/dashboard/host/access-requests">Inbox</NavLink> : null}
             {showAdminNav ? <NavLink href="/admin">Admin</NavLink> : null}
           </nav>

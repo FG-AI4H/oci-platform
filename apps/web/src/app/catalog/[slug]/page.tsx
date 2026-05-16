@@ -31,9 +31,10 @@ import { auth } from '../../../auth';
 import { apiFetch } from '../../../lib/api';
 import { datasetJsonLd } from '../../../lib/dataset-jsonld';
 import { siteUrl } from '../../../lib/site-url';
-import { isAdmin } from '../../../lib/groups';
+import { isAdmin, isCampaignManager } from '../../../lib/groups';
 import { isHostOfDataset } from '../../../lib/identity';
 import { AccessCta } from './access-cta';
+import { CreateCampaignCta } from './create-campaign-cta';
 import { JsonTree } from './json-tree';
 import { ManifestFullView } from './manifest-full-view';
 import { ManifestTabs } from './manifest-tabs';
@@ -257,6 +258,11 @@ export default async function DatasetDetailPage({
               isAuthenticated={!!session}
               isPrivilegedForDataset={isAdmin(session) || isHostOfDataset(session, detail.hostId)}
               justRequested={justRequested}
+            />
+            <CreateCampaignCta
+              datasetSlug={detail.slug}
+              authorized={canLaunchCampaignFromHere(detail, ownRequests, session)}
+              isCampaignManager={isCampaignManager(session)}
             />
           </div>
         </Container>
@@ -597,4 +603,29 @@ function formatBytes(bytes: number): string {
 function isPlatformHosted(contentUrl: string | null): boolean {
   if (!contentUrl) return false;
   return contentUrl.startsWith('/v2/catalog/');
+}
+
+/**
+ * Whether the caller has the right to launch an annotation campaign
+ * from this dataset detail page (user feedback 2026-05-16):
+ *
+ *   - admin: always
+ *   - host of this dataset: always (their data, their call)
+ *   - PUBLIC dataset + authenticated viewer: always
+ *   - RESTRICTED or PRIVATE dataset: the caller must hold an
+ *     APPROVED access-request row.
+ *
+ * The role check ("is the caller a campaign-manager?") lives on the
+ * component itself; this helper only decides the data-side gate.
+ */
+function canLaunchCampaignFromHere(
+  detail: DatasetDetail,
+  ownRequests: AccessRequestSummary[],
+  session: import('next-auth').Session | null,
+): boolean {
+  if (!session) return false;
+  if (isAdmin(session) || isHostOfDataset(session, detail.hostId)) return true;
+  if (detail.visibility === 'PUBLIC') return true;
+  // For RESTRICTED / PRIVATE: must have an APPROVED row.
+  return ownRequests.some((r) => r.status === 'APPROVED');
 }

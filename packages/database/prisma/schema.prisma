@@ -950,6 +950,13 @@ model AnnotationToolIntegration {
   /// Latest semver of the adapter (per ADR-0007 versioning).
   version   String
   isActive  Boolean  @default(true) @map("is_active")
+  /// Task kinds this tool can handle. Used to filter the tool picker
+  /// on `/annotation/campaigns/new` after a task kind is selected
+  /// (user feedback 2026-05-16). The full per-task capability matrix
+  /// from ADR-0007 (containers, signed-handoff routes, schemaProfiles)
+  /// lands with #214; this column is the minimum to make the picker
+  /// safe today.
+  supportedTaskKinds CampaignTaskKind[] @map("supported_task_kinds")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
