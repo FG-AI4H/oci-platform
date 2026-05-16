@@ -165,6 +165,23 @@ export class BootstrapOidcStack extends cdk.Stack {
       }),
     );
 
+    // Read the migrate task's CloudWatch stream on failure. The Deploy
+    // workflow's "DB migrate" step dumps the failing task's container
+    // logs inline before exiting (PR #273) so the operator doesn't have
+    // to round-trip to the console for every iteration. Scoped to the
+    // api stack's log group (`/oci/<env>/api`) — the migrate task writes
+    // here too because MigrateTaskDef shares the API log group.
+    this.deployRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'ReadMigrateLogs',
+        actions: ['logs:GetLogEvents', 'logs:DescribeLogStreams'],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/oci/*/api`,
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/oci/*/api:log-stream:migrate/*`,
+        ],
+      }),
+    );
+
     // ECR repositories. Image scan on push, lifecycle keeps last 20.
     const repoDefaults: Partial<ecr.RepositoryProps> = {
       imageScanOnPush: true,
@@ -212,7 +229,7 @@ export class BootstrapOidcStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            'Path-prefix wildcards are intentional and tightly scoped: cdk-hnb659fds-* matches CDK bootstrap roles (deploy, file-publishing, image-publishing, lookup); oci-* matches our ECR repos (oci-api, oci-web, oci-worker-ingest, oci-migrate) and the auto-generated MigrateTaskDef IAM roles in api-stack; /cdk-bootstrap/* matches CDK bootstrap SSM parameters; /oci/*/migrate/launch-spec is the per-env aggregated launch spec for the prisma migrate task; ecs:RunTask / DescribeTasks / StopTask use task-definition/* and task/* because task definition revisions and task ids are not knowable until run-time. ecr:GetAuthorizationToken and cloudformation:Describe*/List*/GetTemplate do not support per-resource scoping (AWS API limitation, account-scope only).',
+            'Path-prefix wildcards are intentional and tightly scoped: cdk-hnb659fds-* matches CDK bootstrap roles (deploy, file-publishing, image-publishing, lookup); oci-* matches our ECR repos (oci-api, oci-web, oci-worker-ingest, oci-migrate) and the auto-generated MigrateTaskDef IAM roles in api-stack; /cdk-bootstrap/* matches CDK bootstrap SSM parameters; /oci/*/migrate/launch-spec is the per-env aggregated launch spec for the prisma migrate task; /oci/*/api log-group + migrate/* log-streams are how the Deploy workflow surfaces failing migrate-task container logs to the GHA job output; ecs:RunTask / DescribeTasks / StopTask use task-definition/* and task/* because task definition revisions and task ids are not knowable until run-time. ecr:GetAuthorizationToken and cloudformation:Describe*/List*/GetTemplate do not support per-resource scoping (AWS API limitation, account-scope only).',
           appliesTo: [
             'Resource::*',
             `Resource::arn:aws:iam::${this.account}:role/cdk-hnb659fds-*`,
@@ -222,6 +239,8 @@ export class BootstrapOidcStack extends cdk.Stack {
             `Resource::arn:aws:ssm:${this.region}:${this.account}:parameter/oci/*/migrate/launch-spec`,
             `Resource::arn:aws:ecs:${this.region}:${this.account}:task-definition/*`,
             `Resource::arn:aws:ecs:${this.region}:${this.account}:task/*`,
+            `Resource::arn:aws:logs:${this.region}:${this.account}:log-group:/oci/*/api`,
+            `Resource::arn:aws:logs:${this.region}:${this.account}:log-group:/oci/*/api:log-stream:migrate/*`,
             'Action::ecr:GetAuthorizationToken',
             'Action::cloudformation:DescribeStacks',
             'Action::cloudformation:DescribeStackEvents',
