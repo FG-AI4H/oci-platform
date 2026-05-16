@@ -48,6 +48,35 @@ export function userGroups(session: Session | null | undefined): string[] {
   }
 }
 
+/**
+ * Returns the caller's principal identifier — either the `sub` from a
+ * real Cognito JWT, or the `<user>` segment of a `dev:<user>:<roles>`
+ * sentinel. Useful for "is this me?" comparisons against an API-side
+ * `AdminUserSummary.sub` / `.username`. Returns `null` when the
+ * session has no token attached.
+ */
+export function userSub(session: Session | null | undefined): string | null {
+  const token = session?.accessToken;
+  if (!token || typeof token !== 'string') return null;
+
+  if (token.startsWith('dev:')) {
+    const rest = token.slice('dev:'.length);
+    const lastColon = rest.lastIndexOf(':');
+    return lastColon < 0 ? null : rest.slice(0, lastColon);
+  }
+
+  const parts = token.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1] ?? '', 'base64url').toString('utf8')) as {
+      sub?: unknown;
+    };
+    return typeof payload.sub === 'string' ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
 /** True when the caller belongs to the `host` or `admin` Cognito group. */
 export function isHost(session: Session | null | undefined): boolean {
   const groups = userGroups(session);

@@ -18,7 +18,7 @@ import {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
 import { ZodPipe } from '../catalog/dto/zod-pipe.js';
-import { Roles, RolesGuard } from '../catalog/roles.guard.js';
+import { Roles, RolesGuard } from '../../auth/roles.guard.js';
 import { RemoteCatalogService } from './remote-catalog.service.js';
 
 /**
