@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Input, Textarea } from '@oci/ui';
 import type {
   AnnotationToolIntegrationSummary,
@@ -8,6 +8,7 @@ import type {
   CampaignTaskKind,
 } from '@oci/shared-types';
 import { createCampaignAction, type CreateCampaignState } from './actions';
+import { DatasetPicker } from './dataset-picker';
 
 const initial: CreateCampaignState = { status: 'idle' };
 
@@ -27,11 +28,43 @@ const LICENSE_OPTIONS: ReadonlyArray<{ value: CampaignOutputLicense; label: stri
   { value: 'custom-restricted', label: 'custom-restricted' },
 ];
 
-export interface NewCampaignFormProps {
-  toolIntegrations: ReadonlyArray<AnnotationToolIntegrationSummary>;
+/** Dataset already resolved server-side from `?datasetSlug=`. */
+export interface PreselectedDataset {
+  id: string;
+  slug: string;
+  name: string;
+  accessTier: string;
 }
 
-export function NewCampaignForm({ toolIntegrations }: NewCampaignFormProps) {
+export interface NewCampaignFormProps {
+  toolIntegrations: ReadonlyArray<AnnotationToolIntegrationSummary>;
+  /**
+   * Dataset to pre-fill the picker with. Resolved server-side from a
+   * `?datasetSlug=` query param — set when the user lands here via
+   * the "Create annotation campaign" CTA on a catalog dataset detail
+   * page. Null when no preselection is in play.
+   */
+  preselectedDataset: PreselectedDataset | null;
+}
+
+/**
+ * Create-campaign form (`/annotation/campaigns/new`). Field order is
+ * deliberate per user feedback 2026-05-16:
+ *
+ *   slug + name + description    — campaign identity
+ *   task kind                    — drives everything downstream
+ *   dataset (catalog typeahead)  — replaces the bare UUID box
+ *   annotation tool              — filtered by task kind
+ *   nAnnotators + outputLicense  — workflow knobs
+ *
+ * The tool-kind filter uses `tool.supportedTaskKinds` (#247 spawned
+ * this feedback); a server-side guard on `POST /v2/annotation/campaigns`
+ * mirrors the constraint for defence in depth.
+ *
+ * Future: when #247 lands, the task-kind radios will additionally
+ * disable based on the selected dataset's modality.
+ */
+export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCampaignFormProps) {
   const [state, action, pending] = useActionState(createCampaignAction, initial);
   const echoed = state.status === 'error' ? state.values : undefined;
 
@@ -43,10 +76,14 @@ export function NewCampaignForm({ toolIntegrations }: NewCampaignFormProps) {
   const taskError = fieldError(state, 'taskKind');
   const nError = fieldError(state, 'nAnnotators');
 
-  const taskDefault = (echoed?.taskKind as CampaignTaskKind | undefined) ?? 'CLASSIFICATION';
+  const initialTask = (echoed?.taskKind as CampaignTaskKind | undefined) ?? null;
+  const [taskKind, setTaskKind] = useState<CampaignTaskKind | null>(initialTask);
   const licenseDefault =
     (echoed?.outputLicense as CampaignOutputLicense | undefined) ?? 'CC-BY-4.0';
-  const toolDefault = echoed?.toolIntegrationId ?? toolIntegrations[0]?.id ?? '';
+
+  const compatibleTools = taskKind
+    ? toolIntegrations.filter((t) => t.supportedTaskKinds.includes(taskKind))
+    : [];
 
   return (
     <form action={action} className="space-y-5" aria-busy={pending || undefined}>
@@ -114,59 +151,14 @@ export function NewCampaignForm({ toolIntegrations }: NewCampaignFormProps) {
         />
       </Field>
 
-      <Field
-        label="Dataset ID"
-        htmlFor="field-dataset"
-        required
-        hint="UUID of the OCI catalog dataset to annotate. Catalog picker lands with the catalog ↔ annotation linkage (#223)."
-        error={datasetError}
-      >
-        <Input
-          id="field-dataset"
-          name="datasetId"
-          required
-          defaultValue={echoed?.datasetId}
-          invalid={!!datasetError}
-          aria-describedby={datasetError ? 'field-dataset-err' : undefined}
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="00000000-0000-0000-0000-000000000000"
-        />
-      </Field>
-
-      <Field
-        label="Annotation tool"
-        htmlFor="field-tool"
-        required
-        hint="Tool the workflow hands annotators off to. Only active integrations from the registry are listed."
-        error={toolError}
-      >
-        <select
-          id="field-tool"
-          name="toolIntegrationId"
-          defaultValue={toolDefault}
-          required
-          aria-describedby={toolError ? 'field-tool-err' : undefined}
-          className="h-9 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 text-sm text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
-        >
-          {toolIntegrations.length === 0 ? (
-            <option value="" disabled>
-              No active integrations registered yet
-            </option>
-          ) : null}
-          {toolIntegrations.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name} — {t.vendor} (v{t.version})
-            </option>
-          ))}
-        </select>
-      </Field>
-
+      {/* Task kind first — the tool dropdown is filtered by this selection. */}
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">Task kind</legend>
+        <legend className="text-sm font-medium">
+          Task kind <span className="text-[var(--color-danger)]">*</span>
+        </legend>
         <p className="text-xs text-[var(--color-muted-foreground)]">
-          What annotators produce per data point. Drives the integration capability matrix
-          (ADR-0007) and the persistence schemaProfile (ADR-0008).
+          What annotators produce per data point. Drives the tool picker below and the persistence
+          schemaProfile (ADR-0008).
         </p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {TASK_KIND_OPTIONS.map((opt) => (
@@ -179,7 +171,9 @@ export function NewCampaignForm({ toolIntegrations }: NewCampaignFormProps) {
                   type="radio"
                   name="taskKind"
                   value={opt.value}
-                  defaultChecked={opt.value === taskDefault}
+                  required
+                  checked={taskKind === opt.value}
+                  onChange={() => setTaskKind(opt.value)}
                   className="accent-[var(--color-primary)]"
                 />
                 <span className="font-medium">{opt.label}</span>
@@ -194,6 +188,49 @@ export function NewCampaignForm({ toolIntegrations }: NewCampaignFormProps) {
           </p>
         ) : null}
       </fieldset>
+
+      <DatasetPicker
+        echoedValue={echoed?.datasetId}
+        preselected={preselectedDataset}
+        error={datasetError}
+      />
+
+      {/* Tool dropdown — gated on task-kind selection. */}
+      <Field
+        label="Annotation tool"
+        htmlFor="field-tool"
+        required
+        hint={
+          taskKind
+            ? 'Tool the workflow hands annotators off to. Filtered to tools that support the selected task kind.'
+            : 'Pick a task kind first; compatible tools appear here.'
+        }
+        error={toolError}
+      >
+        <select
+          id="field-tool"
+          name="toolIntegrationId"
+          required
+          disabled={!taskKind}
+          aria-describedby={toolError ? 'field-tool-err' : undefined}
+          className="h-9 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 text-sm text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {!taskKind ? (
+            <option value="">— Select a task kind first —</option>
+          ) : compatibleTools.length === 0 ? (
+            <option value="">— No registered tool supports this task kind —</option>
+          ) : (
+            <>
+              <option value="">— Choose a tool —</option>
+              {compatibleTools.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} — {t.vendor} (v{t.version})
+                </option>
+              ))}
+            </>
+          )}
+        </select>
+      </Field>
 
       <Field
         label="Annotators per data point"

@@ -1,21 +1,18 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * E2E coverage for the Phase B.A.1 annotation-campaign fullstack flow
- * (PR follow-up to #238 — web side of #222).
+ * E2E coverage for the annotation-campaign create flow.
  *
- * What this exercises end-to-end against the running local stack:
- *   - Header gating: anonymous / non-campaign-manager users do not see
- *     the "New campaign" link.
- *   - /annotation/campaigns list — flat read, empty state copy + create
- *     CTA for authorised users.
- *   - /annotation/campaigns/new — server action POST
- *     /v2/annotation/campaigns. Uses the seeded `monai-label` /
- *     `ohif-viewer` integrations populated by the migration; the form
- *     fetches `/v2/annotation/tool-integrations` server-side.
- *   - Redirect to detail page on success + assertion the configuration
- *     card surfaces the values the user typed.
- *   - Slug-conflict path — 409 surfaces inline.
+ * Form layout (user feedback 2026-05-16):
+ *   1. slug + name + description
+ *   2. **task kind**          ← drives the tool filter
+ *   3. **dataset picker**     ← typeahead against the catalog
+ *   4. tool                   ← filtered by `supportedTaskKinds`
+ *   5. nAnnotators + outputLicense
+ *
+ * Header simplification (also 2026-05-16): "New dataset" + "New
+ * campaign" are no longer in the primary nav; those CTAs live on the
+ * relevant list pages and (for campaigns) on the catalog detail page.
  *
  * Pre-conditions (the runner does not bring these up):
  *   - docker compose -f infra/local/docker-compose.yml up -d
@@ -24,7 +21,8 @@ import { test, expect, type Page } from '@playwright/test';
  *   - pnpm --filter @oci/web dev    (web on :3001)
  */
 
-const DATASET_UUID = '00000000-0000-4000-8000-00000000ca7a';
+/** Seed-data slug — PUBLIC, visible to all roles. */
+const SEED_DATASET_SLUG = 'rsna-pneumonia-2018';
 
 async function signInAs(page: Page, user: string, roles: string) {
   await page.goto('/signin?callbackUrl=%2Fdashboard');
@@ -34,69 +32,105 @@ async function signInAs(page: Page, user: string, roles: string) {
   await expect(page).toHaveURL(/\/(dashboard)?$/);
 }
 
-test.describe('annotation campaign workflow', () => {
-  test('anonymous visitor sees no "New campaign" link in primary nav', async ({ page }) => {
-    await page.goto('/');
+/**
+ * `<select>.selectOption({ label })` only accepts exact strings, not
+ * regexes. Resolve the option's value by name then submit.
+ */
+async function selectToolByName(page: Page, namePrefix: string) {
+  const select = page.getByLabel('Annotation tool');
+  const value = await select
+    .locator('option', { hasText: namePrefix })
+    .first()
+    .getAttribute('value');
+  if (!value) throw new Error(`No tool option matching "${namePrefix}"`);
+  await select.selectOption(value);
+}
+
+/** Pick a dataset via the typeahead. */
+async function pickDataset(page: Page, query: string) {
+  await page.getByLabel('Dataset').fill(query);
+  // Wait for the listbox + click the first match.
+  const listbox = page.locator('#dataset-picker-listbox');
+  await expect(listbox).toBeVisible();
+  await listbox.getByRole('option').first().click();
+  // After picking, the "Change" button appears next to the selected
+  // row — assert that to confirm the hidden datasetId got set.
+  await expect(page.getByRole('button', { name: /change dataset/i })).toBeVisible();
+}
+
+test.describe('annotation campaign — header + form', () => {
+  test('primary nav no longer carries "New dataset" or "New campaign"', async ({ page }) => {
+    await signInAs(page, 'cm', 'campaign-manager');
     const nav = page.getByRole('navigation', { name: 'Primary' });
     await expect(nav.getByRole('link', { name: 'New campaign' })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: 'New dataset' })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: 'Annotation' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Catalog' })).toBeVisible();
   });
 
-  test('participant cannot see "New campaign" link in primary nav', async ({ page }) => {
-    await signInAs(page, 'eve', 'participant');
-    const nav = page.getByRole('navigation', { name: 'Primary' });
-    await expect(nav.getByRole('link', { name: 'New campaign' })).toHaveCount(0);
-  });
-
-  test('campaign manager: create draft + appears in list + detail surfaces values', async ({
-    page,
-  }) => {
+  test('campaign manager: full create flow with dataset typeahead', async ({ page }) => {
     const slug = `e2e-campaign-${Date.now()}`;
     await signInAs(page, 'cm', 'campaign-manager');
 
-    // Header campaign-manager link is visible. The list page renders a
-    // second "New campaign" CTA in its empty state — scope to the primary
-    // nav to disambiguate.
-    const nav = page.getByRole('navigation', { name: 'Primary' });
-    const newLink = nav.getByRole('link', { name: 'New campaign' });
-    await expect(newLink).toBeVisible();
-
-    // Visit the list first — empty state or existing list. Either way
-    // the page renders cleanly with the header CTA.
     await page.goto('/annotation/campaigns');
     await expect(page.getByRole('heading', { name: 'Campaigns', exact: true })).toBeVisible();
 
-    await newLink.click();
+    // List page surfaces a "New campaign" CTA for managers (header was removed).
+    await page.getByRole('link', { name: 'New campaign' }).first().click();
     await expect(page).toHaveURL(/\/annotation\/campaigns\/new$/);
 
-    // -- Create draft ------------------------------------------------------
+    // -- Identity --------------------------------------------------------
     await page.getByLabel('Slug').fill(slug);
     await page.getByLabel('Name').fill(`E2E ${slug}`);
     await page
       .getByLabel('Description')
       .fill('Campaign created by Playwright E2E for the annotation track.');
-    await page.getByLabel('Dataset ID').fill(DATASET_UUID);
 
-    // Pick segmentation so we can assert the label on detail.
-    await page.getByRole('radio', { name: 'Segmentation' }).check();
+    // -- Task kind first -------------------------------------------------
+    // Pick CLASSIFICATION so both seeded tools qualify (monai-label +
+    // ohif-viewer both list CLASSIFICATION in supportedTaskKinds).
+    await page.getByRole('radio', { name: 'Classification' }).check();
 
-    // Bump nAnnotators to 5 (clinically defensible for safety-critical
-    // tasks per ADR-0009) so we can assert the value on detail.
-    const nField = page.getByLabel('Annotators per data point');
-    await nField.fill('5');
+    // -- Dataset picker --------------------------------------------------
+    await pickDataset(page, SEED_DATASET_SLUG);
+
+    // -- Tool dropdown is filtered by task kind --------------------------
+    const tool = page.getByLabel('Annotation tool');
+    await expect(tool).toBeEnabled();
+    // The placeholder option + at least one real option.
+    await expect(tool.locator('option')).toContainText(['MONAI Label']);
+    await selectToolByName(page, 'MONAI Label');
+
+    await page.getByLabel('Annotators per data point').fill('5');
 
     await page.getByRole('button', { name: /create draft/i }).click();
 
     // Redirected to detail page on success.
     await expect(page).toHaveURL(new RegExp(`/annotation/campaigns/${slug}$`));
     await expect(page.getByRole('heading', { name: `E2E ${slug}` })).toBeVisible();
-    await expect(page.getByText('draft', { exact: false })).toBeVisible();
-    await expect(page.getByText('Segmentation')).toBeVisible();
-    await expect(page.getByText('5', { exact: true })).toBeVisible();
+    await expect(page.getByText('Classification')).toBeVisible();
+  });
 
-    // -- Back to list: new campaign appears -------------------------------
-    await page.getByRole('link', { name: /campaigns$/i }).click();
-    await expect(page).toHaveURL(/\/annotation\/campaigns$/);
-    await expect(page.getByRole('link', { name: new RegExp(`E2E ${slug}`) })).toBeVisible();
+  test('task-kind change re-filters the tool list (defence-in-depth)', async ({ page }) => {
+    await signInAs(page, 'cm', 'campaign-manager');
+    await page.goto('/annotation/campaigns/new');
+
+    // No task kind yet → tool select is disabled with placeholder.
+    const tool = page.getByLabel('Annotation tool');
+    await expect(tool).toBeDisabled();
+
+    // Pick SEGMENTATION — monai-label supports it, ohif-viewer does NOT.
+    await page.getByRole('radio', { name: 'Segmentation' }).check();
+    await expect(tool).toBeEnabled();
+    const segmentationOptions = await tool.locator('option').allTextContents();
+    expect(segmentationOptions.some((s) => /MONAI Label/.test(s))).toBe(true);
+    expect(segmentationOptions.some((s) => /OHIF Viewer/.test(s))).toBe(false);
+
+    // Switch to DETECTION — ohif-viewer supports it, monai-label does NOT.
+    await page.getByRole('radio', { name: 'Detection' }).check();
+    const detectionOptions = await tool.locator('option').allTextContents();
+    expect(detectionOptions.some((s) => /OHIF Viewer/.test(s))).toBe(true);
+    expect(detectionOptions.some((s) => /MONAI Label/.test(s))).toBe(false);
   });
 
   test('campaign manager: slug conflict surfaces inline', async ({ page }) => {
@@ -107,8 +141,9 @@ test.describe('annotation campaign workflow', () => {
     await page.goto('/annotation/campaigns/new');
     await page.getByLabel('Slug').fill(slug);
     await page.getByLabel('Name').fill('First');
-    await page.getByLabel('Dataset ID').fill(DATASET_UUID);
     await page.getByRole('radio', { name: 'Classification' }).check();
+    await pickDataset(page, SEED_DATASET_SLUG);
+    await selectToolByName(page, 'MONAI Label');
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page).toHaveURL(new RegExp(`/annotation/campaigns/${slug}$`));
 
@@ -116,9 +151,31 @@ test.describe('annotation campaign workflow', () => {
     await page.goto('/annotation/campaigns/new');
     await page.getByLabel('Slug').fill(slug);
     await page.getByLabel('Name').fill('Duplicate');
-    await page.getByLabel('Dataset ID').fill(DATASET_UUID);
     await page.getByRole('radio', { name: 'Classification' }).check();
+    await pickDataset(page, SEED_DATASET_SLUG);
+    await selectToolByName(page, 'MONAI Label');
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page.getByText(/already taken/i)).toBeVisible();
+  });
+
+  test('catalog dataset detail surfaces "Create annotation campaign" for managers + pre-fills the form', async ({
+    page,
+  }) => {
+    await signInAs(page, 'cm', 'campaign-manager');
+
+    await page.goto(`/catalog/${SEED_DATASET_SLUG}`);
+    const cta = page.getByRole('link', { name: /create.*annotation campaign/i });
+    await expect(cta).toBeVisible();
+    await cta.click();
+
+    // We landed on the new-campaign page with the picker already populated.
+    await expect(page).toHaveURL(/\/annotation\/campaigns\/new\?datasetSlug=.*$/);
+    await expect(page.getByRole('button', { name: /change dataset/i })).toBeVisible();
+  });
+
+  test('participant (non-campaign-manager) does NOT see the catalog CTA', async ({ page }) => {
+    await signInAs(page, 'eve', 'participant');
+    await page.goto(`/catalog/${SEED_DATASET_SLUG}`);
+    await expect(page.getByRole('link', { name: /create.*annotation campaign/i })).toHaveCount(0);
   });
 });
