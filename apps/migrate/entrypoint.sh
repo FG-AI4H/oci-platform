@@ -25,18 +25,40 @@ export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD_ENC}@${DB_HOST}:$
 echo "migrate: running prisma migrate deploy"
 npx --no-install prisma migrate deploy
 
-# Demo-data seed (#241 follow-up). Skipped in prod because the file
-# uses fake created_by_id values + placeholder dataset rows that don't
-# belong in a production catalogue. CDK MigrateTaskDef passes OCI_ENV
-# straight from the stack's envName.
-if [ -n "${OCI_ENV:-}" ] && [ "${OCI_ENV}" != "prod" ] && [ -f ./seed/demo.sql ]; then
-  echo "seed: OCI_ENV=${OCI_ENV} — replaying demo-data seed (./seed/demo.sql)"
-  # `prisma db execute --file` runs raw SQL through the same engine
-  # binary that migrate uses — no extra runtime dependency needed.
-  npx --no-install prisma db execute \
-    --url "${DATABASE_URL}" \
-    --file ./seed/demo.sql
-  echo "seed: done"
+# Demo-data seed (#249, #251). Skipped in prod because the seed
+# references fake created_by_id values + placeholder dataset rows that
+# don't belong in a production catalogue. CDK MigrateTaskDef passes
+# OCI_ENV straight from the stack's envName.
+if [ -n "${OCI_ENV:-}" ] && [ "${OCI_ENV}" != "prod" ]; then
+  # Step 1 — upload bundled fixture files (#251). Walks every
+  # `./seed/fixtures/<slug>/` directory, reads `manifest.json`, and
+  # PUTs each FileObject file to s3://${OCI_DATASETS_BUCKET}/<slug>/
+  # <distribution-@id>/<filename>. Idempotent via HEAD-check.
+  if [ -f ./upload-fixtures.mjs ] && [ -n "${OCI_DATASETS_BUCKET:-}" ]; then
+    echo "seed: uploading bundled fixtures to s3://${OCI_DATASETS_BUCKET}"
+    node ./upload-fixtures.mjs
+  else
+    echo "seed: skipping fixture upload (OCI_DATASETS_BUCKET=${OCI_DATASETS_BUCKET:-unset})"
+  fi
+
+  # Step 2 — replay the SQL seed. References the keys the upload
+  # step just wrote to, so the dataset rows + S3 bytes stay in sync.
+  if [ -f ./seed/demo.sql ]; then
+    echo "seed: OCI_ENV=${OCI_ENV} — replaying demo-data seed (./seed/demo.sql)"
+    # Prepend a `SET` for the bucket-name GUC the OCI-demo section
+    # reads — keeps the SQL self-contained while letting the
+    # per-environment bucket flow in from the task env.
+    SEED_SCRIPT=$(mktemp)
+    {
+      echo "SET app.datasets_bucket = '${OCI_DATASETS_BUCKET:-oci-datasets-local}';"
+      cat ./seed/demo.sql
+    } > "${SEED_SCRIPT}"
+    npx --no-install prisma db execute \
+      --url "${DATABASE_URL}" \
+      --file "${SEED_SCRIPT}"
+    rm -f "${SEED_SCRIPT}"
+    echo "seed: done"
+  fi
 else
   echo "seed: OCI_ENV=${OCI_ENV:-unset} — skipping demo-data seed"
 fi

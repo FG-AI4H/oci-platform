@@ -391,6 +391,13 @@ export class ApiStack extends cdk.Stack {
         environment: {
           NODE_ENV: 'production',
           OCI_ENV: props.cfg.envName,
+          // Required for the demo-data fixture upload step in
+          // `apps/migrate/entrypoint.sh` (#251) — uploads the bundled
+          // PNGs to the datasets bucket on dev/int. The entrypoint
+          // short-circuits the upload when OCI_ENV=prod, so the env
+          // var is harmless on prod but useful to keep parameterised.
+          OCI_DATASETS_BUCKET: props.datasetsBucket.bucketName,
+          AWS_REGION: this.region,
         },
         secrets: {
           DB_USERNAME: ecs.Secret.fromSecretsManager(dbSecret, 'username'),
@@ -404,6 +411,43 @@ export class ApiStack extends cdk.Stack {
           logGroup: props.logGroup,
         }),
       });
+
+      // S3 + KMS perms for the demo-data fixture upload (#251). The
+      // entrypoint runs `apps/migrate/upload-fixtures.mjs` after
+      // `prisma migrate deploy` on non-prod environments; that script
+      // HEAD-checks then PUTs each bundled PNG. `grantReadWrite`
+      // covers PutObject + HeadObject + the KMS GenerateDataKey/
+      // Decrypt calls the SDK transparently makes against the
+      // bucket's CMK during SSE-KMS PUTs. Production calls are
+      // skipped by the entrypoint's OCI_ENV gate, but the IAM grant
+      // is unconditional — keeps the task definition shape stable
+      // across envs.
+      props.datasetsBucket.grantReadWrite(migrateTaskDef.taskRole);
+
+      // Same cdk-nag IAM5 suppression as the API task role above —
+      // `grantReadWrite` synthesises wildcards on the bucket + CMK
+      // that are the standard CDK shape, scoped to one bucket only.
+      NagSuppressions.addResourceSuppressionsByPath(
+        this,
+        `/${this.stackName}/MigrateTaskDef/TaskRole/DefaultPolicy/Resource`,
+        [
+          {
+            id: 'AwsSolutions-IAM5',
+            reason:
+              'S3 action wildcards from `bucket.grantReadWrite()` on the migrate task role. Needed for the demo-data fixture upload (#251) on non-prod environments. Scoped to one bucket + its CMK.',
+            appliesTo: [
+              'Action::s3:GetObject*',
+              'Action::s3:GetBucket*',
+              'Action::s3:List*',
+              'Action::s3:DeleteObject*',
+              'Action::s3:Abort*',
+              'Action::kms:ReEncrypt*',
+              'Action::kms:GenerateDataKey*',
+              { regex: '/^Resource::<DatasetsBucket.*\\.Arn>\\/\\*$/' },
+            ],
+          },
+        ],
+      );
 
       // Cross-account ECR pull for the GuardDuty Runtime Monitoring agent.
       grantGuardDutyAgentEcrPull(migrateTaskDef);
