@@ -272,17 +272,16 @@ export default async function DatasetDetailPage({
         <Section spacing="md" className="space-y-8">
           <Card>
             <CardHeader>
-              <CardTitle>Manifest</CardTitle>
+              <CardTitle>About this dataset</CardTitle>
               <CardDescription>
-                Croissant {detail.conformanceVersion ?? ''} manifest. <strong>Summary</strong> shows
-                the curated highlights; <strong>Full manifest</strong> renders every populated field
-                grouped by namespace; <strong>Raw JSON</strong> is the collapsible tree. Standalone
-                JSON-LD:{' '}
+                <strong>Summary</strong> is a curated overview; <strong>Full manifest</strong> lists
+                every field the host has published; <strong>Raw</strong> is the underlying record.
+                Download the standalone manifest:{' '}
                 <Link
                   className="font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)]"
                   href={`/catalog/${detail.slug}/croissant`}
                 >
-                  download
+                  croissant.json
                 </Link>
                 .
               </CardDescription>
@@ -427,12 +426,10 @@ export default async function DatasetDetailPage({
           {detail.distributions.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Distributions</CardTitle>
+                <CardTitle>Files</CardTitle>
                 <CardDescription>
-                  Files in the latest version. <em>Platform-hosted</em> entries stream from our S3
-                  via short-lived presigned URLs — the link below goes through the access gate.{' '}
-                  <em>Upstream</em> entries point at the original host (e.g. Grand Challenge) and
-                  the platform references rather than mirrors them.
+                  Files in the latest version. <em>Hosted</em> entries are served by OCI;{' '}
+                  <em>upstream</em> entries are kept by the original publisher and we link to them.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
