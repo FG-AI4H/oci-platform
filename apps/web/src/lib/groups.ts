@@ -60,6 +60,18 @@ export function isAdmin(session: Session | null | undefined): boolean {
 }
 
 /**
+ * True when the caller can create annotation campaigns. Mirrors the
+ * server-side guard in `AnnotationRolesGuard`: `campaign-manager` is
+ * the principal role; `admin` is the operator override. Phase B.A.1
+ * still reads Cognito groups directly — visa-backed Annotation Visa
+ * checks land with the queue endpoints (#215).
+ */
+export function isCampaignManager(session: Session | null | undefined): boolean {
+  const groups = userGroups(session);
+  return groups.includes('campaign-manager') || groups.includes('admin');
+}
+
+/**
  * Server-side guard for host-only routes. Redirects unauthenticated
  * callers to the home page (sign-in CTA) and authenticated non-hosts
  * to /dashboard. Use at the top of a Server Component:
@@ -86,6 +98,17 @@ export function requireAdmin(session: Session | null | undefined): Session {
     redirect('/');
   }
   if (!isAdmin(session)) {
+    redirect('/dashboard');
+  }
+  return session;
+}
+
+/** Server-side guard for /annotation/campaigns/new (campaign-manager only). */
+export function requireCampaignManager(session: Session | null | undefined): Session {
+  if (!session?.user) {
+    redirect('/');
+  }
+  if (!isCampaignManager(session)) {
     redirect('/dashboard');
   }
   return session;

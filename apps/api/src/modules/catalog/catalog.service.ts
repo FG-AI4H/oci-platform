@@ -20,6 +20,7 @@ import type {
   PublishDatasetVersionRequest,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
+import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { CatalogRepository } from './catalog.repository.js';
 
 /**
@@ -453,53 +454,6 @@ function decodeCursor(cursor: string): CursorPayload {
   } catch {
     throw new BadRequestException('invalid cursor');
   }
-}
-
-/**
- * Map a Cognito `sub` to a local UUID used as `identity.users.id`.
- *
- * In production Cognito subs ARE UUIDs, so we pass them through. In
- * local dev (and any other environment that exposes a non-UUID sub —
- * federated IdPs, dev stubs) we derive a deterministic UUIDv5 from
- * the sub via SHA-1 + a fixed namespace. The result is stable across
- * requests and across processes, so two host actions from the same
- * principal converge on the same row.
- *
- * Phase B follow-up: once a post-confirmation Cognito Lambda
- * populates `identity.users (cognito_id, …)`, swap this for a real
- * lookup against that table. The deterministic-UUID derivation stays
- * useful for the upsert key.
- */
-const SUB_NAMESPACE_UUID = 'a4f1c8b2-7d3e-5b9c-9f0a-3c8d4e5f6a7b';
-
-function cognitoSubAsUuid(sub: string): string {
-  if (/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(sub)) {
-    return sub.toLowerCase();
-  }
-  return uuidV5(sub, SUB_NAMESPACE_UUID);
-}
-
-/**
- * RFC 4122 §4.3 name-based UUID (v5, SHA-1). Tiny inline impl so we
- * don't pull in the `uuid` package just for this one call.
- *
- * Steps:
- *   1. Concatenate the namespace bytes (16) and the name bytes.
- *   2. SHA-1 the concatenation.
- *   3. Take the first 16 bytes; set the version (5) and variant
- *      (RFC 4122) bits per the spec.
- *   4. Format as 8-4-4-4-12 hex.
- */
-function uuidV5(name: string, namespace: string): string {
-  const nsBytes = Buffer.from(namespace.replace(/-/g, ''), 'hex');
-  const hash = createHash('sha1').update(nsBytes).update(Buffer.from(name, 'utf8')).digest();
-  const bytes = Buffer.from(hash.subarray(0, 16));
-  // RFC 4122 v5: set bits 12–15 of time_hi_and_version to 0101.
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
-  // Variant: set bits 6–7 of clock_seq_hi_and_reserved to 10.
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-  const hex = bytes.toString('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
 interface ExtractedDistribution {
