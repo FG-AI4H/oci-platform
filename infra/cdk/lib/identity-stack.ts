@@ -234,105 +234,196 @@ export class IdentityStack extends cdk.Stack {
  * `packages/ui/src/theme.css`) so the hosted sign-in page reads as a
  * continuation of the rest of the app.
  *
- * Cognito accepts a deeply-nested settings object where every leaf is
- * either a `valueType` + `value` pair (for primitives) or a typed
- * object. The shape is documented at
- * https://docs.aws.amazon.com/cognito/latest/developerguide/managed-login-branding-designer.html
- * — categories surface common knobs (brand colour, foreground,
- * components.form.backgroundColor, …). We keep this minimal: brand
- * palette + Inter font; the rest stays at Cognito defaults so the
- * page still feels native rather than over-customised.
+ * The shape matches the request body of `CreateManagedLoginBranding`
+ * (see the API reference + example output of
+ * `DescribeManagedLoginBrandingByClient`). Three top-level keys:
  *
- * Light + dark variants are both supplied so the page honours the
- * visitor's colour-scheme preference, same as the rest of the app.
+ *   - `categories`  — Foundation settings (global mode, auth, form,
+ *     sign-up). Form colors do **not** live here; they live under
+ *     `components.form`.
+ *   - `componentClasses` — shared styling for primitives reused across
+ *     components (buttons border radius, input, link colours, …).
+ *   - `components` — per-component styling (form container, page
+ *     background / header / footer, primaryButton, secondaryButton,
+ *     idpButton, pageText, …).
+ *
+ * Light + dark variants live **inside each component** as
+ * `lightMode` / `darkMode` keys (NOT as a top-level `darkMode`
+ * sibling). Cognito flips between them based on
+ * `categories.global.colorSchemeMode` (`LIGHT` / `DARK` /
+ * `BROWSER_ADAPTIVE`).
+ *
+ * Colours are 8-character lowercase hex with alpha (`ff` = opaque),
+ * **without** the `#` prefix. `borderRadius` is a JSON number, not a
+ * string.
  *
  * IMPORTANT: changing the values requires re-deploying the stack;
  * Cognito holds the snapshot per (user-pool, app-client) and serves
  * it on the hosted page. There's no separate cache to purge.
  */
 function ociBrandingSettings(): Record<string, unknown> {
-  // Colours from packages/ui/src/theme.css (oklch in app source;
-  // hex equivalents here for Cognito's parser).
+  // OCI palette — hex without `#`, alpha = ff. Sourced from
+  // packages/ui/src/theme.css (oklch in app source; hex equivalents
+  // here for Cognito's parser).
   const oci = {
-    primary: '#0F766E', // teal-700
-    primaryHover: '#0E5E58',
-    foreground: '#0A1F2C',
-    background: '#FFFFFF',
-    card: '#FFFFFF',
-    border: '#D0DBE3',
-    mutedForeground: '#4D6577',
-    danger: '#B91C1C',
+    primary: '0f766eff', // teal-700
+    primaryHover: '0e5e58ff',
+    primaryActive: '0c4d48ff',
+    onPrimary: 'ffffffff',
+    foreground: '0a1f2cff',
+    background: 'ffffffff',
+    card: 'ffffffff',
+    border: 'd0dbe3ff',
+    borderStrong: 'a6b8c5ff',
+    mutedForeground: '4d6577ff',
+    subtle: 'f4f7f9ff',
+    danger: 'b91c1cff',
     // Dark scheme — matches the app's data-theme="dark" set.
-    darkForeground: '#E6EFF5',
-    darkBackground: '#0A1F2C',
-    darkCard: '#102A38',
-    darkBorder: '#1F3949',
-    darkMutedForeground: '#A6B8C5',
-    darkPrimary: '#2DD4BF',
+    darkForeground: 'e6eff5ff',
+    darkBackground: '0a1f2cff',
+    darkCard: '102a38ff',
+    darkBorder: '1f3949ff',
+    darkMutedForeground: 'a6b8c5ff',
+    darkPrimary: '2dd4bfff',
+    darkPrimaryHover: '5eead4ff',
+    darkOnPrimary: '0a1f2cff',
   };
 
   return {
     categories: {
-      global: {
-        colorSchemeMode: 'LIGHT', // default — visitor's prefers-color-scheme upgrades to DARK
-      },
       auth: {
-        // Hide the "powered by Amazon Cognito" footer if the env lets
-        // us; Cognito still requires showing it in some regions, so we
-        // omit the override rather than fight the platform.
+        authMethodOrder: [
+          [
+            { display: 'INPUT', type: 'USERNAME_PASSWORD' },
+            { display: 'BUTTON', type: 'FEDERATED' },
+          ],
+        ],
+        federation: { interfaceStyle: 'BUTTON_LIST', order: [] },
       },
       form: {
+        displayGraphics: true,
         location: { horizontal: 'CENTER', vertical: 'CENTER' },
-        backgroundColor: oci.card,
-        backgroundImage: { enabled: false },
-        borderColor: oci.border,
-        borderRadius: '8',
+        sessionTimerDisplay: 'NONE',
       },
-      pageBackground: {
-        color: oci.background,
-        image: { enabled: false },
-      },
-      pageHeader: {
-        backgroundColor: oci.background,
-        textColor: oci.foreground,
-      },
-      pageFooter: {
-        backgroundColor: oci.background,
-        textColor: oci.mutedForeground,
-      },
-      buttons: {
-        primary: {
-          backgroundColor: oci.primary,
-          textColor: '#FFFFFF',
-          hoverBackgroundColor: oci.primaryHover,
-          borderRadius: '6',
-        },
-      },
-      links: {
-        color: oci.primary,
-        hoverColor: oci.primaryHover,
-      },
-      darkMode: {
-        pageBackground: { color: oci.darkBackground },
-        pageHeader: { backgroundColor: oci.darkBackground, textColor: oci.darkForeground },
-        pageFooter: { backgroundColor: oci.darkBackground, textColor: oci.darkMutedForeground },
-        form: {
-          backgroundColor: oci.darkCard,
-          borderColor: oci.darkBorder,
-        },
-        buttons: {
-          primary: {
-            backgroundColor: oci.darkPrimary,
-            textColor: oci.darkBackground,
-          },
-        },
-        links: { color: oci.darkPrimary },
+      global: {
+        // BROWSER_ADAPTIVE lets the visitor's prefers-color-scheme
+        // pick light vs dark — same behaviour as the rest of the app.
+        colorSchemeMode: 'BROWSER_ADAPTIVE',
+        spacingDensity: 'REGULAR',
+        pageHeader: { enabled: false },
+        pageFooter: { enabled: false },
       },
     },
     componentClasses: {
-      buttons: { borderRadius: '6' },
-      inputDescription: { textColor: oci.mutedForeground },
-      input: { borderRadius: '6', borderColor: oci.border },
+      buttons: { borderRadius: 6.0 },
+      input: {
+        borderRadius: 6.0,
+        lightMode: { defaults: { backgroundColor: oci.card, borderColor: oci.border } },
+        darkMode: {
+          defaults: { backgroundColor: oci.darkCard, borderColor: oci.darkBorder },
+        },
+      },
+      inputLabel: {
+        lightMode: { textColor: oci.foreground },
+        darkMode: { textColor: oci.darkForeground },
+      },
+      inputDescription: {
+        lightMode: { textColor: oci.mutedForeground },
+        darkMode: { textColor: oci.darkMutedForeground },
+      },
+      link: {
+        lightMode: {
+          defaults: { textColor: oci.primary },
+          hover: { textColor: oci.primaryHover },
+        },
+        darkMode: {
+          defaults: { textColor: oci.darkPrimary },
+          hover: { textColor: oci.darkPrimaryHover },
+        },
+      },
+      focusState: {
+        lightMode: { borderColor: oci.primary },
+        darkMode: { borderColor: oci.darkPrimary },
+      },
+      divider: {
+        lightMode: { borderColor: oci.border },
+        darkMode: { borderColor: oci.darkBorder },
+      },
+    },
+    components: {
+      pageBackground: {
+        image: { enabled: false },
+        lightMode: { color: oci.background },
+        darkMode: { color: oci.darkBackground },
+      },
+      form: {
+        borderRadius: 8.0,
+        backgroundImage: { enabled: false },
+        lightMode: { backgroundColor: oci.card, borderColor: oci.border },
+        darkMode: { backgroundColor: oci.darkCard, borderColor: oci.darkBorder },
+      },
+      pageText: {
+        lightMode: {
+          headingColor: oci.foreground,
+          bodyColor: oci.foreground,
+          descriptionColor: oci.mutedForeground,
+        },
+        darkMode: {
+          headingColor: oci.darkForeground,
+          bodyColor: oci.darkForeground,
+          descriptionColor: oci.darkMutedForeground,
+        },
+      },
+      primaryButton: {
+        lightMode: {
+          defaults: { backgroundColor: oci.primary, textColor: oci.onPrimary },
+          hover: { backgroundColor: oci.primaryHover, textColor: oci.onPrimary },
+          active: { backgroundColor: oci.primaryActive, textColor: oci.onPrimary },
+          disabled: { backgroundColor: oci.subtle, borderColor: oci.border },
+        },
+        darkMode: {
+          defaults: { backgroundColor: oci.darkPrimary, textColor: oci.darkOnPrimary },
+          hover: { backgroundColor: oci.darkPrimaryHover, textColor: oci.darkOnPrimary },
+          active: { backgroundColor: oci.darkPrimary, textColor: oci.darkOnPrimary },
+          disabled: { backgroundColor: oci.darkCard, borderColor: oci.darkBorder },
+        },
+      },
+      secondaryButton: {
+        lightMode: {
+          defaults: {
+            backgroundColor: oci.card,
+            borderColor: oci.primary,
+            textColor: oci.primary,
+          },
+          hover: {
+            backgroundColor: oci.subtle,
+            borderColor: oci.primaryHover,
+            textColor: oci.primaryHover,
+          },
+          active: {
+            backgroundColor: oci.subtle,
+            borderColor: oci.primaryActive,
+            textColor: oci.primaryActive,
+          },
+        },
+        darkMode: {
+          defaults: {
+            backgroundColor: oci.darkCard,
+            borderColor: oci.darkPrimary,
+            textColor: oci.darkPrimary,
+          },
+          hover: {
+            backgroundColor: oci.darkBorder,
+            borderColor: oci.darkPrimaryHover,
+            textColor: oci.darkPrimaryHover,
+          },
+          active: {
+            backgroundColor: oci.darkBorder,
+            borderColor: oci.darkPrimary,
+            textColor: oci.darkPrimary,
+          },
+        },
+      },
     },
   };
 }
