@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type {
@@ -10,6 +12,7 @@ import type {
   CampaignDetail,
   CampaignSummary,
   CampaignOutputLicense,
+  CampaignTransitionAction,
   CreateCampaignRequest,
   ListCampaignsResponse,
 } from '@oci/shared-types';
@@ -20,6 +23,7 @@ import type {
   CampaignOutputLicense as PrismaOutputLicense,
 } from '@oci/database';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
+import { lookupTransition } from './campaign-state-machine.js';
 import { CampaignRepository } from './campaign.repository.js';
 
 /**
@@ -30,6 +34,8 @@ import { CampaignRepository } from './campaign.repository.js';
  */
 @Injectable()
 export class CampaignService {
+  private readonly logger = new Logger(CampaignService.name);
+
   // `emitDecoratorMetadata` does not surface constructor parameter types
   // to Nest's reflector, so type-only injection silently passes
   // `undefined`. The explicit token works in both tsx and tsc paths.
@@ -105,6 +111,85 @@ export class CampaignService {
     return this.toDetail(created, created.toolIntegration);
   }
 
+  /**
+   * Drive the campaign lifecycle state machine (#215, slice 1).
+   *
+   * The state-machine module owns the (current-status, action) → rule
+   * mapping; this method enforces the rule against the live row, runs
+   * action-specific pre-flight checks, writes the new status (+
+   * denormalised `startedAt` / `completedAt`), and emits a structured
+   * log line for the audit feed. A dedicated transition-history table
+   * arrives in slice 2 of this issue.
+   */
+  async transition(
+    slug: string,
+    action: CampaignTransitionAction,
+    reason: string | undefined,
+    user: CognitoAccessTokenPayload,
+  ): Promise<CampaignDetail> {
+    const row = await this.repo.findBySlug(slug);
+    if (!row) throw new NotFoundException(`Campaign '${slug}' not found`);
+
+    const rule = lookupTransition(row.status, action);
+    if (!rule) {
+      throw new BadRequestException(
+        `Action '${action}' is not allowed from status '${row.status}'`,
+      );
+    }
+
+    if (rule.reasonRequired && (!reason || reason.trim().length === 0)) {
+      throw new BadRequestException(`Action '${action}' requires a non-empty reason`);
+    }
+
+    // Action-specific pre-flight. Lives here rather than the matrix
+    // because each check depends on row-shape, not just status.
+    await this.preFlight(action, row);
+
+    const updated = await this.repo.updateStatus({
+      id: row.id,
+      nextStatus: rule.to,
+      stampStartedAt: rule.stampStartedAt,
+      stampCompletedAt: rule.stampCompletedAt,
+    });
+
+    this.logger.log(
+      `campaign-transition slug=${slug} ${row.status}→${rule.to} action=${action} actor=${user.sub}` +
+        (reason ? ` reason="${reason.replace(/"/g, '\\"')}"` : ''),
+    );
+
+    return this.toDetail(updated, updated.toolIntegration);
+  }
+
+  /**
+   * Per-action invariants that can be checked from the row alone.
+   * Task-touching checks (e.g. "all tasks done before `complete`") land
+   * in slice 2 once the task model exists.
+   */
+  private async preFlight(
+    action: CampaignTransitionAction,
+    row: AnnotationCampaign & { toolIntegration: AnnotationToolIntegration },
+  ): Promise<void> {
+    if (action === 'mark-ready') {
+      // Re-validate the surfaces that already had to be valid at
+      // create-time. They could have drifted (e.g. tool integration
+      // deactivated) between DRAFT creation and now.
+      if (!row.toolIntegration.isActive) {
+        throw new ForbiddenException(
+          `Tool integration '${row.toolIntegration.slug}' is no longer active`,
+        );
+      }
+      const wf = row.workflowConfig as { nAnnotators?: number } | null;
+      const n = wf?.nAnnotators ?? 0;
+      if (n < 1 || n > 12) {
+        throw new BadRequestException(`workflowConfig.nAnnotators must be in [1, 12]; got ${n}`);
+      }
+    }
+    // start / complete / archive / revert-to-draft have no extra
+    // row-level checks in slice 1. Slice 2 wires the task-state
+    // invariants for `start` (at least one task) and `complete`
+    // (no in-flight tasks).
+  }
+
   // -------------------------------------------------------------------
   // Mappers — Prisma row → shared-types contract. Keep these in one
   // place so the contract is the only thing the controller depends on.
@@ -123,6 +208,8 @@ export class CampaignService {
       outputLicense: this.toContractLicense(row.outputLicense),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+      startedAt: row.startedAt ? row.startedAt.toISOString() : null,
+      completedAt: row.completedAt ? row.completedAt.toISOString() : null,
     };
   }
 

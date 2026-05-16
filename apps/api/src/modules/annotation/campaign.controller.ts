@@ -3,8 +3,10 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import {
   CampaignSlugSchema,
   CreateCampaignRequestSchema,
+  TransitionCampaignRequestSchema,
   type CampaignSlug,
   type CreateCampaignRequest,
+  type TransitionCampaignRequest,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
@@ -60,5 +62,27 @@ export class CampaignController {
     @CurrentUser() user: CognitoAccessTokenPayload,
   ) {
     return this.campaigns.create(body, user);
+  }
+
+  /**
+   * Drive the campaign lifecycle state machine (#215, slice 1).
+   * Returns the updated campaign detail; rejects illegal transitions
+   * with 400 and missing-reason requirements with 400.
+   */
+  @Post(':slug/transitions')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Transition a campaign through its lifecycle (campaign-manager only)',
+    description:
+      'Allowed actions: mark-ready, revert-to-draft, start, complete, archive. The reason field is required for revert-to-draft and for archive from RUNNING.',
+  })
+  @UseGuards(CognitoJwtGuard, AnnotationRolesGuard)
+  @AnnotationRoles('campaign-manager')
+  transition(
+    @Param('slug', new ZodPipe(CampaignSlugSchema)) slug: CampaignSlug,
+    @Body(new ZodPipe(TransitionCampaignRequestSchema)) body: TransitionCampaignRequest,
+    @CurrentUser() user: CognitoAccessTokenPayload,
+  ) {
+    return this.campaigns.transition(slug, body.action, body.reason, user);
   }
 }

@@ -74,4 +74,27 @@ export class CampaignRepository {
       include: { toolIntegration: true },
     });
   }
+
+  /**
+   * Transition the row to a new status, conditionally stamping
+   * `startedAt` / `completedAt`. The caller (service) is responsible
+   * for the state-machine guard; this repo just persists.
+   */
+  async updateStatus(args: {
+    id: string;
+    nextStatus: PrismaStatus;
+    stampStartedAt?: boolean;
+    stampCompletedAt?: boolean;
+  }): Promise<AnnotationCampaign & { toolIntegration: AnnotationToolIntegration }> {
+    const now = new Date();
+    return this.prisma.client.annotationCampaign.update({
+      where: { id: args.id },
+      data: {
+        status: args.nextStatus,
+        ...(args.stampStartedAt ? { startedAt: now } : {}),
+        ...(args.stampCompletedAt ? { completedAt: now } : {}),
+      },
+      include: { toolIntegration: true },
+    });
+  }
 }

@@ -12,9 +12,16 @@ import {
   DefinitionList,
   Section,
 } from '@oci/ui';
-import type { CampaignDetail, CampaignStatus, CampaignTaskKind } from '@oci/shared-types';
+import {
+  availableCampaignActions,
+  type CampaignDetail,
+  type CampaignStatus,
+  type CampaignTaskKind,
+} from '@oci/shared-types';
 import { auth } from '../../../../auth';
 import { apiFetch } from '../../../../lib/api';
+import { isCampaignManager } from '../../../../lib/groups';
+import { TransitionActions } from './transition-actions';
 
 const STATUS_TONE: Record<CampaignStatus, 'info' | 'primary' | 'success' | 'warning' | 'neutral'> =
   {
@@ -56,6 +63,8 @@ export default async function CampaignDetailPage({ params }: PageProps) {
   if (!detail) notFound();
 
   const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const canManage = isCampaignManager(session);
+  const actions = availableCampaignActions(detail.status);
 
   return (
     <Container size="md">
@@ -121,6 +130,17 @@ export default async function CampaignDetailPage({ params }: PageProps) {
           </Card>
         </div>
 
+        {canManage ? (
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Lifecycle</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TransitionActions slug={detail.slug} current={detail.status} actions={actions} />
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card className="mt-4">
           <CardHeader>
             <CardTitle>Audit</CardTitle>
@@ -137,6 +157,20 @@ export default async function CampaignDetailPage({ params }: PageProps) {
                   {dateFmt.format(new Date(detail.updatedAt))}
                 </time>
               </DefinitionItem>
+              {detail.startedAt ? (
+                <DefinitionItem term="Started">
+                  <time dateTime={detail.startedAt}>
+                    {dateFmt.format(new Date(detail.startedAt))}
+                  </time>
+                </DefinitionItem>
+              ) : null}
+              {detail.completedAt ? (
+                <DefinitionItem term="Completed">
+                  <time dateTime={detail.completedAt}>
+                    {dateFmt.format(new Date(detail.completedAt))}
+                  </time>
+                </DefinitionItem>
+              ) : null}
               <DefinitionItem term="Created by" mono>
                 {detail.createdById}
               </DefinitionItem>
