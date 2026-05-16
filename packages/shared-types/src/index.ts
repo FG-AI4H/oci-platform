@@ -1719,8 +1719,155 @@ export interface ListPolicyAcceptancesResponse {
   items: PolicyAcceptanceReceipt[];
 }
 
+// =============================================================================
+// Annotation module — Phase B.A.1 (ADR-0006..0012)
+// =============================================================================
+
+/**
+ * Campaign slug rules — same shape as DatasetSlugSchema. Lower-case
+ * alphanumerics + single hyphens, 3-80 chars. Campaign URLs share the
+ * ergonomic shape with the rest of the platform.
+ */
+export const CampaignSlugSchema = z
+  .string()
+  .min(3)
+  .max(80)
+  .regex(
+    /^[a-z0-9](?:[a-z0-9]|-(?=[a-z0-9]))*$/,
+    'slug must be lower-case alphanumerics with single hyphens, 3-80 chars',
+  );
+export type CampaignSlug = z.infer<typeof CampaignSlugSchema>;
+
+/**
+ * Campaign lifecycle states (ADR-0006 Decision 1). DRAFT → READY →
+ * RUNNING → COMPLETED → ARCHIVED. Phase B.A.1 only writes DRAFT; the
+ * full state machine is the E3 workflow engine (#215).
+ */
+export const CampaignStatusSchema = z.enum(['DRAFT', 'READY', 'RUNNING', 'COMPLETED', 'ARCHIVED']);
+export type CampaignStatus = z.infer<typeof CampaignStatusSchema>;
+
+/**
+ * Task kinds per ADR-0006. Future kinds (multimodal sub-variants, video,
+ * audio) land as the platform's modality coverage expands per ADR-0008.
+ */
+export const CampaignTaskKindSchema = z.enum([
+  'CLASSIFICATION',
+  'DETECTION',
+  'SEGMENTATION',
+  'LOCALIZATION',
+  'MULTI_MODAL',
+]);
+export type CampaignTaskKind = z.infer<typeof CampaignTaskKindSchema>;
+
+/**
+ * Output license per ADR-0012. SPDX identifier or `custom-restricted`.
+ * Per-tier defaults: OPEN/REGISTERED → CC-BY-4.0; CONTROLLED →
+ * CC-BY-NC-4.0; SENSITIVE → custom-restricted (must be explicitly
+ * specified). Immutable once campaign starts running.
+ */
+export const CampaignOutputLicenseSchema = z.enum([
+  'CC-BY-4.0',
+  'CC-BY-NC-4.0',
+  'CC-BY-SA-4.0',
+  'CC0-1.0',
+  'custom-restricted',
+]);
+export type CampaignOutputLicense = z.infer<typeof CampaignOutputLicenseSchema>;
+
+/**
+ * Workflow configuration (ADR-0009 Decisions 2 + 4). Phase B.A.1 only
+ * surfaces `nAnnotators`; IRR thresholds + gate config + experience-
+ * model knobs land as #216 (E4) ships.
+ */
+export const CampaignWorkflowConfigSchema = z.object({
+  /**
+   * Number of independent annotators at gate 1. Default 3; range [1,12]
+   * per ADR-0009 Decision 2. Values 8-12 require campaign-manager
+   * justification (recorded on the campaign — UI-side enforcement
+   * lands with #222).
+   */
+  nAnnotators: z.number().int().min(1).max(12).default(3),
+});
+export type CampaignWorkflowConfig = z.infer<typeof CampaignWorkflowConfigSchema>;
+
+/**
+ * Reference to the annotation-tool adapter the campaign uses. Phase
+ * B.A.1 ships a minimal `AnnotationToolIntegration` registry with
+ * seeded stub rows; the full contract + capability matrix lands as
+ * sub-epic #214 (ADR-0007).
+ */
+export const AnnotationToolIntegrationSummarySchema = z.object({
+  id: z.string().uuid(),
+  slug: z.string(),
+  name: z.string(),
+  vendor: z.string(),
+  /** Latest available version string (semver per ADR-0007). */
+  version: z.string(),
+});
+export type AnnotationToolIntegrationSummary = z.infer<
+  typeof AnnotationToolIntegrationSummarySchema
+>;
+
+/** Summary row returned by `GET /v2/annotation/campaigns`. */
+export const CampaignSummarySchema = z.object({
+  id: z.string().uuid(),
+  slug: CampaignSlugSchema,
+  name: z.string(),
+  description: z.string().nullable(),
+  status: CampaignStatusSchema,
+  taskKind: CampaignTaskKindSchema,
+  /** FK to catalog.datasets.id — set at creation, immutable per ADR-0006. */
+  datasetId: z.string().uuid(),
+  /** FK to annotation_tool_integrations.id — immutable once campaign runs. */
+  toolIntegrationId: z.string().uuid(),
+  /** Output license declared at creation (ADR-0012). */
+  outputLicense: CampaignOutputLicenseSchema,
+  createdAt: z.string(), // ISO 8601
+  updatedAt: z.string(),
+});
+export type CampaignSummary = z.infer<typeof CampaignSummarySchema>;
+
+/** Full detail returned by `GET /v2/annotation/campaigns/:slug`. */
+export const CampaignDetailSchema = CampaignSummarySchema.extend({
+  workflowConfig: CampaignWorkflowConfigSchema,
+  /** Joined tool-integration summary for display. */
+  toolIntegration: AnnotationToolIntegrationSummarySchema,
+  /** Manager id (FK identity.users.id). The user who created the campaign. */
+  createdById: z.string().uuid(),
+});
+export type CampaignDetail = z.infer<typeof CampaignDetailSchema>;
+
+/** `POST /v2/annotation/campaigns` — campaign-manager create. */
+export const CreateCampaignRequestSchema = z.object({
+  slug: CampaignSlugSchema,
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).nullable().optional(),
+  datasetId: z.string().uuid(),
+  toolIntegrationId: z.string().uuid(),
+  taskKind: CampaignTaskKindSchema,
+  workflowConfig: CampaignWorkflowConfigSchema.optional(),
+  /**
+   * Optional. When unset, the API derives the default from the
+   * dataset's access tier per ADR-0012 Decision 3 (OPEN/REGISTERED →
+   * CC-BY-4.0; CONTROLLED → CC-BY-NC-4.0; SENSITIVE → operator must
+   * specify, so this field becomes required at the API layer for
+   * SENSITIVE-tier datasets).
+   */
+  outputLicense: CampaignOutputLicenseSchema.optional(),
+});
+export type CreateCampaignRequest = z.infer<typeof CreateCampaignRequestSchema>;
+
+export const ListCampaignsResponseSchema = z.object({
+  items: z.array(CampaignSummarySchema),
+  /** Opaque cursor; absent when no more pages. Phase B.A.2 paginates. */
+  nextCursor: z.string().nullable(),
+  totalEstimate: z.number().int(),
+});
+export type ListCampaignsResponse = z.infer<typeof ListCampaignsResponseSchema>;
+
 export const tokens = {
-  /** Phase B will add: Campaign, Task, Sample, Annotation, AnnotationTool */
+  /** Phase B.A.1 added: Campaign, AnnotationToolIntegration (stub registry). */
+  /** Phase B.A.2 will add: Task, TaskAssignment, Annotation, gate decisions. */
   /** Phase C will add: Challenge, Submission, Phase, Leaderboard */
   /** Phase D will add: Report, ReportTemplate, AuditEvent */
   /** Phase E will add: DMXP transaction envelope, FederatedConnector */
