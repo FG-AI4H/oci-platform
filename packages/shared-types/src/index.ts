@@ -25,6 +25,50 @@ export {
 } from './modality-task-kinds.js';
 export type { CanonicalModality } from './modality-task-kinds.js';
 
+// Evaluation task-kind + model-class — extensibility door-openers locked
+// by ADR-0015. Separate from the closed-by-design annotation
+// `CampaignTaskKind`: evaluation is open (LMM door open), annotation is
+// closed (routing invariants in ADR-0009).
+export {
+  KNOWN_EVALUATION_TASK_KINDS,
+  VENDOR_TASK_KIND_PATTERN,
+  EvaluationTaskKindSchema,
+  ModelClassSchema,
+  isKnownEvaluationTaskKind,
+  isLmmTaskKind,
+  requiresLmmGovernance,
+} from './evaluation-task-kind.js';
+export type {
+  KnownEvaluationTaskKind,
+  EvaluationTaskKind,
+  ModelClass,
+} from './evaluation-task-kind.js';
+
+// Intended-Use Statement + IMDRF risk-tier derivation (ADR-0013).
+// Single source of truth — the BIOCroissant manifest schema imports
+// this module rather than redefining the shape.
+export {
+  RiskTierSchema,
+  RISK_TIER_RANK,
+  MedicalPurposeSchema,
+  ClinicalPathwaySchema,
+  OperatingEnvironmentSchema,
+  IntendedUserRoleSchema,
+  TargetPopulationSchema,
+  IntendedUseStatementSchema,
+  deriveRiskTier,
+  overrideRequiresJustification,
+} from './intended-use.js';
+export type {
+  RiskTier,
+  MedicalPurpose,
+  ClinicalPathway,
+  OperatingEnvironment,
+  IntendedUserRole,
+  TargetPopulation,
+  IntendedUseStatement,
+} from './intended-use.js';
+
 // ==== Identity ============================================================
 
 export const RoleSchema = z.enum([
