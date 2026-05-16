@@ -14,7 +14,7 @@ import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
 import { OptionalCognitoJwtGuard } from '../../auth/optional-cognito-jwt.guard.js';
 import { ZodPipe } from './dto/zod-pipe.js';
-import { Roles, RolesGuard } from './roles.guard.js';
+import { Roles, RolesGuard } from '../../auth/roles.guard.js';
 import { CatalogService } from './catalog.service.js';
 
 interface FastifyLikeRequest {

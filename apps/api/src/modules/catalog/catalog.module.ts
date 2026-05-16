@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma.service.js';
 import { CatalogController } from './catalog.controller.js';
 import { CatalogService } from './catalog.service.js';
 import { CatalogRepository } from './catalog.repository.js';
-import { RolesGuard } from './roles.guard.js';
+import { RolesGuard } from '../../auth/roles.guard.js';
 
 @Module({
   imports: [AuthModule],

@@ -109,4 +109,5 @@ export type {
   CampaignStatus,
   CampaignTaskKind,
   CampaignOutputLicense,
+  IdentityAdminAuditEvent,
 } from './generated/client/index.js';

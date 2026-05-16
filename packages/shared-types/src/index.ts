@@ -1865,6 +1865,93 @@ export const ListCampaignsResponseSchema = z.object({
 });
 export type ListCampaignsResponse = z.infer<typeof ListCampaignsResponseSchema>;
 
+// ---------------------------------------------------------------------------
+// Admin — Cognito group management (#241).
+//
+// PlatformGroup is the curated set of Cognito groups the operator UI
+// surfaces. Cognito itself is the source of truth (the API never
+// enforces this enum at the IAM layer); this list is what the
+// `/admin/users` checkboxes render, so adding a new role to the
+// platform means adding it here AND creating it as a Cognito group via
+// CDK / console.
+// ---------------------------------------------------------------------------
+
+export const PlatformGroupSchema = z.enum([
+  'admin',
+  'host',
+  'campaign-manager',
+  'task-supervisor',
+  'reviewer',
+  'arbitration-annotator',
+  'expert-reviewer',
+  'annotator',
+  'supervisor',
+  'regulator',
+  'participant',
+]);
+export type PlatformGroup = z.infer<typeof PlatformGroupSchema>;
+
+/** Cognito's enumerated user-status values, plus an UNKNOWN fallback. */
+export const CognitoUserStatusSchema = z.enum([
+  'CONFIRMED',
+  'UNCONFIRMED',
+  'ARCHIVED',
+  'COMPROMISED',
+  'UNKNOWN',
+  'RESET_REQUIRED',
+  'FORCE_CHANGE_PASSWORD',
+  'EXTERNAL_PROVIDER',
+]);
+export type CognitoUserStatus = z.infer<typeof CognitoUserStatusSchema>;
+
+export interface AdminUserSummary {
+  /** Cognito `sub` (UUID for native pool, opaque for federated IdPs). */
+  sub: string;
+  /** Cognito username — typically the email locally, opaque for federated. */
+  username: string;
+  email: string | null;
+  emailVerified: boolean;
+  status: CognitoUserStatus;
+  groups: PlatformGroup[];
+  /** ISO timestamp of pool-level user creation. */
+  createdAt: string;
+  /**
+   * Best-effort last-modified marker. Cognito does not surface a true
+   * "last login" timestamp; this mirrors `UserLastModifiedDate` which
+   * changes on attribute updates + group changes too. Useful as a
+   * coarse activity signal; do not treat as authoritative.
+   */
+  lastSeen: string | null;
+}
+
+export interface ListAdminUsersResponse {
+  items: AdminUserSummary[];
+  /** Cognito-issued opaque pagination token; null when last page. */
+  nextCursor: string | null;
+}
+
+export const GrantGroupRequestSchema = z.object({
+  group: PlatformGroupSchema,
+});
+export type GrantGroupRequest = z.infer<typeof GrantGroupRequestSchema>;
+
+export interface AdminGroupAuditEntry {
+  id: string;
+  actorSub: string;
+  actorUsername: string;
+  targetSub: string;
+  targetUsername: string;
+  action: 'grant' | 'revoke';
+  group: PlatformGroup;
+  /** ISO timestamp. */
+  timestamp: string;
+}
+
+export interface AdminUserDetail extends AdminUserSummary {
+  /** Last 20 group-change events targeting this user, newest first. */
+  recentAuditEvents: AdminGroupAuditEntry[];
+}
+
 export const tokens = {
   /** Phase B.A.1 added: Campaign, AnnotationToolIntegration (stub registry). */
   /** Phase B.A.2 will add: Task, TaskAssignment, Annotation, gate decisions. */

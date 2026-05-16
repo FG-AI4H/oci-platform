@@ -310,6 +310,29 @@ export class ApiStack extends cdk.Stack {
         resources: [props.datasetsBucket.bucketArn, `${props.datasetsBucket.bucketArn}/*`],
       }),
     );
+
+    // Identity-admin module (#241) — list users + view detail + grant /
+    // revoke group memberships from `/admin/users`. The pool ID is
+    // resolved lazily from SSM at synth time (same dynamic reference
+    // used in the container env above), so the resulting ARN is a
+    // CloudFormation-resolved string; CDK accepts it verbatim.
+    const userPoolId = ssm.StringParameter.valueForStringParameter(
+      this,
+      `/oci/${props.cfg.envName}/cognito/user-pool-id`,
+    );
+    const userPoolArn = `arn:${cdk.Aws.PARTITION}:cognito-idp:${this.region}:${this.account}:userpool/${userPoolId}`;
+    fargate.taskDefinition.taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          'cognito-idp:ListUsers',
+          'cognito-idp:AdminGetUser',
+          'cognito-idp:AdminListGroupsForUser',
+          'cognito-idp:AdminAddUserToGroup',
+          'cognito-idp:AdminRemoveUserFromGroup',
+        ],
+        resources: [userPoolArn],
+      }),
+    );
     // The aggregate policy that `grantReadWrite` synthesises uses S3
     // action wildcards (`s3:GetObject*`, `s3:GetBucket*`, etc.) and
     // KMS wildcards (`kms:GenerateDataKey*`, `kms:ReEncrypt*`). cdk-nag

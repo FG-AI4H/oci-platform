@@ -232,6 +232,36 @@ test.describe('ui/ux diagnostic', () => {
     sections.push({ label: 'annotation-campaigns-new', runs });
   });
 
+  test('admin index (admin)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'admin-index', async (page) => {
+      await signInAs(page, 'alice', 'admin');
+      await page.goto('/admin');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'admin-index', runs });
+  });
+
+  test('admin users list (admin)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'admin-users-list', async (page) => {
+      await signInAs(page, 'alice', 'admin');
+      await page.goto('/admin/users');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'admin-users-list', runs });
+  });
+
+  test('admin user detail (admin)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'admin-user-detail', async (page) => {
+      await signInAs(page, 'alice', 'admin');
+      await page.goto('/admin/users/bob');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'admin-user-detail', runs });
+  });
+
   test('print combined summary', async () => {
     const lines: string[] = [];
     lines.push('# UI/UX audit summary\n');

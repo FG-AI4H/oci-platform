@@ -1038,3 +1038,33 @@ enum CampaignOutputLicense {
 
   @@schema("annotation")
 }
+
+/// Audit log for admin group grants / revokes (#241). One row per
+/// administrative action against `cognito-idp:AdminAddUserToGroup` /
+/// `AdminRemoveUserFromGroup`. The admin user-management UI reads the
+/// last N entries for a given target to show change history.
+///
+/// `actorSub` and `targetSub` are deterministic v5 UUIDs of the Cognito
+/// subs (same convention as other identity-schema rows — see
+/// `cognitoSubAsUuid` in `apps/api/src/auth/cognito-sub.ts`). Username
+/// + email are cached at write-time so the UI can render history even
+/// after a user is renamed / deleted upstream.
+///
+/// `groupName` is a free string — we don't FK to a groups table because
+/// Cognito itself is the source of truth for group definitions. The
+/// `PlatformGroupSchema` in `@oci/shared-types` is the curated UI list.
+model IdentityAdminAuditEvent {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorSub      String   @map("actor_sub")       @db.Uuid
+  actorUsername String   @map("actor_username")
+  targetSub     String   @map("target_sub")      @db.Uuid
+  targetUsername String  @map("target_username")
+  action        String                       /// 'grant' | 'revoke'
+  groupName     String   @map("group_name")
+  createdAt     DateTime @default(now())       @map("created_at")
+
+  @@index([targetSub, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("identity_admin_audit_events")
+  @@schema("identity")
+}

@@ -10,6 +10,7 @@ import { DuaTemplateModule } from './modules/dua-template/dua-template.module.js
 import { RemoteCatalogModule } from './modules/remote-catalog/remote-catalog.module.js';
 import { AccessRequestModule } from './modules/access-request/access-request.module.js';
 import { CertificationModule } from './modules/certification/certification.module.js';
+import { IdentityAdminModule } from './modules/identity-admin/identity-admin.module.js';
 import { OrcidLinkModule } from './modules/orcid-link/orcid-link.module.js';
 import { PassportIssuerModule } from './modules/passport-issuer/passport-issuer.module.js';
 import { PassportModule } from './modules/passport/passport.module.js';
@@ -42,6 +43,7 @@ import { MeController } from './me/me.controller.js';
     StorageModule,
     PreferencesModule,
     CertificationModule,
+    IdentityAdminModule,
     OrcidLinkModule,
     PassportModule,
     PassportIssuerModule,

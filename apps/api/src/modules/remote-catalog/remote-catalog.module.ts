@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../auth/auth.module.js';
 import { PrismaService } from '../../prisma.service.js';
-import { RolesGuard } from '../catalog/roles.guard.js';
+import { RolesGuard } from '../../auth/roles.guard.js';
 import { RemoteCatalogController } from './remote-catalog.controller.js';
 import { RemoteCatalogRepository } from './remote-catalog.repository.js';
 import { RemoteCatalogService } from './remote-catalog.service.js';

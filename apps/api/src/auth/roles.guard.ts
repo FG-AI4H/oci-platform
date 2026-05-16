@@ -19,6 +19,12 @@ const ROLES_KEY = 'oci:requiredRoles';
  *
  * Works as both a method and class decorator (Nest's reflector reads
  * up the chain via `getAllAndOverride([handler, class])`).
+ *
+ * Annotation-specific roles use the parallel `AnnotationRoles` /
+ * `AnnotationRolesGuard` in `apps/api/src/modules/annotation/` —
+ * keep them separate so the annotation surface can swap to a Visa-
+ * backed check (ADR-0006 Decision 2) without disturbing the platform-
+ * wide group check here.
  */
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 
@@ -42,6 +48,8 @@ export class RolesGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest<{ user?: CognitoAccessTokenPayload }>();
     const groups = (req.user?.['cognito:groups'] ?? []) as string[];
 
+    // `admin` is the operator override — always satisfies any role
+    // check. Mirrors `isCampaignManager` / `isHost` on the web side.
     const hasAny = required.some((r) => groups.includes(r) || groups.includes('admin'));
     if (!hasAny) {
       throw new ForbiddenException(`requires one of: ${required.join(', ')}`);

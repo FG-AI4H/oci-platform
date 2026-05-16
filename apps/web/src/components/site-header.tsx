@@ -45,7 +45,7 @@ export async function SiteHeader() {
               <NavLink href="/annotation/campaigns/new">New campaign</NavLink>
             ) : null}
             {showHostNav ? <NavLink href="/dashboard/host/access-requests">Inbox</NavLink> : null}
-            {showAdminNav ? <NavLink href="/catalog/remotes">Remotes</NavLink> : null}
+            {showAdminNav ? <NavLink href="/admin">Admin</NavLink> : null}
           </nav>
         </div>
 
