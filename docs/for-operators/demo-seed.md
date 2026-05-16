@@ -2,6 +2,8 @@
 
 `packages/database/seed/demo.sql` is replayed against every **non-prod** environment on each deploy. It exists so dev and int always have a baseline of data (datasets, campaigns, future entities) without anyone needing to operate the UI to put them there.
 
+In addition to seeding row data, the migrate task **also uploads bundled binary fixtures to the `oci-datasets-<env>` S3 bucket** before the SQL replay (the OCI-curated demo dataset `oci-demo-chest-xr` ships with 5 synthetic PNGs — see [`packages/database/seed/fixtures/oci-demo-chest-xr/`](../../packages/database/seed/fixtures/oci-demo-chest-xr/)). The upload is idempotent (HEAD-then-PUT) and runs only when `OCI_DATASETS_BUCKET` is set.
+
 ## Where the seed runs
 
 | Environment | Runs?        | How                                                                                                                                                                                 |
@@ -17,6 +19,7 @@
 3. **Order matters on first apply**. Reference data (datasets, tool integrations) goes before the entities that depend on it (campaigns, etc.).
 4. **No real PHI**. The seed lands on every non-prod operator's local box. Placeholder names + empty manifests only.
 5. **`created_by_id` is intentionally fake**. The dev-stub `alice` UUID. Production seed never executes; this row is hypothetical in non-prod.
+6. **Bundled fixtures.** A new dataset that needs _bytes_ (not just rows) ships its files alongside the SQL under [`packages/database/seed/fixtures/<slug>/`](../../packages/database/seed/fixtures/) with a `manifest.json` matching the Croissant 1.1 shape. The migrate entrypoint walks each fixture directory and uploads every `distribution[]` file to `s3://oci-datasets-<env>/<slug>/<@id>/<filename>`. Stable UUIDs in the manifest's `@id` keep the upload + SQL paths in sync.
 
 ## Adding a new demo entity
 

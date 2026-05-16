@@ -1,0 +1,86 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "sc": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "dct": "http://purl.org/dc/terms/",
+    "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
+  },
+  "@type": "sc:Dataset",
+  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
+
+  "name": "OCI Demo: Synthetic Chest XR",
+  "description": "OCI-curated demo dataset comprising five 256×256 grayscale chest-XR-style synthetic images. Generated procedurally for platform smoke testing (S3 hosting, presigned download, manifest viewer, annotation campaign attachment) — NOT diagnostic content and NOT representative of real patient data. License: CC-BY-4.0. Refresh the underlying bytes by re-running packages/database/seed/fixtures/oci-demo-chest-xr/generate.mjs.",
+  "url": "https://oci.ai4h.net/catalog/oci-demo-chest-xr",
+  "creator": [{ "@type": "sc:Organization", "name": "OCI Platform (ITU/WHO/WIPO GI-AI4H)" }],
+  "publisher": {
+    "@type": "sc:Organization",
+    "name": "OCI Platform",
+    "url": "https://oci.ai4h.net/"
+  },
+  "datePublished": "2026-05-16",
+  "version": "1.0.0",
+
+  "license": "https://creativecommons.org/licenses/by/4.0/",
+  "keywords": ["synthetic", "chest x-ray", "demo", "smoke test"],
+
+  "bio:modality": [{ "@id": "bio:modality/X-ray", "name": "X-ray" }],
+  "bio:bodyRegion": [{ "@id": "bio:bodyRegion/Chest", "name": "Chest" }],
+  "bio:synthetic": true,
+  "bio:intendedUse": "platform smoke testing",
+
+  "rai:dataCollection": "Programmatic generation. See packages/database/seed/fixtures/oci-demo-chest-xr/generate.mjs in the OCI Platform repo.",
+  "rai:dataAnnotationProtocol": "None — no annotations are attached to this dataset. It exists to exercise the catalog + storage paths.",
+  "rai:dataAnnotationAnalysis": "Not applicable.",
+  "rai:personalSensitiveInformation": "None. All images are synthetic.",
+
+  "distribution": [
+    {
+      "@id": "00000000-0000-4000-8000-deadbeef0001",
+      "@type": "cr:FileObject",
+      "name": "sample-001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0001/download",
+      "contentSize": "43281 B",
+      "sha256": "6b7f2715baa0e978bf87622767891df18b05e93d57331b10da758b89d816b538"
+    },
+    {
+      "@id": "00000000-0000-4000-8000-deadbeef0002",
+      "@type": "cr:FileObject",
+      "name": "sample-002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0002/download",
+      "contentSize": "43352 B",
+      "sha256": "f60d9f613946419a4ed038f678e2765443237475ca8155c94cab2b58a244c1da"
+    },
+    {
+      "@id": "00000000-0000-4000-8000-deadbeef0003",
+      "@type": "cr:FileObject",
+      "name": "sample-003.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0003/download",
+      "contentSize": "43358 B",
+      "sha256": "917b7533b46b029f6620cf5d4d44f1940fac4c8710e9ce4ad865964b9712a19c"
+    },
+    {
+      "@id": "00000000-0000-4000-8000-deadbeef0004",
+      "@type": "cr:FileObject",
+      "name": "sample-004.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0004/download",
+      "contentSize": "43432 B",
+      "sha256": "a6e7c135b89cded45a7c98c063c52a0f537958d47e6705d88d889900fcfe441c"
+    },
+    {
+      "@id": "00000000-0000-4000-8000-deadbeef0005",
+      "@type": "cr:FileObject",
+      "name": "sample-005.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0005/download",
+      "contentSize": "43436 B",
+      "sha256": "6a92c82cea79a878adb82c6af46b88235a9cb21509a9ae0892b7b92629d0fa7b"
+    }
+  ]
+}
