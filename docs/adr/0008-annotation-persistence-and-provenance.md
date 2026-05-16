@@ -75,6 +75,8 @@ The 3-gate SOP's "decision boxes" use IRR scores keyed to task type:
 
 Thresholds are configurable per campaign at creation time; the defaults above are the "I don't know" starting point. The `@oci/annotation-quality` package (pure functions, unit-tested) implements every metric.
 
+The same metrics also drive **intra-rater reliability** — the same annotator's t1 vs t2 annotations on a blind-resampled sample. Intra-rater operates on per-annotator pairs (n=2) of the annotator's own labels and uses Cohen's κ (categorical) / Krippendorff α (ordinal or mixed) / Dice + Hausdorff (segmentation). The resampling protocol that generates the t1/t2 pairs is locked in [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md) Decision 5.
+
 For **segmentation tasks specifically**, the IRR metrics above (Dice + Hausdorff) are _acceptance_ thresholds — they decide whether the fused mask is good enough at each gate. The _aggregation_ algorithm that produces the fused mask (STAPLE / majority-pixel / union / intersection) is locked in [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md) Decision 3. Default = **STAPLE** (Warfield et al. 2004), the medical-imaging consensus algorithm.
 
 ### Retention — EU MDR baseline

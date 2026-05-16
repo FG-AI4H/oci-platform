@@ -9,14 +9,15 @@
 
 [ADR-0006](./0006-annotation-integration-hub-orchestrator.md) committed the annotation module to the integration-hub orchestrator model and locked the 3-gate SOP from ITU-T FG-AI4H DEL05-A03 with "configurable n-annotators" — but deliberately deferred the _routing algorithm_ (which task goes to which annotator) and the _upper bound on N_ to a follow-up decision. [ADR-0008](./0008-annotation-persistence-and-provenance.md) locked IRR thresholds per task type and noted "fusion logic per task type" — but enumerated fusion only for continuous (median) and categorical (majority-vote with seniority tie-break), leaving the segmentation case (the most operationally important one for medical imaging) under-specified.
 
-A review of the ITU FG-AI4H Data Annotation Package slides + the conformance posture against FDA's Good Machine Learning Practice (GMLP) guidance surfaced four concrete gaps that need locking:
+A review of the ITU FG-AI4H Data Annotation Package slides + the conformance posture against FDA's Good Machine Learning Practice (GMLP) guidance surfaced five concrete gaps that need locking:
 
 1. **Smart task assignment.** The next task assigned to an annotator should _not_ be random — it should match the annotator's expertise, weight by their running IRR-vs-gold score, and ensure non-biased coverage so a single annotator doesn't see all positive cases or all of one class.
 2. **Upper bound on N annotators.** "Configurable" with no bound invites cost blowouts; defaults must be chosen. A claim circulating internally that "FDA mandates up to 7 annotators" was checked — **no FDA standard prescribes a specific N**. GMLP requires only that ground truth be well-defined, expert-annotated, with documented criteria + inter-rater consistency metrics. Common medical practice across imaging is 3–5 annotators with an adjudicator; pathology occasionally uses higher in specific high-risk studies (FDA's High Throughput Truthing programme uses 3+, going higher project-by-project, never mandated).
 3. **Segmentation-specific fusion.** When task type is `segmentation`, naive majority-vote produces brittle results on dense masks. The ITU slide shows "Unionization strategy (special case for segmentation tasks)" with A∪B / A∩B notation; the medical-imaging consensus algorithm is **STAPLE** (Simultaneous Truth and Performance Level Estimation, Warfield et al. 2004) — not currently called out in ADR-0008.
 4. **Annotator experience model.** New annotators with no track record can't be ignored, but they also can't be trusted on the first task. Calibration via gold-standard samples (already in scope of E4) needs to feed the router.
+5. **Intra-rater reliability (self-consistency).** The DRAFT standard and the ITU slide both explicitly call out "**inter- and intra-rater agreement**". Inter-rater (annotator-vs-gold, annotator-vs-peers) is necessary but not sufficient — it doesn't catch annotator fatigue (hour 1 vs hour 8), calibration drift (week 1 vs week 8), or sample ambiguity (when raters disagree with themselves more than with each other). Medical-imaging certification programmes (RSNA, ESR) routinely re-present cases for self-consistency testing; the OCI platform must do the same.
 
-This ADR locks the policy for all four.
+This ADR locks the policy for all five.
 
 ## Decision
 
@@ -63,16 +64,39 @@ Acceptance thresholds use Dice + Hausdorff (per ADR-0008's Metrics Reloaded refe
 
 Every annotator has a per-modality + per-annotation-type running score:
 
-- **`irrAgainstGold`** — moving average IRR (Krippendorff α default) over the annotator's annotations on samples flagged `isGoldStandardLabel = true`. Window: trailing 90 days.
-- **`irrAgainstPeers`** — moving average IRR over the annotator's contribution to multi-rater tasks where the gate-1 consensus was reached. Window: trailing 90 days.
+- **`irrAgainstGold`** — moving average IRR (Krippendorff α default) over the annotator's annotations on samples flagged `isGoldStandardLabel = true`. Window: trailing 90 days. _Captures: skill at matching expert ground truth._
+- **`irrAgainstPeers`** — moving average IRR over the annotator's contribution to multi-rater tasks where the gate-1 consensus was reached. Window: trailing 90 days. _Captures: skill at matching community consensus._
+- **`irrAgainstSelf`** — moving average IRR between t1 and t2 annotations on the **same sample** re-presented to the **same annotator** after a blind delay. Window: trailing 90 days. _Captures: self-consistency — fatigue, calibration drift, sample-ambiguity signal._ See "Intra-rater resampling protocol" below for how samples are selected.
 - **`taskCount`** — total tasks contributed in the window.
-- **`calibrationStatus`** — `uncalibrated` (taskCount < 10 on gold samples) | `calibrated` | `flagged` (irrAgainstGold dropped below publishable floor for the running window).
+- **`calibrationStatus`** — `uncalibrated` (taskCount < 10 on gold samples) | `calibrated` | `flagged` (irrAgainstGold dropped below publishable floor _or_ irrAgainstSelf dropped below the fatigue threshold for the running window).
 
 **New annotators** start `uncalibrated`. The router preferentially routes them to gold-standard samples for the first 10 task assignments per campaign so the score converges before they're trusted on high-stakes tasks.
 
-**Flagged annotators** are auto-suspended by the supervisor module pending review. The supervisor either unflags (after retraining or after re-calibration on fresh gold samples) or removes the annotator from the campaign.
+**Flagged annotators** are auto-suspended by the supervisor module pending review. Two distinct flag types:
 
-The score is **per-modality** and **per-annotation-type** — a pathologist who's calibrated on tissue-mask segmentation is not automatically calibrated on retinal-bounding-box detection. Annotators self-declare expertise; the score confirms or contradicts the declaration empirically.
+- **Skill-flag** (low `irrAgainstGold` or low `irrAgainstPeers`) → supervisor either unflags after retraining + re-calibration on fresh gold samples, or removes the annotator from the campaign.
+- **Drift-flag** (low `irrAgainstSelf` despite acceptable `irrAgainstGold` / `irrAgainstPeers`) → supervisor either schedules a recalibration window (no removal — the annotator was good and may still be; this is a fatigue/drift signal) or, if the drift persists across two windows, escalates to skill-flag treatment.
+
+The scores are **per-modality** and **per-annotation-type** — a pathologist who's calibrated on tissue-mask segmentation is not automatically calibrated on retinal-bounding-box detection. Annotators self-declare expertise; the scores confirm or contradict the declaration empirically.
+
+### 5. Intra-rater resampling protocol
+
+Self-consistency is measured via **blind resampling**: a fraction of an annotator's completed samples are silently re-presented after a delay, and `irrAgainstSelf` is computed between the t1 and t2 annotations.
+
+| Setting                      | Default                                                                     | Notes                                                                                                                                                                                |
+| ---------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Resampling rate**          | 5 % of completed samples per annotator per campaign                         | Configurable per campaign in [0 %, 20 %]. Set to 0 % to disable on training-grade or low-stakes campaigns where the QA cost isn't justified.                                         |
+| **Blind delay**              | ≥ 7 days between t1 and t2 presentations                                    | Configurable per campaign in [1 d, 30 d]. Pathology / radiology campaigns where memory recall is plausible may need longer.                                                          |
+| **Sample selection**         | Stratified random across difficulty + class (when known)                    | Easy-case bias is explicitly avoided — re-presenting only easy cases makes the metric meaningless. The stratification matches the campaign's overall distribution.                   |
+| **Annotator awareness**      | Disclosed in onboarding; blinded at moment of annotation                    | "Some of your samples may be re-presented for QA" is part of the annotator agreement. The UI never reveals a sample's resample status; the t1 annotation is hidden when t2 is shown. |
+| **Cost accounting**          | t2 events do **not** count toward the bias-prevention 1.5× cap (Decision 1) | Re-presentations are QA, not annotation work. They also don't count toward the campaign's task-completion progress.                                                                  |
+| **Threshold (drift signal)** | `irrAgainstSelf` < 0.85 for medical imaging                                 | Configurable per campaign. Sustained crossing triggers `drift-flag` (per Decision 4).                                                                                                |
+| **Across-modality scope**    | Per-modality + per-annotation-type                                          | Same granularity as the other scores. A pathologist's tissue-segmentation self-consistency is separate from their retinal-detection self-consistency.                                |
+
+**Two distinct surfaces use this protocol:**
+
+- **During campaign (live):** the router silently injects resamples per the rate above. Used continuously to catch fatigue + drift in real time.
+- **During assessment (certification + recertification):** the existing certification-quiz module (E4 / #216) integrates with the same protocol. Pre-onboarding quiz includes re-presented cases at different sessions; recertification quizzes (every 12 months by default) re-test a fresh set. Calibration is required for new annotators before they touch CONTROLLED / SENSITIVE-tier samples.
 
 ## Consequences
 
@@ -105,6 +129,9 @@ The score is **per-modality** and **per-annotation-type** — a pathologist who'
 - **Majority-pixel as the default fusion for segmentation.** Rejected — fast but loses information at mask boundaries where STAPLE shines. Available as an opt-in fast path.
 - **Global per-annotator experience score** (one number across all modalities). Rejected — a histopathology expert and a retinal-imaging expert are not interchangeable. Per-modality + per-annotation-type is the right granularity.
 - **Skip the bias-prevention sampling and rely on supervisor review.** Rejected — supervisors review individual annotations, not aggregate distribution; bias only becomes visible after the campaign completes and the dataset is published.
+- **Skip intra-rater reliability — rely only on inter-rater (vs gold, vs peers).** Rejected — inter-rater catches skill gaps but not fatigue, drift, or sample-ambiguity. Medical-imaging certification programmes universally include self-consistency testing for a reason. The 5 % resampling cost is a fraction of the cost of releasing a campaign with undetected late-stage drift.
+- **Reveal re-presentation to the annotator** ("you've seen this sample before — re-annotate it"). Rejected — destroys the blind condition that makes the measurement meaningful. Annotators try to remember their previous answer rather than annotate the case on its merits.
+- **Re-present only "hard" samples for intra-rater testing.** Rejected — easy-case bias works both ways; restricting to hard cases overstates disagreement and disagrees with the standard stratification used in medical-imaging certification. Stratified random is the right shape.
 
 ## Amendments to prior ADRs
 
