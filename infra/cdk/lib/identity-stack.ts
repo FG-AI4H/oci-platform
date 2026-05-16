@@ -306,9 +306,11 @@ function ociBrandingSettings(): Record<string, unknown> {
         sessionTimerDisplay: 'NONE',
       },
       global: {
-        // BROWSER_ADAPTIVE lets the visitor's prefers-color-scheme
-        // pick light vs dark — same behaviour as the rest of the app.
-        colorSchemeMode: 'BROWSER_ADAPTIVE',
+        // DYNAMIC = the API enum for the UI's "adaptive" mode — page
+        // honours the visitor's prefers-color-scheme. Valid values
+        // are LIGHT | DARK | DYNAMIC (`BROWSER_ADAPTIVE` is the UI
+        // label, not the API enum, and is rejected as InvalidValue).
+        colorSchemeMode: 'DYNAMIC',
         spacingDensity: 'REGULAR',
         pageHeader: { enabled: false },
         pageFooter: { enabled: false },
