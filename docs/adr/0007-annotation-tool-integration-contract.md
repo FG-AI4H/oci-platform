@@ -50,7 +50,17 @@ AnnotationToolIntegrationVersion {
 ### Handoff protocol
 
 1. Annotator picks a task from the queue. The API issues a **signed handoff URL** for the configured tool. The URL embeds a short-lived JWT scoped to the tool's audience via **RFC 8693 token exchange** (not bearer-passthrough of the user's Cognito JWT). The exchanged token carries the user's role assignment for this specific campaign + task; the audience claim prevents the tool from impersonating the user against the OCI API.
-2. The tool fetches sample bytes via a **presigned S3 URL** the API hands it as part of the handoff payload. No direct S3 access from the tool; no S3 keys in OpenAPI DTOs; presigning happens at the API boundary.
+2. The tool fetches sample bytes via a **presigned S3 URL** the API hands it as part of the handoff payload. No direct S3 access from the tool; no S3 keys in OpenAPI DTOs; presigning happens at the API boundary. The handoff payload also carries a **`metadataBundle`** structured per [ADR-0010](./0010-annotation-metadata-exposure-and-blinding.md):
+
+   ```
+   metadataBundle {
+     required: { /* fields always shown for this campaign + gate */ }
+     optional: { /* fields opted in by the campaign manager */ }
+   }
+   ```
+
+   Fields in the `hidden` or `never` buckets per ADR-0010 are **server-side filtered**: they never appear in the payload regardless of the tool's request shape. The bundle's exact schema is part of the per-version `schemaProfile` so adapters can validate the shape at receive time.
+
 3. The tool POSTs the completed annotation back to a **signed callback URL** (`POST /v2/annotation/integrations/<id>/callback`) with an **idempotency key**. The payload is **validated against the version's Zod `schemaProfile`** before it touches the database.
 4. The orchestrator routes the validated result into the workflow state machine — next gate, reject, mark complete, increment IRR sample. Never into hand-coded `/next` endpoints.
 
@@ -109,10 +119,15 @@ Every `AnnotationToolIntegrationVersion` has a semver. Breaking changes to a too
 - **Single tool-integration version, in-place mutations.** Rejected — in-flight campaigns would be invalidated by tool upgrades; versioning is required for audit + provenance integrity.
 - **Per-tool callback URL paths (legacy `/api/v1/tasks/{id}/next` style).** Rejected — every adapter would invent its own URL shape, defeating the contract. One callback path with idempotency keys and integration-id routing.
 
+## Amendments
+
+- **2026-05-16 — Extended by [ADR-0010](./0010-annotation-metadata-exposure-and-blinding.md).** ADR-0010 specifies the **`metadataBundle`** structure carried in the handoff payload (Decision 1 above). The bundle carries only `required` and `optional` fields (per ADR-0010's four-bucket model); `hidden` and `never` fields are server-side filtered before the bundle is composed.
+
 ## References
 
 - [ADR-0006](./0006-annotation-integration-hub-orchestrator.md) — the orchestrator model this contract serves.
 - [ADR-0008](./0008-annotation-persistence-and-provenance.md) — persistence + provenance layer downstream of submission.
+- [ADR-0010](./0010-annotation-metadata-exposure-and-blinding.md) — metadata bucket model + blinding policy that defines the handoff `metadataBundle` (amends this ADR).
 - [RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693) — OAuth 2.0 Token Exchange.
 - [GA4GH Passport v1.2](https://github.com/ga4gh/data-security/blob/master/AAI/AAIConnectProfile.md) — identity tokens carried in the exchanged JWT.
 - Legacy `FG-AI4H/annotation-tool` (archived) — the four anti-patterns enumerated above are documented end-to-end against the legacy source in an internal planning archive.

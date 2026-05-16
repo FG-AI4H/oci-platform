@@ -53,7 +53,8 @@ Every `Annotation` row carries:
 - **Tool** — `AnnotationToolIntegration.id` + version FK (per [ADR-0007](./0007-annotation-tool-integration-contract.md))
 - **Schema** — Zod schema version that validated the payload
 - **Time** — `createdAt`, `durationSeconds` (time-on-task), `irrSampleTag` (whether this annotation contributes to IRR)
-- **Hash chain** — SHA-256 over the JSONB payload + provenance, linked to the previous annotation in the same task (Merkle-style chain so any retroactive tamper is detectable)
+- **Metadata exposure profile** — `metadataExposureProfile` records what the annotator could see when they made this call (per [ADR-0010](./0010-annotation-metadata-exposure-and-blinding.md)): SHA-256 hash of the campaign-visibility config in effect, the config version, and the list of fields actually delivered to the UI for this sample. Lets a regulator reconstruct "did this annotator see the prior diagnosis?" for any historical annotation.
+- **Hash chain** — SHA-256 over the JSONB payload + provenance (including `metadataExposureProfile`), linked to the previous annotation in the same task (Merkle-style chain so any retroactive tamper is detectable)
 - **Signed receipt** — KMS-CMK signature over the hash, for CONTROLLED and SENSITIVE-tier datasets. Same pattern as click-wrap policy receipts ([#118](https://github.com/FG-AI4H/oci-platform/issues/118)) and DocuSeal AdES receipts ([#128](https://github.com/FG-AI4H/oci-platform/issues/128)). The receipt ARN is stored on the row; the signed material lives in S3 with Object Lock.
 
 The audit event log is append-only and hash-chained at the table level; supervisor actions (suspend annotator, override gate decision) emit dedicated event rows for regulator queries.
@@ -134,12 +135,14 @@ vs. ISO/IEC 5259-3: full conformance on the data quality processes for annotatio
 ## Amendments
 
 - **2026-05-16 — Extended by [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md).** ADR-0009 specifies the _aggregation_ algorithm for segmentation-task fusion (STAPLE default; majority-pixel / union / intersection alternatives). The Dice + Hausdorff _acceptance_ thresholds locked in this ADR are unchanged — they continue to gate the fused mask produced by ADR-0009's aggregation.
+- **2026-05-16 — Extended by [ADR-0010](./0010-annotation-metadata-exposure-and-blinding.md).** Each `Annotation` row acquires a `metadataExposureProfile` field recording what the annotator could see when they made the call (visibility-config hash + version + actually-delivered fields). The hash chain over per-row provenance extends to cover this field. Lets a regulator reconstruct exposure exactly for any historical annotation.
 
 ## References
 
 - [ADR-0006](./0006-annotation-integration-hub-orchestrator.md) — orchestrator model + role + catalog linkage.
 - [ADR-0007](./0007-annotation-tool-integration-contract.md) — tool-integration contract + schema profiles.
 - [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md) — task-routing + N-annotator policy + segmentation fusion (amends this ADR).
+- [ADR-0010](./0010-annotation-metadata-exposure-and-blinding.md) — metadata exposure + blinding policy (amends this ADR for `metadataExposureProfile`).
 - [ADR-0003](./0003-tiered-identity-assurance-and-access-requirements.md) — `accessTier` + `clinicalUseClaim` driving retention.
 - ITU-T FG-AI4H DEL05-A03 (2023-01-28) — 3-gate SOP + IRR metric-by-task-type framing.
 - ISO/IEC 5259-2:2024 — AI data quality measures.

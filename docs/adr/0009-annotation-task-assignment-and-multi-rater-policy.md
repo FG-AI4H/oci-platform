@@ -29,7 +29,7 @@ A task is assigned to an annotator (or queued for them to pull) based on the fol
 2. **Capability match** — the annotator's declared expertise (modality + annotation type, stored on the user profile) must intersect with the campaign's `taskKind` + `Tool.capabilities`. Annotators without declared expertise are eligible only for campaigns marked as "training-grade" or "no-expertise-required".
 3. **Experience-weighted ranking** — among eligible annotators, sort by running IRR-vs-gold-standard score (campaign-scoped + modality-scoped). The router prefers higher-scoring annotators for high-stakes tasks (CONTROLLED / SENSITIVE-tier datasets); lower-scoring annotators are routed to lower-stakes tasks first and to gold-standard samples for calibration.
 4. **Bias-prevention sampling** — no single annotator may see more than `⌈total_samples / n_active_annotators⌉ × 1.5` samples within a campaign. The router enforces this at assignment time; if the constraint would be violated, the task is offered to the next-eligible annotator.
-5. **Class-balance check** — if a campaign's samples carry class labels (e.g. positive / negative for a binary classification), the router refuses assignments that would give one annotator more than 1.5× the proportional share of any single class. Same-class clustering (annotator X sees all positives) is detected + blocked.
+5. **Class-balance + metadata-facet check** — if a campaign declares stratification keys (default keys include `class` when labels exist; campaign manager can add `metadata.hospital_id`, `metadata.scanner_make`, `metadata.scanner_model`, bucketed `age_bin`, `sex`, or any catalog metadata field), the router refuses assignments that would give one annotator more than 1.5× the proportional share of any single value of any declared key. Same-class clustering and same-facet clustering (annotator X sees all positives _or_ all Hospital B scans _or_ all one-scanner-make samples) are both detected + blocked. Stratification keys can be **`hidden`** from the UI per [ADR-0010](./0010-annotation-metadata-exposure-and-blinding.md) — the router uses the value, the annotator never sees it.
 6. **Within-tie tiebreaker** — within an equivalence class after the above, FIFO by `taskAssignment.assignedAt` timestamp.
 
 **No purely-random assignment.** Even when all predicates allow multiple annotators, the deterministic tiebreaker means task assignment is audit-reproducible.
@@ -140,6 +140,10 @@ This ADR amends:
 - **ADR-0006** — Decision 2 (role-based assignment) and Decision 3 (configurable n-annotators) are extended by Decisions 1–2 above. ADR-0006 acquires an "Amendments" section noting this cross-reference.
 - **ADR-0008** — "IRR policy — defaults locked, per-campaign override" is extended by Decision 3 above (segmentation fusion algorithm). The Dice + Hausdorff acceptance metrics in ADR-0008 are unchanged; this ADR specifies the _aggregation_ algorithm that produces the fused mask Dice + Hausdorff are computed against. ADR-0008 acquires an "Amendments" section noting this cross-reference.
 - **ADR-0007** unchanged — the tool-integration contract's capability matrix already supports all the annotation types referenced here.
+
+## Amendments to this ADR
+
+- **2026-05-16 — Extended by [ADR-0010](./0010-annotation-metadata-exposure-and-blinding.md).** Decision 1 step 5 (class-balance check) extends to **any declared stratification key** — `metadata.hospital_id`, `metadata.scanner_make`, bucketed demographics, etc. The 1.5× soft cap applies per-key, evaluated independently. Stratification keys can be in any visibility bucket (including `hidden`) — the router uses the value, the annotator may never see it.
 
 ## References
 
