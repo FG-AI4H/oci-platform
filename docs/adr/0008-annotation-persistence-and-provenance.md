@@ -75,6 +75,8 @@ The 3-gate SOP's "decision boxes" use IRR scores keyed to task type:
 
 Thresholds are configurable per campaign at creation time; the defaults above are the "I don't know" starting point. The `@oci/annotation-quality` package (pure functions, unit-tested) implements every metric.
 
+For **segmentation tasks specifically**, the IRR metrics above (Dice + Hausdorff) are _acceptance_ thresholds — they decide whether the fused mask is good enough at each gate. The _aggregation_ algorithm that produces the fused mask (STAPLE / majority-pixel / union / intersection) is locked in [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md) Decision 3. Default = **STAPLE** (Warfield et al. 2004), the medical-imaging consensus algorithm.
+
 ### Retention — EU MDR baseline
 
 | Dataset clinical-use claim          | Retention floor                          |
@@ -127,10 +129,15 @@ vs. ISO/IEC 5259-3: full conformance on the data quality processes for annotatio
 - **Use a different IRR metric default** (e.g. Cohen's κ everywhere). Rejected — Cohen's κ doesn't handle >2 raters or missing values; Krippendorff α handles both. The papers ([`standards-papers.md`](../planning/inputs/standards-papers.md)) are unanimous on this for variable-rater medical-imaging campaigns.
 - **Sign every annotation** (not just CONTROLLED/SENSITIVE-tier). Rejected — the KMS-CMK call cost adds up; only the regulator-facing tiers need non-repudiation. OPEN/REGISTERED tiers get hash-chain only.
 
+## Amendments
+
+- **2026-05-16 — Extended by [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md).** ADR-0009 specifies the _aggregation_ algorithm for segmentation-task fusion (STAPLE default; majority-pixel / union / intersection alternatives). The Dice + Hausdorff _acceptance_ thresholds locked in this ADR are unchanged — they continue to gate the fused mask produced by ADR-0009's aggregation.
+
 ## References
 
 - [ADR-0006](./0006-annotation-integration-hub-orchestrator.md) — orchestrator model + role + catalog linkage.
 - [ADR-0007](./0007-annotation-tool-integration-contract.md) — tool-integration contract + schema profiles.
+- [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md) — task-routing + N-annotator policy + segmentation fusion (amends this ADR).
 - [ADR-0003](./0003-tiered-identity-assurance-and-access-requirements.md) — `accessTier` + `clinicalUseClaim` driving retention.
 - ITU-T FG-AI4H DEL05-A03 (2023-01-28) — 3-gate SOP + IRR metric-by-task-type framing.
 - ISO/IEC 5259-2:2024 — AI data quality measures.

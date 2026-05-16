@@ -24,8 +24,8 @@ Full research compiled separately in the internal planning archive (legacy-codeb
 The OCI annotation module is an **integration-hub orchestrator**. It owns:
 
 1. **Campaign + task lifecycle** — DRAFT, READY, RUNNING, COMPLETED, ARCHIVED states; per-task gate state machine (INDEPENDENT, AWAITING_ARBITRATION, AWAITING_EXPERT, COMPLETED, SKIPPED).
-2. **Role-based assignment** — campaign manager, task supervisor, annotator, reviewer, arbitration annotator, expert reviewer + the existing OCI ACT (which can be assigned as expert reviewer on SENSITIVE-tier campaigns). Each role is a time-bounded GA4GH Visa Type per campaign, issued through the identity module ([ADR-0003](./0003-tiered-identity-assurance-and-access-requirements.md) Decision 3).
-3. **The 3-gate SOP from DEL05-A03**, with configurable n-annotators and consistency thresholds. The expert-review decision is **final** (closes the DRAFT's TBD on rejection-loop termination).
+2. **Role-based assignment** — campaign manager, task supervisor, annotator, reviewer, arbitration annotator, expert reviewer + the existing OCI ACT (which can be assigned as expert reviewer on SENSITIVE-tier campaigns). Each role is a time-bounded GA4GH Visa Type per campaign, issued through the identity module ([ADR-0003](./0003-tiered-identity-assurance-and-access-requirements.md) Decision 3). **The task-routing algorithm** (skill match → experience-weighted ranking → bias-prevention sampling → class-balance check, with deterministic tie-break) is locked in [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md).
+3. **The 3-gate SOP from DEL05-A03**, with configurable n-annotators and consistency thresholds. The expert-review decision is **final** (closes the DRAFT's TBD on rejection-loop termination). **N-annotator default = 3, soft maximum = 12** (per ADR-0009; the rumoured "FDA mandates N=7" claim is documented in ADR-0009 as inaccurate — no FDA standard prescribes a specific N).
 4. **Quality gates and IRR scoring** — campaign-level configuration, defaults locked in [ADR-0008](./0008-annotation-persistence-and-provenance.md).
 5. **Audit trail, provenance, and persistence** — per [ADR-0008](./0008-annotation-persistence-and-provenance.md).
 6. **The catalog ↔ annotation linkage** — annotations target a catalog dataset by FK at three levels: `Dataset.id` + `DatasetManifest.id` (immutable on the campaign) + `DatasetSample.id`. Completed campaigns contribute the resulting annotations back to the catalog as a new distribution.
@@ -68,12 +68,17 @@ It explicitly **does not own** modality-specific viewers/editors. Those plug in 
 - **Feature-flagged dual-running cutover from legacy.** Rejected — the legacy submission endpoint is broken, the data is sandbox-only, and the legacy frontend has a leaked API key. Maintaining the dual-run window costs more than it buys.
 - **Allow runtime third-party adapter registration via admin UI.** Rejected — bigger E2 scope, larger attack surface, wrong posture for a regulated audience. Curated-only via CDK declarations until the contract is proven; revisit after Phase B.
 
+## Amendments
+
+- **2026-05-16 — Extended by [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md).** ADR-0009 locks the task-routing algorithm (referenced from Decision 2) and the N-annotator defaults + bounds (referenced from Decision 3). It also clarifies that "FDA mandates N=7" — a claim that had been circulating internally — is not supported by any current FDA guidance.
+
 ## References
 
 - Issue: [FG-AI4H/oci-platform#45](https://github.com/FG-AI4H/oci-platform/issues/45) — original Phase B annotation epic (closed and replaced by a new umbrella epic when this ADR lands).
 - [ADR-0003](./0003-tiered-identity-assurance-and-access-requirements.md) — role + GA4GH Passport Visa infrastructure that this ADR reuses for annotation-role assignment.
 - [ADR-0007](./0007-annotation-tool-integration-contract.md) — the tool-integration contract referenced above.
 - [ADR-0008](./0008-annotation-persistence-and-provenance.md) — the persistence + provenance + IRR + retention policy referenced above.
+- [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md) — task-routing + N-annotator policy + segmentation fusion (amends this ADR).
 - ITU-T FG-AI4H DEL05-A03 (2023-01-28) — "Proposed Standard for Data Annotation in Health" (the DRAFT).
 - ISO/IEC 5259 series — AI data quality framework.
 - GA4GH Passport v1.2.
