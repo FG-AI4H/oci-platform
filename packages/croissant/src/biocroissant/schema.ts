@@ -98,6 +98,64 @@ const IrbApproval = z
  */
 const AnonymizationLevel = z.enum(['IDENTIFIED', 'LIMITED', 'DEIDENTIFIED', 'ANONYMIZED']);
 
+/**
+ * Consent legal basis under which the dataset was collected. WHO/ITU
+ * FG-AI4H (2023) §5.5 and WHO 2021 ch. 8 cite this as a non-negotiable
+ * provenance field; EHDS Art. 33-34 (secondary use) bind against it.
+ *
+ *   EXPLICIT_INFORMED      — written informed consent for research / AI use
+ *   OPT_OUT                — implied consent under a published opt-out programme
+ *   RETROSPECTIVE_WAIVER   — IRB waiver of consent for retrospective study
+ *   ARCHIVAL_EXCEPTION     — archival data covered by legal/heritage exception
+ *   PUBLIC_INTEREST        — GDPR Art. 9(2)(i) public-health public-interest basis
+ *   ANONYMOUS_NO_CONSENT   — fully anonymous data not subject to consent law
+ */
+const ConsentBasis = z.enum([
+  'EXPLICIT_INFORMED',
+  'OPT_OUT',
+  'RETROSPECTIVE_WAIVER',
+  'ARCHIVAL_EXCEPTION',
+  'PUBLIC_INTEREST',
+  'ANONYMOUS_NO_CONSENT',
+]);
+
+/**
+ * GDPR / equivalent lawful-basis cell per jurisdiction. Captures both
+ * the Art. 6 (general) and Art. 9 (sensitive-data) cells the data
+ * processing relies on. Free-text article codes ("Art.6(1)(e)",
+ * "Art.9(2)(j)") so non-GDPR regimes (HIPAA §164.512(i), Singapore PDPA,
+ * etc.) can be expressed in the same shape.
+ */
+const LawfulBasis = z
+  .object({
+    /** ISO 3166-1 alpha-2. */
+    jurisdiction: z.string().regex(/^[A-Z]{2}$/, 'expected ISO 3166-1 alpha-2'),
+    /** Free-text framework name, e.g. "GDPR", "HIPAA", "Swiss-FADP". */
+    framework: z.string().min(1).max(50).optional(),
+    /** Article / clause reference, e.g. "Art.6(1)(e)" + "Art.9(2)(j)". */
+    articleRefs: z.array(z.string().max(50)).min(1).max(10),
+    /** Optional narrative — DPO's note, ethics-board rationale. */
+    notes: z.string().max(2000).optional(),
+  })
+  .passthrough();
+
+/**
+ * GDPR controller / processor declarations (Art. 4(7)+(8)). Lifted to
+ * dataset granularity because OCI datasets cross controller boundaries
+ * routinely (host institution = controller, OCI Platform = processor),
+ * and the DPIA (WHO/ITU FG-AI4H 2023 §5.5.2) reads from these fields.
+ */
+const DataParty = z
+  .object({
+    name: z.string().min(1).max(200),
+    /** ISO 3166-1 alpha-2 country where the legal entity is registered. */
+    jurisdictionCountry: z.string().regex(/^[A-Z]{2}$/),
+    /** Contact email — DPO's mailbox or institutional point of contact. */
+    contactEmail: z.string().email().optional(),
+  })
+  .passthrough();
+
+
 export const BioCroissantSchema = z
   .object({
     /**
@@ -136,7 +194,62 @@ export const BioCroissantSchema = z
      */
     consentNotes: z.string().optional(),
 
+    /**
+     * Consent legal basis under which the dataset was collected
+     * (ADR-0013, WHO/ITU FG-AI4H 2023 §5.5). Distinct from
+     * `consentNotes` (free text) and from DUO terms (downstream-use
+     * encoding): this field declares *how* the upstream consent was
+     * obtained at collection time.
+     */
+    consentBasis: ConsentBasis.optional(),
+
     anonymizationLevel: AnonymizationLevel.optional(),
+
+    /**
+     * Per-jurisdiction GDPR / equivalent lawful-basis declarations
+     * (WHO/ITU FG-AI4H 2023 §5.5.1; EU AI Act + EHDS overlap). One
+     * entry per legal regime that gates the processing. Empty array is
+     * acceptable for fully anonymous data outside the scope of any
+     * data-protection regime.
+     */
+    lawfulBasis: z.array(LawfulBasis).max(20).optional(),
+
+    /**
+     * EHDS (Regulation 2025/327) secondary-use data permit identifier.
+     * Required from March 2029 for cross-EU secondary use; populated
+     * earlier on a voluntary basis. Free-text format until EHDS DAB
+     * issuance schemes stabilise.
+     */
+    ehdsDataPermitId: z.string().max(200).optional(),
+
+    /**
+     * Whether redistribution / processing in jurisdictions other than
+     * the source jurisdiction is permitted. When `true`,
+     * `jurisdictionsEligible` lists the authorised set; an empty list
+     * with `crossBorderSharingPermitted=true` means "any jurisdiction"
+     * (rare; OCI surfaces a warning to the host before publish).
+     */
+    crossBorderSharingPermitted: z.boolean().optional(),
+    jurisdictionsEligible: z.array(z.string().regex(/^[A-Z]{2}$/)).max(250).optional(),
+
+    /**
+     * GDPR Art. 4(7) data controller. Independent of any platform-
+     * processor role: OCI is typically the processor, the host
+     * institution the controller.
+     */
+    dataController: DataParty.optional(),
+    /** GDPR Art. 4(8) data processor; absent if controller == processor. */
+    dataProcessor: DataParty.optional(),
+
+    /**
+     * Free-text statement of how the dataset's `populationCharacteristics`
+     * relate to a target population the dataset is suited to support.
+     * WHO 2021 ch. 4 stresses "missing demographics + why" — this field
+     * carries that narrative so a regulator reading the manifest can
+     * understand the gap between the dataset's actual composition and
+     * any deployment population a consumer might apply it to.
+     */
+    representativenessStatement: z.string().max(4000).optional(),
 
     /** clinicaltrials.gov identifier, format `NCT\d{8}`. */
     clinicalTrialId: z
@@ -147,6 +260,8 @@ export const BioCroissantSchema = z
     /**
      * Regulatory classification, free-form. Examples:
      *   "FDA-CDRH 510(k)", "EU-MDR Class IIa", "EU-IVDR Annex VIII".
+     * Phase B may tighten this to a typed pathway enum mirroring
+     * `@oci/shared-types` `RegulatoryPathwaySchema`.
      */
     regulatoryClass: z.string().optional(),
   })
@@ -164,7 +279,15 @@ export const BIOCROISSANT_PROPERTIES = [
   'dataAcquisitionEquipment',
   'irbApproval',
   'consentNotes',
+  'consentBasis',
   'anonymizationLevel',
+  'lawfulBasis',
+  'ehdsDataPermitId',
+  'crossBorderSharingPermitted',
+  'jurisdictionsEligible',
+  'dataController',
+  'dataProcessor',
+  'representativenessStatement',
   'clinicalTrialId',
   'regulatoryClass',
 ] as const;

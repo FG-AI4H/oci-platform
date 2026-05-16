@@ -11,6 +11,7 @@ import { RemoteCatalogModule } from './modules/remote-catalog/remote-catalog.mod
 import { AccessRequestModule } from './modules/access-request/access-request.module.js';
 import { CertificationModule } from './modules/certification/certification.module.js';
 import { IdentityAdminModule } from './modules/identity-admin/identity-admin.module.js';
+import { IntendedUseModule } from './modules/intended-use/intended-use.module.js';
 import { OrcidLinkModule } from './modules/orcid-link/orcid-link.module.js';
 import { PassportIssuerModule } from './modules/passport-issuer/passport-issuer.module.js';
 import { PassportModule } from './modules/passport/passport.module.js';
@@ -45,6 +46,7 @@ import { MeController } from './me/me.controller.js';
     PreferencesModule,
     CertificationModule,
     IdentityAdminModule,
+    IntendedUseModule,
     OrcidLinkModule,
     PassportModule,
     PassportIssuerModule,
