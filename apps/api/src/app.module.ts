@@ -14,6 +14,7 @@ import { IdentityAdminModule } from './modules/identity-admin/identity-admin.mod
 import { OrcidLinkModule } from './modules/orcid-link/orcid-link.module.js';
 import { PassportIssuerModule } from './modules/passport-issuer/passport-issuer.module.js';
 import { PassportModule } from './modules/passport/passport.module.js';
+import { PlatformSettingsModule } from './modules/platform-settings/platform-settings.module.js';
 import { PolicyAcceptanceModule } from './modules/policy-acceptance/policy-acceptance.module.js';
 import { PreferencesModule } from './modules/preferences/preferences.module.js';
 import { RenewalModule } from './modules/renewal/renewal.module.js';
@@ -47,6 +48,7 @@ import { MeController } from './me/me.controller.js';
     OrcidLinkModule,
     PassportModule,
     PassportIssuerModule,
+    PlatformSettingsModule,
     PolicyAcceptanceModule,
     RenewalModule,
     // Phase C: PredictionModule, EvaluationModule

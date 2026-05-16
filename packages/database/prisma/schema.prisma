@@ -12,7 +12,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  schemas  = ["identity", "catalog", "annotation", "prediction", "evaluation", "reporting"]
+  schemas  = ["identity", "catalog", "annotation", "prediction", "evaluation", "reporting", "platform"]
 }
 
 // ==========================================================================
@@ -1067,4 +1067,29 @@ model IdentityAdminAuditEvent {
   @@index([createdAt(sort: Desc)])
   @@map("identity_admin_audit_events")
   @@schema("identity")
+}
+
+/// Cross-cutting platform settings (#242). Single-row table — the
+/// fixed `key='current'` unique constraint enforces the singleton
+/// shape so any admin write replaces, never inserts in parallel.
+///
+/// `value` is JSONB so we can grow the settings surface (maintenance
+/// banner today; #214 tool registry + #235 phase 2 license defaults
+/// next) without a migration per addition. The shape is validated by
+/// `PlatformSettingsSchema` in `@oci/shared-types` at the API
+/// boundary.
+///
+/// `lastUpdatedBySub` is the v5 UUID of the admin who applied the
+/// most recent change (matches `cognitoSubAsUuid` convention used in
+/// the catalog + annotation modules); the username is cached for UI
+/// display.
+model PlatformSetting {
+  key                  String   @id        /// always 'current'
+  value                Json
+  lastUpdatedBySub     String?  @map("last_updated_by_sub")      @db.Uuid
+  lastUpdatedByUsername String? @map("last_updated_by_username")
+  updatedAt            DateTime @updatedAt  @map("updated_at")
+
+  @@map("platform_settings")
+  @@schema("platform")
 }
