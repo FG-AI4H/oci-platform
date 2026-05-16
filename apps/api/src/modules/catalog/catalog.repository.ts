@@ -30,6 +30,13 @@ interface DatasetRow {
   conformanceVersion: string | null;
   croissant: unknown;
   duoTerms: string[];
+  /**
+   * Modality labels denormalised from the manifest at publish time
+   * (#247). Empty when the host hasn't declared structured modality
+   * metadata; the campaign-create form then falls back to "allow all
+   * task kinds".
+   */
+  modalities: string[];
   accessTier: AccessTier;
   commercialUseTerms: CommercialUseTerms;
   commercialClauses: string | null;
@@ -224,6 +231,7 @@ export class CatalogRepository {
       updated_at: Date;
       access_tier: AccessTier;
       commercial_use_terms: CommercialUseTerms;
+      modalities: string[];
     };
 
     const rows = await this.prisma.client.$queryRaw<Row[]>(Prisma.sql`
@@ -237,6 +245,7 @@ export class CatalogRepository {
         d.conformance_version,
         d.access_tier,
         d.commercial_use_terms,
+        d.modalities,
         (
           SELECT v.version
           FROM "catalog"."dataset_versions" v
@@ -343,6 +352,7 @@ export class CatalogRepository {
           requiresAccess: d.requiresAccess,
         })) ?? [],
       duoTerms: ds.duoTerms ?? [],
+      modalities: ds.modalities ?? [],
       hostId: ds.hostId,
       accessTier: ds.accessTier as AccessTier,
       commercialUseTerms: ds.commercialUseTerms as CommercialUseTerms,
@@ -380,6 +390,11 @@ export class CatalogRepository {
     hostId: string;
     visibility: DatasetVisibility;
     duoTerms: string[];
+    /**
+     * Modality labels (#247). Surfaced here so the annotation campaign
+     * service can apply its modality → task-kind guard at create time.
+     */
+    modalities: string[];
     accessTier: AccessTier;
     emailDomainAllowlist: string[];
     commercialUseTerms: CommercialUseTerms;
@@ -392,6 +407,7 @@ export class CatalogRepository {
         hostId: true,
         visibility: true,
         duoTerms: true,
+        modalities: true,
         accessTier: true,
         emailDomainAllowlist: true,
         commercialUseTerms: true,
@@ -404,6 +420,7 @@ export class CatalogRepository {
       hostId: ds.hostId,
       visibility: ds.visibility as DatasetVisibility,
       duoTerms: ds.duoTerms ?? [],
+      modalities: ds.modalities ?? [],
       accessTier: ds.accessTier as AccessTier,
       emailDomainAllowlist: ds.emailDomainAllowlist ?? [],
       commercialUseTerms: ds.commercialUseTerms as CommercialUseTerms,
@@ -426,6 +443,13 @@ export class CatalogRepository {
     conformanceVersion: string;
     /** PR J.1 (#93): DUO ids extracted from the manifest's consentCode. */
     duoTerms: string[];
+    /**
+     * #247: modality labels extracted from the manifest's BIOCroissant
+     * `imagingModality` / `dataModality` slots. Empty when the host
+     * hasn't declared them; the campaign-create form then falls back
+     * to allowing all task kinds.
+     */
+    modalities: string[];
     distributions: Array<{
       croissantId: string;
       contentUrl: string | null;
@@ -481,6 +505,7 @@ export class CatalogRepository {
           conformanceVersion: args.conformanceVersion,
           croissant: args.croissant as Prisma.InputJsonValue,
           duoTerms: args.duoTerms,
+          modalities: args.modalities,
         },
       });
 
@@ -619,6 +644,11 @@ export class CatalogRepository {
         // catalog UI treats as "ask before assuming"). Hosts on the peer
         // surface the real terms via `originUrl`.
         commercialUseTerms: 'CASE_BY_CASE' as const,
+        // We don't introspect peer-side modality metadata; federated
+        // rows can't drive the campaign-create form's task-kind
+        // constraint (#247). Empty here means "no host declaration" —
+        // the form falls back to "allow all task kinds".
+        modalities: [] as string[],
       })),
       totalEstimate,
     };
@@ -638,6 +668,7 @@ function rowToSummary(r: {
   updated_at: Date;
   access_tier: AccessTier;
   commercial_use_terms: CommercialUseTerms;
+  modalities: string[];
 }): DatasetSummary {
   return {
     id: r.id,
@@ -654,5 +685,6 @@ function rowToSummary(r: {
     originUrl: null,
     accessTier: r.access_tier,
     commercialUseTerms: r.commercial_use_terms,
+    modalities: r.modalities ?? [],
   };
 }

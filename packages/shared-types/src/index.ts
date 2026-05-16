@@ -14,6 +14,17 @@ export type {
   EmailDomainAllowlistEntry,
 } from './email-domain.js';
 
+// Modality → allowed task kinds (#247). Shared between the campaign-
+// create form (disables incompatible radios with a rationale tooltip)
+// and the API service guard (rejects incompatible combos with 400).
+export {
+  MODALITY_TASK_KIND_MAP,
+  allowedTaskKindsForModalities,
+  canonicalizeModality,
+  rationaleForDisabledTaskKind,
+} from './modality-task-kinds.js';
+export type { CanonicalModality } from './modality-task-kinds.js';
+
 // ==== Identity ============================================================
 
 export const RoleSchema = z.enum([
@@ -268,6 +279,17 @@ export const DatasetSummarySchema = z.object({
    * at a glance. `CASE_BY_CASE` is the conservative default.
    */
   commercialUseTerms: CommercialUseTermsSchema.default('CASE_BY_CASE'),
+  /**
+   * Modality labels denormalised from the Croissant manifest on publish
+   * (#247). Extracted from BIOCroissant's `bio:imagingModality` /
+   * `bio:dataModality` / matching free-text. Empty when the host
+   * hasn't declared structured modality metadata.
+   *
+   * Drives the campaign-create form's task-kind constraint
+   * (`allowedTaskKindsForModalities`). Authoritative source remains the
+   * manifest; this array is a read-cache the same way `duoTerms` is.
+   */
+  modalities: z.array(z.string()).default([]),
 });
 export type DatasetSummary = z.infer<typeof DatasetSummarySchema>;
 

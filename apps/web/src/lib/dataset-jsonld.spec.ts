@@ -49,6 +49,7 @@ const baseDetail: DatasetDetail = {
   sourceCatalog: null,
   originUrl: null,
   duoTerms: [],
+  modalities: ['X-ray'],
   hostId: '00000000-0000-0000-0000-0000000000aa',
   accessTier: 'OPEN',
   commercialUseTerms: 'CASE_BY_CASE',

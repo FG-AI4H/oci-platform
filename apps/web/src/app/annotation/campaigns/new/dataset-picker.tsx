@@ -4,11 +4,22 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Field, Input, SearchIcon } from '@oci/ui';
 import type { ListDatasetsResponse } from '@oci/shared-types';
 
-interface PickedDataset {
+/**
+ * Dataset summary the picker hands back to the parent form. Carries
+ * the modality labels (#247) so the form can disable incompatible
+ * task-kind radios as soon as the manager picks.
+ */
+export interface PickedDataset {
   id: string;
   slug: string;
   name: string;
   accessTier: string;
+  /**
+   * Modality labels denormalised from the manifest (#247). Empty when
+   * the host hasn't declared structured modality metadata — the form
+   * then leaves every task-kind radio enabled.
+   */
+  modalities: string[];
 }
 
 export interface DatasetPickerProps {
@@ -29,6 +40,12 @@ export interface DatasetPickerProps {
   echoedValue?: string;
   /** Field-level error to render under the hidden input. */
   error?: string;
+  /**
+   * Notify the parent form when the picked dataset changes (#247). The
+   * form uses this to compute the allowed task-kind set and disable
+   * incompatible radios. `null` on `Change` (clear).
+   */
+  onChange?: (picked: PickedDataset | null) => void;
 }
 
 /**
@@ -44,7 +61,7 @@ export interface DatasetPickerProps {
  * Out of scope here: filtering the result set by modality / task-kind
  * compatibility — that's #247.
  */
-export function DatasetPicker({ preselected, echoedValue, error }: DatasetPickerProps) {
+export function DatasetPicker({ preselected, echoedValue, error, onChange }: DatasetPickerProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PickedDataset[]>([]);
   const [picked, setPicked] = useState<PickedDataset | null>(preselected ?? null);
@@ -60,12 +77,15 @@ export function DatasetPicker({ preselected, echoedValue, error }: DatasetPicker
     if (!echoedValue || picked) return;
     let active = true;
     void resolveById(echoedValue).then((found) => {
-      if (active && found) setPicked(found);
+      if (active && found) {
+        setPicked(found);
+        onChange?.(found);
+      }
     });
     return () => {
       active = false;
     };
-  }, [echoedValue, picked]);
+  }, [echoedValue, picked, onChange]);
 
   // Debounced search.
   useEffect(() => {
@@ -103,7 +123,8 @@ export function DatasetPicker({ preselected, echoedValue, error }: DatasetPicker
     setPicked(null);
     setQuery('');
     setResults([]);
-  }, []);
+    onChange?.(null);
+  }, [onChange]);
 
   return (
     <Field
@@ -174,6 +195,7 @@ export function DatasetPicker({ preselected, echoedValue, error }: DatasetPicker
                         onClick={() => {
                           setPicked(d);
                           setOpen(false);
+                          onChange?.(d);
                         }}
                         className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm text-left hover:bg-[var(--color-subtle)] focus-visible:bg-[var(--color-subtle)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
                       >
@@ -214,6 +236,9 @@ async function search(q: string): Promise<PickedDataset[]> {
       slug: row.slug,
       name: row.name,
       accessTier: row.accessTier ?? 'OPEN',
+      // #247: modalities denormalised on the row from the manifest.
+      // Empty when the host hasn't declared them.
+      modalities: row.modalities ?? [],
     }));
   } catch {
     return [];
@@ -235,6 +260,7 @@ async function resolveById(id: string): Promise<PickedDataset | null> {
         slug: found.slug,
         name: found.name,
         accessTier: found.accessTier ?? 'OPEN',
+        modalities: found.modalities ?? [],
       }
     : null;
 }

@@ -54,6 +54,9 @@ export default async function NewCampaignPage({ searchParams }: NewCampaignPageP
         slug: ds.slug,
         name: ds.name,
         accessTier: ds.accessTier ?? 'OPEN',
+        // #247: surface modalities so the form can disable incompatible
+        // task-kind radios with a rationale tooltip.
+        modalities: ds.modalities ?? [],
       };
     }
   } else if (datasetId) {

@@ -7,8 +7,9 @@ import type {
   CampaignOutputLicense,
   CampaignTaskKind,
 } from '@oci/shared-types';
+import { allowedTaskKindsForModalities, rationaleForDisabledTaskKind } from '@oci/shared-types';
 import { createCampaignAction, type CreateCampaignState } from './actions';
-import { DatasetPicker } from './dataset-picker';
+import { DatasetPicker, type PickedDataset } from './dataset-picker';
 
 const initial: CreateCampaignState = { status: 'idle' };
 
@@ -34,6 +35,14 @@ export interface PreselectedDataset {
   slug: string;
   name: string;
   accessTier: string;
+  /**
+   * Modality labels denormalised from the manifest (#247). Drives the
+   * task-kind constraint — radios for incompatible kinds render
+   * disabled with a tooltip explaining why. Empty when the host hasn't
+   * declared modality metadata; the form then allows all task kinds
+   * and the server logs a warning.
+   */
+  modalities: string[];
 }
 
 export interface NewCampaignFormProps {
@@ -61,8 +70,14 @@ export interface NewCampaignFormProps {
  * this feedback); a server-side guard on `POST /v2/annotation/campaigns`
  * mirrors the constraint for defence in depth.
  *
- * Future: when #247 lands, the task-kind radios will additionally
- * disable based on the selected dataset's modality.
+ * Task-kind radios also disable for kinds the selected dataset's
+ * modality can't support (#247). Each disabled radio carries a tooltip
+ * explaining why — `rationaleForDisabledTaskKind` in
+ * `@oci/shared-types/modality-task-kinds`. Until a dataset is picked,
+ * every kind is enabled. When the dataset has no recognised modalities
+ * (host hasn't declared structured metadata) the form also leaves
+ * every kind enabled and the server logs a warning rather than
+ * blocking the manager.
  */
 export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCampaignFormProps) {
   const [state, action, pending] = useActionState(createCampaignAction, initial);
@@ -80,6 +95,20 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
   const [taskKind, setTaskKind] = useState<CampaignTaskKind | null>(initialTask);
   const licenseDefault =
     (echoed?.outputLicense as CampaignOutputLicense | undefined) ?? 'CC-BY-4.0';
+
+  // Picked dataset — preselected from `?datasetSlug=` or chosen via
+  // the typeahead. Drives the modality → task-kind constraint (#247).
+  const [pickedDataset, setPickedDataset] = useState<PickedDataset | null>(
+    preselectedDataset ?? null,
+  );
+
+  // Modality → allowed task-kinds (#247). Until a dataset is picked,
+  // we render no constraint (every radio enabled). The shared mapping
+  // also returns the full set for an empty/unrecognised modality list,
+  // matching the server-side "don't block the manager" fallback.
+  const allowedTaskKinds = pickedDataset
+    ? allowedTaskKindsForModalities(pickedDataset.modalities)
+    : null;
 
   const compatibleTools = taskKind
     ? toolIntegrations.filter((t) => t.supportedTaskKinds.includes(taskKind))
@@ -159,28 +188,64 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
         <p className="text-xs text-[var(--color-muted-foreground)]">
           What annotators produce per data point. Drives the tool picker below and the persistence
           schemaProfile (ADR-0008).
+          {pickedDataset && pickedDataset.modalities.length > 0 ? (
+            <>
+              {' '}
+              Filtered against the dataset modality (
+              <span className="font-medium">{pickedDataset.modalities.join(', ')}</span>).
+            </>
+          ) : null}
         </p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {TASK_KIND_OPTIONS.map((opt) => (
-            <label
-              key={opt.value}
-              className="flex flex-col gap-0.5 rounded-md border border-[var(--color-border)] p-3 text-sm cursor-pointer transition-colors has-[:checked]:border-[var(--color-primary)] has-[:checked]:bg-[var(--color-primary-soft)]/40 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--color-ring)]"
-            >
-              <span className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="taskKind"
-                  value={opt.value}
-                  required
-                  checked={taskKind === opt.value}
-                  onChange={() => setTaskKind(opt.value)}
-                  className="accent-[var(--color-primary)]"
-                />
-                <span className="font-medium">{opt.label}</span>
-              </span>
-              <span className="text-xs text-[var(--color-muted-foreground)] ps-6">{opt.hint}</span>
-            </label>
-          ))}
+          {TASK_KIND_OPTIONS.map((opt) => {
+            const disabledByModality =
+              allowedTaskKinds !== null && !allowedTaskKinds.includes(opt.value);
+            const rationale = disabledByModality
+              ? rationaleForDisabledTaskKind(opt.value, pickedDataset?.modalities ?? [])
+              : undefined;
+            return (
+              <label
+                key={opt.value}
+                title={rationale}
+                aria-describedby={
+                  disabledByModality ? `task-kind-${opt.value}-rationale` : undefined
+                }
+                className={
+                  'flex flex-col gap-0.5 rounded-md border border-[var(--color-border)] p-3 text-sm transition-colors has-[:checked]:border-[var(--color-primary)] has-[:checked]:bg-[var(--color-primary-soft)]/40 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--color-ring)] ' +
+                  (disabledByModality ? 'cursor-not-allowed opacity-50' : 'cursor-pointer')
+                }
+              >
+                <span className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="taskKind"
+                    value={opt.value}
+                    required
+                    checked={taskKind === opt.value}
+                    disabled={disabledByModality}
+                    aria-disabled={disabledByModality || undefined}
+                    onChange={() => {
+                      if (disabledByModality) return;
+                      setTaskKind(opt.value);
+                    }}
+                    className="accent-[var(--color-primary)]"
+                  />
+                  <span className="font-medium">{opt.label}</span>
+                </span>
+                <span className="text-xs text-[var(--color-muted-foreground)] ps-6">
+                  {opt.hint}
+                </span>
+                {disabledByModality ? (
+                  <span
+                    id={`task-kind-${opt.value}-rationale`}
+                    className="text-xs text-[var(--color-muted-foreground)] ps-6"
+                  >
+                    {rationale}
+                  </span>
+                ) : null}
+              </label>
+            );
+          })}
         </div>
         {taskError ? (
           <p className="text-xs text-[var(--color-danger)]" role="alert">
@@ -193,6 +258,20 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
         echoedValue={echoed?.datasetId}
         preselected={preselectedDataset}
         error={datasetError}
+        onChange={(picked) => {
+          setPickedDataset(picked);
+          // If the newly-picked dataset's modality no longer allows the
+          // currently-selected task kind, clear the selection so the
+          // user is forced to pick a compatible one (rather than
+          // silently submitting an incompatible combo that the server
+          // would 400). Empty / unrecognised modality lists fall back
+          // to "allow all" so this branch only fires for the
+          // structurally incompatible case.
+          if (picked && taskKind) {
+            const allowed = allowedTaskKindsForModalities(picked.modalities);
+            if (!allowed.includes(taskKind)) setTaskKind(null);
+          }
+        }}
       />
 
       {/* Tool dropdown — gated on task-kind selection. */}

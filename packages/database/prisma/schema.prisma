@@ -599,6 +599,20 @@ model Dataset {
   /// page + the access-request matcher. Re-extracted on each publish.
   duoTerms String[] @default([]) @map("duo_terms")
 
+  /// Modality labels denormalised from the Croissant manifest on
+  /// publish (#247). Sourced from BIOCroissant's `bio:imagingModality`
+  /// / `bio:dataModality` entries (raw `name` / `termCode` text — no
+  /// vocabulary normalisation here). Empty when the host hasn't
+  /// declared structured modality metadata.
+  ///
+  /// Drives the campaign-create form's task-kind constraint (#247) and
+  /// the API service guard at `POST /v2/annotation/campaigns`. The
+  /// canonical modality → allowed task-kinds map lives in
+  /// `@oci/shared-types/modality-task-kinds`. Authoritative source
+  /// remains the manifest; this array is a read-cache the same way
+  /// `duoTerms` is — re-extracted on each publish.
+  modalities String[] @default([]) @map("modalities")
+
   /// Per-dataset email-domain allowlist (#116, Phase B · DAP). Empty
   /// disables the allowlist; the API then falls back to the heuristic
   /// classifier in `@oci/shared-types/email-domain.ts`. Entries are

@@ -76,6 +76,7 @@ The publish endpoint also:
 - Computes `croissantHash` = SHA-256 of the canonicalised JSON-LD.
 - Stamps `publishedAt` from server time.
 - Inherits `duoTerms` from the manifest's `consentCode`.
+- Inherits `modalities` from the manifest's `bio:imagingModality` / `bio:dataModality` slots (preferring `name`, falling back to `termCode`). The denormalised array drives the annotation-campaign-create form's task-kind constraint (text-only datasets can't be paired with SEGMENTATION, etc.) and is re-extracted on every publish.
 - Adopts platform-hosted `contentUrl`s back to their S3 origin (so a host who uploaded → republished doesn't end up with a manifest pointing at a 400-ing endpoint).
 
 ## What's _not_ in our validator

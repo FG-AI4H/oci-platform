@@ -90,6 +90,7 @@ Errors come back as a structured panel with JSON-pointer paths into the offendin
 - Mirrors `distribution[]` entries into `Distribution` rows, with the contentUrl preserved.
 - For platform-hosted contentUrls (the `/v2/catalog/...` shape), inherits the source distribution's S3 metadata so the gated download path works.
 - Extracts DUO ids from `consentCode[]` and persists them on the dataset (`Dataset.duoTerms`) for fast read.
+- Extracts modality labels from `bio:imagingModality` / `bio:dataModality` and persists them on the dataset (`Dataset.modalities`) for fast read. This drives the annotation-campaign-create form's task-kind constraint — text-only datasets, for example, can't be paired with a SEGMENTATION campaign.
 - Flips `Dataset.status` from DRAFT to PUBLISHED.
 - Bust the detail-page cache so visitors see the new version immediately.
 

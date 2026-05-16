@@ -44,7 +44,7 @@
 -- ----------------------------------------------------------------------------
 
 INSERT INTO "catalog"."datasets"
-    (id, slug, name, description, host_id, visibility, status, access_tier, commercial_use_terms, updated_at)
+    (id, slug, name, description, host_id, visibility, status, access_tier, commercial_use_terms, modalities, updated_at)
 VALUES
     (gen_random_uuid(),
      'rsna-pneumonia-2018',
@@ -55,6 +55,7 @@ VALUES
      'PUBLISHED',
      'OPEN',
      'OK',
+     ARRAY['X-ray'],
      CURRENT_TIMESTAMP),
     (gen_random_uuid(),
      'isic-2019-melanoma',
@@ -65,6 +66,7 @@ VALUES
      'PUBLISHED',
      'REGISTERED',
      'NON_COMMERCIAL_ONLY',
+     ARRAY['Pathology'],
      CURRENT_TIMESTAMP),
     (gen_random_uuid(),
      'uhz-cardiac-mri-2024',
@@ -75,8 +77,38 @@ VALUES
      'PUBLISHED',
      'CONTROLLED',
      'CASE_BY_CASE',
+     ARRAY['MRI'],
+     CURRENT_TIMESTAMP),
+    -- Text-only dataset (#247). The campaign-create form must disable
+    -- the spatial task-kind radios (DETECTION / SEGMENTATION /
+    -- LOCALIZATION) when this dataset is picked; CLASSIFICATION and
+    -- MULTI_MODAL stay enabled. E2E coverage in
+    -- apps/web/e2e/annotation-campaign.spec.ts.
+    (gen_random_uuid(),
+     'demo-clinical-notes-2024',
+     'Demo Clinical Notes 2024 — Text-Only Modality',
+     'Demo placeholder for a text-only clinical-notes dataset. Used to exercise the campaign-create modality → task-kind constraint (#247).',
+     '00000000-0000-4000-8000-000000000099',
+     'PUBLIC',
+     'PUBLISHED',
+     'OPEN',
+     'OK',
+     ARRAY['Text'],
      CURRENT_TIMESTAMP)
 ON CONFLICT (slug) DO NOTHING;
+
+-- Idempotent backfill: existing dev clusters created before #247 hold
+-- rows with empty `modalities`. Top them up so the constraint E2E and
+-- the dataset-detail badge work without requiring a destroy-recreate.
+UPDATE "catalog"."datasets"
+SET "modalities" = ARRAY['X-ray']
+WHERE slug = 'rsna-pneumonia-2018' AND cardinality("modalities") = 0;
+UPDATE "catalog"."datasets"
+SET "modalities" = ARRAY['Pathology']
+WHERE slug = 'isic-2019-melanoma' AND cardinality("modalities") = 0;
+UPDATE "catalog"."datasets"
+SET "modalities" = ARRAY['MRI']
+WHERE slug = 'uhz-cardiac-mri-2024' AND cardinality("modalities") = 0;
 
 -- ----------------------------------------------------------------------------
 -- Section 2 — Annotation campaigns.

@@ -16,6 +16,7 @@ import type {
   CreateCampaignRequest,
   ListCampaignsResponse,
 } from '@oci/shared-types';
+import { allowedTaskKindsForModalities } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import type {
   AnnotationCampaign,
@@ -96,6 +97,42 @@ export class CampaignService {
       throw new BadRequestException(
         `Tool '${tool.slug}' does not support taskKind '${body.taskKind}' ` +
           `(supports: ${tool.supportedTaskKinds.join(', ') || 'none'})`,
+      );
+    }
+
+    // Defence-in-depth #2 (#247): the form disables radios that the
+    // dataset's modality forbids; mirror the constraint here so a
+    // hand-crafted POST can't pair a text-only dataset with a
+    // SEGMENTATION campaign. When the dataset has no recognised
+    // modalities (host hasn't declared, or labels don't match the
+    // canonical vocabulary in @oci/shared-types/modality-task-kinds)
+    // we DON'T block the manager — the curated mapping is opt-in
+    // metadata, not a hard requirement. Instead we log a warning so
+    // hosts get nudged to publish modality metadata that drives the
+    // UX safety net.
+    const dataset = await this.repo.findDatasetModalities(body.datasetId);
+    if (!dataset) {
+      // Cleaner than a deferred FK violation at INSERT.
+      throw new BadRequestException(`datasetId '${body.datasetId}' is not a registered dataset`);
+    }
+    const allowedTaskKinds = allowedTaskKindsForModalities(dataset.modalities);
+    if (!allowedTaskKinds.includes(body.taskKind)) {
+      throw new BadRequestException(
+        `Dataset '${dataset.slug}' modalities ` +
+          `(${dataset.modalities.join(', ') || 'none declared'}) ` +
+          `do not support taskKind '${body.taskKind}' ` +
+          `(allowed: ${allowedTaskKinds.join(', ') || 'none'})`,
+      );
+    }
+    if (dataset.modalities.length === 0) {
+      // Host hasn't declared modality metadata in their manifest.
+      // Audit signal — operators can use this to nudge hosts to
+      // publish richer BIOCroissant fields. Not an error: the form
+      // already allows the manager through in this case.
+      this.logger.warn(
+        `campaign-create: dataset '${dataset.slug}' has no modalities declared; ` +
+          `task-kind constraint fell back to "allow all". Host should publish ` +
+          `bio:imagingModality / bio:dataModality on the next manifest revision.`,
       );
     }
 
