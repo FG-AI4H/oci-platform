@@ -78,10 +78,52 @@ Paste it into the **Croissant manifest** textarea on the publish page. The "Vali
 1. **Croissant 1.0 base** schema (locked since March 2024).
 2. **Croissant 1.1 deltas** (PROV-O, ODRL, DUO consent codes, vocabulary framework).
 3. **RAI extension** (Responsible AI properties — bias, sensitivity, etc.).
-4. **BioCroissant draft** (imaging modality, body region, anonymisation level).
+4. **BioCroissant draft** (imaging modality, body region, anonymisation level, plus the optional data-protection fields described below).
 5. **OCI publish-time checks** (e.g. for non-PUBLIC datasets, at least one `consentCode`).
 
 Errors come back as a structured panel with JSON-pointer paths into the offending fields. Fix and resubmit.
+
+## Optional BIOCroissant data-protection fields (ADR-0013)
+
+The BIOCroissant schema accepts a set of **optional** fields that capture the data-protection provenance regulators expect. None gate publish today; populate when known. Recommended for GDPR / EHDS / EU AI Act–positioned datasets — vendors who later submit AI evaluations against your dataset inherit the structured trail.
+
+```jsonc
+{
+  // … standard BIOCroissant fields above …
+  "bio:consentBasis": "RETROSPECTIVE_WAIVER",
+  "bio:lawfulBasis": [
+    {
+      "jurisdiction": "DE",
+      "framework": "GDPR",
+      "articleRefs": ["Art.6(1)(e)", "Art.9(2)(j)"],
+      "notes": "Public-interest research basis approved by Ethik-Kommission.",
+    },
+  ],
+  "bio:ehdsDataPermitId": "EHDS-DAB-DE-2026-00041",
+  "bio:crossBorderSharingPermitted": true,
+  "bio:jurisdictionsEligible": ["DE", "FR", "CH"],
+  "bio:dataController": {
+    "name": "University Hospital Zürich",
+    "jurisdictionCountry": "CH",
+    "contactEmail": "dpo@usz.ch",
+  },
+  "bio:dataProcessor": { "name": "OCI Platform Operator", "jurisdictionCountry": "CH" },
+  "bio:representativenessStatement": "Cohort skews ages 40–75; subgroup analyses below 40 are under-powered.",
+}
+```
+
+| Field | Why it matters |
+|---|---|
+| `bio:consentBasis` | EU AI Act Art. 9 + GDPR Art. 6/9 — declares *how* the upstream consent was obtained. Enum (see [docs/for-developers/api-reference.md](../for-developers/api-reference.md#biocroissant-manifest-extensions-data-protection)). |
+| `bio:lawfulBasis[]` | Per-jurisdiction lawful-basis cells. Non-GDPR regimes (HIPAA §164.512(i), Singapore PDPA, Swiss FADP) use the same shape with their own `framework` + `articleRefs`. |
+| `bio:ehdsDataPermitId` | EHDS Art. 33–34 secondary-use Data Permit. Required from March 2029 for cross-EU secondary use; voluntary today. |
+| `bio:crossBorderSharingPermitted` + `bio:jurisdictionsEligible[]` | Whether the data may be processed outside its source jurisdiction, and where. |
+| `bio:dataController` / `bio:dataProcessor` | GDPR Art. 4(7) / 4(8) — declares the controller/processor split. Drives the DPIA the access-request flow produces. |
+| `bio:representativenessStatement` | Free-text "what populations are under-represented and why" — WHO 2021 ch. 4. Surfaces to vendors evaluating models against the dataset. |
+
+### What is NOT a dataset field
+
+The **Intended-Use Statement** (medical purpose, target population, foreseeable misuse, contraindications, IMDRF risk tier) attaches to AI submissions (the ModelCard, Phase C), **never to a dataset**. A dataset is a multi-purpose resource — the same chest-X-ray set can train a Tier I research model, a Tier II screening tool, or a Tier IV standalone diagnostic. Vendors declare their IUS when they submit their model; OCI then derives the matching question from your dataset's `bio:populationCharacteristics` + the fields above. Don't put an IUS on the manifest. See [ADR-0013](../adr/0013-intended-use-statement-and-risk-tier.md) (especially the 2026-05-17 amendment) for the full rationale.
 
 ## What the platform does on publish
 

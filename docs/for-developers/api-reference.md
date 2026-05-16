@@ -300,6 +300,63 @@ Caller's audit trail. Most-recent-first list. Excludes the bulky `policyText` fr
 
 Response: `ListPolicyAcceptancesResponse` — `{ items: PolicyAcceptanceReceipt[] }`.
 
+## Intended-Use Statement (ADR-0013)
+
+Regulator-facing helper for the IMDRF risk-tier auto-derivation table committed by [ADR-0013](../adr/0013-intended-use-statement-and-risk-tier.md). Pure derivation — no persistence. Drives the model-submission wizard hint on the web side and the CEAR / AI-MDR-Bridge report scaffolds (Phase C).
+
+The Intended-Use Statement (IUS) attaches to the **AI submission (`ModelCard`)**, never to a dataset. A dataset is a multi-purpose resource — pinning a single IUS to a dataset would prejudge the device. Dataset suitability for a given IUS is a *matching* concern resolved by reading the dataset's provenance + characteristics fields. See the same-day amendment on ADR-0013 for the full rationale.
+
+### `POST /v2/intended-use/derive-risk-tier` _(any auth)_
+
+Request body (validated against `IntendedUseStatementSchema` partial; only the fields the matrix consumes are required):
+
+```json
+{
+  "medicalPurpose": "diagnosis",
+  "intendedClinicalPathway": "standalone",
+  "operatingEnvironment": ["hospital-outpatient"]
+}
+```
+
+- `medicalPurpose` (required): `screening` | `diagnosis` | `triage` | `treatment-planning` | `monitoring` | `prognosis` | `clinical-decision-support` | `administrative` | `patient-education` | `research-only` | `other`.
+- `intendedClinicalPathway` (optional): `standalone` | `adjunct-with-confirmation` | `triage-before-clinician` | `screening-before-specialist` | `research-only`.
+- `operatingEnvironment[]` (optional): array of `primary-care` | `hospital-inpatient` | `hospital-outpatient` | `emergency` | `field-or-community` | `home-or-telehealth` | `lab` | `research`.
+
+Response:
+
+```json
+{
+  "autoDerivedTier": "IV",
+  "rationale": "Standalone diagnosis drives autonomous clinical action; auto-tiered IV."
+}
+```
+
+- `autoDerivedTier`: IMDRF risk class — `I` / `II` / `III` / `IV`.
+- `rationale`: short, UI-renderable string explaining the derivation. Always present.
+
+The derivation is a pure function of the IUS (IMDRF Tables 5/6, condensed). The same logic is exposed as `deriveRiskTier()` in `@oci/shared-types` and can be called directly from a Next.js form without round-tripping the API.
+
+#### Override-with-justification
+
+When the model submitter later declares a tier ≥ 2 levels above the auto-derived tier, `IntendedUseService.validate()` will require a `riskTierJustification` (free-text, ≤ 4000 chars) on the IUS payload. This service is invoked by the `prediction` module's model-card submission path (🚧 Planned, [#260](https://github.com/FG-AI4H/oci-platform/issues/260)).
+
+## BIOCroissant manifest extensions (data-protection)
+
+[ADR-0013](../adr/0013-intended-use-statement-and-risk-tier.md) ships alongside a set of **optional** BIOCroissant manifest fields that surface provenance regulators expect. None gate publish today; populate when known.
+
+| Field | Type | Purpose |
+|---|---|---|
+| `bio:consentBasis` | enum | `EXPLICIT_INFORMED` / `OPT_OUT` / `RETROSPECTIVE_WAIVER` / `ARCHIVAL_EXCEPTION` / `PUBLIC_INTEREST` / `ANONYMOUS_NO_CONSENT` |
+| `bio:lawfulBasis[]` | array | One per applicable jurisdiction. Each: `{ jurisdiction: 'DE', framework?: 'GDPR', articleRefs: ['Art.6(1)(e)', 'Art.9(2)(j)'], notes?: '…' }`. |
+| `bio:ehdsDataPermitId` | string | EHDS (Regulation 2025/327) secondary-use Data Permit identifier. Required from March 2029 for cross-EU secondary use; voluntary earlier. |
+| `bio:crossBorderSharingPermitted` | boolean | Whether redistribution outside the source jurisdiction is allowed. |
+| `bio:jurisdictionsEligible[]` | array of ISO 3166-1 alpha-2 | When `crossBorderSharingPermitted=true`, the authorised set. Empty + true means "any jurisdiction" (rare; the publish UI surfaces a warning). |
+| `bio:dataController` | object | GDPR Art. 4(7) controller: `{ name, jurisdictionCountry, contactEmail? }`. |
+| `bio:dataProcessor` | object | GDPR Art. 4(8) processor (absent when controller == processor). |
+| `bio:representativenessStatement` | string ≤ 4000 | Free-text narrative of how `bio:populationCharacteristics` relates to any target deployment population — captures the "missing demographics + why" framing called out by WHO 2021 ch. 4. |
+
+The complete BIOCroissant schema is in [`packages/croissant/src/biocroissant/schema.ts`](../../packages/croissant/src/biocroissant/schema.ts).
+
 ## Errors
 
 The API emits RFC 7807 `application/problem+json` for all error responses:

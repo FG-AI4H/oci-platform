@@ -47,6 +47,53 @@ The OCI is designed to be **configured for your jurisdiction**, not to claim one
 
 The full security baseline is in [`docs/security.md`](../security.md).
 
+## Mapping OCI artefacts to specific clauses
+
+A second, complementary map: which OCI artefact contributes to which clause of the EU AI Act, EHDS, EU MDR, and GDPR Art. 89 research basis. Anchored to [ADR-0013](../adr/0013-intended-use-statement-and-risk-tier.md), [ADR-0014](../adr/0014-evidence-audit-trail-and-regulator-export.md), and [ADR-0015](../adr/0015-lmm-extensibility-door-openers.md). Items marked 🚧 are planned-not-yet-live; the issue number links the work item.
+
+### EU AI Act (Regulation 2024/1689) — high-risk AI obligations
+
+| Clause | OCI artefact | State |
+|---|---|---|
+| Art. 9 (data governance) | BIOCroissant manifest provenance fields (modality, body region, condition, demographics, IRB, `consentBasis`, `anonymizationLevel`, `lawfulBasis[]`, `dataController`/`dataProcessor`) + DUO permission terms + dataset access tier (`OPEN`/`REGISTERED`/`CONTROLLED`/`SENSITIVE`) | ✅ Live (BIOCroissant ext. landed in PR #272) |
+| Art. 10 (data + data governance for high-risk AI) | Annotation provenance ([ADR-0008](../adr/0008-annotation-persistence-and-provenance.md)) + IRR ([ADR-0009](../adr/0009-annotation-task-assignment-and-multi-rater-policy.md)) + dataset version immutability | 🚧 Annotation track Phase B (#212 + sub-epics) |
+| Art. 11 (technical documentation) | BIOCroissant manifest + ModelCard (Phase C) + CEAR (Phase D) | 🚧 Planned ([#260](https://github.com/FG-AI4H/oci-platform/issues/260), [#265](https://github.com/FG-AI4H/oci-platform/issues/265)) |
+| Art. 12 (record-keeping) | Append-only `AuditEvent` table + signed `GET /v2/audit/export` bundle (ADR-0014) | 🚧 Planned ([#257](https://github.com/FG-AI4H/oci-platform/issues/257), [#259](https://github.com/FG-AI4H/oci-platform/issues/259)) |
+| Art. 13 (transparency to user) | Model Facts Label — auto-rendered one-page summary from the AI submission's IUS + evaluation results (WHO 2021 Fig. 7) | 🚧 Planned ([#261](https://github.com/FG-AI4H/oci-platform/issues/261)) |
+| Art. 14 (human oversight) | Annotation 3-gate SOP ([ADR-0009](../adr/0009-annotation-task-assignment-and-multi-rater-policy.md)) + Clinical Evaluator role (Phase C) | 🚧 Annotation Phase B (live for annotators) / Phase C (Clinical Evaluator role) |
+| Art. 15 (accuracy + robustness + cybersecurity) | Fairness / subgroup report (per-group sens/spec/AUC with CIs; ≥ 5% delta flagged) + external validation typing + risk-tier-gated evidence rigor | 🚧 Planned ([#263](https://github.com/FG-AI4H/oci-platform/issues/263), [#264](https://github.com/FG-AI4H/oci-platform/issues/264)) |
+| Art. 72 (post-market monitoring) | PMS dashboard + drift-event API | 🚧 Planned ([#267](https://github.com/FG-AI4H/oci-platform/issues/267)) |
+
+### EHDS (Regulation 2025/327) — secondary use of health data
+
+| Clause | OCI artefact | State |
+|---|---|---|
+| Art. 33–34 (secondary-use permits) | BIOCroissant `ehdsDataPermitId` + `lawfulBasis[]` per-jurisdiction array on the manifest | ✅ Live as schema (passthrough optional) |
+| Art. 50 (Data Access Body interface) | DUO + access-request matcher + audit log of every decision | ✅ Live (catalog access-request flow) |
+| Art. 56 (cross-border secondary use) | BIOCroissant `crossBorderSharingPermitted` + `jurisdictionsEligible[]` declaration | ✅ Live as schema |
+
+### EU MDR (Regulation 2017/745) — medical-device technical documentation
+
+| Annex | OCI artefact | State |
+|---|---|---|
+| Annex II §B.1 (device description, intended use) | ModelCard.intendedUse (ADR-0013) | 🚧 Planned ([#260](https://github.com/FG-AI4H/oci-platform/issues/260)) |
+| Annex II §B.4 (risk analysis) | IMDRF risk-tier auto-derivation + override-with-justification (ADR-0013 §3) | ✅ Live as schema |
+| Annex II §B.5 (data verification + validation) | Evaluation module + external validation typing + reproducibility manifest | 🚧 Planned ([#262](https://github.com/FG-AI4H/oci-platform/issues/262)) |
+| Annex II §6 (clinical evaluation) | CEAR — Clinical Evaluation Assessment Report generator | 🚧 Planned ([#265](https://github.com/FG-AI4H/oci-platform/issues/265)) |
+| AI-MDR Bridge Report (cross-cutting) | Maps every OCI artefact to MDR Annex II / III clauses for Notified Body submissions | 🚧 Planned ([#266](https://github.com/FG-AI4H/oci-platform/issues/266)) |
+
+### GDPR (Regulation 2016/679)
+
+The existing GDPR table below covers the high-level posture; the new BIOCroissant fields tighten specific points:
+
+- **Art. 4(7)/4(8)** (controller / processor): `dataController` + `dataProcessor` fields on the manifest.
+- **Art. 6 / Art. 9** (lawful basis / sensitive data): `lawfulBasis[]` per-jurisdiction array with article references.
+- **Art. 89** (research exemption): `consentBasis` enum value `RETROSPECTIVE_WAIVER` or `PUBLIC_INTEREST` captures the legal basis.
+
+### Note on Intended-Use Statement scope
+
+The Intended-Use Statement (IUS) and IMDRF risk tier attach to the **AI submission / ModelCard**, **never to the dataset**. A dataset is a multi-purpose resource: the same chest-X-ray set may train a Tier I research model, a Tier II screening tool, or a Tier IV standalone diagnostic — pinning a single IUS to the dataset would prejudge the device. Dataset suitability for a given IUS is a *matching* concern resolved by reading the dataset's existing provenance + characteristic fields. See [ADR-0013](../adr/0013-intended-use-statement-and-risk-tier.md) (especially the 2026-05-17 amendment) for the full rationale.
+
 ## Mapping to common regulatory regimes
 
 This is a partial, illustrative map. **Each row is a hint, not a certification.** Substantive coverage depends on configuration and process.

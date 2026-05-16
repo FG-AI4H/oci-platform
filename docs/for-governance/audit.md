@@ -79,6 +79,54 @@ In Cognito (separate from the catalogue DB):
 
 A **regulator audit-trail export endpoint** is planned for Phase D. Until then, regulator audits are run by the operator via direct read-only access to the audit data.
 
+## Architectural commitment — append-only audit feed + signed regulator export ([ADR-0014](../adr/0014-evidence-audit-trail-and-regulator-export.md))
+
+🚧 **Planned — Phase B foundation, Phase C export.** Not yet implemented. The shape and contract are committed; the work is tracked under [#257](https://github.com/FG-AI4H/oci-platform/issues/257) (audit package + table), [#258](https://github.com/FG-AI4H/oci-platform/issues/258) (CI coverage gate), [#259](https://github.com/FG-AI4H/oci-platform/issues/259) (export endpoint).
+
+### `AuditEvent` shape
+
+A single append-only Postgres table mirrors regulator-grade domain facts from every module. Each row carries:
+
+- `id`, `occurredAt`, `sequenceNumber` (BIGINT auto-increment for chain ordering).
+- `module` (`catalog`, `annotation`, `access-request`, …) + `action` (`dataset.published`, `evaluation.submitted`, `dua.signed`, …).
+- `subjectType` + `subjectId` — what the event is about (dataset, model, evaluation, user, …).
+- `actorUserId` + `actorRoles[]` — who did it; roles snapshotted at emission time.
+- `payload` (JSON-LD) — module-defined; round-trips with a stable canonicalisation (RFC 8785 JCS).
+- `payloadHash` (sha256 of canonical payload), `previousHash` (chain pointer), `recordHash` (sha256 of the row minus `recordHash`).
+- `retentionClass` — `short-1y` / `standard-7y` / `legal-hold`.
+
+**Append-only is enforced in Postgres**, not the application layer: `BEFORE UPDATE` / `BEFORE DELETE` triggers raise on the table. The retention sweeper uses a `SECURITY DEFINER` carve-out and writes archived rows to an S3 Object Lock bucket before deletion.
+
+### Hash chain
+
+Each row's `recordHash` references the previous row's hash. A daily Lambda verifies the chain end-to-end and anchors the chain root to S3 Object Lock. We do not claim cryptographic untamperability against a Postgres admin — we claim **detectability**. A bundle export (see below) carries the chain root at export time so a future verifier can prove no event was edited between emission and read.
+
+### Retention classes
+
+| Class | Purpose | Default |
+|---|---|---|
+| `short-1y` | Operational chatter (login events, etc. — mostly not in this table at all). | 1 year |
+| `standard-7y` | Default for every domain event: dataset/model/evaluation lifecycle, access decisions, DUA signatures, role grants. | 7 years |
+| `legal-hold` | Operator-set per-subject; never auto-deleted. | indefinite |
+
+### Regulator-export endpoint
+
+`GET /v2/audit/export?subjectType=<...>&subjectId=<...>&since=&until=&includeRelated=` — gated to `regulatory-advisor` or `admin` Visas per [ADR-0003](../adr/0003-tiered-identity-assurance-and-access-requirements.md). Returns a streaming ZIP:
+
+```
+manifest.jsonld      — subject metadata, query parameters, chain anchor
+events.ndjson        — newline-delimited audit events
+signature.cose       — COSE_Sign1 envelope (KMS-signed, ECDSA-P256-SHA256)
+chain-root.txt       — hash chain root at export time + S3 Object Lock pointer
+README.md            — offline verification instructions
+```
+
+The bundle is self-verifying: any future regulator can read it six years later without platform connectivity, validate the signature against the published KMS public key, and recompute the chain locally.
+
+### What's already covered today (without `AuditEvent`)
+
+Until the `@oci/audit` package + table land, the platform writes operational facts into per-module tables (`AccessRequest.statusHistory`, `DuaSigning.events`, `PolicyAcceptance.history`). Those continue to exist after `AuditEvent` lands — they remain the operational surface; `AuditEvent` is the regulator-grade mirror written in the same transaction. No data is moved or duplicated semantically; the export endpoint reads `AuditEvent` plus selectively joins the operational tables when `includeRelated=true`.
+
 ## How to verify a model's training-data claims
 
 A claim like _"trained on RSNA Pneumonia 2018 v1.0.0 (manifest sha256:abc…)"_ is verifiable end-to-end:
