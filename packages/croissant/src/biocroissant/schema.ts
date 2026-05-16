@@ -155,7 +155,6 @@ const DataParty = z
   })
   .passthrough();
 
-
 export const BioCroissantSchema = z
   .object({
     /**
@@ -230,7 +229,10 @@ export const BioCroissantSchema = z
      * (rare; OCI surfaces a warning to the host before publish).
      */
     crossBorderSharingPermitted: z.boolean().optional(),
-    jurisdictionsEligible: z.array(z.string().regex(/^[A-Z]{2}$/)).max(250).optional(),
+    jurisdictionsEligible: z
+      .array(z.string().regex(/^[A-Z]{2}$/))
+      .max(250)
+      .optional(),
 
     /**
      * GDPR Art. 4(7) data controller. Independent of any platform-

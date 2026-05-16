@@ -140,13 +140,10 @@ export const IntendedUseStatementSchema = z
     riskTierJustification: z.string().max(4000).optional(),
   })
   .strict()
-  .refine(
-    (ius) => ius.medicalPurpose !== 'other' || (ius.medicalPurposeOther?.length ?? 0) > 0,
-    {
-      message: 'medicalPurposeOther is required when medicalPurpose is "other"',
-      path: ['medicalPurposeOther'],
-    },
-  );
+  .refine((ius) => ius.medicalPurpose !== 'other' || (ius.medicalPurposeOther?.length ?? 0) > 0, {
+    message: 'medicalPurposeOther is required when medicalPurpose is "other"',
+    path: ['medicalPurposeOther'],
+  });
 export type IntendedUseStatement = z.infer<typeof IntendedUseStatementSchema>;
 
 /**
@@ -174,10 +171,7 @@ export function deriveRiskTier(
   if (medicalPurpose === 'patient-education') return 'I';
 
   // Critical-pathway clinical decisions
-  if (
-    medicalPurpose === 'diagnosis' ||
-    medicalPurpose === 'treatment-planning'
-  ) {
+  if (medicalPurpose === 'diagnosis' || medicalPurpose === 'treatment-planning') {
     if (intendedClinicalPathway === 'standalone') return 'IV';
     if (intendedClinicalPathway === 'adjunct-with-confirmation') return 'III';
     return 'III';
@@ -214,10 +208,7 @@ export function deriveRiskTier(
  * enough" to require `riskTierJustification`. ADR-0013 §2: ≥ 2 tiers
  * up requires justification; ≤ 1 tier or any downward move is free.
  */
-export function overrideRequiresJustification(
-  autoDerived: RiskTier,
-  declared: RiskTier,
-): boolean {
+export function overrideRequiresJustification(autoDerived: RiskTier, declared: RiskTier): boolean {
   // eslint-disable-next-line security/detect-object-injection -- typed RiskTier keys, total over `RISK_TIER_RANK`
   const delta = RISK_TIER_RANK[declared] - RISK_TIER_RANK[autoDerived];
   return delta >= 2;

@@ -495,7 +495,31 @@ jobs:
           echo "Task stopped reason: $STOPPED_REASON"
 
           if [[ "$EXIT" != "0" ]]; then
-            echo "::error::Migrate task did not exit zero (exit=$EXIT, reason='$REASON', stopped='$STOPPED_REASON'). Check CloudWatch log group /oci/$ENV/api stream prefix migrate." >&2
+            # Surface the container's own stdout/stderr inline so the
+            # operator can see WHY migrate exited non-zero without
+            # round-tripping to the CloudWatch console. The log stream
+            # name is `<stream-prefix>/<container-name>/<task-id>`;
+            # MigrateTaskDef declares streamPrefix=`migrate` and the
+            # container name is `migrate`, so the stream is
+            # `migrate/migrate/<task-id>`.
+            TASK_ID="${TASK_ARN##*/}"
+            STREAM="migrate/migrate/${TASK_ID}"
+            LOG_GROUP="/oci/$ENV/api"
+            echo "::group::Migrate container logs ($LOG_GROUP $STREAM)"
+            # `--start-from-head` so output is chronological; cap at
+            # 500 events which is enough for a Prisma migration / seed
+            # failure trace. Tolerate the call failing — e.g. the
+            # stream isn't visible yet (rare) or perms changed — so
+            # the deploy still reports a useful error.
+            aws logs get-log-events \
+              --log-group-name "$LOG_GROUP" \
+              --log-stream-name "$STREAM" \
+              --start-from-head \
+              --limit 500 \
+              --output text \
+              --query 'events[].[timestamp,message]' 2>&1 | tail -500 || true
+            echo "::endgroup::"
+            echo "::error::Migrate task did not exit zero (exit=$EXIT, reason='$REASON', stopped='$STOPPED_REASON'). Container logs above; full stream at CloudWatch $LOG_GROUP $STREAM." >&2
             exit 1
           fi
           echo "Migrations applied (or no-op if up to date)."
