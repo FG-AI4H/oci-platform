@@ -22,6 +22,11 @@ export default tseslint.config(
       '**/*.d.ts',
       'apps/web/next-env.d.ts',
       'packages/database/src/generated/**',
+      // Seed fixtures — one-off generators (`generate.mjs`) + binary
+      // assets shipped alongside the SQL seed (#251). The generators
+      // use array-index access + filesystem writes with constructed
+      // paths; both intentional and not worth a per-line disable.
+      'packages/database/seed/fixtures/**',
     ],
   },
 
