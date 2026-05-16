@@ -7,9 +7,9 @@
 
 ## Context
 
-A convergent reading of five WHO publications (2021 *Ethics & Governance of AI for Health*, 2023 *Regulatory Considerations on AI for Health*, 2024 *LMM Guidance*, 2026 *AI and Evidence-Informed Policy*, 2026 WHO Europe *EU Readiness*) surfaced **Intended Use** as the most-cited foundation for everything downstream: risk classification, evidence rigor, model card content, post-market surveillance scope, regulatory pathway, and subgroup-fairness analysis all depend on it. The WHO/ITU FG-AI4H regulatory document devotes its entire §5.3 to it; WHO 2021 makes it a required "Model Facts" element (Figure 7); the EU Readiness doc maps it directly to the EU AI Act high-risk obligations matrix.
+A convergent reading of five WHO publications (2021 _Ethics & Governance of AI for Health_, 2023 _Regulatory Considerations on AI for Health_, 2024 _LMM Guidance_, 2026 _AI and Evidence-Informed Policy_, 2026 WHO Europe _EU Readiness_) surfaced **Intended Use** as the most-cited foundation for everything downstream: risk classification, evidence rigor, model card content, post-market surveillance scope, regulatory pathway, and subgroup-fairness analysis all depend on it. The WHO/ITU FG-AI4H regulatory document devotes its entire §5.3 to it; WHO 2021 makes it a required "Model Facts" element (Figure 7); the EU Readiness doc maps it directly to the EU AI Act high-risk obligations matrix.
 
-OCI today has **request-side** intended use ([`IntendedUseCategorySchema`](../../packages/shared-types/src/index.ts) — `NON_COMMERCIAL_RESEARCH` / `COMMERCIAL_RESEARCH` / `CLINICAL_CARE` / `EDUCATION`) used by access-request flows. This is necessary but not sufficient: it describes what the requester intends to do with the data, not what the AI device is medically *for*. The latter — the device's medical purpose, target population, intended user, operating environment, foreseeable misuse, contraindications — is unmodeled.
+OCI today has **request-side** intended use ([`IntendedUseCategorySchema`](../../packages/shared-types/src/index.ts) — `NON_COMMERCIAL_RESEARCH` / `COMMERCIAL_RESEARCH` / `CLINICAL_CARE` / `EDUCATION`) used by access-request flows. This is necessary but not sufficient: it describes what the requester intends to do with the data, not what the AI device is medically _for_. The latter — the device's medical purpose, target population, intended user, operating environment, foreseeable misuse, contraindications — is unmodeled.
 
 Without it the platform cannot:
 
@@ -26,33 +26,33 @@ This ADR locks the schema and the vocabulary. It does **not** scaffold the `eval
 
 ### 1. Intended-Use Statement (IUS) is a typed object on AI submissions
 
-The IUS schema lives in `@oci/shared-types` as `IntendedUseStatementSchema`. It is the single source of truth for "what is this *AI device* medically for". One carrier:
+The IUS schema lives in `@oci/shared-types` as `IntendedUseStatementSchema`. It is the single source of truth for "what is this _AI device_ medically for". One carrier:
 
 - **AI submissions / model cards** — IUS is required at the moment a model is submitted to the future `prediction` / `evaluation` modules (Phase C). Stored on `ModelCard.intendedUse` JSONB column (Phase C). Drives risk-tier auto-derivation, evidence-rigor selection, Model Facts Label, CEAR, AI-MDR Bridge Report, PMS scope, fairness-report scope, and the regulator-export bundle.
 
 **Datasets are explicitly NOT a carrier.** A dataset is a resource that can be reused across many medical purposes (a chest-X-ray set can train a Tier I research model, a Tier II screening tool, or a Tier IV standalone diagnostic). Pinning a single IUS onto a dataset prejudges the device and would be friction with no downstream benefit. Dataset suitability for a given IUS is a matching concern resolved by reading the dataset's existing provenance + characteristic fields (modality, body region, condition, demographics, IRB approval, consent basis, anonymisation level, lawful basis, EHDS permit) — all of which live in BIOCroissant already.
 
-Request-side intended use ([`IntendedUseCategorySchema`](../../packages/shared-types/src/index.ts) — `NON_COMMERCIAL_RESEARCH` / `COMMERCIAL_RESEARCH` / …) remains where it is: on the access request. That field describes the *requester's* intent, distinct from the device's IUS.
+Request-side intended use ([`IntendedUseCategorySchema`](../../packages/shared-types/src/index.ts) — `NON_COMMERCIAL_RESEARCH` / `COMMERCIAL_RESEARCH` / …) remains where it is: on the access request. That field describes the _requester's_ intent, distinct from the device's IUS.
 
 ### 2. Field set (locked vocabulary)
 
 The IUS contains exactly the following:
 
-| Field | Type | Notes |
-|---|---|---|
-| `medicalPurpose` | enum: `screening`, `diagnosis`, `triage`, `treatment-planning`, `monitoring`, `prognosis`, `clinical-decision-support`, `administrative`, `patient-education`, `research-only`, `other` | "What clinical job does this do?" |
-| `medicalPurposeOther` | string ≤ 200 | Required iff `medicalPurpose=other`. |
-| `bodySystemOrSite` | open string ≤ 200 | FMA / SNOMED CT-class concept; free text until vocabulary service lands. |
-| `targetPopulation` | object | `ageRangeYears`, `sexEligibility`, `clinicalStrata[]` (free-text codes), `populationDescription` narrative (≤ 2000). |
-| `intendedUserRole` | enum: `nurse`, `general-clinician`, `specialist`, `radiologist`, `pathologist`, `lab-tech`, `patient`, `researcher`, `administrator`, `other` | Multi-valued. |
-| `operatingEnvironment` | enum: `primary-care`, `hospital-inpatient`, `hospital-outpatient`, `emergency`, `field-or-community`, `home-or-telehealth`, `lab`, `research` | Multi-valued. |
-| `intendedClinicalPathway` | enum: `standalone`, `adjunct-with-confirmation`, `triage-before-clinician`, `screening-before-specialist`, `research-only` | Drives the human-oversight expectations. |
-| `operatingPrinciple` | open string ≤ 1000 | "Rule-based on lab values" / "CNN over chest X-ray" / "LLM with RAG over EHR" — short narrative. |
-| `foreseeableMisuse` | string ≤ 4000 | Required. WHO/ITU §5.3.2: "developers must document foreseeable misuse." |
-| `contraindications` | string ≤ 4000 | Required. Empty value is allowed but the field is not. |
-| `riskTier` | enum: `I`, `II`, `III`, `IV` | IMDRF significance × healthcare-situation severity. Auto-suggested by the platform from `medicalPurpose` + `intendedClinicalPathway` + `operatingEnvironment` per the IMDRF Table 5/6 matrix; submitter can override but must record `riskTierJustification` (≥ 50 chars) when override raises tier ≥ III. |
-| `riskTierJustification` | string ≤ 4000 | Required when `riskTier` was overridden upward. |
-| `regulatoryPathway` | reuses [`RegulatoryPathwaySchema`](../../packages/shared-types/src/index.ts) | Already exists for access requests; same vocabulary applies here. Optional. |
+| Field                     | Type                                                                                                                                                                                    | Notes                                                                                                                                                                                                                                                                                                      |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `medicalPurpose`          | enum: `screening`, `diagnosis`, `triage`, `treatment-planning`, `monitoring`, `prognosis`, `clinical-decision-support`, `administrative`, `patient-education`, `research-only`, `other` | "What clinical job does this do?"                                                                                                                                                                                                                                                                          |
+| `medicalPurposeOther`     | string ≤ 200                                                                                                                                                                            | Required iff `medicalPurpose=other`.                                                                                                                                                                                                                                                                       |
+| `bodySystemOrSite`        | open string ≤ 200                                                                                                                                                                       | FMA / SNOMED CT-class concept; free text until vocabulary service lands.                                                                                                                                                                                                                                   |
+| `targetPopulation`        | object                                                                                                                                                                                  | `ageRangeYears`, `sexEligibility`, `clinicalStrata[]` (free-text codes), `populationDescription` narrative (≤ 2000).                                                                                                                                                                                       |
+| `intendedUserRole`        | enum: `nurse`, `general-clinician`, `specialist`, `radiologist`, `pathologist`, `lab-tech`, `patient`, `researcher`, `administrator`, `other`                                           | Multi-valued.                                                                                                                                                                                                                                                                                              |
+| `operatingEnvironment`    | enum: `primary-care`, `hospital-inpatient`, `hospital-outpatient`, `emergency`, `field-or-community`, `home-or-telehealth`, `lab`, `research`                                           | Multi-valued.                                                                                                                                                                                                                                                                                              |
+| `intendedClinicalPathway` | enum: `standalone`, `adjunct-with-confirmation`, `triage-before-clinician`, `screening-before-specialist`, `research-only`                                                              | Drives the human-oversight expectations.                                                                                                                                                                                                                                                                   |
+| `operatingPrinciple`      | open string ≤ 1000                                                                                                                                                                      | "Rule-based on lab values" / "CNN over chest X-ray" / "LLM with RAG over EHR" — short narrative.                                                                                                                                                                                                           |
+| `foreseeableMisuse`       | string ≤ 4000                                                                                                                                                                           | Required. WHO/ITU §5.3.2: "developers must document foreseeable misuse."                                                                                                                                                                                                                                   |
+| `contraindications`       | string ≤ 4000                                                                                                                                                                           | Required. Empty value is allowed but the field is not.                                                                                                                                                                                                                                                     |
+| `riskTier`                | enum: `I`, `II`, `III`, `IV`                                                                                                                                                            | IMDRF significance × healthcare-situation severity. Auto-suggested by the platform from `medicalPurpose` + `intendedClinicalPathway` + `operatingEnvironment` per the IMDRF Table 5/6 matrix; submitter can override but must record `riskTierJustification` (≥ 50 chars) when override raises tier ≥ III. |
+| `riskTierJustification`   | string ≤ 4000                                                                                                                                                                           | Required when `riskTier` was overridden upward.                                                                                                                                                                                                                                                            |
+| `regulatoryPathway`       | reuses [`RegulatoryPathwaySchema`](../../packages/shared-types/src/index.ts)                                                                                                            | Already exists for access requests; same vocabulary applies here. Optional.                                                                                                                                                                                                                                |
 
 All optional sub-fields are nullable; the **shape** is fixed.
 
@@ -60,28 +60,28 @@ All optional sub-fields are nullable; the **shape** is fixed.
 
 Auto-derivation is published as `deriveRiskTier(intendedUse): RiskTier` in `@oci/shared-types`. The mapping (truncated; full table in code) is the IMDRF significance-of-information × significance-of-healthcare-situation matrix:
 
-| `medicalPurpose` | `intendedClinicalPathway` | Auto-suggested tier |
-|---|---|---|
-| `diagnosis`, `treatment-planning` | `standalone` | IV |
-| `diagnosis`, `treatment-planning` | `adjunct-with-confirmation` | III |
-| `triage`, `screening` | `triage-before-clinician`, `screening-before-specialist` | II–III (depends on operating environment: emergency → III) |
-| `prognosis`, `monitoring` | any | II |
-| `clinical-decision-support` | `adjunct-with-confirmation` | II |
-| `administrative`, `patient-education` | any | I |
-| `research-only` | any | I (excluded from production deployment) |
+| `medicalPurpose`                      | `intendedClinicalPathway`                                | Auto-suggested tier                                        |
+| ------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------- |
+| `diagnosis`, `treatment-planning`     | `standalone`                                             | IV                                                         |
+| `diagnosis`, `treatment-planning`     | `adjunct-with-confirmation`                              | III                                                        |
+| `triage`, `screening`                 | `triage-before-clinician`, `screening-before-specialist` | II–III (depends on operating environment: emergency → III) |
+| `prognosis`, `monitoring`             | any                                                      | II                                                         |
+| `clinical-decision-support`           | `adjunct-with-confirmation`                              | II                                                         |
+| `administrative`, `patient-education` | any                                                      | I                                                          |
+| `research-only`                       | any                                                      | I (excluded from production deployment)                    |
 
-The matrix is a *suggestion*; the user can adjust ±1 tier without justification, ≥ 2 tiers or jumping from I/II to III/IV requires the `riskTierJustification` field. Auto-derivation is a pure function of the IUS — no I/O, no DB lookups — so it lives in `@oci/shared-types` and runs on both the API and the web form.
+The matrix is a _suggestion_; the user can adjust ±1 tier without justification, ≥ 2 tiers or jumping from I/II to III/IV requires the `riskTierJustification` field. Auto-derivation is a pure function of the IUS — no I/O, no DB lookups — so it lives in `@oci/shared-types` and runs on both the API and the web form.
 
 ### 4. Evidence-rigor tier follows risk tier
 
 The IUS `riskTier` is the **input** to the evidence-rigor selector that the future `evaluation` module will use:
 
-| Risk tier | Minimum evidence required at submission |
-|---|---|
-| I | Analytical metrics on external validation set; demographic distribution report. |
-| II | + retrospective clinical analysis vs. reference standard; subgroup performance. |
-| III | + prospective protocol (SPIRIT-AI), Clinical Evaluation Assessment Report (CEAR). |
-| IV | + post-market surveillance plan (mandatory before deployment promotion). |
+| Risk tier | Minimum evidence required at submission                                           |
+| --------- | --------------------------------------------------------------------------------- |
+| I         | Analytical metrics on external validation set; demographic distribution report.   |
+| II        | + retrospective clinical analysis vs. reference standard; subgroup performance.   |
+| III       | + prospective protocol (SPIRIT-AI), Clinical Evaluation Assessment Report (CEAR). |
+| IV        | + post-market surveillance plan (mandatory before deployment promotion).          |
 
 This ADR does not implement the evidence-rigor module; it locks the **vocabulary** the future module will consume.
 
@@ -115,10 +115,10 @@ This ADR does not implement the evidence-rigor module; it locks the **vocabulary
 ## Alternatives considered
 
 - **Free-text intended-use field.** Rejected — every downstream consumer (risk tier, CEAR, PMS scope) would need to re-parse free text. Structured wins.
-- **Reuse `IntendedUseCategorySchema` from access-request.** Rejected — that field describes the *requester's* intent (research vs. commercial); the IUS describes the *device's* clinical purpose. Same word, different concept.
+- **Reuse `IntendedUseCategorySchema` from access-request.** Rejected — that field describes the _requester's_ intent (research vs. commercial); the IUS describes the _device's_ clinical purpose. Same word, different concept.
 - **Carry the IUS on `Dataset` as well as on `ModelCard`** (the original v1 of this ADR before the 2026-05-17 amendment). Rejected — a dataset is a resource that can train models with different intended uses; pinning a single IUS prejudges the device. Dataset suitability is a matching concern resolvable from existing provenance fields (modality, body region, condition, demographics, IRB, consent, anonymisation, lawful basis, EHDS permit). See amendment.
 - **Carry a multi-valued `supportedIntendedUses[]` capability declaration on the dataset.** Deferred — no concrete consumer needs it today. A future regulator UI may want a "this dataset is suited for X / Y / Z purposes" hint, at which point we add the field. Doesn't prejudice any later submission's IUS.
-- **Defer the entire schema until the `prediction` module lands.** Rejected for the *schema* itself — keeping the Zod schema + derivation helper in `@oci/shared-types` today lets the web form + future API surface adopt it without round-tripping through an ADR. Accepted for the *column* — `ModelCard.intendedUse` lands with the prediction module in Phase C.
+- **Defer the entire schema until the `prediction` module lands.** Rejected for the _schema_ itself — keeping the Zod schema + derivation helper in `@oci/shared-types` today lets the web form + future API surface adopt it without round-tripping through an ADR. Accepted for the _column_ — `ModelCard.intendedUse` lands with the prediction module in Phase C.
 - **Auto-classify on every submission and refuse override.** Rejected — clinical judgment isn't always pattern-matchable from enum values; an override with justification preserves auditability without paternalism.
 - **Capture the full IMDRF Table 5/6 cells (12 cells, not 4 tiers).** Rejected — too fine-grained for v1; 4 tiers covers the regulatory mapping cleanly and is easier to defend in a regulatory dossier.
 
@@ -126,7 +126,7 @@ This ADR does not implement the evidence-rigor module; it locks the **vocabulary
 
 ### 2026-05-17 — IUS carrier narrowed to AI submissions only
 
-The v1 of this ADR named both `Dataset` and `ModelCard` as carriers, and the initial implementation added `Dataset.intendedUse Json?` + `bio:intendedUse` to the BIOCroissant manifest + a publish-time gate. On the day the implementation landed, the design was challenged: a dataset is a *resource* and the same set can train models with different intended uses, while IMDRF risk-tier classification, Model Facts Label, CEAR, and SPIRIT-AI all attach to the *device*, not the data.
+The v1 of this ADR named both `Dataset` and `ModelCard` as carriers, and the initial implementation added `Dataset.intendedUse Json?` + `bio:intendedUse` to the BIOCroissant manifest + a publish-time gate. On the day the implementation landed, the design was challenged: a dataset is a _resource_ and the same set can train models with different intended uses, while IMDRF risk-tier classification, Model Facts Label, CEAR, and SPIRIT-AI all attach to the _device_, not the data.
 
 The amendment:
 
@@ -141,9 +141,9 @@ The strategic frame (OCI as a compliance-evidence generator for EU AI Act / MDR 
 
 ## References
 
-- WHO/ITU FG-AI4H (2023) *Regulatory Considerations on AI for Health* — [9789240078871-eng.pdf](../research/9789240078871-eng.pdf) §5.3 (Intended Use).
-- WHO (2021) *Ethics and Governance of AI for Health* — [9789240038462-eng.pdf](../research/9789240038462-eng.pdf) Chapter 4 (Intended Use), §11 (Model Facts).
-- WHO Europe (2026) *AI Reshaping Health Systems — EU Readiness* — [WHO-Europe-2026-AI-Reshaping-Health-Systems-EU-Readiness.pdf](../research/WHO-Europe-2026-AI-Reshaping-Health-Systems-EU-Readiness.pdf) §1.3.
+- WHO/ITU FG-AI4H (2023) _Regulatory Considerations on AI for Health_ — [9789240078871-eng.pdf](../research/9789240078871-eng.pdf) §5.3 (Intended Use).
+- WHO (2021) _Ethics and Governance of AI for Health_ — [9789240038462-eng.pdf](../research/9789240038462-eng.pdf) Chapter 4 (Intended Use), §11 (Model Facts).
+- WHO Europe (2026) _AI Reshaping Health Systems — EU Readiness_ — [WHO-Europe-2026-AI-Reshaping-Health-Systems-EU-Readiness.pdf](../research/WHO-Europe-2026-AI-Reshaping-Health-Systems-EU-Readiness.pdf) §1.3.
 - IMDRF/SaMD WG/N12 FINAL:2014 — "Software as a Medical Device: Possible Framework for Risk Categorization and Corresponding Considerations" (Table 5/6 used for the auto-derivation matrix).
 - EU MDR (2017/745) Annex II §B.1 — technical documentation device-description requirements.
 - [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md) — recommended-bounds-by-tier table; IUS risk tier integrates with that table directly.

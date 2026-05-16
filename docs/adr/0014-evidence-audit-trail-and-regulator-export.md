@@ -72,11 +72,11 @@ If a row is tampered with at the DB layer despite the trigger guards, the chain 
 
 ### 3. Retention classes
 
-| Retention class | Purpose | Default duration |
-|---|---|---|
-| `short-1y` | Operational chatter (login events, page views) — most are *not* in the audit table at all but pino logs; included here for the rare cases that should be visible to regulators. | 1 year |
-| `standard-7y` | Default for every domain event (dataset.published, evaluation.submitted, access.granted, dua.signed, role.assigned, model.promoted, etc.). | 7 years |
-| `legal-hold` | Set by the platform operator on a per-subject basis; never auto-deleted. | indefinite |
+| Retention class | Purpose                                                                                                                                                                         | Default duration |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `short-1y`      | Operational chatter (login events, page views) — most are _not_ in the audit table at all but pino logs; included here for the rare cases that should be visible to regulators. | 1 year           |
+| `standard-7y`   | Default for every domain event (dataset.published, evaluation.submitted, access.granted, dua.signed, role.assigned, model.promoted, etc.).                                      | 7 years          |
+| `legal-hold`    | Set by the platform operator on a per-subject basis; never auto-deleted.                                                                                                        | indefinite       |
 
 Retention is enforced by the sweeper Lambda. Records moved out are written to an S3 Object Lock bucket in compliance mode before deletion from Postgres; the sweeper records the move as an audit event (`audit.retention.sweep`).
 
@@ -120,7 +120,7 @@ Each event carries enough payload to make sense **without** the application runn
 
 ### 6. Existing event-history tables are not deleted
 
-`AccessRequest.statusHistory`, `DuaSigning.events`, etc., remain. They are operational — the UI reads them, the matcher reads them. The `AuditEvent` row is the *regulator-grade* mirror, written in the same transaction. Modules that have no event-history table today add only the `AuditEvent` emit; no operational duplication.
+`AccessRequest.statusHistory`, `DuaSigning.events`, etc., remain. They are operational — the UI reads them, the matcher reads them. The `AuditEvent` row is the _regulator-grade_ mirror, written in the same transaction. Modules that have no event-history table today add only the `AuditEvent` emit; no operational duplication.
 
 ## Consequences
 
@@ -139,7 +139,7 @@ Each event carries enough payload to make sense **without** the application runn
 
 ### Neutral
 
-- The audit table is not a substitute for CloudTrail (infra-level) or pino logs (operational). It captures *domain* facts only.
+- The audit table is not a substitute for CloudTrail (infra-level) or pino logs (operational). It captures _domain_ facts only.
 - COSE was chosen over JWS because the bundle is binary-aware (CBOR-friendly) and the COSE_Sign1 envelope is the IETF standard for detached signatures over JSON-LD-like payloads.
 - We do not commit to immediate S3 Object Lock on every event — only on the archived cold tier and the export bundle root. Hot Postgres is the operational mode.
 
@@ -149,7 +149,7 @@ Each event carries enough payload to make sense **without** the application runn
 - **CloudTrail / VPC Flow Logs as the audit trail.** Rejected — those capture infra calls, not domain facts. A regulator asking "who approved access to dataset X" cannot read `s3:GetObject` and find the answer.
 - **Use the existing `AccessRequest.statusHistory` pattern across all modules.** Rejected — it works for one entity but the global "what happened to this user across the platform" query is impossible across N independent history tables.
 - **AWS QLDB as the primary store.** Rejected — QLDB is being deprecated by AWS; betting on a managed-ledger is a portability risk. We re-implement the parts we want (append-only + hash chain) in Postgres, which we already run.
-- **External SIEM integration (Splunk / Datadog audit).** Rejected for the regulator-export use case — SIEMs aren't built for "give a signed snapshot to a Notified Body"; they're built for live ops. We do plan to *also* tee audit events to a SIEM in Phase C for ops; this ADR doesn't depend on it.
+- **External SIEM integration (Splunk / Datadog audit).** Rejected for the regulator-export use case — SIEMs aren't built for "give a signed snapshot to a Notified Body"; they're built for live ops. We do plan to _also_ tee audit events to a SIEM in Phase C for ops; this ADR doesn't depend on it.
 - **Synchronous emission only.** Rejected — for high-frequency events the latency hit is unacceptable; the BullMQ-backed asynchronous path with at-least-once delivery is sufficient for non-critical events. Critical events (DUA, access grant) use `emitSync`.
 
 ## References

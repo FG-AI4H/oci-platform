@@ -43,10 +43,7 @@ export class IntendedUseController {
   }
 }
 
-function rationaleFor(
-  body: DeriveRiskTierRequest,
-  tier: 'I' | 'II' | 'III' | 'IV',
-): string {
+function rationaleFor(body: DeriveRiskTierRequest, tier: 'I' | 'II' | 'III' | 'IV'): string {
   const { medicalPurpose, intendedClinicalPathway, operatingEnvironment } = body;
   const inEmergency = operatingEnvironment?.includes('emergency') ?? false;
   if (tier === 'I') {

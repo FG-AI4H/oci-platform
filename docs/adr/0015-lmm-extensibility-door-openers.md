@@ -7,7 +7,7 @@
 
 ## Context
 
-WHO 2024 *Ethics and Governance of AI for Health: Guidance on Large Multi-Modal Models* ([WHO-2024-AI-Governance-LMMs-in-Health.pdf](../research/WHO-2024-AI-Governance-LMMs-in-Health.pdf)) is the only one of the five WHO publications reviewed that **does not fit** the current OCI evaluation design. Classical AI-SaMD benchmarks assume a fixed input → fixed output mapping with metrics like sensitivity, specificity, AUC, Dice, Hausdorff. LMM evaluation needs:
+WHO 2024 _Ethics and Governance of AI for Health: Guidance on Large Multi-Modal Models_ ([WHO-2024-AI-Governance-LMMs-in-Health.pdf](../research/WHO-2024-AI-Governance-LMMs-in-Health.pdf)) is the only one of the five WHO publications reviewed that **does not fit** the current OCI evaluation design. Classical AI-SaMD benchmarks assume a fixed input → fixed output mapping with metrics like sensitivity, specificity, AUC, Dice, Hausdorff. LMM evaluation needs:
 
 - Red-teaming corpora with adversarial-prompt libraries;
 - Hallucination scoring against curated factuality rubrics;
@@ -62,7 +62,7 @@ export type EvaluationTaskKind = z.infer<typeof EvaluationTaskKindSchema>;
 
 Two design choices locked here:
 
-- **`lmm-*` is a known prefix from day one.** The enum *values* are listed even though no code consumes them yet, because adding them later would force a schema-version bump and a re-migration of every emitted artefact that mentioned a `task_kind`.
+- **`lmm-*` is a known prefix from day one.** The enum _values_ are listed even though no code consumes them yet, because adding them later would force a schema-version bump and a re-migration of every emitted artefact that mentioned a `task_kind`.
 - **`x-*` is the vendor-extension prefix.** Anyone needing to register a task kind without an upstream ADR uses `x-<vendor>-<task>`. The platform never gates on `x-*` semantics; UI surfaces them as "custom".
 
 Crucially, this is **not** the same as the annotation `CampaignTaskKind` (in [`packages/shared-types/src/modality-task-kinds.ts`](../../packages/shared-types/src/modality-task-kinds.ts)) — that one is a closed set on purpose because the annotation orchestrator needs to make routing decisions (per [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md)). The annotation `CampaignTaskKind` stays closed; the evaluation `EvaluationTaskKind` is open. Different module, different invariant.
@@ -73,11 +73,11 @@ The Zod schema in `@oci/shared-types`:
 
 ```ts
 export const ModelClassSchema = z.enum([
-  'classical',     // closed-form ML/DL: classifier, segmentor, detector, regressor
-  'time-series',   // RNN/Transformer over signals — ECG, EEG, vitals
-  'foundation',    // general-purpose pre-trained model, single-modality
-  'lmm',           // Large Multi-Modal Model (LLM with vision / EHR / signals)
-  'agent',         // multi-step orchestrated AI (Phase D+); placeholder
+  'classical', // closed-form ML/DL: classifier, segmentor, detector, regressor
+  'time-series', // RNN/Transformer over signals — ECG, EEG, vitals
+  'foundation', // general-purpose pre-trained model, single-modality
+  'lmm', // Large Multi-Modal Model (LLM with vision / EHR / signals)
+  'agent', // multi-step orchestrated AI (Phase D+); placeholder
 ]);
 export type ModelClass = z.infer<typeof ModelClassSchema>;
 ```
@@ -117,7 +117,7 @@ For any module that touches `EvaluationTaskKind` or `ModelClass`:
 
 ### Neutral
 
-- The enum value list (`lmm-qa`, `lmm-summarization`, …) is best-effort. Phase D may add, rename, or refine these; that's fine — the *schema* doesn't change, only the documented vocabulary does.
+- The enum value list (`lmm-qa`, `lmm-summarization`, …) is best-effort. Phase D may add, rename, or refine these; that's fine — the _schema_ doesn't change, only the documented vocabulary does.
 - Storage shape (`String @db.VarChar(64)`) is identical to a closed-enum storage shape in Postgres terms.
 
 ## Alternatives considered
@@ -129,7 +129,7 @@ For any module that touches `EvaluationTaskKind` or `ModelClass`:
 
 ## References
 
-- WHO 2024 *Ethics & Governance of AI for Health: LMM Guidance* — [WHO-2024-AI-Governance-LMMs-in-Health.pdf](../research/WHO-2024-AI-Governance-LMMs-in-Health.pdf).
+- WHO 2024 _Ethics & Governance of AI for Health: LMM Guidance_ — [WHO-2024-AI-Governance-LMMs-in-Health.pdf](../research/WHO-2024-AI-Governance-LMMs-in-Health.pdf).
 - [ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md) — `CampaignTaskKind` is intentionally closed; this ADR doesn't change that.
 - [ADR-0013](./0013-intended-use-statement-and-risk-tier.md) — IUS schema is fixed; LMM-specific IUS fields are a future extension, again with a `v` bump rather than a model_class flag.
 - [ADR-0014](./0014-evidence-audit-trail-and-regulator-export.md) — audit events carry `taskKind` and `modelClass` in payload; extensibility here means the audit stream gracefully accepts future kinds too.

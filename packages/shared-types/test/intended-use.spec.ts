@@ -47,9 +47,7 @@ describe('IntendedUseStatementSchema (ADR-0013)', () => {
         medicalPurpose: 'something-not-listed',
       }),
     ).toThrow();
-    expect(() =>
-      IntendedUseStatementSchema.parse({ ...baseIus, riskTier: 'V' }),
-    ).toThrow();
+    expect(() => IntendedUseStatementSchema.parse({ ...baseIus, riskTier: 'V' })).toThrow();
   });
 });
 
@@ -124,12 +122,8 @@ describe('deriveRiskTier (ADR-0013 §3 matrix)', () => {
         intendedClinicalPathway: 'research-only',
       }),
     ).toBe('I');
-    expect(
-      deriveRiskTier({ medicalPurpose: 'administrative' }),
-    ).toBe('I');
-    expect(
-      deriveRiskTier({ medicalPurpose: 'patient-education' }),
-    ).toBe('I');
+    expect(deriveRiskTier({ medicalPurpose: 'administrative' })).toBe('I');
+    expect(deriveRiskTier({ medicalPurpose: 'patient-education' })).toBe('I');
   });
 });
 

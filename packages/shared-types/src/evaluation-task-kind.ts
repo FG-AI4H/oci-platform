@@ -116,13 +116,7 @@ export function isLmmTaskKind(value: EvaluationTaskKind): boolean {
  *   - `lmm`         — Large Multi-Modal Model (LLM + vision / EHR / signals).
  *   - `agent`       — multi-step orchestrated AI (Phase D+ placeholder).
  */
-export const ModelClassSchema = z.enum([
-  'classical',
-  'time-series',
-  'foundation',
-  'lmm',
-  'agent',
-]);
+export const ModelClassSchema = z.enum(['classical', 'time-series', 'foundation', 'lmm', 'agent']);
 export type ModelClass = z.infer<typeof ModelClassSchema>;
 
 /**
