@@ -12,6 +12,7 @@ WORKDIR /repo
 RUN corepack enable
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json ./
 COPY apps/api/package.json apps/api/
+COPY packages/audit/package.json packages/audit/
 COPY packages/auth/package.json packages/auth/
 COPY packages/croissant/package.json packages/croissant/
 COPY packages/database/package.json packages/database/
@@ -33,6 +34,7 @@ RUN pnpm --filter @oci/database build \
  && pnpm --filter @oci/shared-types build \
  && pnpm --filter @oci/auth build \
  && pnpm --filter @oci/croissant build \
+ && pnpm --filter @oci/audit build \
  && pnpm --filter @oci/api build \
  && pnpm --filter @oci/api deploy --prod --legacy /out
 
