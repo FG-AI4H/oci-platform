@@ -43,6 +43,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Audit-coverage grep (ADR-0014)
+        run: pnpm --filter @oci/database exec tsx ../../scripts/check-audit-coverage.ts
+
       - name: Build
         run: pnpm build
 
