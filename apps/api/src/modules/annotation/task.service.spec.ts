@@ -102,6 +102,7 @@ interface CampaignsMock {
 interface TasksMock {
   seedTasks: ReturnType<typeof vi.fn>;
   listTasksForCampaign: ReturnType<typeof vi.fn>;
+  submittedCountsForCampaign: ReturnType<typeof vi.fn>;
   findActiveAssignmentForUser: ReturnType<typeof vi.fn>;
   findNextEligibleTask: ReturnType<typeof vi.fn>;
   createAssignment: ReturnType<typeof vi.fn>;
@@ -122,6 +123,7 @@ beforeEach(() => {
   tasks = {
     seedTasks: vi.fn(),
     listTasksForCampaign: vi.fn(),
+    submittedCountsForCampaign: vi.fn().mockResolvedValue(new Map<string, number>()),
     findActiveAssignmentForUser: vi.fn(),
     findNextEligibleTask: vi.fn(),
     createAssignment: vi.fn(),
@@ -166,6 +168,36 @@ describe('TaskService.seed', () => {
     await expect(service.seed({ slug: 'nope', sampleRefs: ['a'] })).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+});
+
+// --- listForCampaign --------------------------------------------------------
+
+describe('TaskService.listForCampaign', () => {
+  it("populates submittedCount per task from the campaign's SUBMITTED rows", async () => {
+    const taskA = taskRow({ id: 'task-A', nAnnotatorsRequired: 3, gateState: 'INDEPENDENT' });
+    const taskB = taskRow({
+      id: 'task-B',
+      nAnnotatorsRequired: 3,
+      gateState: 'AWAITING_ARBITRATION',
+    });
+    const taskC = taskRow({ id: 'task-C', nAnnotatorsRequired: 3 });
+    campaigns.findBySlug.mockResolvedValue(runningCampaign(3));
+    tasks.listTasksForCampaign.mockResolvedValue([taskA, taskB, taskC]);
+    tasks.submittedCountsForCampaign.mockResolvedValue(
+      new Map([
+        ['task-A|INDEPENDENT', 2],
+        ['task-A|AWAITING_ARBITRATION', 1], // ignored — task-A is still at INDEPENDENT
+        ['task-B|AWAITING_ARBITRATION', 1],
+        // task-C has no SUBMITTED rows.
+      ]),
+    );
+
+    const result = await service.listForCampaign('pilot');
+
+    expect(result.find((t) => t.id === 'task-A')?.submittedCount).toBe(2);
+    expect(result.find((t) => t.id === 'task-B')?.submittedCount).toBe(1);
+    expect(result.find((t) => t.id === 'task-C')?.submittedCount).toBe(0);
   });
 });
 
