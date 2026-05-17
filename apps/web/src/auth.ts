@@ -53,15 +53,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           name: 'Local Dev',
           credentials: {
             user: { label: 'User', type: 'text', placeholder: 'local-dev@oci.ai4h.net' },
-            roles: { label: 'Roles (comma-sep)', type: 'text', placeholder: 'host,admin' },
+            roles: {
+              label: 'Roles (comma-sep, lowercase)',
+              type: 'text',
+              placeholder: 'annotator,host,admin',
+            },
           },
           authorize: (raw) => {
             const userValue =
               typeof raw?.user === 'string' && raw.user.length > 0
                 ? raw.user
                 : 'local-dev@oci.ai4h.net';
-            const rolesValue =
+            // Cognito group names on this platform are all-lowercase
+            // (see PlatformGroupSchema in @oci/shared-types). The
+            // local sign-in form accepts any case so we don't punish
+            // typos like 'Annotator' — every role gating check uses
+            // `groups.includes('annotator')` exactly, so we lowercase
+            // here once and forget about it.
+            const rolesRaw =
               typeof raw?.roles === 'string' && raw.roles.length > 0 ? raw.roles : 'host,admin';
+            const rolesValue = rolesRaw
+              .split(',')
+              .map((r) => r.trim().toLowerCase())
+              .filter(Boolean)
+              .join(',');
             return {
               id: userValue,
               name: userValue,
