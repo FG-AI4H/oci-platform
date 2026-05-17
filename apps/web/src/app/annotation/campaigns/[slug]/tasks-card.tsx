@@ -196,7 +196,8 @@ function SubmissionsCell({ task }: { task: TaskSummary }) {
   const required = task.gateState === 'INDEPENDENT' ? task.nAnnotatorsRequired : 1;
   return (
     <span aria-label={`${task.submittedCount} of ${required} submitted`}>
-      {task.submittedCount} <span className="text-[var(--color-muted-foreground)]">/ {required}</span>
+      {task.submittedCount}{' '}
+      <span className="text-[var(--color-muted-foreground)]">/ {required}</span>
     </span>
   );
 }

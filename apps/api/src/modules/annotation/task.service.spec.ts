@@ -176,7 +176,11 @@ describe('TaskService.seed', () => {
 describe('TaskService.listForCampaign', () => {
   it("populates submittedCount per task from the campaign's SUBMITTED rows", async () => {
     const taskA = taskRow({ id: 'task-A', nAnnotatorsRequired: 3, gateState: 'INDEPENDENT' });
-    const taskB = taskRow({ id: 'task-B', nAnnotatorsRequired: 3, gateState: 'AWAITING_ARBITRATION' });
+    const taskB = taskRow({
+      id: 'task-B',
+      nAnnotatorsRequired: 3,
+      gateState: 'AWAITING_ARBITRATION',
+    });
     const taskC = taskRow({ id: 'task-C', nAnnotatorsRequired: 3 });
     campaigns.findBySlug.mockResolvedValue(runningCampaign(3));
     tasks.listTasksForCampaign.mockResolvedValue([taskA, taskB, taskC]);
