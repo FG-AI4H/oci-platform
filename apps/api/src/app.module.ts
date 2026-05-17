@@ -4,6 +4,7 @@ import { TerminusModule } from '@nestjs/terminus';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './auth/auth.module.js';
 import { AnnotationModule } from './modules/annotation/annotation.module.js';
+import { AuditModule } from './modules/audit/audit.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { DuaSigningModule } from './modules/dua-signing/dua-signing.module.js';
 import { DuaTemplateModule } from './modules/dua-template/dua-template.module.js';
@@ -36,6 +37,7 @@ import { MeController } from './me/me.controller.js';
     TerminusModule,
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     AuthModule,
+    AuditModule,
     AnnotationModule,
     CatalogModule,
     DuaTemplateModule,

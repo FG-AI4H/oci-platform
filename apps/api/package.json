@@ -31,6 +31,7 @@
     "@nestjs/swagger": "^11.4.2",
     "@nestjs/terminus": "^11.0.0",
     "@nestjs/throttler": "^6.4.0",
+    "@oci/audit": "workspace:*",
     "@oci/auth": "workspace:*",
     "@oci/croissant": "workspace:*",
     "@oci/database": "workspace:*",

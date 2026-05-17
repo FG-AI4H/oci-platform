@@ -1118,3 +1118,40 @@ model PlatformSetting {
   @@map("platform_settings")
   @@schema("platform")
 }
+
+/// Platform-wide append-only audit feed (ADR-0014, #257).
+///
+/// Modules call `@oci/audit`'s `emit` / `emitSync` at the boundary of
+/// every persisted state change. Rows are immutable in Postgres: a
+/// BEFORE UPDATE trigger raises on any mutation, and the BEFORE DELETE
+/// trigger raises except when the retention sweeper (a SECURITY
+/// DEFINER role) deletes rows past their retention horizon.
+///
+/// `previousHash` + `recordHash` form a global hash chain across the
+/// stream — see the BEFORE INSERT trigger in the migration for the
+/// canonical serialization (pipe-delimited, sha256 over pgcrypto). The
+/// verification Lambda + regulator export are Phase C follow-ups
+/// (#259); this issue lands the table, the triggers, and the emitter.
+model AuditEvent {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  occurredAt      DateTime @default(now())                                  @map("occurred_at")
+  emittedAt       DateTime @default(now())                                  @map("emitted_at")
+  sequenceNumber  BigInt   @default(autoincrement())                        @map("sequence_number")
+  module          String
+  action          String
+  subjectType     String   @map("subject_type")
+  subjectId       String   @map("subject_id")
+  actorUserId     String?  @map("actor_user_id")  @db.Uuid
+  actorRoles      String[] @default([])           @map("actor_roles")
+  payload         Json
+  payloadHash     String   @map("payload_hash")     /// sha256 of RFC 8785 canonical JSON of `payload`
+  previousHash    String?  @map("previous_hash")    /// recordHash of the row with the immediately preceding sequence_number; trigger-populated
+  recordHash      String   @map("record_hash")      /// sha256 over the pipe-delimited canonical form; trigger-populated
+  retentionClass  String   @default("standard-7y") @map("retention_class") /// 'short-1y' | 'standard-7y' | 'legal-hold'
+
+  @@index([subjectType, subjectId, occurredAt])
+  @@index([module, action, occurredAt])
+  @@index([sequenceNumber])
+  @@map("audit_events")
+  @@schema("platform")
+}
