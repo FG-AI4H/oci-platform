@@ -1,9 +1,11 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import {
   Alert,
   AlertDescription,
   AlertTitle,
   Badge,
+  Button,
   Card,
   CardContent,
   CardDescription,
@@ -13,6 +15,7 @@ import {
   Container,
   DefinitionItem,
   DefinitionList,
+  FlowIcon,
   KeyIcon,
   Section,
   Separator,
@@ -20,6 +23,7 @@ import {
   UserIcon,
 } from '@oci/ui';
 import { auth } from '../../auth';
+import { isAnnotationWorker } from '../../lib/groups';
 
 interface MeResponse {
   sub: string;
@@ -124,6 +128,31 @@ export default async function DashboardPage() {
             .
           </p>
         </header>
+
+        {result.ok && isAnnotationWorker(session) ? (
+          <Card accent="info" className="mb-6">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <span
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--color-info-soft)] text-[var(--color-info)]"
+                  aria-hidden="true"
+                >
+                  <FlowIcon size={18} />
+                </span>
+                <CardTitle>Annotation queue</CardTitle>
+              </div>
+              <CardDescription>
+                Your Cognito role lets you pick up annotation work on RUNNING campaigns. Pull the
+                next eligible task from the campaign list.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button asChild variant="primary">
+                <Link href="/annotation/campaigns">Browse campaigns</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {result.ok ? (
           <div className="grid gap-6 lg:grid-cols-3">

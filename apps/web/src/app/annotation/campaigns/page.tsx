@@ -22,7 +22,7 @@ import type {
 } from '@oci/shared-types';
 import { auth } from '../../../auth';
 import { apiFetch } from '../../../lib/api';
-import { isCampaignManager } from '../../../lib/groups';
+import { isAnnotationWorker, isCampaignManager } from '../../../lib/groups';
 
 /**
  * Annotation campaigns list (Phase B.A.1 — #222). Read-only flat
@@ -56,6 +56,7 @@ const TASK_KIND_LABEL: Record<CampaignTaskKind, string> = {
 export default async function AnnotationCampaignsPage() {
   const session = await auth();
   const canCreate = isCampaignManager(session);
+  const canAnnotate = isAnnotationWorker(session);
 
   let response: ListCampaignsResponse | null = null;
   let error: string | null = null;
@@ -114,7 +115,7 @@ export default async function AnnotationCampaignsPage() {
           <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {response.items.map((c) => (
               <li key={c.id}>
-                <CampaignCard c={c} />
+                <CampaignCard c={c} canAnnotate={canAnnotate} />
               </li>
             ))}
           </ul>
@@ -124,30 +125,43 @@ export default async function AnnotationCampaignsPage() {
   );
 }
 
-function CampaignCard({ c }: { c: CampaignSummary }) {
+function CampaignCard({ c, canAnnotate }: { c: CampaignSummary; canAnnotate: boolean }) {
+  // Show the inline "Annotate" affordance only when the caller has an
+  // annotation role AND the campaign is RUNNING (the only state the
+  // server-side router will serve work from). Saves the annotator a
+  // detour through the campaign detail page.
+  const showAnnotate = canAnnotate && c.status === 'RUNNING';
+
   return (
-    <Link
-      href={`/annotation/campaigns/${c.slug}`}
-      className="group block h-full rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
-    >
-      <Card interactive="hover" className="h-full">
-        <CardHeader>
-          <div className="flex items-start justify-between gap-2">
-            <CardTitle className="line-clamp-2 group-hover:text-[var(--color-primary)] transition-colors">
+    <Card interactive="hover" className="h-full">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="line-clamp-2">
+            <Link
+              href={`/annotation/campaigns/${c.slug}`}
+              className="rounded hover:text-[var(--color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+            >
               {c.name}
-            </CardTitle>
-            <Badge tone={STATUS_TONE[c.status]}>{c.status.toLowerCase()}</Badge>
-          </div>
-          <CardDescription className="line-clamp-3 min-h-[3.5rem]">
-            {c.description ?? <em>No description provided.</em>}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-4 text-xs text-[var(--color-muted-foreground)]">
-          <span className="font-mono truncate">{c.slug}</span>
+            </Link>
+          </CardTitle>
+          <Badge tone={STATUS_TONE[c.status]}>{c.status.toLowerCase()}</Badge>
+        </div>
+        <CardDescription className="line-clamp-3 min-h-[3.5rem]">
+          {c.description ?? <em>No description provided.</em>}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-4 text-xs text-[var(--color-muted-foreground)]">
+        <span className="font-mono truncate">{c.slug}</span>
+        <div className="flex items-center gap-2">
           <Badge tone="neutral">{TASK_KIND_LABEL[c.taskKind]}</Badge>
-        </CardContent>
-      </Card>
-    </Link>
+          {showAnnotate ? (
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/annotation/campaigns/${c.slug}/annotate`}>Annotate</Link>
+            </Button>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

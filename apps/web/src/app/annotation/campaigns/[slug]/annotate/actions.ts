@@ -20,10 +20,8 @@ export type SubmitState =
     }
   | { status: 'error'; message: string; submission: string };
 
-const initialPull: PullState = { status: 'idle' };
-const initialSubmit: SubmitState = { status: 'idle' };
-
-export { initialPull, initialSubmit };
+// Initial `useActionState` values live in `annotate-form.tsx`. This
+// file is `'use server'` — Next 16 only allows async exports here.
 
 /**
  * Pull the caller's next eligible task. Idempotent — re-issues an

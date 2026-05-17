@@ -4,7 +4,15 @@ import { useActionState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Textarea } from '@oci/ui';
 import type { AssignmentSummary } from '@oci/shared-types';
-import { initialPull, initialSubmit, pullNextAction, submitAssignmentAction } from './actions';
+import {
+  pullNextAction,
+  submitAssignmentAction,
+  type PullState,
+  type SubmitState,
+} from './actions';
+
+const initialPull: PullState = { status: 'idle' };
+const initialSubmit: SubmitState = { status: 'idle' };
 
 interface AnnotateFormProps {
   slug: string;
