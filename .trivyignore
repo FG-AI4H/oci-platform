@@ -42,3 +42,21 @@ CVE-2026-28390
 # Mitigation: drop this entry as soon as prisma releases an update
 # whose vendored picomatch is >= 4.0.4.
 CVE-2026-33671
+
+# -----------------------------------------------------------------------------
+# libc6 (Debian 12 / distroless gcr.io/distroless/nodejs24-debian12)
+# Installed: 2.36-9+deb12u13
+# Fixed:     2.36-9+deb12u14 (not yet in the distroless image as of 2026-05-17)
+# CVE-2026-0861: integer overflow in glibc's memalign() leads to heap
+# corruption when the caller passes an attacker-controlled `size`
+# argument that triggers the wraparound.
+# Rationale: the API + web + worker-ingest containers run a managed
+# Node.js V8 runtime. memalign() is not exposed to user JavaScript,
+# and the framework code (NestJS / Next.js) does not call it directly
+# with externally-influenced sizes. Reaching the bug would require a
+# bug-or-misuse in V8 or libuv that lets a caller pass arbitrary
+# size to memalign — none is known. No inbound network input lands
+# on a memalign call path.
+# Mitigation: rebuild and re-deploy as soon as distroless publishes
+# the libc6 update.
+CVE-2026-0861
