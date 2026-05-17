@@ -53,9 +53,10 @@ if [ -n "${OCI_ENV:-}" ] && [ "${OCI_ENV}" != "prod" ]; then
       echo "SET app.datasets_bucket = '${OCI_DATASETS_BUCKET:-oci-datasets-local}';"
       cat ./seed/demo.sql
     } > "${SEED_SCRIPT}"
-    npx --no-install prisma db execute \
-      --url "${DATABASE_URL}" \
-      --file "${SEED_SCRIPT}"
+    # Prisma 7 removed the `--url` flag on `prisma db execute`; the
+    # datasource URL is now resolved from prisma.config.ts, which reads
+    # DATABASE_URL from the environment (we exported it above).
+    npx --no-install prisma db execute --file "${SEED_SCRIPT}"
     rm -f "${SEED_SCRIPT}"
     echo "seed: done"
   fi
