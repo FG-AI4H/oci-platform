@@ -1,0 +1,191 @@
+name: Trivy suppression audit
+
+# Watch every CVE listed in `.trivyignore` for upstream fixes.
+# Each suppression is a temporary trade-off — security baseline at the
+# top of the file says entries are revisited every 30 days. This
+# workflow turns that into a hard automated signal: every weekday at
+# 06:00 UTC it pulls the freshest copy of each base image we ship from
+# (gcr.io/distroless/nodejs24-debian12, node:24-alpine) plus a
+# throwaway install of the Prisma 7 CLI (which is where the picomatch
+# CVE lives), runs Trivy without the ignore list, and compares the
+# detected HIGH/CRITICAL set against the suppressed set.
+#
+# A suppressed CVE that is NOT in the current detection set is one of:
+#   - The upstream image was rebuilt with the patch — DROP the entry.
+#   - The vulnerable package was removed in a base-image refresh.
+#   - The CVE was withdrawn / re-classified below HIGH.
+# All three cases mean the suppression can go. The workflow opens (or
+# updates) a single tracking issue listing the candidates; the operator
+# verifies, removes the entry from `.trivyignore`, and re-deploys.
+#
+# Manual run is allowed (`workflow_dispatch`) for ad-hoc audits after
+# touching `.trivyignore` or when an upstream advisory mentions a base
+# image rebuild.
+
+on:
+  schedule:
+    # 06:00 UTC every weekday — early enough to surface on the morning
+    # standup, weekend-free so an unattended fix doesn't churn the
+    # tracking issue.
+    - cron: '0 6 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: trivy-suppression-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract suppressed CVE IDs from .trivyignore
+        id: suppressed
+        run: |
+          set -euo pipefail
+          grep -oE 'CVE-[0-9]{4}-[0-9]+' .trivyignore | sort -u > suppressed.txt
+          echo "Suppressed CVEs:"
+          cat suppressed.txt
+          echo "count=$(wc -l < suppressed.txt | tr -d ' ')" >> "$GITHUB_OUTPUT"
+
+      - name: Install Trivy
+        uses: aquasecurity/setup-trivy@v0.2.3
+        with:
+          version: v0.70.0
+
+      - name: Scan distroless base
+        # Run WITHOUT `.trivyignore` and WITHOUT --ignore-unfixed so we
+        # see every HIGH/CRITICAL the upstream still ships. Hand-rolled
+        # ignorefile (empty) overrides the repo's so the suppressions
+        # don't hide currently-detected entries.
+        run: |
+          set -euo pipefail
+          : > /tmp/empty.trivyignore
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --format json \
+            --ignorefile /tmp/empty.trivyignore \
+            --output distroless.json \
+            gcr.io/distroless/nodejs24-debian12:nonroot
+
+      - name: Scan alpine base
+        run: |
+          set -euo pipefail
+          : > /tmp/empty.trivyignore
+          trivy image \
+            --severity HIGH,CRITICAL \
+            --format json \
+            --ignorefile /tmp/empty.trivyignore \
+            --output alpine.json \
+            node:24-alpine
+
+      - name: Build + scan the Prisma 7 CLI install
+        # Picomatch CVE-2026-33671 lives inside the Prisma CLI tarball;
+        # base-image scans don't catch it. Install Prisma in a throwaway
+        # rootfs and scan that filesystem.
+        run: |
+          set -euo pipefail
+          : > /tmp/empty.trivyignore
+          PRISMA_VERSION=$(jq -r '.dependencies.prisma // .devDependencies.prisma' apps/migrate/package.json | tr -d '^~')
+          mkdir -p /tmp/prisma-rootfs
+          npm install --prefix /tmp/prisma-rootfs --no-audit --no-fund "prisma@${PRISMA_VERSION}"
+          trivy fs \
+            --severity HIGH,CRITICAL \
+            --format json \
+            --ignorefile /tmp/empty.trivyignore \
+            --output prisma.json \
+            /tmp/prisma-rootfs
+
+      - name: Cross-reference suppressions vs current detections
+        id: compare
+        run: |
+          set -euo pipefail
+          # Collect VulnerabilityIDs across all three scans.
+          jq -r '.Results[]?.Vulnerabilities[]?.VulnerabilityID' \
+            distroless.json alpine.json prisma.json \
+            | sort -u > detected.txt
+          echo "Detected HIGH/CRITICAL CVEs in current base + Prisma: $(wc -l < detected.txt | tr -d ' ')"
+          # `comm -23` = lines in suppressed but not in detected = candidates to drop.
+          comm -23 suppressed.txt detected.txt > candidates.txt
+          if [ -s candidates.txt ]; then
+            echo "drop_candidates<<EOF" >> "$GITHUB_OUTPUT"
+            cat candidates.txt >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            echo "has_candidates=true" >> "$GITHUB_OUTPUT"
+            echo "Candidates to drop from .trivyignore:"
+            cat candidates.txt
+          else
+            echo "has_candidates=false" >> "$GITHUB_OUTPUT"
+            echo "No drop candidates — every suppressed CVE is still detected upstream."
+          fi
+
+      - name: Open or update tracking issue
+        if: steps.compare.outputs.has_candidates == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DROP_CANDIDATES: ${{ steps.compare.outputs.drop_candidates }}
+          SUPPRESSED_COUNT: ${{ steps.suppressed.outputs.count }}
+        run: |
+          set -euo pipefail
+          TITLE="Trivy suppression audit: upstream fix(es) detected"
+          BODY=$(cat <<EOF
+          The Trivy suppression audit (.github/workflows/trivy-suppression-audit.yml) detected one or more CVEs listed in \`.trivyignore\` that are **no longer reported** by a fresh scan of the upstream base images + Prisma CLI install. This typically means the upstream fix has shipped (or the vulnerable package was removed) and the suppression can be dropped.
+
+          **Candidates to drop from \`.trivyignore\` ($SUPPRESSED_COUNT total suppressions):**
+
+          \`\`\`
+          $DROP_CANDIDATES
+          \`\`\`
+
+          **Follow-up:**
+          1. Open a PR removing the listed CVE entries from \`.trivyignore\` (keep the comment block above each — re-add if the audit was a false positive).
+          2. Re-run the deploy pipeline. The image scan should now pass without the suppression.
+          3. If the deploy *still* fails on that CVE: the audit may have run before image-tag propagation. Leave the entry and wait one cycle.
+
+          This issue is updated in place by the next audit run; close it when the candidates are addressed.
+          EOF
+          )
+          EXISTING=$(gh issue list --search "$TITLE in:title" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue edit "$EXISTING" --body "$BODY"
+            echo "Updated existing tracking issue #$EXISTING"
+          else
+            gh issue create --title "$TITLE" --body "$BODY" --label "security"
+          fi
+
+      - name: Auto-close stale tracking issue
+        # When the suppression list is fully aligned (everything in
+        # .trivyignore IS still detected upstream), close any open
+        # audit issue — the prior batch was handled.
+        if: steps.compare.outputs.has_candidates == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TITLE="Trivy suppression audit: upstream fix(es) detected"
+          EXISTING=$(gh issue list --search "$TITLE in:title" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue close "$EXISTING" --comment "Audit confirms every suppressed CVE is still detected upstream — closing as stale. The next audit will re-open if anything ships a fix."
+            echo "Closed stale tracking issue #$EXISTING"
+          fi
+
+      - name: Upload raw scan artefacts
+        # Keep the raw JSON for one rotation so the next run can diff if
+        # needed — and so a human can inspect what Trivy actually saw.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-audit-reports
+          path: |
+            distroless.json
+            alpine.json
+            prisma.json
+            suppressed.txt
+            detected.txt
+            candidates.txt
+          retention-days: 14
