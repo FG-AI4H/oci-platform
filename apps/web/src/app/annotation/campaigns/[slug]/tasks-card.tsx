@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
-import { Alert, AlertDescription, AlertTitle, Button, Field, Stat, Textarea } from '@oci/ui';
+import { Alert, AlertDescription, AlertTitle, Button, Field, Textarea } from '@oci/ui';
 import type { AnnotationGateState, TaskSummary } from '@oci/shared-types';
 import { seedTasksAction, type SeedTasksState } from './tasks-actions';
 
@@ -37,16 +37,33 @@ export function TasksCard({ slug, tasks, canSeed }: TasksCardProps) {
   const breakdown = countByGate(tasks);
   const total = tasks.length;
 
+  // Compact summary row instead of a 6-tile grid — six Stat tiles
+  // dominated the page on the first audit pass; a single line keeps
+  // the breakdown visible without burying the table + seed form.
+  const summary: Array<{ label: string; value: number }> = [
+    { label: 'Total', value: total },
+    { label: 'Independent', value: breakdown.INDEPENDENT },
+    { label: 'Arbitration', value: breakdown.AWAITING_ARBITRATION },
+    { label: 'Expert review', value: breakdown.AWAITING_EXPERT },
+    { label: 'Completed', value: breakdown.COMPLETED },
+    { label: 'Skipped', value: breakdown.SKIPPED },
+  ];
+
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Stat label="Total tasks" value={total.toString()} />
-        <Stat label="Independent" value={breakdown.INDEPENDENT.toString()} />
-        <Stat label="Arbitration" value={breakdown.AWAITING_ARBITRATION.toString()} />
-        <Stat label="Expert review" value={breakdown.AWAITING_EXPERT.toString()} />
-        <Stat label="Completed" value={breakdown.COMPLETED.toString()} />
-        <Stat label="Skipped" value={breakdown.SKIPPED.toString()} />
-      </div>
+      <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm">
+        {summary.map((s, i) => (
+          <div key={s.label} className="flex items-baseline gap-1.5">
+            <dt className="text-[var(--color-muted-foreground)]">{s.label}</dt>
+            <dd className="font-semibold tabular-nums">{s.value}</dd>
+            {i < summary.length - 1 ? (
+              <span aria-hidden="true" className="text-[var(--color-muted-foreground)] ms-3">
+                ·
+              </span>
+            ) : null}
+          </div>
+        ))}
+      </dl>
 
       {total > 0 ? (
         <TasksTable tasks={tasks} />
@@ -105,14 +122,32 @@ function TasksTable({ tasks }: { tasks: ReadonlyArray<TaskSummary> }) {
   // land with the supervisor inbox in slice 3.
   const head = tasks.slice(0, 25);
   return (
-    <div className="overflow-x-auto">
+    <div
+      // tabindex + role keep the table reachable via keyboard when it
+      // overflows horizontally on narrow viewports (axe
+      // scrollable-region-focusable). The aria-label is what a screen
+      // reader announces when the region gains focus.
+      tabIndex={0}
+      role="region"
+      aria-label="Annotation tasks"
+      className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
+    >
       <table className="w-full text-sm">
+        <caption className="sr-only">Annotation tasks for this campaign</caption>
         <thead>
           <tr className="border-b border-[var(--color-border)] text-left text-xs uppercase tracking-wide text-[var(--color-muted-foreground)]">
-            <th className="py-2 pr-4 font-medium">Sample</th>
-            <th className="py-2 pr-4 font-medium">Gate</th>
-            <th className="py-2 pr-4 font-medium">N required</th>
-            <th className="py-2 font-medium">Completed</th>
+            <th scope="col" className="py-2 pr-4 font-medium">
+              Sample
+            </th>
+            <th scope="col" className="py-2 pr-4 font-medium">
+              Gate
+            </th>
+            <th scope="col" className="py-2 pr-4 font-medium">
+              Annotators
+            </th>
+            <th scope="col" className="py-2 font-medium">
+              Completed
+            </th>
           </tr>
         </thead>
         <tbody>

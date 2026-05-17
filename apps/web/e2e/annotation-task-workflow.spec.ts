@@ -41,8 +41,10 @@ test.describe('annotator queue web slice', () => {
     const tasksCard = page
       .getByRole('region', { name: /tasks/i })
       .or(page.locator('article').filter({ hasText: /Total tasks/i }));
-    await expect(page.getByText('Total tasks')).toBeVisible();
-    await expect(page.getByText(/Independent/, { exact: false })).toBeVisible();
+    // Stat summary row uses short labels ("Total", "Independent", ...);
+    // the parent Card carries the "Tasks" title.
+    await expect(page.getByText('Total', { exact: true })).toBeVisible();
+    await expect(page.getByText('Independent').first()).toBeVisible();
     await expect(page.getByRole('button', { name: /seed tasks/i })).toBeVisible();
 
     // Seed a fresh one — the unique constraint on (campaign, sampleRef)
