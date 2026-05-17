@@ -53,6 +53,27 @@ export class TaskRepository {
     });
   }
 
+  /**
+   * Returns a `(taskId|gate) → submittedCount` map for every
+   * SUBMITTED assignment in the campaign. The service cross-
+   * references this against each task's current `gateState` so the
+   * count surfaced on the manager dashboard is "submitted at the
+   * task's current gate" — which advances + resets as the task
+   * moves through INDEPENDENT → AWAITING_ARBITRATION → AWAITING_EXPERT.
+   */
+  async submittedCountsForCampaign(campaignId: string): Promise<Map<string, number>> {
+    const rows = await this.prisma.client.annotationTaskAssignment.findMany({
+      where: { status: 'SUBMITTED', task: { campaignId } },
+      select: { taskId: true, gateAtAssignment: true },
+    });
+    const byTaskAndGate = new Map<string, number>();
+    for (const r of rows) {
+      const key = `${r.taskId}|${r.gateAtAssignment}`;
+      byTaskAndGate.set(key, (byTaskAndGate.get(key) ?? 0) + 1);
+    }
+    return byTaskAndGate;
+  }
+
   async countSubmittedAssignmentsAtGate(
     taskId: string,
     gate: AnnotationGateState,

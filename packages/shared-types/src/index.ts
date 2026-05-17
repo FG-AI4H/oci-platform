@@ -2080,6 +2080,14 @@ export const TaskSummarySchema = z.object({
   sampleRef: z.string(),
   gateState: AnnotationGateStateSchema,
   nAnnotatorsRequired: z.number().int().min(1),
+  /**
+   * Number of `SUBMITTED` assignments at the task's CURRENT gate.
+   * Surfaces "1/3 submitted" progress to the manager view (#215
+   * slice-2 web). When the task has advanced past INDEPENDENT the
+   * count resets — this is the count at the gate the task is in now,
+   * not a lifetime total.
+   */
+  submittedCount: z.number().int().nonnegative(),
   createdAt: z.string().datetime(),
   completedAt: z.string().datetime().nullable(),
 });

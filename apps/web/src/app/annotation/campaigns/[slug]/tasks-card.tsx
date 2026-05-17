@@ -143,7 +143,7 @@ function TasksTable({ tasks }: { tasks: ReadonlyArray<TaskSummary> }) {
               Gate
             </th>
             <th scope="col" className="py-2 pr-4 font-medium">
-              Annotators
+              Submissions
             </th>
             <th scope="col" className="py-2 font-medium">
               Completed
@@ -155,7 +155,9 @@ function TasksTable({ tasks }: { tasks: ReadonlyArray<TaskSummary> }) {
             <tr key={t.id} className="border-b border-[var(--color-border)] last:border-b-0">
               <td className="py-2 pr-4 font-mono text-xs">{t.sampleRef}</td>
               <td className="py-2 pr-4">{GATE_LABEL[t.gateState]}</td>
-              <td className="py-2 pr-4 tabular-nums">{t.nAnnotatorsRequired}</td>
+              <td className="py-2 pr-4 tabular-nums">
+                <SubmissionsCell task={t} />
+              </td>
               <td className="py-2 text-xs text-[var(--color-muted-foreground)]">
                 {t.completedAt
                   ? new Intl.DateTimeFormat('en-GB', {
@@ -174,6 +176,28 @@ function TasksTable({ tasks }: { tasks: ReadonlyArray<TaskSummary> }) {
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Per-task submission progress. For tasks at INDEPENDENT or
+ * AWAITING_ARBITRATION the count needs to reach `nAnnotatorsRequired`
+ * (independent) or 1 (arbitration / expert) before the gate advances;
+ * we surface `n/N` and `n/1` respectively so the manager sees what's
+ * landed at the CURRENT gate, even when the lifetime task isn't done.
+ *
+ * COMPLETED / SKIPPED tasks show a single dash — the count is meaningless
+ * (the task ended; we don't reset the counter visually).
+ */
+function SubmissionsCell({ task }: { task: TaskSummary }) {
+  if (task.gateState === 'COMPLETED' || task.gateState === 'SKIPPED') {
+    return <span className="text-[var(--color-muted-foreground)]">—</span>;
+  }
+  const required = task.gateState === 'INDEPENDENT' ? task.nAnnotatorsRequired : 1;
+  return (
+    <span aria-label={`${task.submittedCount} of ${required} submitted`}>
+      {task.submittedCount} <span className="text-[var(--color-muted-foreground)]">/ {required}</span>
+    </span>
   );
 }
 

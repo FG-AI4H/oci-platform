@@ -80,8 +80,15 @@ export class TaskService {
   async listForCampaign(slug: string): Promise<TaskSummary[]> {
     const campaign = await this.campaigns.findBySlug(slug);
     if (!campaign) throw new NotFoundException(`Campaign '${slug}' not found`);
-    const rows = await this.tasks.listTasksForCampaign(campaign.id);
-    return rows.map(toTaskSummary);
+    const [rows, submittedByKey] = await Promise.all([
+      this.tasks.listTasksForCampaign(campaign.id),
+      this.tasks.submittedCountsForCampaign(campaign.id),
+    ]);
+    return rows.map((row) => {
+      const key = `${row.id}|${row.gateState}`;
+      const submittedCount = submittedByKey.get(key) ?? 0;
+      return toTaskSummary(row, submittedCount);
+    });
   }
 
   // --- Next (router) -----------------------------------------------------
@@ -302,13 +309,14 @@ function roleForGate(gate: AnnotationGateState): string {
   }
 }
 
-function toTaskSummary(row: AnnotationTask): TaskSummary {
+function toTaskSummary(row: AnnotationTask, submittedCount: number): TaskSummary {
   return {
     id: row.id,
     campaignId: row.campaignId,
     sampleRef: row.sampleRef,
     gateState: row.gateState,
     nAnnotatorsRequired: row.nAnnotatorsRequired,
+    submittedCount,
     createdAt: row.createdAt.toISOString(),
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
   };
