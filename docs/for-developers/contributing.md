@@ -33,6 +33,18 @@ If you touched UI: run a visual + a11y audit (axe-core deltas must be flat or im
 
 CI re-runs everything plus Trivy + Gitleaks + CycloneDX SBOM. PRs don't merge unless CI is green.
 
+### Audit-event coverage (ADR-0014)
+
+Every persisted state change in a domain module should be mirrored into the platform-wide audit feed via `@oci/audit`. The declared taxonomy of expected events lives in [`scripts/audit-taxonomy.json`](../../scripts/audit-taxonomy.json); the CI step `Audit-coverage grep (ADR-0014)` walks it and greps `apps/api/src/` for matching `audit.emit({ module, action, … })` or `audit.emitSync(…)` call sites.
+
+When you wire a new emitter:
+
+1. Confirm the `module.action` pair is in `expected[]`. Add it if a new one is needed.
+2. Remove the entry from `unimplemented{}` if it was deferred.
+3. Run the check locally: `pnpm --filter @oci/database exec tsx ../../scripts/check-audit-coverage.ts`.
+
+When a module is **not yet** ready to emit, add the action to `unimplemented{}` with a tracking-issue reference. Stale `unimplemented` entries (action is now emitted but still listed) surface as warnings.
+
 ## Commit messages
 
 Conventional commits, scoped:
