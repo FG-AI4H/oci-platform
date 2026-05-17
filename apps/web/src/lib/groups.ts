@@ -142,3 +142,29 @@ export function requireCampaignManager(session: Session | null | undefined): Ses
   }
   return session;
 }
+
+/**
+ * Which annotation gate the caller is eligible to work at. Mirrors
+ * `TaskService.gateFromGroups` on the API side — a caller with
+ * multiple roles gets the earliest gate they qualify for (preserves
+ * the SOP ordering: INDEPENDENT → AWAITING_ARBITRATION → AWAITING_EXPERT).
+ *
+ * `admin` is intentionally NOT auto-mapped here — operator override
+ * is appropriate for lifecycle transitions but not for "pull a task
+ * to annotate as if you were the annotator". Operators sign in with
+ * an annotator role when they want to test the queue.
+ */
+export function annotationGateForCaller(
+  session: Session | null | undefined,
+): 'INDEPENDENT' | 'AWAITING_ARBITRATION' | 'AWAITING_EXPERT' | null {
+  const groups = userGroups(session);
+  if (groups.includes('annotator')) return 'INDEPENDENT';
+  if (groups.includes('arbitration-annotator')) return 'AWAITING_ARBITRATION';
+  if (groups.includes('expert-reviewer')) return 'AWAITING_EXPERT';
+  return null;
+}
+
+/** True when the caller can pick up annotation work in at least one gate. */
+export function isAnnotationWorker(session: Session | null | undefined): boolean {
+  return annotationGateForCaller(session) !== null;
+}

@@ -177,6 +177,36 @@ WHERE ds.slug = 'rsna-pneumonia-2018'
 ON CONFLICT (slug) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
+-- Section 2b — Annotation tasks for the RUNNING demo campaign (#215 slice 2).
+--
+-- Seeds 8 AnnotationTask rows against `demo-rsna-segmentation` so the
+-- annotator UI has work to hand out the moment a dev signs in with
+-- the annotator role. The campaign has nAnnotators=3, so each task
+-- needs three independent submissions before it escalates to
+-- arbitration.
+--
+-- Sample refs are opaque pointers (`<dataset-slug>/sample-NNN`); the
+-- catalog ↔ annotation linkage that turns them into real S3 keys
+-- lands with #223 (E11). Until then they're just stable strings.
+--
+-- ON CONFLICT (campaign_id, sample_ref) matches the unique index in
+-- the migration, so re-runs are no-ops.
+-- ----------------------------------------------------------------------------
+
+INSERT INTO "annotation"."annotation_tasks"
+    (campaign_id, sample_ref, n_annotators_required, gate_state, updated_at)
+SELECT
+    c.id,
+    'rsna-pneumonia-2018/sample-' || lpad(s::text, 3, '0'),
+    3,
+    'INDEPENDENT'::"annotation"."AnnotationGateState",
+    CURRENT_TIMESTAMP
+FROM "annotation"."annotation_campaigns" c,
+     generate_series(1, 8) s
+WHERE c.slug = 'demo-rsna-segmentation'
+ON CONFLICT (campaign_id, sample_ref) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
 -- Section 3 — OCI-owned demo dataset WITH REAL S3 BYTES (#251).
 --
 -- Unlike the placeholders in Section 1, this dataset is end-to-end live:

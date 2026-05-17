@@ -17,10 +17,12 @@ import {
   type CampaignDetail,
   type CampaignStatus,
   type CampaignTaskKind,
+  type TaskSummary,
 } from '@oci/shared-types';
 import { auth } from '../../../../auth';
 import { apiFetch } from '../../../../lib/api';
-import { isCampaignManager } from '../../../../lib/groups';
+import { isAnnotationWorker, isCampaignManager } from '../../../../lib/groups';
+import { TasksCard } from './tasks-card';
 import { TransitionActions } from './transition-actions';
 
 const STATUS_TONE: Record<CampaignStatus, 'info' | 'primary' | 'success' | 'warning' | 'neutral'> =
@@ -64,7 +66,19 @@ export default async function CampaignDetailPage({ params }: PageProps) {
 
   const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
   const canManage = isCampaignManager(session);
+  const canAnnotate = isAnnotationWorker(session) && detail.status === 'RUNNING';
   const actions = availableCampaignActions(detail.status);
+
+  // Manager + supervisor see the full task list; annotators don't
+  // need it (they have the /annotate route below). 403 from the API
+  // is mapped to an empty list so the rest of the page still renders.
+  const tasks =
+    canManage && (detail.status === 'RUNNING' || detail.status === 'COMPLETED')
+      ? ((await apiFetch<TaskSummary[]>(
+          `/v2/annotation/campaigns/${encodeURIComponent(detail.slug)}/tasks`,
+          { session, revalidate: 0 },
+        )) ?? [])
+      : [];
 
   return (
     <Container size="md">
@@ -137,6 +151,36 @@ export default async function CampaignDetailPage({ params }: PageProps) {
             </CardHeader>
             <CardContent>
               <TransitionActions slug={detail.slug} current={detail.status} actions={actions} />
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {canAnnotate ? (
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Annotate</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-3 text-sm text-[var(--color-muted-foreground)]">
+                You&apos;re eligible to pick up annotation work on this campaign.
+              </p>
+              <Link
+                href={`/annotation/campaigns/${detail.slug}/annotate`}
+                className="inline-flex items-center justify-center rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+              >
+                Open annotator queue
+              </Link>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {canManage && (detail.status === 'RUNNING' || detail.status === 'COMPLETED') ? (
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Tasks</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TasksCard slug={detail.slug} tasks={tasks} canSeed={detail.status === 'RUNNING'} />
             </CardContent>
           </Card>
         ) : null}
