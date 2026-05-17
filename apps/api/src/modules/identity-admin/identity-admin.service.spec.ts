@@ -1,4 +1,5 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import type { AuditEmitter } from '@oci/audit';
 import type { AdminUserSummary, PlatformGroup } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -37,8 +38,14 @@ interface RepoMock {
   listForTarget: ReturnType<typeof vi.fn>;
 }
 
+interface AuditMock {
+  emit: ReturnType<typeof vi.fn>;
+  emitSync: ReturnType<typeof vi.fn>;
+}
+
 let cognito: CognitoMock;
 let repo: RepoMock;
+let audit: AuditMock;
 let service: IdentityAdminService;
 
 beforeEach(() => {
@@ -52,9 +59,14 @@ beforeEach(() => {
     recordEvent: vi.fn().mockResolvedValue({}),
     listForTarget: vi.fn().mockResolvedValue([]),
   };
+  audit = {
+    emit: vi.fn().mockResolvedValue(undefined),
+    emitSync: vi.fn().mockResolvedValue({}),
+  };
   service = new IdentityAdminService(
     cognito as unknown as CognitoAdminClient,
     repo as unknown as IdentityAdminRepository,
+    audit as unknown as AuditEmitter,
   );
 });
 
@@ -72,6 +84,13 @@ describe('IdentityAdminService.grant', () => {
         action: 'grant',
         groupName: 'campaign-manager',
         targetUsername: 'bob',
+      }),
+    );
+    expect(audit.emitSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        module: 'identity',
+        action: 'role.granted',
+        subjectType: 'user',
       }),
     );
   });
@@ -107,6 +126,9 @@ describe('IdentityAdminService.revoke', () => {
     expect(cognito.removeUserFromGroup).toHaveBeenCalledWith('bob', 'campaign-manager');
     expect(repo.recordEvent).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'revoke', groupName: 'campaign-manager' }),
+    );
+    expect(audit.emitSync).toHaveBeenCalledWith(
+      expect.objectContaining({ module: 'identity', action: 'role.revoked' }),
     );
   });
 

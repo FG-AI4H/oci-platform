@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import type { AuditEmitter } from '@oci/audit';
 import type {
   AdminGroupAuditEntry,
   AdminUserDetail,
@@ -15,6 +16,7 @@ import type {
 import type { IdentityAdminAuditEvent } from '@oci/database';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
+import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { CognitoAdminClient } from './cognito-admin.client.js';
 import { IdentityAdminRepository } from './identity-admin.repository.js';
 
@@ -34,6 +36,7 @@ export class IdentityAdminService {
   constructor(
     @Inject(CognitoAdminClient) private readonly cognito: CognitoAdminClient,
     @Inject(IdentityAdminRepository) private readonly repo: IdentityAdminRepository,
+    @Inject(AUDIT_EMITTER) private readonly audit: AuditEmitter,
   ) {}
 
   async listUsers(args: {
@@ -84,6 +87,21 @@ export class IdentityAdminService {
       action: 'grant',
       groupName: group,
     });
+    // Platform-wide audit mirror (ADR-0014 §6 — the operational
+    // history table above stays; AuditEvent is the regulator-grade
+    // mirror that spans every module).
+    await this.audit.emitSync({
+      module: 'identity',
+      action: 'role.granted',
+      subjectType: 'user',
+      subjectId: cognitoSubAsUuid(target.sub),
+      actorUserId: cognitoSubAsUuid(actor.sub),
+      payload: {
+        actorUsername: pickActorUsername(actor),
+        targetUsername: target.username,
+        group,
+      },
+    });
     this.logger.log(`grant: actor=${actor.sub} target=${target.username} group=${group}`);
     return this.getUser(username);
   }
@@ -119,6 +137,18 @@ export class IdentityAdminService {
       targetUsername: target.username,
       action: 'revoke',
       groupName: group,
+    });
+    await this.audit.emitSync({
+      module: 'identity',
+      action: 'role.revoked',
+      subjectType: 'user',
+      subjectId: cognitoSubAsUuid(target.sub),
+      actorUserId: cognitoSubAsUuid(actor.sub),
+      payload: {
+        actorUsername: pickActorUsername(actor),
+        targetUsername: target.username,
+        group,
+      },
     });
     this.logger.log(`revoke: actor=${actor.sub} target=${target.username} group=${group}`);
     return this.getUser(username);

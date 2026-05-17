@@ -168,6 +168,7 @@ Last update: **2026-05-16** (annotation architecture locked across 7 ADRs — 00
 | OIDC-only deploys (no static AWS keys)                                 | ✅ Live    | Phase A    |
 | Deploy hygiene — Node 24 actions + `@oci/croissant` build in web image | ✅ Live    | PR #102    |
 | OpenTelemetry / X-Ray instrumentation                                  | 🚧 Partial | Ongoing    |
+| Platform-wide audit feed — `@oci/audit` + `AuditEvent` (ADR-0014)      | ✅ Live    | #257       |
 
 ## Annotation track
 
