@@ -2022,6 +2022,132 @@ export function campaignActionRequiresReason(
 }
 
 // ---------------------------------------------------------------------------
+// Annotation tasks + gate state machine (#215 slice 2).
+//
+// Each campaign's work is broken into AnnotationTasks (one per sample).
+// Tasks move through the 3-gate SOP via the state machine below. Slice 2
+// implements the minimum surface ADR-0009 Decision 1 requires: routing
+// by role (predicate 1) + FIFO tiebreaker (predicate 6). Experience-
+// weighted ranking, bias-prevention, stratification, and the
+// calibration loop land in slice 3.
+// ---------------------------------------------------------------------------
+
+export const AnnotationGateStateSchema = z.enum([
+  'INDEPENDENT',
+  'AWAITING_ARBITRATION',
+  'AWAITING_EXPERT',
+  'COMPLETED',
+  'SKIPPED',
+]);
+export type AnnotationGateState = z.infer<typeof AnnotationGateStateSchema>;
+
+export const AnnotationAssignmentStatusSchema = z.enum([
+  'PENDING',
+  'IN_PROGRESS',
+  'SUBMITTED',
+  'EXPIRED',
+]);
+export type AnnotationAssignmentStatus = z.infer<typeof AnnotationAssignmentStatusSchema>;
+
+/**
+ * Cognito groups eligible for annotation work at each gate. The router
+ * (`apps/api/src/modules/annotation/task.service.ts`) matches the
+ * caller's groups against the required role for the task's current
+ * gate; a caller with multiple eligible groups receives tasks for the
+ * earliest gate in the chain they qualify for.
+ */
+export const ANNOTATION_GATE_ROLES = {
+  INDEPENDENT: 'annotator',
+  AWAITING_ARBITRATION: 'arbitration-annotator',
+  AWAITING_EXPERT: 'expert-reviewer',
+} as const satisfies Partial<Record<AnnotationGateState, string>>;
+
+export const SeedTasksRequestSchema = z.object({
+  /** Stable per-sample identifiers; one task created per ref. */
+  sampleRefs: z.array(z.string().min(1).max(500)).min(1).max(10_000),
+});
+export type SeedTasksRequest = z.infer<typeof SeedTasksRequestSchema>;
+
+export const SeedTasksResponseSchema = z.object({
+  created: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+});
+export type SeedTasksResponse = z.infer<typeof SeedTasksResponseSchema>;
+
+export const TaskSummarySchema = z.object({
+  id: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  sampleRef: z.string(),
+  gateState: AnnotationGateStateSchema,
+  nAnnotatorsRequired: z.number().int().min(1),
+  createdAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+});
+export type TaskSummary = z.infer<typeof TaskSummarySchema>;
+
+export const AssignmentSummarySchema = z.object({
+  id: z.string().uuid(),
+  taskId: z.string().uuid(),
+  sampleRef: z.string(),
+  gateAtAssignment: AnnotationGateStateSchema,
+  assigneeRole: z.string(),
+  status: AnnotationAssignmentStatusSchema,
+  assignedAt: z.string().datetime(),
+  startedAt: z.string().datetime().nullable(),
+  submittedAt: z.string().datetime().nullable(),
+});
+export type AssignmentSummary = z.infer<typeof AssignmentSummarySchema>;
+
+export const PullNextResponseSchema = z.object({
+  /** `null` when the caller has no eligible task in flight or queued. */
+  assignment: AssignmentSummarySchema.nullable(),
+});
+export type PullNextResponse = z.infer<typeof PullNextResponseSchema>;
+
+export const SubmitAssignmentRequestSchema = z.object({
+  /**
+   * Free-form per-task submission shape. The tool-integration's
+   * declared schemaProfile (ADR-0007 / #214) will validate this server-
+   * side once the registry lands; slice 2 stores the JSON verbatim.
+   */
+  submission: z.record(z.string(), z.unknown()),
+});
+export type SubmitAssignmentRequest = z.infer<typeof SubmitAssignmentRequestSchema>;
+
+export const SubmitAssignmentResponseSchema = z.object({
+  assignmentId: z.string().uuid(),
+  taskId: z.string().uuid(),
+  /** `null` when the gate did not advance on this submission. */
+  newGateState: AnnotationGateStateSchema.nullable(),
+});
+export type SubmitAssignmentResponse = z.infer<typeof SubmitAssignmentResponseSchema>;
+
+export const SkipTaskRequestSchema = z.object({
+  reason: z.string().min(3).max(500),
+});
+export type SkipTaskRequest = z.infer<typeof SkipTaskRequestSchema>;
+
+/**
+ * Gate-state transition vocabulary. The state machine in
+ * `apps/api/src/modules/annotation/gate-state-machine.ts` is the
+ * authoritative source for the `(from, action) → to` matrix; this
+ * enum is shared with the UI for button visibility.
+ */
+export const GateTransitionActionSchema = z.enum([
+  /** Annotator persisted an independent submission. */
+  'independent-submitted',
+  /** Arbitration annotator persisted their resolution. */
+  'arbitration-submitted',
+  /** Arbitration could not resolve; escalate to expert review. */
+  'escalate-to-expert',
+  /** Expert reviewer persisted the final decision (per ADR-0008). */
+  'expert-submitted',
+  /** Operator override (reason required) — exits the SOP entirely. */
+  'skip',
+]);
+export type GateTransitionAction = z.infer<typeof GateTransitionActionSchema>;
+
+// ---------------------------------------------------------------------------
 // Admin — Cognito group management (#241).
 //
 // PlatformGroup is the curated set of Cognito groups the operator UI

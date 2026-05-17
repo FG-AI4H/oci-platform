@@ -1064,6 +1064,127 @@ enum CampaignOutputLicense {
   @@schema("annotation")
 }
 
+/// 3-gate SOP gate state per annotation task (#215 slice 2, ADR-0006
+/// Decision 3 + ADR-0008 §IRR thresholds + ADR-0011 sample rejection).
+///
+/// Flow (slice-2 minimum — IRR threshold checks at gate-1 are slice 3):
+///   INDEPENDENT → AWAITING_ARBITRATION (after N independent submissions)
+///   INDEPENDENT → COMPLETED            (N=1 single-rater shortcut)
+///   AWAITING_ARBITRATION → AWAITING_EXPERT (escalation)
+///   AWAITING_ARBITRATION → COMPLETED   (arbitration submission ends it)
+///   AWAITING_EXPERT → COMPLETED        (expert review is FINAL per ADR-0008)
+///   any → SKIPPED                      (operator override; reason required)
+enum AnnotationGateState {
+  INDEPENDENT
+  AWAITING_ARBITRATION
+  AWAITING_EXPERT
+  COMPLETED
+  SKIPPED
+
+  @@schema("annotation")
+}
+
+/// One row per (campaign × sample). Holds the gate-state pointer for
+/// the 3-gate SOP. Slice 2 of #215 seeds tasks via an explicit
+/// `sampleRefs` array on the seed endpoint; in slice 3 the seed will
+/// pull the references from the dataset manifest under the
+/// catalog ↔ annotation linkage being added in #223 (E11).
+///
+/// `sampleRef` is intentionally opaque — actual sample retrieval goes
+/// through the tool-integration's signed handoff URL (ADR-0007 / #214).
+/// The task model carries only the pointer + the gate state.
+model AnnotationTask {
+  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId  String              @map("campaign_id") @db.Uuid
+  /// Stable, campaign-scoped identifier for the underlying sample.
+  /// Free-form string today; will be constrained to dataset
+  /// `recordSet/record` URIs once #223 lands.
+  sampleRef   String              @map("sample_ref")
+  /// Denormalised at create time from `campaign.workflowConfig.nAnnotators`
+  /// so the gate-completion check doesn't have to re-read the campaign.
+  /// Mutating the campaign workflow after RUNNING is intentionally
+  /// not in scope — change → clone instead.
+  nAnnotatorsRequired Int         @map("n_annotators_required")
+  gateState   AnnotationGateState @default(INDEPENDENT) @map("gate_state")
+  /// Operator-supplied reason for SKIPPED transitions; null otherwise.
+  skipReason  String?             @map("skip_reason")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  completedAt DateTime?           @map("completed_at")
+
+  assignments AnnotationTaskAssignment[]
+
+  @@unique([campaignId, sampleRef])
+  @@index([campaignId, gateState])
+  @@map("annotation_tasks")
+  @@schema("annotation")
+}
+
+/// Status of an annotator's work on a task at a given gate.
+///   PENDING     — assignment row exists, annotator hasn't started
+///   IN_PROGRESS — annotator opened the task (signed handoff issued)
+///   SUBMITTED   — annotator persisted their submission; counts toward
+///                 the gate-completion check
+///   EXPIRED     — abandonment timeout (#229) freed the assignment
+enum AnnotationAssignmentStatus {
+  PENDING
+  IN_PROGRESS
+  SUBMITTED
+  EXPIRED
+
+  @@schema("annotation")
+}
+
+/// One row per (task × annotator × gate). Tracks the assignment
+/// lifecycle so the router can re-issue work after expiry without
+/// double-counting submissions.
+///
+/// Slice-2 routing implements predicate 1 (role match) + predicate 6
+/// (FIFO tiebreaker) from ADR-0009 Decision 1. Experience-weighted
+/// ranking, bias-prevention sampling, stratification, and the
+/// calibration loop are slice 3+.
+///
+/// `assigneeRole` is snapshotted at assignment time so a later change
+/// to the annotator's group memberships doesn't retroactively
+/// invalidate a submission already in flight.
+model AnnotationTaskAssignment {
+  id                 String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId             String                     @map("task_id") @db.Uuid
+  /// Soft FK → identity.users.id (matches the existing campaign-side
+  /// `createdById` convention). Stored as the v5-derived UUID of the
+  /// caller's Cognito sub, per `cognitoSubAsUuid()`.
+  assigneeUserId     String                     @map("assignee_user_id") @db.Uuid
+  /// Cognito group at assignment time. Slice 2 supports:
+  /// 'annotator' | 'arbitration-annotator' | 'expert-reviewer'.
+  assigneeRole       String                     @map("assignee_role")
+  /// Snapshot of `task.gateState` at assignment time. The submission
+  /// pipeline cross-checks this against the live gateState before
+  /// counting the submission, so a stale assignment from a previous
+  /// gate is rejected with 409.
+  gateAtAssignment   AnnotationGateState        @map("gate_at_assignment")
+  status             AnnotationAssignmentStatus @default(PENDING)
+  /// Free-form JSONB submission payload. Slice 2 stores whatever the
+  /// caller passes; tool-integration-aware schema validation per
+  /// ADR-0007 lands with #214 / #231.
+  submission         Json?
+  assignedAt         DateTime                   @default(now()) @map("assigned_at")
+  startedAt          DateTime?                  @map("started_at")
+  submittedAt        DateTime?                  @map("submitted_at")
+  expiredAt          DateTime?                  @map("expired_at")
+
+  task AnnotationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  /// One annotator can hold at most one ACTIVE assignment per
+  /// (task, gate). The partial unique index in the migration enforces
+  /// the constraint excluding SUBMITTED / EXPIRED rows so re-assignment
+  /// after abandonment isn't blocked.
+  @@index([taskId, status])
+  @@index([assigneeUserId, status])
+  @@index([taskId, gateAtAssignment, status])
+  @@map("annotation_task_assignments")
+  @@schema("annotation")
+}
+
 /// Audit log for admin group grants / revokes (#241). One row per
 /// administrative action against `cognito-idp:AdminAddUserToGroup` /
 /// `AdminRemoveUserFromGroup`. The admin user-management UI reads the
