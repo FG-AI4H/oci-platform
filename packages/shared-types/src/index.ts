@@ -1867,6 +1867,39 @@ export const CampaignWorkflowConfigSchema = z.object({
 export type CampaignWorkflowConfig = z.infer<typeof CampaignWorkflowConfigSchema>;
 
 /**
+ * Quality config (#216, ADR-0008): per-campaign IRR metric +
+ * agreement threshold consumed by the workflow engine at the gate-1
+ * decision-box. If `IRR ≥ threshold` across the N independent
+ * submissions, the task skips arbitration and auto-completes;
+ * otherwise it escalates to AWAITING_ARBITRATION (per ADR-0008
+ * gate-1 → gate-2 semantics).
+ *
+ * First cut surfaces three metrics — the set slice 3 actually
+ * consumes. Krippendorff α (#289), Hausdorff / ICC / Euclidean
+ * (#290), gold-standard sample handling (#291), and calibration-
+ * drift detection (#292) extend this enum as they ship.
+ */
+export const AnnotationQualityMetricSchema = z.enum(['cohens-kappa', 'fleiss-kappa', 'dice']);
+export type AnnotationQualityMetric = z.infer<typeof AnnotationQualityMetricSchema>;
+
+export const CampaignQualityConfigSchema = z.object({
+  /**
+   * IRR metric used at gate 1. Defaults match ADR-0008:
+   * `fleiss-kappa` for categorical tasks, `dice` for segmentation —
+   * but the workflow engine never relies on the default, it always
+   * reads the row.
+   */
+  metric: AnnotationQualityMetricSchema.default('fleiss-kappa'),
+  /**
+   * Agreement threshold in [0, 1]. ADR-0008 leaves the floor to
+   * campaign managers — 0.6 ("substantial" per Landis & Koch) is a
+   * common starting point but no value is mandated.
+   */
+  threshold: z.number().min(0).max(1).default(0.6),
+});
+export type CampaignQualityConfig = z.infer<typeof CampaignQualityConfigSchema>;
+
+/**
  * Reference to the annotation-tool adapter the campaign uses. Phase
  * B.A.1 ships a minimal `AnnotationToolIntegration` registry with
  * seeded stub rows; the full contract + capability matrix lands as
