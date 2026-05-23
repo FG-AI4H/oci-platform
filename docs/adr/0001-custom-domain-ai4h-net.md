@@ -130,6 +130,41 @@ before, no behaviour change.
   HTTP forever. Rejected: in-VPC plaintext hop violates
   `docs/security.md` ("All data … in transit (TLS 1.3 only)").
 
+## Aftermath
+
+2026-05-23 — Security Hub finding `CloudFront.1` flagged distribution
+`E282SSFANZ4B6W` (no `DefaultRootObject`). Investigation showed the
+distribution was a **pre-OCI-Platform legacy artefact** (last modified
+2023-06-14), unrelated to the WebStack retired in PR #17. It was
+already `Enabled: false`, had no Route 53 alias, and pointed at an
+S3 bucket (`fg-ai4h-oci-web-app-bucket`) holding the legacy React
+build assets.
+
+Remediation: deleted the distribution and the auto-created
+us-east-1 WAFv2 web ACL
+(`CreatedByCloudFront-62e35de3-c2e0-4cd4-b3fb-50e359288a43`). The
+S3 bucket and `www.ai4h.net` ACM cert were left in place — both
+are FG-AI4H shared-tenant resources, not OCI Platform's to remove.
+
+No CDK change required: the orphan was never in the CDK graph.
+The OCI Platform itself remains CloudFront-free (per the
+WebStack-retirement decision above). The account still holds three
+**non-OCI** CloudFront distributions belonging to other FG-AI4H
+tenants:
+
+- `E3DSJ1I0AH65Z2` — serves `www.ai4h.net` static site; correctly
+  configured (`DefaultRootObject: index.html`).
+- ~~`E211MDTGOMO4RM`~~ — deleted 2026-05-23 in response to Security Hub
+  finding `CloudFront.9` (insecure custom-origin protocol). Same orphan
+  profile as `E282SSFANZ4B6W`: disabled since 2023-06-16, no alias, no
+  attached WAF, custom origin `fg-ai4h-oci-web-app-bucket.s3-website.…`
+  with `OriginProtocolPolicy: http-only` (exactly the
+  `CloudFront.9` trigger).
+- `E3CTDZA2J6CCQ5` — enabled distribution fronting an API Gateway
+  (`vno8vyh8x5.execute-api.eu-central-1.amazonaws.com`), last
+  modified 2022-05-20, no alias, empty `DefaultRootObject`. Owner
+  unknown — investigate before touching.
+
 ## References
 
 - `docs/security.md` — TLS-only mandate.

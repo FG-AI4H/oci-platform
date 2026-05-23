@@ -29,14 +29,14 @@ cloud "Internet" as net
 
 rectangle "AWS account 601883093460 / eu-central-1" <<aws>> {
 
-  rectangle "CloudFront\noci-dev-cdn\nTLS, security headers,\nedge cache" as cf <<service>>
+  rectangle "Route 53\nai4h.net zone\n*.oci.ai4h.net A/AAAA" as r53 <<service>>
 
   rectangle "Cognito User Pool\noci-dev\nESSENTIALS plan,\nMFA OPTIONAL,\n7 groups" as cog <<security>>
 
   rectangle "VPC oci-dev-network\n10.10.0.0/16, 3 AZ" <<vpc>> {
 
     rectangle "public subnets" <<subnet>> {
-      rectangle "ALB\noci-dev-api-alb\nHTTP :80,\nCFn origin,\naccess logs" as alb <<service>>
+      rectangle "ALB\noci-dev-api-alb\nHTTPS :443 (ACM),\n:80 → :443 redirect,\nNestJS @fastify/helmet\nsec headers,\naccess logs" as alb <<service>>
     }
 
     rectangle "private subnets" <<subnet>> {
@@ -53,7 +53,7 @@ rectangle "AWS account 601883093460 / eu-central-1" <<aws>> {
 
   rectangle "S3 oci-dev-media\nKMS, versioned,\nblock public,\nlogs to AccessLogs/" as media <<storage>>
   rectangle "S3 oci-dev-artifacts\nKMS, versioned,\nblock public,\nlogs to AccessLogs/" as artif <<storage>>
-  rectangle "S3 oci-dev-access-logs\nS3-managed enc,\nALB + S3 + CDN target,\nlifecycle 30d" as logs <<storage>>
+  rectangle "S3 oci-dev-access-logs\nS3-managed enc,\nALB + S3 target,\nlifecycle 30d" as logs <<storage>>
 
   rectangle "CloudWatch Logs\n/oci/dev/api\n/oci/dev/workers\n1 month retention" as cw <<service>>
   rectangle "SNS oci-dev-alarms\nTLS-only publish" as sns <<service>>
@@ -62,8 +62,8 @@ rectangle "AWS account 601883093460 / eu-central-1" <<aws>> {
 }
 
 user --> net : https
-net --> cf : https
-cf --> alb : http
+net ..> r53 : DNS
+net --> alb : https :443
 alb --> api
 api --> rds : tcp 5432\nIAM auth (Phase A2)
 api ..> cog : /oauth2/userInfo, JWKS
@@ -74,16 +74,17 @@ media ..> cmk
 artif ..> cmk
 api --> cw : pino → awslogs
 alb --> logs : access logs
-cf --> logs : standard logs
 media --> logs : server access logs
 artif --> logs : server access logs
 
 note as N1
   Solid arrow  = sync data flow on the hot path
   Dotted arrow = async / metadata / out-of-band
+  CloudFront retired per ADR-0001 (2026-05-03);
+  ALB is the public entry point with ACM TLS 1.3
+  and security headers via NestJS @fastify/helmet.
   Phase A2 follow-ups:
     • IAM database auth wiring
-    • ACM cert + custom domain
     • narrow PowerUserAccess on deploy role
 end note
 @enduml

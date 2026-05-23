@@ -20,7 +20,7 @@ packages/
   auth/          Cognito helpers FE/BE
   croissant/     BIOCroissant validators / ingest helpers
 infra/
-  cdk/           AWS CDK — VPC, Cognito, Aurora, ECS, ALB, CloudFront, WAF, S3, Logs
+  cdk/           AWS CDK — VPC, Cognito, Aurora, ECS, ALB (TLS+ACM), WAF, S3, Logs
 .github/workflows/  CI + dev/int/prod deploy via OIDC
 docs/             Architecture, getting-started, security, deployment, ADRs, migration plan
 scripts/          Bootstrap & maintenance
@@ -63,7 +63,7 @@ Full setup details: [`docs/getting-started.md`](./docs/getting-started.md).
 - **Node.js 24 LTS** · **pnpm 10.33** · **Turborepo 2.9** · **TypeScript 6**
 - **NestJS 11** + **Fastify 5** + **Prisma 7** + **Aurora Postgres**
 - **Next.js 16** (App Router, RSC, Turbopack) + **Tailwind CSS 4** + **shadcn/ui**
-- **AWS CDK 2.252** — IaC for VPC, Cognito, Aurora Serverless v2, ECS Fargate (ARM64), ALB, CloudFront, WAFv2, S3, KMS, CloudWatch
+- **AWS CDK 2.252** — IaC for VPC, Cognito, Aurora Serverless v2, ECS Fargate (ARM64), ALB (TLS 1.3 + ACM), WAFv2, S3, KMS, CloudWatch
 - **GitHub Actions OIDC** for dev/int/prod deploy. No static AWS keys, anywhere.
 
 Why these choices: see [`docs/architecture.md`](./docs/architecture.md) and the ADRs under [`docs/adr/`](./docs/adr/).

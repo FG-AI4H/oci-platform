@@ -15,7 +15,7 @@ and (over time) federated health data. This page is the operating contract.
 ## Data protection
 
 - **At rest**: KMS-CMK encryption on Aurora and S3. Each environment has its own CMK, keys auto-rotate annually.
-- **In transit**: TLS 1.3 only at the ALB and CloudFront (security policy `TLS13_RES`). No TLS 1.0/1.1/1.2 fallback.
+- **In transit**: TLS 1.3 only at the ALB (security policy `ELBSecurityPolicy-TLS13-1-2-2021-06`). Port 80 redirects to 443; no plaintext path. No TLS 1.0/1.1/1.2 fallback. (CloudFront retired in ADR-0001 — request path is now ALB direct.)
 - **S3 buckets**: `BlockPublicAccess.BLOCK_ALL` + `enforceSSL: true` + `BUCKET_OWNER_ENFORCED` ownership + versioning. Prod artifact bucket has **Object Lock** enabled (compliance mode for assessment reports).
 - **Aurora**: not publicly accessible, in private isolated subnets, IAM database auth enabled, audit logging exported to CloudWatch.
 
@@ -53,7 +53,7 @@ Every Docker image build runs:
 
 - Structured JSON logs (pino) → CloudWatch with environment-specific retention (1mo dev, 6mo prod).
 - All write operations on `identity`, `prediction`, `reporting` modules emit an `AuditEvent` to a dedicated audit log group (Phase D — fed by the `reporting` audit-trail module).
-- CloudFront access logs to S3 (intelligent tiering, 90-day retention dev / 1-year prod).
+- ALB access logs to S3 (intelligent tiering, 90-day retention dev / 1-year prod). WAF logs to CloudWatch in int/prod.
 
 ## Incident response
 

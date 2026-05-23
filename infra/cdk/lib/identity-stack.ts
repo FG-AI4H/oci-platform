@@ -52,7 +52,11 @@ export class IdentityStack extends cdk.Stack {
       featurePlan:
         props.cfg.envName === 'prod' ? cognito.FeaturePlan.PLUS : cognito.FeaturePlan.ESSENTIALS,
       removalPolicy: props.cfg.removalPolicy,
-      deletionProtection: props.cfg.envName === 'prod',
+      // Account-wide policy: deletion protection on all environments. The
+      // dev pool can still be intentionally torn down by flipping this to
+      // false in a one-shot CDK deploy first, then running `cdk destroy`
+      // (same pattern as the Aurora dev cluster).
+      deletionProtection: true,
     });
 
     // Roles as Cognito groups (precedence reflects org seniority)
