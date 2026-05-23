@@ -6,12 +6,12 @@ The OCI is built on the principle that **data stays at source; only metadata tra
 
 In a default OCI deployment with default host choices:
 
-| Resource                          | Lives at                                                                          |
-| --------------------------------- | --------------------------------------------------------------------------------- |
-| **Croissant manifest (metadata)** | The OCI instance's database (Aurora Postgres). Not the data; descriptive JSON-LD. |
-| **Catalogue search index**        | Same Aurora Postgres (via `tsvector` GENERATED column).                           |
-| **Federation index outbound**     | Cached behind CloudFront; PUBLIC + PUBLISHED only.                                |
-| **Dataset bytes — host's choice** | Three options below.                                                              |
+| Resource                          | Lives at                                                                            |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| **Croissant manifest (metadata)** | The OCI instance's database (Aurora Postgres). Not the data; descriptive JSON-LD.   |
+| **Catalogue search index**        | Same Aurora Postgres (via `tsvector` GENERATED column).                             |
+| **Federation index outbound**     | Served by the ALB (`/.well-known/croissant-catalog.json`); PUBLIC + PUBLISHED only. |
+| **Dataset bytes — host's choice** | Three options below.                                                                |
 
 For **bytes**, the host picks at publish time:
 

@@ -6,10 +6,10 @@ manually, but should match the CDK code in `infra/cdk/`.
 
 ## Files
 
-| File                                                             | Description                                                                                                                  |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| [oci-dev-runtime.puml](./oci-dev-runtime.puml)                   | Runtime architecture for the `dev` environment — VPC, ALB, ECS Fargate, Aurora, Cognito, CloudFront, S3, KMS, observability. |
-| [oci-deploy-control-plane.puml](./oci-deploy-control-plane.puml) | CI/CD control plane — GitHub Actions to AWS via OIDC, ECR push, CloudFormation/CDK deploy.                                   |
+| File                                                             | Description                                                                                                                 |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| [oci-dev-runtime.puml](./oci-dev-runtime.puml)                   | Runtime architecture for the `dev` environment — Route 53, ALB (TLS), ECS Fargate, Aurora, Cognito, S3, KMS, observability. |
+| [oci-deploy-control-plane.puml](./oci-deploy-control-plane.puml) | CI/CD control plane — GitHub Actions to AWS via OIDC, ECR push, CloudFormation/CDK deploy.                                  |
 
 ## Rendering
 

@@ -1853,6 +1853,16 @@ export const CampaignWorkflowConfigSchema = z.object({
    * lands with #222).
    */
   nAnnotators: z.number().int().min(1).max(12).default(3),
+  /**
+   * Per-campaign abandonment timeout (#229). An assignment that stays
+   * PENDING / IN_PROGRESS past `assignedAt + taskTimeoutHours` is
+   * auto-expired by the background sweeper so the slot frees up for
+   * the next annotator. Default 24 h; range [1 h, 168 h = 7 d] per
+   * the issue. Genuine work-life interruptions are common — no
+   * penalty applies to the original assignee (calibrationStatus +
+   * IRR untouched per the issue's "Decisions to make" section).
+   */
+  taskTimeoutHours: z.number().int().min(1).max(168).default(24),
 });
 export type CampaignWorkflowConfig = z.infer<typeof CampaignWorkflowConfigSchema>;
 

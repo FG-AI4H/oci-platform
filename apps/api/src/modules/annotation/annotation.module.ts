@@ -5,6 +5,8 @@ import { CampaignController } from './campaign.controller.js';
 import { CampaignService } from './campaign.service.js';
 import { CampaignRepository } from './campaign.repository.js';
 import { AnnotationRolesGuard } from './roles.guard.js';
+import { TaskAbandonmentScheduler } from './task-abandonment.scheduler.js';
+import { TaskAbandonmentService } from './task-abandonment.service.js';
 import { TaskController } from './task.controller.js';
 import { TaskRepository } from './task.repository.js';
 import { TaskService } from './task.service.js';
@@ -31,8 +33,10 @@ import { ToolIntegrationController } from './tool-integration.controller.js';
     CampaignRepository,
     TaskService,
     TaskRepository,
+    TaskAbandonmentService,
+    TaskAbandonmentScheduler,
     AnnotationRolesGuard,
   ],
-  exports: [CampaignService, TaskService],
+  exports: [CampaignService, TaskService, TaskAbandonmentService],
 })
 export class AnnotationModule {}

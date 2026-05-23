@@ -20,7 +20,7 @@ export interface OciEnvConfig {
   backupRetentionDays: number;
   /** Whether prod-grade monitoring (X-Ray, Container Insights, alarms) is on */
   enhancedMonitoring: boolean;
-  /** Whether WAF is attached to the public ALB / CloudFront */
+  /** Whether WAF is attached to the public ALB (int/prod only). */
   enableWaf: boolean;
 }
 
@@ -33,9 +33,16 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     ...COMMON,
     domainName: 'dev.oci.ai4h.net',
     removalPolicy: cdk.RemovalPolicy.DESTROY,
-    aurora: { minCapacity: 0.5, maxCapacity: 2, multiAz: false, deletionProtection: false },
+    // deletionProtection: true even in dev — Security Hub RDS.7 enforces it
+    // account-wide, and the cost of accidental destruction is non-zero even
+    // when the data is non-prod. To tear the stack down intentionally, flip
+    // this to false via a one-shot CDK deploy first, then `cdk destroy`.
+    aurora: { minCapacity: 0.5, maxCapacity: 2, multiAz: false, deletionProtection: true },
     fargate: { minTasks: 1, maxTasks: 2, cpu: 512, memory: 1024 },
-    backupRetentionDays: 1,
+    // 7 days is the Security Hub RDS.50 default threshold. Cost impact on a
+    // sub-2-ACU dev cluster is negligible (<$1/month for backup storage
+    // beyond the cluster size).
+    backupRetentionDays: 7,
     enhancedMonitoring: false,
     enableWaf: false,
   },
@@ -43,7 +50,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     ...COMMON,
     domainName: 'int.oci.ai4h.net',
     removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
-    aurora: { minCapacity: 0.5, maxCapacity: 4, multiAz: true, deletionProtection: false },
+    aurora: { minCapacity: 0.5, maxCapacity: 4, multiAz: true, deletionProtection: true },
     fargate: { minTasks: 2, maxTasks: 4, cpu: 1024, memory: 2048 },
     backupRetentionDays: 7,
     enhancedMonitoring: true,
