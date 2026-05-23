@@ -262,7 +262,19 @@ export class CampaignService {
   }
 
   private toDetail(row: AnnotationCampaign, tool: AnnotationToolIntegration): CampaignDetail {
-    const workflowConfig = (row.workflowConfig as { nAnnotators: number }) ?? { nAnnotators: 3 };
+    // Older campaign rows (pre-#229) only carry `nAnnotators`; the
+    // task-timeout knob has a baked-in default in the Zod schema,
+    // and the abandonment service reads the same default when the
+    // JSONB column is missing the field. Fill in the default here so
+    // the API response shape stays consistent.
+    const raw = (row.workflowConfig ?? {}) as Partial<{
+      nAnnotators: number;
+      taskTimeoutHours: number;
+    }>;
+    const workflowConfig = {
+      nAnnotators: raw.nAnnotators ?? 3,
+      taskTimeoutHours: raw.taskTimeoutHours ?? 24,
+    };
     return {
       ...this.toSummary(row),
       workflowConfig,

@@ -249,4 +249,75 @@ export class TaskRepository {
       data: { status, ...(status === 'IN_PROGRESS' ? { startedAt: new Date() } : {}) },
     });
   }
+
+  /**
+   * Find assignments whose visibility-window has elapsed and the
+   * caller still hasn't submitted (#229). Returns each row joined
+   * with its task + the task's parent campaign metadata so the
+   * scheduler service can read each campaign's per-row
+   * `taskTimeoutHours` from `workflowConfig`.
+   *
+   * `AnnotationTask.campaignId` is a SOFT FK per ADR-0006 Decision 6
+   * (no Prisma relation defined — the cross-schema migration to hard
+   * FKs lands later). We do the join in two queries instead: the
+   * assignment+task in one round-trip, the campaign rows in a
+   * `findMany({ where: { id: { in } } })` batch keyed by distinct
+   * `task.campaignId`.
+   */
+  async findAbandonmentCandidates(args: { olderThan: Date; limit: number }): Promise<
+    Array<
+      AnnotationTaskAssignment & {
+        task: AnnotationTask & {
+          campaign: { id: string; slug: string; workflowConfig: unknown };
+        };
+      }
+    >
+  > {
+    const rows = await this.prisma.client.annotationTaskAssignment.findMany({
+      where: {
+        status: { in: ['PENDING', 'IN_PROGRESS'] },
+        assignedAt: { lt: args.olderThan },
+      },
+      include: { task: true },
+      orderBy: { assignedAt: 'asc' },
+      take: args.limit,
+    });
+    if (rows.length === 0) return [];
+
+    const campaignIds = Array.from(new Set(rows.map((r) => r.task.campaignId)));
+    const campaigns = await this.prisma.client.annotationCampaign.findMany({
+      where: { id: { in: campaignIds } },
+      select: { id: true, slug: true, workflowConfig: true },
+    });
+    const byId = new Map(campaigns.map((c) => [c.id, c]));
+
+    return rows.map((r) => {
+      const camp = byId.get(r.task.campaignId) ?? {
+        id: r.task.campaignId,
+        slug: 'unknown',
+        workflowConfig: {},
+      };
+      return {
+        ...r,
+        task: {
+          ...r.task,
+          campaign: camp,
+        },
+      };
+    });
+  }
+
+  /**
+   * Conditional expire. The `status` filter guards against a parallel
+   * submit transitioning the row to SUBMITTED between the scheduler's
+   * read and write; if `updateMany` returns count=0 the row was
+   * raced and we leave it alone.
+   */
+  async markAssignmentExpired(assignmentId: string): Promise<boolean> {
+    const result = await this.prisma.client.annotationTaskAssignment.updateMany({
+      where: { id: assignmentId, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+      data: { status: 'EXPIRED', expiredAt: new Date() },
+    });
+    return result.count > 0;
+  }
 }
