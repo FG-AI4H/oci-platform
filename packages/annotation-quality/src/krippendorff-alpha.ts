@@ -117,6 +117,7 @@ export function krippendorffAlpha(
   const coincidence: number[][] = Array.from({ length: nCategories }, () =>
     new Array<number>(nCategories).fill(0),
   );
+  /* eslint-disable security/detect-object-injection -- bounded numeric indices into local arrays */
   for (const row of items) {
     const m = row.length;
     // count per category in this unit
@@ -128,7 +129,6 @@ export function krippendorffAlpha(
           `krippendorffAlpha: rating ${String(v)} is not in the categories list`,
         );
       }
-      // eslint-disable-next-line security/detect-object-injection -- bounded index
       counts[idx] = (counts[idx] ?? 0) + 1;
     }
     const denom = m - 1;
@@ -170,6 +170,7 @@ export function krippendorffAlpha(
     }
   }
   expectedDisagreement /= total - 1;
+  /* eslint-enable security/detect-object-injection */
 
   const alpha = expectedDisagreement === 0 ? NaN : 1 - observedDisagreement / expectedDisagreement;
 
@@ -193,7 +194,9 @@ function buildDelta2(
   if (level === 'interval') {
     const values = categories.map((c) => c as number);
     return (a, b) => {
+      /* eslint-disable-next-line security/detect-object-injection -- bounded numeric index */
       const va = values[a]!;
+      /* eslint-disable-next-line security/detect-object-injection -- bounded numeric index */
       const vb = values[b]!;
       const diff = va - vb;
       return diff * diff;
@@ -205,8 +208,10 @@ function buildDelta2(
     if (a === b) return 0;
     const [lo, hi] = a < b ? [a, b] : [b, a];
     let mid = 0;
+    /* eslint-disable security/detect-object-injection -- bounded numeric indices into local array */
     for (let g = lo + 1; g < hi; g += 1) mid += marginals[g]!;
     const halfEnds = (marginals[lo]! + marginals[hi]!) / 2;
+    /* eslint-enable security/detect-object-injection */
     const d = mid + halfEnds;
     return d * d;
   };
