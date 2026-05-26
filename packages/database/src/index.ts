@@ -109,6 +109,7 @@ export type {
   AnnotationToolIntegration,
   AnnotationTask,
   AnnotationTaskAssignment,
+  AnnotatorCalibrationFlag,
   AnnotationGateState,
   AnnotationAssignmentStatus,
   CampaignStatus,

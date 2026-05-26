@@ -1991,6 +1991,152 @@ export const CampaignQualityConfigSchema = z.object({
 });
 export type CampaignQualityConfig = z.infer<typeof CampaignQualityConfigSchema>;
 
+// ---------------------------------------------------------------------------
+// Annotator calibration drift detection (#292, ADR-0009 Decision 4 + 5).
+//
+// Two transitions:
+//   - SKILL — `vs-gold` or `vs-peers` below `publishableFloor`
+//     → auto-suspend pending supervisor review
+//   - DRIFT — `vs-self` below `fatigueFloor` while peer/gold scores
+//     are OK → schedule recalibration window
+//
+// The scheduler runs every 6h by default; thresholds are per-campaign
+// settings (with platform defaults). The supervisor inbox API surfaces
+// only ACTIVE flags.
+// ---------------------------------------------------------------------------
+
+export const CalibrationFlagTypeSchema = z.enum(['SKILL', 'DRIFT']);
+export type CalibrationFlagType = z.infer<typeof CalibrationFlagTypeSchema>;
+
+export const CalibrationMetricKindSchema = z.enum(['vs-gold', 'vs-peers', 'vs-self']);
+export type CalibrationMetricKind = z.infer<typeof CalibrationMetricKindSchema>;
+
+export const CalibrationFlagStatusSchema = z.enum(['ACTIVE', 'CLEARED']);
+export type CalibrationFlagStatus = z.infer<typeof CalibrationFlagStatusSchema>;
+
+export const CalibrationThresholdsSchema = z.object({
+  /**
+   * Floor on `vs-gold` / `vs-peers`. Falling below raises a SKILL flag
+   * → annotator auto-suspended. Default 0.6 (substantial agreement per
+   * Landis & Koch).
+   */
+  publishableFloor: z.number().min(0).max(1).default(0.6),
+  /**
+   * Floor on `vs-self` (test-retest on duplicate samples). Falling
+   * below despite acceptable peer / gold scores raises a DRIFT flag →
+   * recalibration window scheduled. Default 0.7 (higher than the peer
+   * floor because intra-rater agreement is reflexive).
+   */
+  fatigueFloor: z.number().min(0).max(1).default(0.7),
+  /** Minimum submissions in the rolling window before metrics are computed. */
+  minSampleSize: z.number().int().min(1).default(10),
+});
+export type CalibrationThresholds = z.infer<typeof CalibrationThresholdsSchema>;
+
+/** Single annotator's calibration metrics over the recompute window. */
+export interface CalibrationAnnotatorInput {
+  annotatorUserId: string;
+  sampleSize: number;
+  /** κ / Dice vs gold-standard samples in the window. Null when no gold seen. */
+  vsGold: number | null;
+  /** κ / Dice vs peer annotators on shared samples. Null when no overlap. */
+  vsPeers: number | null;
+  /** κ / Dice vs duplicate same-sample submissions from this annotator. Null when no duplicates. */
+  vsSelf: number | null;
+}
+
+export interface CalibrationFlagDecision {
+  annotatorUserId: string;
+  flagType: CalibrationFlagType;
+  metric: CalibrationMetricKind;
+  score: number;
+  threshold: number;
+  sampleSize: number;
+}
+
+/**
+ * Pure evaluator: classify each annotator against the thresholds and
+ * return the flags that should be ACTIVE. Caller diffs against the
+ * persisted state to decide which rows to raise / clear / leave alone.
+ *
+ * Rule precedence (per ADR-0009 Decision 5):
+ *   1. If `vs-gold` is set AND < publishableFloor → SKILL flag (vs-gold)
+ *   2. Else if `vs-peers` is set AND < publishableFloor → SKILL flag (vs-peers)
+ *   3. Else if `vs-self` is set AND < fatigueFloor AND
+ *      both vs-gold (when present) and vs-peers (when present) are above
+ *      publishableFloor → DRIFT flag (vs-self)
+ *
+ * Annotators with `sampleSize < minSampleSize` are skipped — too few
+ * submissions for the metrics to be stable.
+ */
+export function evaluateCalibrationFlags(
+  inputs: readonly CalibrationAnnotatorInput[],
+  thresholds: CalibrationThresholds,
+): CalibrationFlagDecision[] {
+  const out: CalibrationFlagDecision[] = [];
+  for (const row of inputs) {
+    if (row.sampleSize < thresholds.minSampleSize) continue;
+    if (row.vsGold !== null && row.vsGold < thresholds.publishableFloor) {
+      out.push({
+        annotatorUserId: row.annotatorUserId,
+        flagType: 'SKILL',
+        metric: 'vs-gold',
+        score: row.vsGold,
+        threshold: thresholds.publishableFloor,
+        sampleSize: row.sampleSize,
+      });
+      continue;
+    }
+    if (row.vsPeers !== null && row.vsPeers < thresholds.publishableFloor) {
+      out.push({
+        annotatorUserId: row.annotatorUserId,
+        flagType: 'SKILL',
+        metric: 'vs-peers',
+        score: row.vsPeers,
+        threshold: thresholds.publishableFloor,
+        sampleSize: row.sampleSize,
+      });
+      continue;
+    }
+    if (row.vsSelf !== null && row.vsSelf < thresholds.fatigueFloor) {
+      // DRIFT requires that peer/gold are *acceptable* — otherwise the
+      // root cause is skill, not fatigue, and the SKILL branch above
+      // would have fired (we get here precisely because they're either
+      // null or ≥ publishableFloor). No extra check needed.
+      out.push({
+        annotatorUserId: row.annotatorUserId,
+        flagType: 'DRIFT',
+        metric: 'vs-self',
+        score: row.vsSelf,
+        threshold: thresholds.fatigueFloor,
+        sampleSize: row.sampleSize,
+      });
+    }
+  }
+  return out;
+}
+
+export const CalibrationFlagSchema = z.object({
+  id: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  annotatorUserId: z.string().uuid(),
+  flagType: CalibrationFlagTypeSchema,
+  metric: CalibrationMetricKindSchema,
+  score: z.number(),
+  threshold: z.number(),
+  sampleSize: z.number().int(),
+  status: CalibrationFlagStatusSchema,
+  createdAt: z.string().datetime(),
+  clearedAt: z.string().datetime().nullable(),
+});
+export type CalibrationFlag = z.infer<typeof CalibrationFlagSchema>;
+
+export const ListCalibrationFlagsResponseSchema = z.object({
+  /** ACTIVE flags only by default; the controller filters status. */
+  items: z.array(CalibrationFlagSchema),
+});
+export type ListCalibrationFlagsResponse = z.infer<typeof ListCalibrationFlagsResponseSchema>;
+
 /**
  * Reference to the annotation-tool adapter the campaign uses. Phase
  * B.A.1 ships a minimal `AnnotationToolIntegration` registry with
