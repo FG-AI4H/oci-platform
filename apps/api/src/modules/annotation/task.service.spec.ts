@@ -97,6 +97,7 @@ function assignmentRow(
 
 interface CampaignsMock {
   findBySlug: ReturnType<typeof vi.fn>;
+  findById: ReturnType<typeof vi.fn>;
 }
 
 interface TasksMock {
@@ -109,6 +110,7 @@ interface TasksMock {
   findAssignmentById: ReturnType<typeof vi.fn>;
   markAssignmentSubmitted: ReturnType<typeof vi.fn>;
   countSubmittedAssignmentsAtGate: ReturnType<typeof vi.fn>;
+  submissionPayloadsAtGate: ReturnType<typeof vi.fn>;
   updateGateState: ReturnType<typeof vi.fn>;
   setAssignmentStatus: ReturnType<typeof vi.fn>;
   findTaskById: ReturnType<typeof vi.fn>;
@@ -119,7 +121,18 @@ let tasks: TasksMock;
 let service: TaskService;
 
 beforeEach(() => {
-  campaigns = { findBySlug: vi.fn() };
+  campaigns = {
+    findBySlug: vi.fn(),
+    // Default: a campaign with no qualityConfig — so the gate-1
+    // predicate uses defaults (fleiss-kappa @ 0.6). The N=3
+    // escalation test feeds dissimilar labels so the predicate
+    // fails and the original "escalate" assertion still holds.
+    findById: vi.fn().mockResolvedValue({
+      id: 'cmp-1',
+      taskKind: 'CLASSIFICATION',
+      workflowConfig: { nAnnotators: 3 },
+    }),
+  };
   tasks = {
     seedTasks: vi.fn(),
     listTasksForCampaign: vi.fn(),
@@ -130,6 +143,13 @@ beforeEach(() => {
     findAssignmentById: vi.fn(),
     markAssignmentSubmitted: vi.fn(),
     countSubmittedAssignmentsAtGate: vi.fn(),
+    // Default: N submissions with DISAGREEING labels so the gate-1
+    // predicate fails and the task escalates (preserves the
+    // existing escalation test). Individual tests override this
+    // to exercise the PASS path.
+    submissionPayloadsAtGate: vi
+      .fn()
+      .mockResolvedValue([{ label: 'a' }, { label: 'b' }, { label: 'c' }]),
     updateGateState: vi.fn(),
     setAssignmentStatus: vi.fn(),
     findTaskById: vi.fn(),
@@ -366,16 +386,17 @@ describe('TaskService.submit', () => {
     expect(result.newGateState).toBeNull();
   });
 
-  it('N=3: third independent submission escalates to AWAITING_ARBITRATION', async () => {
+  it('N=3: third independent submission with DISAGREEING labels escalates to AWAITING_ARBITRATION', async () => {
     const task = taskRow({ nAnnotatorsRequired: 3 });
     tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
     tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(3);
+    // Default mock seeds three disagreeing labels — IRR < 0.6 → escalate.
     tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'AWAITING_ARBITRATION' }));
 
     const result = await service.submit({
       assignmentId: 'asn-1',
-      submission: {},
+      submission: { label: 'c' },
       user: userPayload(ANNOTATOR_SUB),
     });
 
@@ -385,6 +406,61 @@ describe('TaskService.submit', () => {
         to: 'AWAITING_ARBITRATION',
       }),
     );
+    expect(result.newGateState).toBe('AWAITING_ARBITRATION');
+  });
+
+  it('N=3: third independent submission with UNANIMOUS labels skips arbitration → COMPLETED', async () => {
+    const task = taskRow({ nAnnotatorsRequired: 3 });
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
+    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(3);
+    tasks.submissionPayloadsAtGate.mockResolvedValue([
+      { label: 'pneumonia' },
+      { label: 'pneumonia' },
+      { label: 'pneumonia' },
+    ]);
+    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+
+    const result = await service.submit({
+      assignmentId: 'asn-1',
+      submission: { label: 'pneumonia' },
+      user: userPayload(ANNOTATOR_SUB),
+    });
+
+    expect(tasks.updateGateState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        expectedFrom: 'INDEPENDENT',
+        to: 'COMPLETED',
+        stampCompletedAt: true,
+      }),
+    );
+    expect(result.newGateState).toBe('COMPLETED');
+  });
+
+  it('N=3: SEGMENTATION campaign always escalates (predicate deferred until #214)', async () => {
+    const task = taskRow({ nAnnotatorsRequired: 3 });
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
+    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(3);
+    campaigns.findById.mockResolvedValueOnce({
+      id: 'cmp-1',
+      taskKind: 'SEGMENTATION',
+      workflowConfig: { nAnnotators: 3 },
+    });
+    // Even unanimous labels can't pass — segmentation needs masks.
+    tasks.submissionPayloadsAtGate.mockResolvedValue([
+      { label: 'lesion' },
+      { label: 'lesion' },
+      { label: 'lesion' },
+    ]);
+    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'AWAITING_ARBITRATION' }));
+
+    const result = await service.submit({
+      assignmentId: 'asn-1',
+      submission: { label: 'lesion' },
+      user: userPayload(ANNOTATOR_SUB),
+    });
+
     expect(result.newGateState).toBe('AWAITING_ARBITRATION');
   });
 

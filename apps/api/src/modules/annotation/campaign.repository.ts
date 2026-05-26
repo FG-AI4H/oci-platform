@@ -41,6 +41,15 @@ export class CampaignRepository {
   }
 
   /**
+   * Look up a campaign by UUID. Used by the slice-3 decision-box
+   * predicate (#215) which only has `task.campaignId` in hand and
+   * can't reach through `findBySlug`.
+   */
+  async findById(id: string): Promise<AnnotationCampaign | null> {
+    return this.prisma.client.annotationCampaign.findUnique({ where: { id } });
+  }
+
+  /**
    * Look up the modality labels denormalised on the Dataset row (#247).
    * Used by the campaign-create guard to reject incompatible
    * (modality × taskKind) combos with a 400 — mirrors the form's

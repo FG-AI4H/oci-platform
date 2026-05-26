@@ -69,9 +69,17 @@ const MATRIX: Record<
 };
 
 /**
- * Variant of `MATRIX` for the N=1 single-rater shortcut. The router
- * uses the campaign's `nAnnotatorsRequired` to decide which one to
- * apply when an independent submission lands.
+ * Per-call overrides applied on top of `MATRIX`. There are two:
+ *
+ *   - **N=1 single-rater**: a single INDEPENDENT submission closes
+ *     the task (no arbitration is meaningful with one rater). Per
+ *     ADR-0009 Decision 2 "minimum N=1".
+ *
+ *   - **IRR pass (slice 3 of #215)**: when N ≥ 2 and all N
+ *     INDEPENDENT submissions agree above the campaign's threshold
+ *     (`@oci/annotation-quality` per ADR-0008), the gate skips
+ *     arbitration and goes straight to COMPLETED. This is the
+ *     point of the gate-1 decision-box predicate.
  */
 const N_EQUALS_ONE_OVERRIDES: Partial<
   Record<AnnotationGateState, Partial<Record<GateTransitionAction, GateTransitionRule>>>
@@ -85,15 +93,45 @@ const N_EQUALS_ONE_OVERRIDES: Partial<
   },
 };
 
+const IRR_PASS_OVERRIDES: Partial<
+  Record<AnnotationGateState, Partial<Record<GateTransitionAction, GateTransitionRule>>>
+> = {
+  INDEPENDENT: {
+    'independent-submitted': {
+      to: 'COMPLETED',
+      reasonRequired: false,
+      stampCompletedAt: true,
+    },
+  },
+};
+
+export interface GateTransitionContext {
+  /**
+   * Set when the gate-1 IRR predicate ran and the rater agreement
+   * meets / exceeds the campaign's threshold. Routes
+   * `independent-submitted` to COMPLETED instead of
+   * AWAITING_ARBITRATION for N ≥ 2.
+   */
+  irrPassed?: boolean;
+}
+
 /** Look up the rule for `(currentGate, action)`; null if illegal. */
 export function lookupGateTransition(
   current: AnnotationGateState,
   action: GateTransitionAction,
   nAnnotatorsRequired: number,
+  ctx: GateTransitionContext = {},
 ): GateTransitionRule | null {
   if (nAnnotatorsRequired === 1) {
     // eslint-disable-next-line security/detect-object-injection -- typed enum keys
     const override = N_EQUALS_ONE_OVERRIDES[current];
+    // eslint-disable-next-line security/detect-object-injection -- typed enum keys
+    const overrideRule = override?.[action];
+    if (overrideRule) return overrideRule;
+  }
+  if (ctx.irrPassed) {
+    // eslint-disable-next-line security/detect-object-injection -- typed enum keys
+    const override = IRR_PASS_OVERRIDES[current];
     // eslint-disable-next-line security/detect-object-injection -- typed enum keys
     const overrideRule = override?.[action];
     if (overrideRule) return overrideRule;

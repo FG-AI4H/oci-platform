@@ -10,6 +10,8 @@ import {
 import type { AnnotationGateState, AnnotationTask, AnnotationTaskAssignment } from '@oci/database';
 import type {
   AssignmentSummary,
+  CampaignQualityConfig,
+  CampaignTaskKind,
   GateTransitionAction,
   PullNextResponse,
   SeedTasksResponse,
@@ -21,6 +23,7 @@ import type {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { CampaignRepository } from './campaign.repository.js';
+import { evaluateGate1Predicate } from './gate-irr-predicate.js';
 import { lookupGateTransition } from './gate-state-machine.js';
 import { TaskRepository } from './task.repository.js';
 
@@ -224,10 +227,37 @@ export class TaskService {
       };
     }
 
+    // Slice-3 decision-box predicate (#215, ADR-0008): when the
+    // N-th independent submission lands AND N ≥ 2, compute IRR
+    // across all N submissions. If raters agreed above the
+    // campaign's threshold, route INDEPENDENT → COMPLETED instead
+    // of AWAITING_ARBITRATION.
+    let irrPassed = false;
+    if (
+      assignment.task.gateState === 'INDEPENDENT' &&
+      assignment.task.nAnnotatorsRequired >= 2 &&
+      action === 'independent-submitted'
+    ) {
+      const campaign = await this.campaigns.findById(assignment.task.campaignId);
+      const quality = readQualityConfig(campaign?.workflowConfig);
+      const taskKind = (campaign?.taskKind ?? 'CLASSIFICATION') as CampaignTaskKind;
+      const submissions = await this.tasks.submissionPayloadsAtGate(
+        assignment.task.id,
+        'INDEPENDENT',
+      );
+      const result = evaluateGate1Predicate({ taskKind, quality, submissions });
+      irrPassed = result.passed;
+      this.logger.log(
+        `gate-1 decision: task=${assignment.task.id} ${result.reason} ` +
+          `(irr=${result.irr ?? 'n/a'}, metric=${result.metricApplied ?? 'n/a'}, threshold=${result.threshold})`,
+      );
+    }
+
     const rule = lookupGateTransition(
       assignment.task.gateState,
       action,
       assignment.task.nAnnotatorsRequired,
+      { irrPassed },
     );
     if (!rule) {
       this.logger.warn(
@@ -294,6 +324,29 @@ function gateActionForSubmittedRole(role: string): GateTransitionAction | null {
   if (role === 'arbitration-annotator') return 'arbitration-submitted';
   if (role === 'expert-reviewer') return 'expert-submitted';
   return null;
+}
+
+/**
+ * Read the campaign's quality config from its JSONB `workflowConfig`,
+ * filling in `CampaignQualityConfigSchema` defaults when the field
+ * is missing (every pre-#216 campaign row). Tolerant of partial
+ * objects — partial values fall back to defaults individually.
+ */
+function readQualityConfig(workflowConfig: unknown): CampaignQualityConfig {
+  const raw =
+    workflowConfig && typeof workflowConfig === 'object'
+      ? ((workflowConfig as { qualityConfig?: unknown }).qualityConfig ?? {})
+      : {};
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const metric = obj.metric;
+  const threshold = obj.threshold;
+  return {
+    metric:
+      metric === 'cohens-kappa' || metric === 'fleiss-kappa' || metric === 'dice'
+        ? metric
+        : 'fleiss-kappa',
+    threshold: typeof threshold === 'number' && threshold >= 0 && threshold <= 1 ? threshold : 0.6,
+  };
 }
 
 function roleForGate(gate: AnnotationGateState): string {
