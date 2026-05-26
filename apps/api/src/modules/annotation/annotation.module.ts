@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../auth/auth.module.js';
 import { PrismaService } from '../../prisma.service.js';
+import { CalibrationController } from './calibration.controller.js';
+import { CalibrationRepository } from './calibration.repository.js';
+import { CalibrationScheduler } from './calibration.scheduler.js';
+import { CalibrationService } from './calibration.service.js';
 import { CampaignController } from './campaign.controller.js';
 import { CampaignService } from './campaign.service.js';
 import { CampaignRepository } from './campaign.repository.js';
@@ -29,6 +33,7 @@ import { ToolIntegrationController } from './tool-integration.controller.js';
 @Module({
   imports: [AuthModule],
   controllers: [
+    CalibrationController,
     CampaignController,
     InstructionsController,
     TaskController,
@@ -36,6 +41,9 @@ import { ToolIntegrationController } from './tool-integration.controller.js';
   ],
   providers: [
     PrismaService,
+    CalibrationRepository,
+    CalibrationScheduler,
+    CalibrationService,
     CampaignService,
     CampaignRepository,
     InstructionsService,
@@ -45,6 +53,12 @@ import { ToolIntegrationController } from './tool-integration.controller.js';
     TaskAbandonmentScheduler,
     AnnotationRolesGuard,
   ],
-  exports: [CampaignService, InstructionsService, TaskService, TaskAbandonmentService],
+  exports: [
+    CalibrationService,
+    CampaignService,
+    InstructionsService,
+    TaskService,
+    TaskAbandonmentService,
+  ],
 })
 export class AnnotationModule {}

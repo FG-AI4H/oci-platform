@@ -1234,6 +1234,50 @@ model AnnotationTaskAssignment {
   @@schema("annotation")
 }
 
+/// Calibration drift flags per annotator (#292, ADR-0009 Decision 4 + 5).
+///
+/// One ACTIVE row at a time per (campaignId, annotatorUserId, flagType).
+/// The periodic recompute (`calibration.service.ts`) raises a flag when
+/// the rolling-window metric crosses the configured threshold and
+/// auto-clears the row when the metric recovers. CLEARED rows are kept
+/// for audit; the supervisor inbox surfaces only ACTIVE rows.
+///
+/// `flagType`:
+///   - `SKILL`  — IRR vs gold OR vs peers fell below the publishable
+///                floor → annotator is auto-suspended pending review.
+///   - `DRIFT`  — IRR vs self (test-retest) below fatigue threshold
+///                despite acceptable peer/gold scores → schedule
+///                recalibration window.
+model AnnotatorCalibrationFlag {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId        String   @map("campaign_id")        @db.Uuid
+  annotatorUserId   String   @map("annotator_user_id")  @db.Uuid
+  flagType          String   @map("flag_type")          /// 'SKILL' | 'DRIFT'
+  /// Which metric tripped the flag — 'vs-gold' | 'vs-peers' | 'vs-self'.
+  metric            String
+  /// Numeric value of the metric at flag-raise time (κ, Dice, …).
+  score             Float
+  /// Threshold the metric was compared against.
+  threshold         Float
+  /// Number of submissions evaluated in the rolling window.
+  sampleSize        Int      @map("sample_size")
+  status            String   @default("ACTIVE")         /// 'ACTIVE' | 'CLEARED'
+  /// Free-form JSONB capturing the window definition (since / until /
+  /// task-kind) for audit reproducibility.
+  windowMeta        Json     @map("window_meta")
+  createdAt         DateTime @default(now()) @map("created_at")
+  clearedAt         DateTime? @map("cleared_at")
+
+  @@index([campaignId, status])
+  @@index([annotatorUserId, status])
+  /// The partial unique index `(campaignId, annotatorUserId, flagType)
+  /// WHERE status = 'ACTIVE'` is created in the migration SQL; Prisma's
+  /// `@@unique` doesn't support partial predicates so we rely on the
+  /// service-layer SELECT-then-INSERT for the typed read path.
+  @@map("annotator_calibration_flags")
+  @@schema("annotation")
+}
+
 /// Audit log for admin group grants / revokes (#241). One row per
 /// administrative action against `cognito-idp:AdminAddUserToGroup` /
 /// `AdminRemoveUserFromGroup`. The admin user-management UI reads the
