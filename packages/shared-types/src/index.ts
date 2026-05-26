@@ -1971,6 +1971,14 @@ export const AnnotationQualityMetricSchema = z.enum([
   'krippendorff-alpha-ordinal',
   /** Krippendorff's α with the interval δ² (#289). Numeric scales — δ² = (a-b)². */
   'krippendorff-alpha-interval',
+  /** Hausdorff (strict) — worst-case boundary mismatch for segmentation contours (#290). */
+  'hausdorff',
+  /** Hausdorff at the 95th percentile — outlier-robust variant of the above (#290). */
+  'hausdorff-95',
+  /** ICC(2,1) absolute-agreement for continuous ratings (#290). */
+  'icc-2-1',
+  /** Euclidean-distance-based agreement score in [0, 1] for vector outputs (#290). */
+  'euclidean-agreement',
 ]);
 export type AnnotationQualityMetric = z.infer<typeof AnnotationQualityMetricSchema>;
 
