@@ -83,6 +83,31 @@ export class TaskRepository {
     });
   }
 
+  /**
+   * Submission payloads from the SUBMITTED assignments at a given
+   * gate. Used by the slice-3 gate-1 decision-box predicate (#215)
+   * to feed the IRR computation. Returns one payload per submission
+   * in `assignedAt` order so the result is deterministic across
+   * re-runs (matters when the audit emit captures the IRR score —
+   * the same submissions should produce the same κ).
+   */
+  async submissionPayloadsAtGate(
+    taskId: string,
+    gate: AnnotationGateState,
+  ): Promise<Array<Record<string, unknown>>> {
+    const rows = await this.prisma.client.annotationTaskAssignment.findMany({
+      where: { taskId, gateAtAssignment: gate, status: 'SUBMITTED' },
+      select: { submission: true },
+      orderBy: { assignedAt: 'asc' },
+    });
+    return rows
+      .map((r) => r.submission as unknown)
+      .filter(
+        (s): s is Record<string, unknown> =>
+          s !== null && typeof s === 'object' && !Array.isArray(s),
+      );
+  }
+
   async updateGateState(args: {
     taskId: string;
     expectedFrom: AnnotationGateState;
