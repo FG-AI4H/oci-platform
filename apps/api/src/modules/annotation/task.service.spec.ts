@@ -106,6 +106,7 @@ interface TasksMock {
   submittedCountsForCampaign: ReturnType<typeof vi.fn>;
   findActiveAssignmentForUser: ReturnType<typeof vi.fn>;
   findNextEligibleTask: ReturnType<typeof vi.fn>;
+  biasCapInputs: ReturnType<typeof vi.fn>;
   createAssignment: ReturnType<typeof vi.fn>;
   findAssignmentById: ReturnType<typeof vi.fn>;
   markAssignmentSubmitted: ReturnType<typeof vi.fn>;
@@ -139,6 +140,12 @@ beforeEach(() => {
     submittedCountsForCampaign: vi.fn().mockResolvedValue(new Map<string, number>()),
     findActiveAssignmentForUser: vi.fn(),
     findNextEligibleTask: vi.fn(),
+    // Default: cap doesn't bind (totalTasks=0 → cap=0 → callerShare+1>0
+    // would falsely bind, so seed with totalTasks=1 and callerShare=0
+    // → cap=⌈1/1⌉ × 1.5=1.5 → caller's first task slips under).
+    biasCapInputs: vi
+      .fn()
+      .mockResolvedValue({ totalTasks: 1, nActiveAnnotators: 1, callerShare: 0 }),
     createAssignment: vi.fn(),
     findAssignmentById: vi.fn(),
     markAssignmentSubmitted: vi.fn(),
@@ -339,6 +346,72 @@ describe('TaskService.pullNext', () => {
     expect(tasks.findNextEligibleTask).toHaveBeenCalledWith(
       expect.objectContaining({ gate: 'INDEPENDENT' }),
     );
+  });
+
+  // --- bias-prevention 1.5× cap (ADR-0009 predicate 4) ---------------------
+
+  it('refuses to assign when the caller would exceed the bias-prevention cap', async () => {
+    tasks.findActiveAssignmentForUser.mockResolvedValue(null);
+    // 8 tasks, 2 active annotators → cap = ceil(8/2) × 1.5 = 6.
+    // Caller already at 6 → next assignment would be 7th → over cap.
+    tasks.biasCapInputs.mockResolvedValueOnce({
+      totalTasks: 8,
+      nActiveAnnotators: 2,
+      callerShare: 6,
+    });
+
+    const result = await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(result.assignment).toBeNull();
+    // Router never even reaches findNextEligibleTask when the cap binds.
+    expect(tasks.findNextEligibleTask).not.toHaveBeenCalled();
+  });
+
+  it('lets a multi-role caller in when their share is still below the cap', async () => {
+    const task = taskRow();
+    tasks.findActiveAssignmentForUser.mockResolvedValue(null);
+    // 8 tasks, 2 active annotators → cap = 6. Caller at 5 → 6 just fits.
+    tasks.biasCapInputs.mockResolvedValueOnce({
+      totalTasks: 8,
+      nActiveAnnotators: 2,
+      callerShare: 5,
+    });
+    tasks.findNextEligibleTask.mockResolvedValue(task);
+    tasks.createAssignment.mockResolvedValue(assignmentRow());
+
+    const result = await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(result.assignment?.taskId).toBe('task-1');
+  });
+
+  it('does not bind when the caller is the only annotator and there is enough work', async () => {
+    const task = taskRow();
+    tasks.findActiveAssignmentForUser.mockResolvedValue(null);
+    // 8 tasks, only this annotator working (n=1) → cap = 8 × 1.5 = 12.
+    // Caller already at 4 → 5 ≤ 12 → fine.
+    tasks.biasCapInputs.mockResolvedValueOnce({
+      totalTasks: 8,
+      nActiveAnnotators: 1,
+      callerShare: 4,
+    });
+    tasks.findNextEligibleTask.mockResolvedValue(task);
+    tasks.createAssignment.mockResolvedValue(assignmentRow());
+
+    const result = await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(result.assignment).not.toBeNull();
   });
 });
 
