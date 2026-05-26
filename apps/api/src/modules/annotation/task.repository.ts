@@ -250,6 +250,7 @@ export class TaskRepository {
   async markAssignmentSubmitted(args: {
     assignmentId: string;
     submission: Record<string, unknown>;
+    acknowledgedInstructionsVersion?: string | null;
   }): Promise<AnnotationTaskAssignment> {
     return this.prisma.client.annotationTaskAssignment.update({
       where: { id: args.assignmentId },
@@ -261,6 +262,9 @@ export class TaskRepository {
         // identical; we'd need RFC 8785 canonicalisation to narrow it.
         submission: args.submission as unknown as object,
         submittedAt: new Date(),
+        ...(args.acknowledgedInstructionsVersion !== undefined
+          ? { acknowledgedInstructionsVersion: args.acknowledgedInstructionsVersion }
+          : {}),
       },
     });
   }

@@ -105,6 +105,7 @@ export type {
   DatasetStatus,
   AccessRequestStatus,
   AnnotationCampaign,
+  AnnotationCampaignInstructions,
   AnnotationToolIntegration,
   AnnotationTask,
   AnnotationTaskAssignment,

@@ -92,6 +92,7 @@ export class TaskController {
     return this.tasks.submit({
       assignmentId: id,
       submission: body.submission,
+      acknowledgedInstructionsVersion: body.acknowledgedInstructionsVersion ?? null,
       user,
     });
   }

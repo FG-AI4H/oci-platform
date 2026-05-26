@@ -292,6 +292,7 @@ export class CampaignService {
         supportedTaskKinds: tool.supportedTaskKinds,
       },
       createdById: row.createdById,
+      currentInstructionsVersion: row.currentInstructionsVersion ?? null,
     };
   }
 
