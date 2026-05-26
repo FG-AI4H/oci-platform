@@ -6,10 +6,12 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import type { AnnotationGateState, AnnotationTask, AnnotationTaskAssignment } from '@oci/database';
 import type {
   AssignmentSummary,
+  CampaignCompletenessMode,
   CampaignQualityConfig,
   CampaignTaskKind,
   GateTransitionAction,
@@ -18,6 +20,7 @@ import type {
   SubmitAssignmentResponse,
   TaskSummary,
 } from '@oci/shared-types';
+import { evaluateCompleteness } from '@oci/shared-types';
 // ANNOTATION_GATE_ROLES is the canonical gate → group mapping shared
 // with the web; `roleForGate` is the local typed accessor.
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
@@ -187,6 +190,33 @@ export class TaskService {
       throw new ConflictException(`Task is ${assignment.task.gateState}; submissions closed`);
     }
 
+    // Completeness check (#231). Read the parent campaign once for
+    // `taskKind` + `completenessMode`; the predicate is pure and
+    // shared with the annotator UI. On `hard-block` campaigns a
+    // semantically-incomplete payload throws 422; on `soft-warn`
+    // we log a warning + carry on so the supervisor inbox can
+    // surface the row for review (the soft-warn surface comes
+    // with the supervisor PR in #233).
+    const campaignForSubmit = await this.campaigns.findById(assignment.task.campaignId);
+    const completenessMode = readCompletenessMode(campaignForSubmit?.workflowConfig);
+    const completeness = evaluateCompleteness(
+      (campaignForSubmit?.taskKind ?? 'CLASSIFICATION') as CampaignTaskKind,
+      args.submission,
+    );
+    if (!completeness.complete) {
+      if (completenessMode === 'hard-block') {
+        throw new UnprocessableEntityException({
+          message: 'Submission is incomplete and the campaign requires hard-block validation',
+          reasons: completeness.reasons,
+          campaignSlug: campaignForSubmit?.slug ?? null,
+          taskId: assignment.task.id,
+        });
+      }
+      this.logger.warn(
+        `submit: incomplete payload (soft-warn) task=${assignment.task.id} reasons=${completeness.reasons.join('; ')}`,
+      );
+    }
+
     await this.tasks.markAssignmentSubmitted({
       assignmentId: assignment.id,
       submission: args.submission,
@@ -238,7 +268,9 @@ export class TaskService {
       assignment.task.nAnnotatorsRequired >= 2 &&
       action === 'independent-submitted'
     ) {
-      const campaign = await this.campaigns.findById(assignment.task.campaignId);
+      // Re-use the campaign row read above for completeness; both
+      // paths need the same parent campaign + workflowConfig.
+      const campaign = campaignForSubmit;
       const quality = readQualityConfig(campaign?.workflowConfig);
       const taskKind = (campaign?.taskKind ?? 'CLASSIFICATION') as CampaignTaskKind;
       const submissions = await this.tasks.submissionPayloadsAtGate(
@@ -347,6 +379,19 @@ function readQualityConfig(workflowConfig: unknown): CampaignQualityConfig {
         : 'fleiss-kappa',
     threshold: typeof threshold === 'number' && threshold >= 0 && threshold <= 1 ? threshold : 0.6,
   };
+}
+
+/**
+ * Read the campaign's completeness-enforcement mode from its JSONB
+ * `workflowConfig` (#231). Pre-#231 campaign rows are missing the
+ * field — fall back to the schema default (`soft-warn`).
+ */
+function readCompletenessMode(workflowConfig: unknown): CampaignCompletenessMode {
+  if (workflowConfig && typeof workflowConfig === 'object') {
+    const v = (workflowConfig as { completenessMode?: unknown }).completenessMode;
+    if (v === 'soft-warn' || v === 'hard-block') return v;
+  }
+  return 'soft-warn';
 }
 
 function roleForGate(gate: AnnotationGateState): string {
