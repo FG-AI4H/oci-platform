@@ -270,10 +270,15 @@ export class CampaignService {
     const raw = (row.workflowConfig ?? {}) as Partial<{
       nAnnotators: number;
       taskTimeoutHours: number;
+      completenessMode: 'soft-warn' | 'hard-block';
     }>;
     const workflowConfig = {
       nAnnotators: raw.nAnnotators ?? 3,
       taskTimeoutHours: raw.taskTimeoutHours ?? 24,
+      completenessMode:
+        raw.completenessMode === 'hard-block' || raw.completenessMode === 'soft-warn'
+          ? raw.completenessMode
+          : ('soft-warn' as const),
     };
     return {
       ...this.toSummary(row),

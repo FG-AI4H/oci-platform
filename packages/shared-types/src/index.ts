@@ -1841,6 +1841,21 @@ export const CampaignOutputLicenseSchema = z.enum([
 export type CampaignOutputLicense = z.infer<typeof CampaignOutputLicenseSchema>;
 
 /**
+ * Submission-completeness enforcement mode (#231). Determines what
+ * happens when an annotator submits a structurally-valid payload
+ * that's semantically incomplete (e.g. bbox without a label,
+ * segmentation mask with zero pixels marked).
+ *
+ *   - `soft-warn` (default): API records the submission, supervisor
+ *     inbox flags it for review; the gate-1 / arbitration flow
+ *     still progresses.
+ *   - `hard-block`: API rejects the submission with 422 + structured
+ *     reasons; the annotator must fix and resubmit.
+ */
+export const CampaignCompletenessModeSchema = z.enum(['soft-warn', 'hard-block']);
+export type CampaignCompletenessMode = z.infer<typeof CampaignCompletenessModeSchema>;
+
+/**
  * Workflow configuration (ADR-0009 Decisions 2 + 4). Phase B.A.1 only
  * surfaces `nAnnotators`; IRR thresholds + gate config + experience-
  * model knobs land as #216 (E4) ships.
@@ -1863,8 +1878,75 @@ export const CampaignWorkflowConfigSchema = z.object({
    * IRR untouched per the issue's "Decisions to make" section).
    */
   taskTimeoutHours: z.number().int().min(1).max(168).default(24),
+  /**
+   * Submission-completeness enforcement mode (#231). Defaults to
+   * `soft-warn` — manager opts into `hard-block` on regulated
+   * workflows where incomplete annotations are a liability.
+   */
+  completenessMode: CampaignCompletenessModeSchema.default('soft-warn'),
 });
 export type CampaignWorkflowConfig = z.infer<typeof CampaignWorkflowConfigSchema>;
+
+/**
+ * Per-task-kind completeness predicate (#231).
+ *
+ * Pure function shared with the annotator UI so the same warnings
+ * surface client- and server-side. Rules are intentionally generous
+ * today — they fire only on obviously-incomplete submissions
+ * (missing label, empty array). The #214 tool-integration registry
+ * will eventually let task definitions ship richer `schemaProfile`
+ * Zod schemas; until then this is the cross-task minimum.
+ *
+ * A submission with `noFindings: true` is always complete — that's
+ * the explicit "this sample has nothing to annotate" path that
+ * differentiates a deliberate empty annotation from an oversight.
+ */
+export interface CompletenessResult {
+  complete: boolean;
+  reasons: string[];
+}
+
+export function evaluateCompleteness(
+  taskKind: CampaignTaskKind,
+  submission: Record<string, unknown>,
+): CompletenessResult {
+  if (submission.noFindings === true) {
+    return { complete: true, reasons: [] };
+  }
+  const reasons: string[] = [];
+  switch (taskKind) {
+    case 'CLASSIFICATION':
+    case 'MULTI_MODAL': {
+      const label = submission.label;
+      if (typeof label !== 'string' || label.trim().length === 0) {
+        reasons.push('expected a non-empty `label` string (or `noFindings: true`)');
+      }
+      break;
+    }
+    case 'DETECTION':
+    case 'LOCALIZATION': {
+      const boxes = submission.boxes;
+      if (!Array.isArray(boxes) || boxes.length === 0) {
+        reasons.push(
+          'expected a non-empty `boxes` array of detected regions (or `noFindings: true`)',
+        );
+      }
+      break;
+    }
+    case 'SEGMENTATION': {
+      // Until the tool-integration registry (#214) gives us real
+      // mask payloads, treat `maskUrl` as the carrier. The
+      // mask-pixel check is deferred — when bytes / a NIfTI URL
+      // arrive, slice-3 follow-up can read them.
+      const maskUrl = submission.maskUrl;
+      if (typeof maskUrl !== 'string' || maskUrl.trim().length === 0) {
+        reasons.push('expected a non-empty `maskUrl` (or `noFindings: true`)');
+      }
+      break;
+    }
+  }
+  return { complete: reasons.length === 0, reasons };
+}
 
 /**
  * Quality config (#216, ADR-0008): per-campaign IRR metric +

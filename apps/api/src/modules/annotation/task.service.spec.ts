@@ -1,4 +1,9 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import type {
   AnnotationCampaign,
   AnnotationGateState,
@@ -542,5 +547,86 @@ describe('TaskService.submit', () => {
         user: userPayload(ANNOTATOR_SUB),
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  // --- #231 completeness validation -----------------------------------------
+
+  it('hard-block: 422 when submission is incomplete', async () => {
+    const task = taskRow();
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
+    campaigns.findById.mockResolvedValueOnce({
+      id: 'cmp-1',
+      slug: 'pilot',
+      taskKind: 'CLASSIFICATION',
+      workflowConfig: { nAnnotators: 3, completenessMode: 'hard-block' },
+    });
+
+    await expect(
+      service.submit({
+        assignmentId: 'asn-1',
+        submission: { not_a_label: 'x' },
+        user: userPayload(ANNOTATOR_SUB),
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    expect(tasks.markAssignmentSubmitted).not.toHaveBeenCalled();
+  });
+
+  it('hard-block: accepts a complete submission', async () => {
+    const task = taskRow({ nAnnotatorsRequired: 1 });
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
+    campaigns.findById.mockResolvedValueOnce({
+      id: 'cmp-1',
+      slug: 'pilot',
+      taskKind: 'CLASSIFICATION',
+      workflowConfig: { nAnnotators: 1, completenessMode: 'hard-block' },
+    });
+    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
+    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+
+    const result = await service.submit({
+      assignmentId: 'asn-1',
+      submission: { label: 'pneumonia' },
+      user: userPayload(ANNOTATOR_SUB),
+    });
+    expect(tasks.markAssignmentSubmitted).toHaveBeenCalled();
+    expect(result.newGateState).toBe('COMPLETED');
+  });
+
+  it('hard-block: accepts noFindings: true on classification', async () => {
+    const task = taskRow({ nAnnotatorsRequired: 1 });
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
+    campaigns.findById.mockResolvedValueOnce({
+      id: 'cmp-1',
+      slug: 'pilot',
+      taskKind: 'CLASSIFICATION',
+      workflowConfig: { nAnnotators: 1, completenessMode: 'hard-block' },
+    });
+    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
+    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+
+    await service.submit({
+      assignmentId: 'asn-1',
+      submission: { noFindings: true },
+      user: userPayload(ANNOTATOR_SUB),
+    });
+    expect(tasks.markAssignmentSubmitted).toHaveBeenCalled();
+  });
+
+  it('soft-warn: incomplete payload is accepted (default mode)', async () => {
+    const task = taskRow({ nAnnotatorsRequired: 1 });
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
+    // Default campaign mock has no completenessMode → soft-warn.
+    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
+    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+
+    await service.submit({
+      assignmentId: 'asn-1',
+      submission: { irrelevant: 'x' },
+      user: userPayload(ANNOTATOR_SUB),
+    });
+    expect(tasks.markAssignmentSubmitted).toHaveBeenCalled();
   });
 });
