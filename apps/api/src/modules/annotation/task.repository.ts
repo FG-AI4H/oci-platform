@@ -27,18 +27,83 @@ export class TaskRepository {
   async seedTasks(
     campaignId: string,
     nAnnotatorsRequired: number,
-    sampleRefs: readonly string[],
+    items: ReadonlyArray<{
+      sampleRef: string;
+      isGoldStandard?: boolean;
+      goldStandardLabel?: Record<string, unknown>;
+    }>,
   ): Promise<{ created: number; skipped: number }> {
-    const data = sampleRefs.map((sampleRef) => ({
+    const data = items.map((item) => ({
       campaignId,
-      sampleRef,
+      sampleRef: item.sampleRef,
       nAnnotatorsRequired,
+      isGoldStandard: item.isGoldStandard ?? false,
+      // Prisma's `InputJsonValue` is a tagged structural type that
+      // only accepts an `object`-shaped value (or undefined for
+      // "leave NULL"). The cast through `unknown` matches the
+      // existing pattern used in markAssignmentSubmitted.
+      goldStandardLabel:
+        item.goldStandardLabel !== undefined
+          ? (item.goldStandardLabel as unknown as object)
+          : undefined,
     }));
     const result = await this.prisma.client.annotationTask.createMany({
       data,
       skipDuplicates: true,
     });
-    return { created: result.count, skipped: sampleRefs.length - result.count };
+    return { created: result.count, skipped: items.length - result.count };
+  }
+
+  /**
+   * Pairs of (annotator submission, gold expected label) for every
+   * gold sample in the campaign that this annotator has submitted
+   * on. Feeds the supervisor IRR-vs-gold computation (#291,
+   * ADR-0009 Decision 4).
+   *
+   * Filters out the rare cases where a row is flagged as gold but
+   * the label was never set — the API rejects those at seed time
+   * anyway, but historic rows may exist.
+   */
+  async annotatorGoldPairs(args: {
+    campaignId: string;
+    annotatorUserId: string;
+  }): Promise<Array<{ submission: Record<string, unknown>; gold: Record<string, unknown> }>> {
+    const rows = await this.prisma.client.annotationTaskAssignment.findMany({
+      where: {
+        assigneeUserId: args.annotatorUserId,
+        status: 'SUBMITTED',
+        task: { campaignId: args.campaignId, isGoldStandard: true },
+      },
+      select: {
+        submission: true,
+        task: { select: { goldStandardLabel: true } },
+      },
+    });
+    const out: Array<{ submission: Record<string, unknown>; gold: Record<string, unknown> }> = [];
+    for (const r of rows) {
+      const sub = r.submission as unknown;
+      const gold = r.task.goldStandardLabel as unknown;
+      if (
+        sub !== null &&
+        typeof sub === 'object' &&
+        !Array.isArray(sub) &&
+        gold !== null &&
+        typeof gold === 'object' &&
+        !Array.isArray(gold)
+      ) {
+        out.push({
+          submission: sub as Record<string, unknown>,
+          gold: gold as Record<string, unknown>,
+        });
+      }
+    }
+    return out;
+  }
+
+  async countGoldSamplesInCampaign(campaignId: string): Promise<number> {
+    return this.prisma.client.annotationTask.count({
+      where: { campaignId, isGoldStandard: true },
+    });
   }
 
   async findTaskById(id: string): Promise<AnnotationTask | null> {

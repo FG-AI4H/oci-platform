@@ -21,3 +21,8 @@ export {
 } from './hausdorff.js';
 export { icc21, type IccResult } from './icc.js';
 export { euclideanDistance, vectorAgreementScore, type Vector } from './euclidean.js';
+export {
+  annotatorVsGold,
+  type AnnotatorVsGoldInput,
+  type AnnotatorVsGoldResult,
+} from './vs-gold.js';

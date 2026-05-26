@@ -1152,6 +1152,20 @@ model AnnotationTask {
   /// the sample needs special-attention notes. Capped at 4KB at the
   /// API layer.
   instructionsNote String?        @map("instructions_note")
+  /// Gold-standard sample (#291, ADR-0009 Decision 4). When true the
+  /// sample carries an expected label in `goldStandardLabel` that the
+  /// supervisor reads to score each annotator's submission against —
+  /// the running `irrAgainstGold` per annotator (Decision 4) is
+  /// computed off these rows. Gold samples still go through the
+  /// normal gate-1/2/3 workflow; the gold-truth comparison is a
+  /// supervisor-side overlay.
+  isGoldStandard      Boolean  @default(false) @map("is_gold_standard")
+  /// Expected submission shape for a gold sample. Same JSON shape as
+  /// `AnnotationTaskAssignment.submission` so the IRR functions
+  /// compare like-for-like (e.g. `{label: 'pneumonia'}` for
+  /// classification; a mask reference for segmentation). Null when
+  /// `isGoldStandard` is false.
+  goldStandardLabel   Json?    @map("gold_standard_label")
   createdAt   DateTime            @default(now()) @map("created_at")
   updatedAt   DateTime            @updatedAt @map("updated_at")
   completedAt DateTime?           @map("completed_at")
@@ -1160,6 +1174,7 @@ model AnnotationTask {
 
   @@unique([campaignId, sampleRef])
   @@index([campaignId, gateState])
+  @@index([campaignId, isGoldStandard])
   @@map("annotation_tasks")
   @@schema("annotation")
 }
