@@ -2036,6 +2036,11 @@ export const CampaignDetailSchema = CampaignSummarySchema.extend({
   toolIntegration: AnnotationToolIntegrationSummarySchema,
   /** Manager id (FK identity.users.id). The user who created the campaign. */
   createdById: z.string().uuid(),
+  /**
+   * Pointer to the currently-published instructions version (#230).
+   * Null when no instructions are attached yet.
+   */
+  currentInstructionsVersion: z.string().nullable(),
 });
 export type CampaignDetail = z.infer<typeof CampaignDetailSchema>;
 
@@ -2244,6 +2249,13 @@ export const SubmitAssignmentRequestSchema = z.object({
    * side once the registry lands; slice 2 stores the JSON verbatim.
    */
   submission: z.record(z.string(), z.unknown()),
+  /**
+   * Version of the campaign instructions the annotator acknowledged
+   * before submitting (#230). Required when the campaign has
+   * instructions published; the API rejects mismatches with 409 so
+   * mid-campaign updates force a re-acknowledge on the next pull.
+   */
+  acknowledgedInstructionsVersion: z.string().min(1).max(64).optional(),
 });
 export type SubmitAssignmentRequest = z.infer<typeof SubmitAssignmentRequestSchema>;
 
@@ -2279,6 +2291,112 @@ export const GateTransitionActionSchema = z.enum([
   'skip',
 ]);
 export type GateTransitionAction = z.infer<typeof GateTransitionActionSchema>;
+
+// ---------------------------------------------------------------------------
+// Per-campaign annotation instructions (#230).
+//
+// Versioned by sha256 of the markdown body so identical content does not
+// produce a new row. The annotator UI captures the acknowledged version
+// on the assignment and the submit endpoint rejects mismatches; this
+// gives the auditor a per-annotation record of *which* instructions were
+// in effect when the annotator submitted (extends ADR-0008's tool /
+// schema version pattern).
+// ---------------------------------------------------------------------------
+
+/** Embedded media reference inside instructions markdown. */
+export const InstructionsMediaRefSchema = z.object({
+  url: z.string().url(),
+  kind: z.enum(['image', 'video']),
+  caption: z.string().max(200).optional(),
+});
+export type InstructionsMediaRef = z.infer<typeof InstructionsMediaRefSchema>;
+
+/** Cap on raw markdown body — 64 KB. */
+export const INSTRUCTIONS_MARKDOWN_MAX_BYTES = 64 * 1024;
+
+export const CampaignInstructionsSchema = z.object({
+  id: z.string().uuid(),
+  campaignId: z.string().uuid(),
+  /** Short hex slice of the sha256 of `markdownBody` (16 chars). */
+  version: z.string().min(1).max(64),
+  markdownBody: z.string(),
+  mediaUrls: z.array(InstructionsMediaRefSchema),
+  createdById: z.string().uuid(),
+  createdAt: z.string().datetime(),
+  /** True when this row's version matches the campaign's pointer. */
+  isCurrent: z.boolean(),
+});
+export type CampaignInstructions = z.infer<typeof CampaignInstructionsSchema>;
+
+/** `PUT /v2/annotation/campaigns/:slug/instructions` — manager publish. */
+/**
+ * UTF-8 byte length without depending on `TextEncoder` (the shared-
+ * types package targets ES2022 + no DOM lib). Counts each code-point
+ * by its UTF-8 expansion: < 0x80 → 1, < 0x800 → 2, < 0x10000 → 3,
+ * surrogate-paired code points → 4. Matches `Buffer.byteLength(s, 'utf8')`.
+ */
+function utf8ByteLength(s: string): number {
+  let bytes = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    const code = s.charCodeAt(i);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      bytes += 4;
+      i += 1;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
+export const PublishInstructionsRequestSchema = z.object({
+  markdownBody: z
+    .string()
+    .min(1)
+    .refine(
+      (s) => utf8ByteLength(s) <= INSTRUCTIONS_MARKDOWN_MAX_BYTES,
+      `markdownBody must be ≤ ${INSTRUCTIONS_MARKDOWN_MAX_BYTES} bytes`,
+    ),
+  mediaUrls: z.array(InstructionsMediaRefSchema).max(20).default([]),
+});
+export type PublishInstructionsRequest = z.infer<typeof PublishInstructionsRequestSchema>;
+
+/** Response from publish: the new (or existing identical-hash) version. */
+export const PublishInstructionsResponseSchema = z.object({
+  instructions: CampaignInstructionsSchema,
+  /** True when this publish call created a new row (false on no-op idempotent re-publish). */
+  created: z.boolean(),
+});
+export type PublishInstructionsResponse = z.infer<typeof PublishInstructionsResponseSchema>;
+
+/** `GET /v2/annotation/campaigns/:slug/instructions` — annotator / manager fetch. */
+export const FetchInstructionsResponseSchema = z.object({
+  /** Null when the campaign has no instructions published yet. */
+  current: CampaignInstructionsSchema.nullable(),
+  /** Past versions in `createdAt` desc order. Slice 1 caps at 20 entries. */
+  history: z.array(CampaignInstructionsSchema),
+});
+export type FetchInstructionsResponse = z.infer<typeof FetchInstructionsResponseSchema>;
+
+/**
+ * Compute the canonical short-version slug for an instructions
+ * markdown body. Shared FE/BE so the manager-side editor can show
+ * "version abc12345 will be published" before the API roundtrip.
+ *
+ * Implementation: lowercase hex slice of sha256(markdownBody).
+ * The hashing is delegated to the caller's host environment via a
+ * `hash` injection so this module remains pure / runtime-agnostic.
+ */
+export function shortVersionFromHash(hashHex: string): string {
+  return hashHex.toLowerCase().slice(0, 16);
+}
+
+/** `PATCH /v2/annotation/tasks/:taskId/instructions-note` — manager per-task override (#230 §per-task). */
+export const SetTaskInstructionsNoteRequestSchema = z.object({
+  /** Free-form markdown shown alongside campaign-level instructions; null clears the override. */
+  note: z.string().max(4000).nullable(),
+});
+export type SetTaskInstructionsNoteRequest = z.infer<typeof SetTaskInstructionsNoteRequestSchema>;
 
 // ---------------------------------------------------------------------------
 // Admin — Cognito group management (#241).

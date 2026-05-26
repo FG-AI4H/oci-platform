@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service.js';
 import type {
   AnnotationCampaign,
+  AnnotationCampaignInstructions,
   AnnotationToolIntegration,
   CampaignOutputLicense as PrismaOutputLicense,
   CampaignStatus as PrismaStatus,
@@ -108,6 +109,70 @@ export class CampaignRepository {
         createdById: args.createdById,
       },
       include: { toolIntegration: true },
+    });
+  }
+
+  /**
+   * Look up an instructions row by (campaignId, version). Used by the
+   * publish path's idempotent re-publish check (#230).
+   */
+  async findInstructionsByVersion(
+    campaignId: string,
+    version: string,
+  ): Promise<AnnotationCampaignInstructions | null> {
+    return this.prisma.client.annotationCampaignInstructions.findUnique({
+      where: { campaignId_version: { campaignId, version } },
+    });
+  }
+
+  async listInstructionsHistory(
+    campaignId: string,
+    limit = 20,
+  ): Promise<AnnotationCampaignInstructions[]> {
+    return this.prisma.client.annotationCampaignInstructions.findMany({
+      where: { campaignId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  /**
+   * Idempotent publish: insert the row if (campaignId, version) is
+   * new, then advance the campaign's `currentInstructionsVersion`
+   * pointer. Returns the persisted row and a `created` flag so the
+   * caller can distinguish a fresh publish from a no-op republish.
+   */
+  async publishInstructions(args: {
+    campaignId: string;
+    version: string;
+    markdownBody: string;
+    mediaUrls: unknown;
+    createdById: string;
+  }): Promise<{ row: AnnotationCampaignInstructions; created: boolean }> {
+    return this.prisma.client.$transaction(async (tx) => {
+      const existing = await tx.annotationCampaignInstructions.findUnique({
+        where: { campaignId_version: { campaignId: args.campaignId, version: args.version } },
+      });
+      let row = existing;
+      const created = !existing;
+      if (!existing) {
+        row = await tx.annotationCampaignInstructions.create({
+          data: {
+            campaignId: args.campaignId,
+            version: args.version,
+            markdownBody: args.markdownBody,
+            // Prisma typings for JSON column accept JsonValue; cast here
+            // since the caller validates the shape via Zod.
+            mediaUrls: args.mediaUrls as never,
+            createdById: args.createdById,
+          },
+        });
+      }
+      await tx.annotationCampaign.update({
+        where: { id: args.campaignId },
+        data: { currentInstructionsVersion: args.version },
+      });
+      return { row: row!, created };
     });
   }
 

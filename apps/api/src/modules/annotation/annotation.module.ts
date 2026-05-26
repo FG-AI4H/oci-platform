@@ -4,6 +4,8 @@ import { PrismaService } from '../../prisma.service.js';
 import { CampaignController } from './campaign.controller.js';
 import { CampaignService } from './campaign.service.js';
 import { CampaignRepository } from './campaign.repository.js';
+import { InstructionsController } from './instructions.controller.js';
+import { InstructionsService } from './instructions.service.js';
 import { AnnotationRolesGuard } from './roles.guard.js';
 import { TaskAbandonmentScheduler } from './task-abandonment.scheduler.js';
 import { TaskAbandonmentService } from './task-abandonment.service.js';
@@ -26,17 +28,23 @@ import { ToolIntegrationController } from './tool-integration.controller.js';
  */
 @Module({
   imports: [AuthModule],
-  controllers: [CampaignController, TaskController, ToolIntegrationController],
+  controllers: [
+    CampaignController,
+    InstructionsController,
+    TaskController,
+    ToolIntegrationController,
+  ],
   providers: [
     PrismaService,
     CampaignService,
     CampaignRepository,
+    InstructionsService,
     TaskService,
     TaskRepository,
     TaskAbandonmentService,
     TaskAbandonmentScheduler,
     AnnotationRolesGuard,
   ],
-  exports: [CampaignService, TaskService, TaskAbandonmentService],
+  exports: [CampaignService, InstructionsService, TaskService, TaskAbandonmentService],
 })
 export class AnnotationModule {}

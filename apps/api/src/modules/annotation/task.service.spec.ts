@@ -629,4 +629,94 @@ describe('TaskService.submit', () => {
     });
     expect(tasks.markAssignmentSubmitted).toHaveBeenCalled();
   });
+
+  // --- #230 instructions acknowledgement -------------------------------------
+
+  it('409s when the campaign has published instructions but the submission omits the ack', async () => {
+    const task = taskRow({ nAnnotatorsRequired: 1 });
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
+    campaigns.findById.mockResolvedValueOnce({
+      id: 'cmp-1',
+      slug: 'pilot',
+      taskKind: 'CLASSIFICATION',
+      workflowConfig: { nAnnotators: 1 },
+      currentInstructionsVersion: 'abc123',
+    });
+
+    await expect(
+      service.submit({
+        assignmentId: 'asn-1',
+        submission: { label: 'pneumonia' },
+        user: userPayload(ANNOTATOR_SUB),
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tasks.markAssignmentSubmitted).not.toHaveBeenCalled();
+  });
+
+  it('409s when the ack version is stale (instructions updated mid-flight)', async () => {
+    const task = taskRow({ nAnnotatorsRequired: 1 });
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
+    campaigns.findById.mockResolvedValueOnce({
+      id: 'cmp-1',
+      slug: 'pilot',
+      taskKind: 'CLASSIFICATION',
+      workflowConfig: { nAnnotators: 1 },
+      currentInstructionsVersion: 'def456',
+    });
+
+    await expect(
+      service.submit({
+        assignmentId: 'asn-1',
+        submission: { label: 'pneumonia' },
+        acknowledgedInstructionsVersion: 'abc123',
+        user: userPayload(ANNOTATOR_SUB),
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tasks.markAssignmentSubmitted).not.toHaveBeenCalled();
+  });
+
+  it('persists the ack version on the assignment when the submission matches the current version', async () => {
+    const task = taskRow({ nAnnotatorsRequired: 1 });
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
+    campaigns.findById.mockResolvedValueOnce({
+      id: 'cmp-1',
+      slug: 'pilot',
+      taskKind: 'CLASSIFICATION',
+      workflowConfig: { nAnnotators: 1 },
+      currentInstructionsVersion: 'abc123',
+    });
+    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
+    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+
+    await service.submit({
+      assignmentId: 'asn-1',
+      submission: { label: 'pneumonia' },
+      acknowledgedInstructionsVersion: 'abc123',
+      user: userPayload(ANNOTATOR_SUB),
+    });
+
+    expect(tasks.markAssignmentSubmitted).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assignmentId: 'asn-1',
+        acknowledgedInstructionsVersion: 'abc123',
+      }),
+    );
+  });
+
+  it('does not enforce the ack when the campaign has no published instructions', async () => {
+    const task = taskRow({ nAnnotatorsRequired: 1 });
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
+    // Default campaign mock has currentInstructionsVersion = undefined ≡ null.
+    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
+    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+
+    await service.submit({
+      assignmentId: 'asn-1',
+      submission: { label: 'pneumonia' },
+      user: userPayload(ANNOTATOR_SUB),
+    });
+    expect(tasks.markAssignmentSubmitted).toHaveBeenCalled();
+  });
 });

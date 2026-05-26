@@ -1017,6 +1017,12 @@ model AnnotationCampaign {
   /// Soft FK → identity.users.id. The campaign manager who created it.
   createdById String @map("created_by_id") @db.Uuid
 
+  /// Pointer to the currently-published `CampaignInstructions` version
+  /// for this campaign (#230). Null while no instructions are attached.
+  /// Cached on the campaign row so annotator pulls don't have to join
+  /// the instructions table on every read.
+  currentInstructionsVersion String? @map("current_instructions_version")
+
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   /// Set when the campaign transitions to RUNNING (#215, slice 1).
@@ -1026,11 +1032,44 @@ model AnnotationCampaign {
   completedAt DateTime? @map("completed_at")
 
   toolIntegration AnnotationToolIntegration @relation(fields: [toolIntegrationId], references: [id])
+  instructions    AnnotationCampaignInstructions[]
 
   @@index([status])
   @@index([datasetId])
   @@index([createdById])
   @@map("annotation_campaigns")
+  @@schema("annotation")
+}
+
+/// Per-campaign instructions (#230). Versioned by sha256 of the
+/// markdown body so identical content never produces a new row. The
+/// `campaign.currentInstructionsVersion` pointer references whichever
+/// version is currently "published" to annotators.
+///
+/// Markdown is sanitised on render (frontend); the API stores raw
+/// markdown. `mediaUrls` is a free-form JSON array — captured at
+/// publish time so the auditor can reproduce what the annotator saw.
+model AnnotationCampaignInstructions {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId    String   @map("campaign_id") @db.Uuid
+  /// Short hex slice of the sha256 of `markdownBody` (16 chars).
+  /// Stable across re-publishes of identical content; the
+  /// `(campaignId, version)` unique index drops duplicate publishes.
+  version       String
+  /// Raw markdown. Capped at 64KB at the API layer.
+  markdownBody  String   @map("markdown_body")
+  /// JSON array of {url, kind} entries the markdown references.
+  mediaUrls     Json     @map("media_urls")
+  /// Soft FK → identity.users.id. Same convention as
+  /// `AnnotationCampaign.createdById`.
+  createdById   String   @map("created_by_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  campaign AnnotationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, version])
+  @@index([campaignId, createdAt])
+  @@map("annotation_campaign_instructions")
   @@schema("annotation")
 }
 
@@ -1108,6 +1147,11 @@ model AnnotationTask {
   gateState   AnnotationGateState @default(INDEPENDENT) @map("gate_state")
   /// Operator-supplied reason for SKIPPED transitions; null otherwise.
   skipReason  String?             @map("skip_reason")
+  /// Optional per-task instructions override (#230). Free-form
+  /// markdown shown alongside the campaign-level instructions when
+  /// the sample needs special-attention notes. Capped at 4KB at the
+  /// API layer.
+  instructionsNote String?        @map("instructions_note")
   createdAt   DateTime            @default(now()) @map("created_at")
   updatedAt   DateTime            @updatedAt @map("updated_at")
   completedAt DateTime?           @map("completed_at")
@@ -1167,6 +1211,11 @@ model AnnotationTaskAssignment {
   /// caller passes; tool-integration-aware schema validation per
   /// ADR-0007 lands with #214 / #231.
   submission         Json?
+  /// Campaign-instructions version the annotator acknowledged at
+  /// submission time (#230). Captured into the annotation provenance
+  /// alongside `tool_version` / `schema_version`. Null until the
+  /// annotator submits with an explicit acknowledgement.
+  acknowledgedInstructionsVersion String? @map("acknowledged_instructions_version")
   assignedAt         DateTime                   @default(now()) @map("assigned_at")
   startedAt          DateTime?                  @map("started_at")
   submittedAt        DateTime?                  @map("submitted_at")

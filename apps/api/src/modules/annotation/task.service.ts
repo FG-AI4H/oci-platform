@@ -164,6 +164,7 @@ export class TaskService {
   async submit(args: {
     assignmentId: string;
     submission: Record<string, unknown>;
+    acknowledgedInstructionsVersion?: string | null;
     user: CognitoAccessTokenPayload;
   }): Promise<SubmitAssignmentResponse> {
     const assignment = await this.tasks.findAssignmentById(args.assignmentId);
@@ -198,6 +199,25 @@ export class TaskService {
     // surface the row for review (the soft-warn surface comes
     // with the supervisor PR in #233).
     const campaignForSubmit = await this.campaigns.findById(assignment.task.campaignId);
+
+    // Instructions acknowledgement (#230). When the campaign has a
+    // published instructions version, the submission must carry the
+    // matching `acknowledgedInstructionsVersion` so the annotator
+    // can't slip past an updated version. Captured into the
+    // assignment row for provenance.
+    const requiredInstructionsVersion = campaignForSubmit?.currentInstructionsVersion ?? null;
+    if (requiredInstructionsVersion !== null) {
+      const ack = args.acknowledgedInstructionsVersion ?? null;
+      if (ack !== requiredInstructionsVersion) {
+        throw new ConflictException({
+          message:
+            'Submission must acknowledge the current instructions version before it can be persisted',
+          requiredInstructionsVersion,
+          acknowledgedInstructionsVersion: ack,
+          campaignSlug: campaignForSubmit?.slug ?? null,
+        });
+      }
+    }
     const completenessMode = readCompletenessMode(campaignForSubmit?.workflowConfig);
     const completeness = evaluateCompleteness(
       (campaignForSubmit?.taskKind ?? 'CLASSIFICATION') as CampaignTaskKind,
@@ -220,6 +240,7 @@ export class TaskService {
     await this.tasks.markAssignmentSubmitted({
       assignmentId: assignment.id,
       submission: args.submission,
+      acknowledgedInstructionsVersion: args.acknowledgedInstructionsVersion ?? null,
     });
 
     const submittedCount = await this.tasks.countSubmittedAssignmentsAtGate(
