@@ -1856,6 +1856,57 @@ export const CampaignCompletenessModeSchema = z.enum(['soft-warn', 'hard-block']
 export type CampaignCompletenessMode = z.infer<typeof CampaignCompletenessModeSchema>;
 
 /**
+ * Per-tier default output license (#235, ADR-0012 Decision 3).
+ *
+ *   OPEN / REGISTERED → CC-BY-4.0     (permissive; matches the
+ *                                      datasets these tiers serve)
+ *   CONTROLLED        → CC-BY-NC-4.0  (non-commercial — matches the
+ *                                      access-control rationale of
+ *                                      the tier)
+ *   SENSITIVE         → custom-restricted  (the manager MUST attach a
+ *                                          clause set; SENSITIVE is
+ *                                          never a one-click default)
+ *
+ * Pure function — shared with the campaign-create UI so the form's
+ * license picker pre-selects the right value once the manager picks
+ * a dataset.
+ */
+export function defaultOutputLicenseForTier(tier: AccessTier): CampaignOutputLicense {
+  if (tier === 'OPEN' || tier === 'REGISTERED') return 'CC-BY-4.0';
+  if (tier === 'CONTROLLED') return 'CC-BY-NC-4.0';
+  return 'custom-restricted';
+}
+
+/**
+ * Validate a chosen output license against the dataset's
+ * commercial-use terms (#235, ADR-0012 Decision 3). Returns null
+ * when the combination is allowed; a reason string when it isn't.
+ *
+ * Rule: a `NON_COMMERCIAL_ONLY` dataset can only produce outputs
+ * that disallow commercial use. The OCI shortlist of NCU-compatible
+ * licenses today is `CC-BY-NC-4.0` and `custom-restricted` (the
+ * `custom-restricted` shape lets the campaign manager write the
+ * NCU restriction explicitly). `CC-BY-SA-4.0` would inherit the
+ * NCU constraint to downstream users only if every downstream
+ * derived work also forbids commercial use — too brittle to rely
+ * on, so we reject. `OK` and `CASE_BY_CASE` accept any license;
+ * `CASE_BY_CASE` is a soft signal that requires host review
+ * downstream (the access-request matcher handles that).
+ */
+export function outputLicenseAllowedForTerms(
+  license: CampaignOutputLicense,
+  terms: CommercialUseTerms,
+): string | null {
+  if (terms !== 'NON_COMMERCIAL_ONLY') return null;
+  if (license === 'CC-BY-NC-4.0' || license === 'custom-restricted') return null;
+  return (
+    `Dataset terms are NON_COMMERCIAL_ONLY; the campaign output license '${license}' would ` +
+    `permit commercial reuse downstream. Pick 'CC-BY-NC-4.0' or 'custom-restricted' with an ` +
+    `explicit NCU clause set.`
+  );
+}
+
+/**
  * Workflow configuration (ADR-0009 Decisions 2 + 4). Phase B.A.1 only
  * surfaces `nAnnotators`; IRR thresholds + gate config + experience-
  * model knobs land as #216 (E4) ships.
