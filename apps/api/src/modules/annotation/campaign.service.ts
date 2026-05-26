@@ -8,15 +8,21 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type {
+  AccessTier,
   AnnotationToolIntegrationSummary,
   CampaignDetail,
   CampaignSummary,
   CampaignOutputLicense,
   CampaignTransitionAction,
+  CommercialUseTerms,
   CreateCampaignRequest,
   ListCampaignsResponse,
 } from '@oci/shared-types';
-import { allowedTaskKindsForModalities } from '@oci/shared-types';
+import {
+  allowedTaskKindsForModalities,
+  defaultOutputLicenseForTier,
+  outputLicenseAllowedForTerms,
+} from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import type {
   AnnotationCampaign,
@@ -136,13 +142,26 @@ export class CampaignService {
       );
     }
 
-    // Output license — when caller doesn't pass one, derive from the
-    // dataset's access tier per ADR-0012 Decision 3. Phase B.A.1 ships
-    // with a simplified default (CC-BY-4.0) until the catalog ↔
-    // annotation linkage that surfaces accessTier lands with sub-epic
-    // #223. The tier-aware default + SENSITIVE-tier enforcement lands
-    // alongside that work.
-    const outputLicense: CampaignOutputLicense = body.outputLicense ?? 'CC-BY-4.0';
+    // Output license — read the dataset's access tier + commercial
+    // terms (#235, ADR-0012 Decision 3). When the caller omits the
+    // license, fall back to the per-tier default; otherwise validate
+    // their pick against the dataset's commercial terms. Missing
+    // dataset rows (legacy / orphan datasetId) fall back to the
+    // safest default (`custom-restricted`) so the manager has to
+    // think about it explicitly.
+    const ctx = await this.repo.findDatasetLicenseContext(body.datasetId);
+    const accessTier = (ctx?.accessTier ?? 'SENSITIVE') as AccessTier;
+    const commercialUseTerms = (ctx?.commercialUseTerms ?? 'CASE_BY_CASE') as CommercialUseTerms;
+    const outputLicense: CampaignOutputLicense =
+      body.outputLicense ?? defaultOutputLicenseForTier(accessTier);
+    const conflict = outputLicenseAllowedForTerms(outputLicense, commercialUseTerms);
+    if (conflict) {
+      throw new BadRequestException({
+        message: conflict,
+        outputLicense,
+        commercialUseTerms,
+      });
+    }
 
     const created = await this.repo.create({
       slug: body.slug,

@@ -52,6 +52,7 @@ interface RepoMock {
   findToolIntegrationById: ReturnType<typeof vi.fn>;
   listActiveToolIntegrations: ReturnType<typeof vi.fn>;
   findDatasetModalities: ReturnType<typeof vi.fn>;
+  findDatasetLicenseContext: ReturnType<typeof vi.fn>;
   create: ReturnType<typeof vi.fn>;
   updateStatus: ReturnType<typeof vi.fn>;
 }
@@ -71,6 +72,12 @@ beforeEach(() => {
     findToolIntegrationById: vi.fn(),
     listActiveToolIntegrations: vi.fn(),
     findDatasetModalities: vi.fn(),
+    // Default to OPEN / OK so tests that don't care about the
+    // license-context check just pass through. Per-test overrides
+    // exercise the CONTROLLED / SENSITIVE / NCU branches.
+    findDatasetLicenseContext: vi
+      .fn()
+      .mockResolvedValue({ accessTier: 'OPEN', commercialUseTerms: 'OK' }),
     create: vi.fn(),
     updateStatus: vi.fn(),
   };
@@ -119,6 +126,110 @@ describe('CampaignService.create', () => {
         workflowConfig: { nAnnotators: 3 },
         createdById: SUB_UUID,
       }),
+    );
+  });
+
+  it('uses CC-BY-NC-4.0 as default for CONTROLLED-tier datasets (#235)', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue(TOOL);
+    mockDatasetModalities(['X-ray']);
+    repo.findDatasetLicenseContext.mockResolvedValueOnce({
+      accessTier: 'CONTROLLED',
+      commercialUseTerms: 'CASE_BY_CASE',
+    });
+    repo.create.mockResolvedValue(ROW);
+
+    await service.create(
+      {
+        slug: 'controlled-pilot',
+        name: 'Controlled',
+        datasetId: 'ds-1',
+        toolIntegrationId: TOOL.id,
+        taskKind: 'CLASSIFICATION',
+      },
+      user(SUB_UUID),
+    );
+
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ outputLicense: 'CC_BY_NC_4_0' }),
+    );
+  });
+
+  it('uses custom-restricted as default for SENSITIVE-tier datasets (#235)', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue(TOOL);
+    mockDatasetModalities(['X-ray']);
+    repo.findDatasetLicenseContext.mockResolvedValueOnce({
+      accessTier: 'SENSITIVE',
+      commercialUseTerms: 'CASE_BY_CASE',
+    });
+    repo.create.mockResolvedValue(ROW);
+
+    await service.create(
+      {
+        slug: 'sensitive-pilot',
+        name: 'Sensitive',
+        datasetId: 'ds-1',
+        toolIntegrationId: TOOL.id,
+        taskKind: 'CLASSIFICATION',
+      },
+      user(SUB_UUID),
+    );
+
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ outputLicense: 'CUSTOM_RESTRICTED' }),
+    );
+  });
+
+  it('rejects a CC-BY-4.0 output on a NCU dataset (#235)', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue(TOOL);
+    mockDatasetModalities(['X-ray']);
+    repo.findDatasetLicenseContext.mockResolvedValueOnce({
+      accessTier: 'CONTROLLED',
+      commercialUseTerms: 'NON_COMMERCIAL_ONLY',
+    });
+
+    await expect(
+      service.create(
+        {
+          slug: 'ncu-pilot',
+          name: 'NCU',
+          datasetId: 'ds-1',
+          toolIntegrationId: TOOL.id,
+          taskKind: 'CLASSIFICATION',
+          outputLicense: 'CC-BY-4.0',
+        },
+        user(SUB_UUID),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts CC-BY-NC-4.0 on a NCU dataset', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue(TOOL);
+    mockDatasetModalities(['X-ray']);
+    repo.findDatasetLicenseContext.mockResolvedValueOnce({
+      accessTier: 'CONTROLLED',
+      commercialUseTerms: 'NON_COMMERCIAL_ONLY',
+    });
+    repo.create.mockResolvedValue(ROW);
+
+    await service.create(
+      {
+        slug: 'ncu-pilot',
+        name: 'NCU',
+        datasetId: 'ds-1',
+        toolIntegrationId: TOOL.id,
+        taskKind: 'CLASSIFICATION',
+        outputLicense: 'CC-BY-NC-4.0',
+      },
+      user(SUB_UUID),
+    );
+
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ outputLicense: 'CC_BY_NC_4_0' }),
     );
   });
 

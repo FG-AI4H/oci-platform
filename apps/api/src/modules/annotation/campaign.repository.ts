@@ -77,6 +77,27 @@ export class CampaignRepository {
     };
   }
 
+  /**
+   * Licensing context for a dataset — the campaign output-license
+   * picker (#235, ADR-0012 Decision 3) needs the dataset's access
+   * tier (to pick the default) and commercial-use terms (to
+   * validate the chosen license). Soft-FK lookup matching the
+   * existing `findDatasetModalities` pattern.
+   */
+  async findDatasetLicenseContext(
+    datasetId: string,
+  ): Promise<{ accessTier: string; commercialUseTerms: string } | null> {
+    const ds = await this.prisma.client.dataset.findUnique({
+      where: { id: datasetId },
+      select: { accessTier: true, commercialUseTerms: true },
+    });
+    if (!ds) return null;
+    return {
+      accessTier: ds.accessTier,
+      commercialUseTerms: ds.commercialUseTerms,
+    };
+  }
+
   async listActiveToolIntegrations(): Promise<AnnotationToolIntegration[]> {
     return this.prisma.client.annotationToolIntegration.findMany({
       where: { isActive: true },
