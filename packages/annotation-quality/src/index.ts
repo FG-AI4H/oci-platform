@@ -13,3 +13,11 @@ export {
   type KrippendorffLevel,
   type KrippendorffValue,
 } from './krippendorff-alpha.js';
+export {
+  hausdorffDistance,
+  type HausdorffOptions,
+  type HausdorffResult,
+  type Point,
+} from './hausdorff.js';
+export { icc21, type IccResult } from './icc.js';
+export { euclideanDistance, vectorAgreementScore, type Vector } from './euclidean.js';
