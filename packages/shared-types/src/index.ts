@@ -1961,7 +1961,17 @@ export function evaluateCompleteness(
  * (#290), gold-standard sample handling (#291), and calibration-
  * drift detection (#292) extend this enum as they ship.
  */
-export const AnnotationQualityMetricSchema = z.enum(['cohens-kappa', 'fleiss-kappa', 'dice']);
+export const AnnotationQualityMetricSchema = z.enum([
+  'cohens-kappa',
+  'fleiss-kappa',
+  'dice',
+  /** Krippendorff's α with the nominal δ² (#289). Reduces to Fleiss-like behaviour on full-coverage data. */
+  'krippendorff-alpha-nominal',
+  /** Krippendorff's α with the ordinal δ² (#289). Closer-but-not-equal disagreements weighted less. */
+  'krippendorff-alpha-ordinal',
+  /** Krippendorff's α with the interval δ² (#289). Numeric scales — δ² = (a-b)². */
+  'krippendorff-alpha-interval',
+]);
 export type AnnotationQualityMetric = z.infer<typeof AnnotationQualityMetricSchema>;
 
 export const CampaignQualityConfigSchema = z.object({
