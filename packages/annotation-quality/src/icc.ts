@@ -73,11 +73,10 @@ export function icc21(ratings: ReadonlyArray<ReadonlyArray<number>>): IccResult 
   const rowMeans = new Array<number>(nSubjects).fill(0);
   const colMeans = new Array<number>(nRaters).fill(0);
   let grandSum = 0;
+  /* eslint-disable security/detect-object-injection -- bounded numeric loop indices into local arrays */
   for (let i = 0; i < nSubjects; i += 1) {
-    // eslint-disable-next-line security/detect-object-injection -- bounded loop
     const row = ratings[i]!;
     for (let j = 0; j < nRaters; j += 1) {
-      // eslint-disable-next-line security/detect-object-injection -- bounded loop
       const v = row[j]!;
       rowMeans[i] = (rowMeans[i] ?? 0) + v;
       colMeans[j] = (colMeans[j] ?? 0) + v;
@@ -86,6 +85,7 @@ export function icc21(ratings: ReadonlyArray<ReadonlyArray<number>>): IccResult 
   }
   for (let i = 0; i < nSubjects; i += 1) rowMeans[i] = (rowMeans[i] ?? 0) / nRaters;
   for (let j = 0; j < nRaters; j += 1) colMeans[j] = (colMeans[j] ?? 0) / nSubjects;
+  /* eslint-enable security/detect-object-injection */
   const grandMean = grandSum / (nSubjects * nRaters);
 
   // Sums of squares

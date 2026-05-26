@@ -95,9 +95,11 @@ function directional(from: readonly Point[], to: readonly Point[], percentile: n
   const rank = (percentile / 100) * (sorted.length - 1);
   const lo = Math.floor(rank);
   const hi = Math.ceil(rank);
+  /* eslint-disable security/detect-object-injection -- bounded numeric indices into a local sorted array */
   if (lo === hi) return sorted[lo]!;
   const frac = rank - lo;
   return sorted[lo]! * (1 - frac) + sorted[hi]! * frac;
+  /* eslint-enable security/detect-object-injection */
 }
 
 function euclidean(a: Point, b: Point): number {
