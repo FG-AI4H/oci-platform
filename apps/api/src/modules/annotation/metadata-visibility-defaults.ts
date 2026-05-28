@@ -95,6 +95,23 @@ const NEVER_FIELD_PATTERNS: readonly RegExp[] = [
 ];
 
 /**
+ * Safe own-property read for records keyed by *external* field names
+ * (sample-metadata keys, campaign-config keys, dataset Croissant tags).
+ * The `Object.hasOwn` guard rejects inherited / prototype-chain keys, so
+ * a hostile field name like `__proto__` or `constructor` resolves to
+ * `undefined` instead of walking the prototype — closing a latent
+ * object-injection / prototype-pollution read. The metadata path is
+ * attacker-influenced (ADR-0010), so a bare `eslint-disable` with the
+ * usual "typed enum keys" rationale would be unsafe here; the single
+ * disable below is justified by the guard, not by the key's type.
+ */
+export function ownFieldValue<V>(record: Record<string, V>, field: string): V | undefined {
+  if (!Object.hasOwn(record, field)) return undefined;
+  // eslint-disable-next-line security/detect-object-injection -- guarded by Object.hasOwn above; field is an external metadata key
+  return record[field];
+}
+
+/**
  * Resolve the OCI default bucket for a field, or `undefined` when the
  * field is unknown to the table (the caller then applies the
  * `hidden` default-hide fallback). The `never` patterns win over an
@@ -103,7 +120,7 @@ const NEVER_FIELD_PATTERNS: readonly RegExp[] = [
  */
 export function defaultBucketForField(field: string): MetadataVisibilityBucket | undefined {
   const key = field.trim().toLowerCase();
-  const exact = OCI_DEFAULT_VISIBILITY_TABLE[key];
+  const exact = ownFieldValue(OCI_DEFAULT_VISIBILITY_TABLE, key);
   if (exact === 'never') return 'never';
   if (NEVER_FIELD_PATTERNS.some((re) => re.test(key))) return 'never';
   return exact;

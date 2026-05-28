@@ -15,7 +15,7 @@ import {
   type MetadataVisibilityGate,
 } from '@oci/shared-types';
 import { CampaignRepository } from './campaign.repository.js';
-import { defaultBucketForField } from './metadata-visibility-defaults.js';
+import { defaultBucketForField, ownFieldValue } from './metadata-visibility-defaults.js';
 
 /** Which source won the bucket resolution for a field (UX + audit). */
 export type VisibilitySource =
@@ -81,8 +81,8 @@ export class MetadataVisibilityService {
     source: VisibilitySource;
     promotedAtGates: MetadataVisibilityGate[];
   } {
-    const managerRule = config.fieldOverrides[field];
-    const croissantBucket = croissantTags[field];
+    const managerRule = ownFieldValue(config.fieldOverrides, field);
+    const croissantBucket = ownFieldValue(croissantTags, field);
     const defaultBucket = defaultBucketForField(field);
     const bucket = resolveFieldBucket({
       managerBucket: managerRule?.bucket,
