@@ -140,6 +140,26 @@ export class TaskService {
       return { assignment: toAssignmentSummary(existing, existing.task) };
     }
 
+    // Bias-prevention 1.5× cap (ADR-0009 Decision 1 Predicate 4).
+    // The router refuses to give this caller another task if doing
+    // so would push their per-campaign share above the soft
+    // ceiling. EXPIRED rows are excluded (abandonment doesn't
+    // burden the cap per ADR-0009 + #229). When the cap binds the
+    // task stays in the queue for another annotator to pick up.
+    if (
+      !this.callerWithinBiasCap(
+        await this.tasks.biasCapInputs({
+          campaignId: campaign.id,
+          callerUserId: assigneeUserId,
+        }),
+      )
+    ) {
+      this.logger.log(
+        `pullNext: caller ${assigneeUserId} at the bias-prevention cap in campaign ${campaign.slug} — returning null`,
+      );
+      return { assignment: null };
+    }
+
     const nextTask = await this.tasks.findNextEligibleTask({
       campaignId: campaign.id,
       gate,
@@ -364,6 +384,28 @@ export class TaskService {
    * configurable per campaign (a campaign manager might want their
    * expert-reviewer to drain arbitration backlog before gate-1).
    */
+  /**
+   * Bias-prevention soft ceiling per ADR-0009 Decision 1
+   * Predicate 4:
+   *
+   *   cap = ceil(totalTasks / max(1, nActiveAnnotators)) * 1.5
+   *
+   * Returns false when assigning the next task to this caller would
+   * push their share past the cap; the router then refuses + the
+   * task waits for another annotator. The "max(1, n)" guard handles
+   * the first-ever pull-next on a fresh campaign (no rows yet → no
+   * cap can possibly bind).
+   */
+  private callerWithinBiasCap(inputs: {
+    totalTasks: number;
+    nActiveAnnotators: number;
+    callerShare: number;
+  }): boolean {
+    const n = Math.max(1, inputs.nActiveAnnotators);
+    const cap = Math.ceil(inputs.totalTasks / n) * 1.5;
+    return inputs.callerShare + 1 <= cap;
+  }
+
   private gateFromGroups(groups: readonly string[]): AnnotationGateState | null {
     if (groups.includes('annotator')) return 'INDEPENDENT';
     if (groups.includes('arbitration-annotator')) return 'AWAITING_ARBITRATION';

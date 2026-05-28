@@ -221,6 +221,42 @@ export class TaskRepository {
     return null;
   }
 
+  /**
+   * Inputs to ADR-0009 Decision 1 predicate 4 (bias-prevention
+   * 1.5× cap). The router asks "would assigning the next task to
+   * this caller push their share above the soft ceiling?". The
+   * formula needs three integers:
+   *
+   *   cap = ceil(totalTasks / max(1, nActiveAnnotators)) * 1.5
+   *
+   * `nActiveAnnotators` excludes EXPIRED rows — abandonment doesn't
+   * count toward task-share per #229 + ADR-0009. `taskShareOf`
+   * counts the caller's PENDING + IN_PROGRESS + SUBMITTED rows in
+   * the same way.
+   *
+   * One round-trip via `groupBy` is cheaper than four counts.
+   */
+  async biasCapInputs(args: {
+    campaignId: string;
+    callerUserId: string;
+  }): Promise<{ totalTasks: number; nActiveAnnotators: number; callerShare: number }> {
+    const [totalTasks, groups] = await Promise.all([
+      this.prisma.client.annotationTask.count({ where: { campaignId: args.campaignId } }),
+      this.prisma.client.annotationTaskAssignment.groupBy({
+        by: ['assigneeUserId'],
+        where: {
+          task: { campaignId: args.campaignId },
+          status: { in: ['PENDING', 'IN_PROGRESS', 'SUBMITTED'] },
+        },
+        _count: { _all: true },
+      }),
+    ]);
+    const nActiveAnnotators = groups.length;
+    const callerGroup = groups.find((g) => g.assigneeUserId === args.callerUserId);
+    const callerShare = callerGroup?._count._all ?? 0;
+    return { totalTasks, nActiveAnnotators, callerShare };
+  }
+
   async createAssignment(args: {
     taskId: string;
     assigneeUserId: string;
