@@ -8,14 +8,17 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { annotatorVsGold } from '@oci/annotation-quality';
 import type { AnnotationGateState, AnnotationTask, AnnotationTaskAssignment } from '@oci/database';
 import type {
+  AnnotatorQualitySummary,
   AssignmentSummary,
   CampaignCompletenessMode,
   CampaignQualityConfig,
   CampaignTaskKind,
   GateTransitionAction,
   PullNextResponse,
+  SeedTaskItem,
   SeedTasksResponse,
   SubmitAssignmentResponse,
   TaskSummary,
@@ -58,7 +61,10 @@ export class TaskService {
 
   // --- Seed --------------------------------------------------------------
 
-  async seed(args: { slug: string; sampleRefs: readonly string[] }): Promise<SeedTasksResponse> {
+  async seed(args: {
+    slug: string;
+    sampleRefs: readonly SeedTaskItem[];
+  }): Promise<SeedTasksResponse> {
     const campaign = await this.campaigns.findBySlug(args.slug);
     if (!campaign) throw new NotFoundException(`Campaign '${args.slug}' not found`);
 
@@ -75,12 +81,63 @@ export class TaskService {
       throw new ConflictException('Cannot seed tasks on a COMPLETED campaign');
     }
 
+    // Normalise the union shape: a string ref is implicitly a non-gold
+    // sample. Gold rows MUST carry a label — the supervisor IRR-vs-
+    // gold computation has nothing to compare against otherwise.
+    const items = args.sampleRefs.map((raw, i) => {
+      if (typeof raw === 'string') return { sampleRef: raw, isGoldStandard: false };
+      if (raw.isGoldStandard && !raw.goldStandardLabel) {
+        throw new BadRequestException(
+          `sampleRefs[${i}]: gold-standard rows must include a goldStandardLabel`,
+        );
+      }
+      return {
+        sampleRef: raw.sampleRef,
+        isGoldStandard: raw.isGoldStandard,
+        ...(raw.goldStandardLabel ? { goldStandardLabel: raw.goldStandardLabel } : {}),
+      };
+    });
+
     const n = this.requireNAnnotators(campaign.workflowConfig);
-    const result = await this.tasks.seedTasks(campaign.id, n, args.sampleRefs);
+    const result = await this.tasks.seedTasks(campaign.id, n, items);
+    const goldCount = items.filter((i) => i.isGoldStandard).length;
     this.logger.log(
-      `seed: campaign=${campaign.slug} created=${result.created} skipped=${result.skipped} n=${n}`,
+      `seed: campaign=${campaign.slug} created=${result.created} skipped=${result.skipped} n=${n} gold=${goldCount}`,
     );
     return result;
+  }
+
+  /**
+   * Supervisor read of an annotator's IRR-vs-gold score for a
+   * campaign (#291, ADR-0009 Decision 4). Used by the supervisor
+   * inbox to decide which annotators are `calibrated` /
+   * `uncalibrated` / `flagged` per the calibration-state model. The
+   * auto-transition logic itself is the slice-3 follow-up (#292).
+   */
+  async annotatorQuality(args: {
+    slug: string;
+    annotatorUserId: string;
+  }): Promise<AnnotatorQualitySummary> {
+    const campaign = await this.campaigns.findBySlug(args.slug);
+    if (!campaign) throw new NotFoundException(`Campaign '${args.slug}' not found`);
+
+    const quality = readQualityConfig(campaign.workflowConfig);
+    const [pairs, goldTotal] = await Promise.all([
+      this.tasks.annotatorGoldPairs({
+        campaignId: campaign.id,
+        annotatorUserId: args.annotatorUserId,
+      }),
+      this.tasks.countGoldSamplesInCampaign(campaign.id),
+    ]);
+    const scored = annotatorVsGold({ metric: quality.metric, pairs });
+    return {
+      annotatorUserId: args.annotatorUserId,
+      goldSamplesScored: scored.scored,
+      goldSamplesTotal: goldTotal,
+      irrAgainstGold: scored.score,
+      metric: quality.metric,
+      threshold: quality.threshold,
+    };
   }
 
   async listForCampaign(slug: string): Promise<TaskSummary[]> {
@@ -138,6 +195,26 @@ export class TaskService {
     });
     if (existing) {
       return { assignment: toAssignmentSummary(existing, existing.task) };
+    }
+
+    // Bias-prevention 1.5× cap (ADR-0009 Decision 1 Predicate 4).
+    // The router refuses to give this caller another task if doing
+    // so would push their per-campaign share above the soft
+    // ceiling. EXPIRED rows are excluded (abandonment doesn't
+    // burden the cap per ADR-0009 + #229). When the cap binds the
+    // task stays in the queue for another annotator to pick up.
+    if (
+      !this.callerWithinBiasCap(
+        await this.tasks.biasCapInputs({
+          campaignId: campaign.id,
+          callerUserId: assigneeUserId,
+        }),
+      )
+    ) {
+      this.logger.log(
+        `pullNext: caller ${assigneeUserId} at the bias-prevention cap in campaign ${campaign.slug} — returning null`,
+      );
+      return { assignment: null };
     }
 
     const nextTask = await this.tasks.findNextEligibleTask({
@@ -364,6 +441,28 @@ export class TaskService {
    * configurable per campaign (a campaign manager might want their
    * expert-reviewer to drain arbitration backlog before gate-1).
    */
+  /**
+   * Bias-prevention soft ceiling per ADR-0009 Decision 1
+   * Predicate 4:
+   *
+   *   cap = ceil(totalTasks / max(1, nActiveAnnotators)) * 1.5
+   *
+   * Returns false when assigning the next task to this caller would
+   * push their share past the cap; the router then refuses + the
+   * task waits for another annotator. The "max(1, n)" guard handles
+   * the first-ever pull-next on a fresh campaign (no rows yet → no
+   * cap can possibly bind).
+   */
+  private callerWithinBiasCap(inputs: {
+    totalTasks: number;
+    nActiveAnnotators: number;
+    callerShare: number;
+  }): boolean {
+    const n = Math.max(1, inputs.nActiveAnnotators);
+    const cap = Math.ceil(inputs.totalTasks / n) * 1.5;
+    return inputs.callerShare + 1 <= cap;
+  }
+
   private gateFromGroups(groups: readonly string[]): AnnotationGateState | null {
     if (groups.includes('annotator')) return 'INDEPENDENT';
     if (groups.includes('arbitration-annotator')) return 'AWAITING_ARBITRATION';
@@ -433,6 +532,7 @@ function toTaskSummary(row: AnnotationTask, submittedCount: number): TaskSummary
     id: row.id,
     campaignId: row.campaignId,
     sampleRef: row.sampleRef,
+    isGoldStandard: row.isGoldStandard,
     gateState: row.gateState,
     nAnnotatorsRequired: row.nAnnotatorsRequired,
     submittedCount,

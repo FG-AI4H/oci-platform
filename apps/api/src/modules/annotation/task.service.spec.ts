@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -72,6 +73,8 @@ function taskRow(overrides: Partial<AnnotationTask> = {}): AnnotationTask {
     nAnnotatorsRequired: 1,
     gateState: 'INDEPENDENT' as AnnotationGateState,
     skipReason: null,
+    isGoldStandard: false,
+    goldStandardLabel: null,
     createdAt: new Date('2026-05-17T10:00:00Z'),
     updatedAt: new Date('2026-05-17T10:00:00Z'),
     completedAt: null,
@@ -111,6 +114,7 @@ interface TasksMock {
   submittedCountsForCampaign: ReturnType<typeof vi.fn>;
   findActiveAssignmentForUser: ReturnType<typeof vi.fn>;
   findNextEligibleTask: ReturnType<typeof vi.fn>;
+  biasCapInputs: ReturnType<typeof vi.fn>;
   createAssignment: ReturnType<typeof vi.fn>;
   findAssignmentById: ReturnType<typeof vi.fn>;
   markAssignmentSubmitted: ReturnType<typeof vi.fn>;
@@ -119,6 +123,8 @@ interface TasksMock {
   updateGateState: ReturnType<typeof vi.fn>;
   setAssignmentStatus: ReturnType<typeof vi.fn>;
   findTaskById: ReturnType<typeof vi.fn>;
+  annotatorGoldPairs: ReturnType<typeof vi.fn>;
+  countGoldSamplesInCampaign: ReturnType<typeof vi.fn>;
 }
 
 let campaigns: CampaignsMock;
@@ -144,6 +150,12 @@ beforeEach(() => {
     submittedCountsForCampaign: vi.fn().mockResolvedValue(new Map<string, number>()),
     findActiveAssignmentForUser: vi.fn(),
     findNextEligibleTask: vi.fn(),
+    // Default: cap doesn't bind (totalTasks=0 → cap=0 → callerShare+1>0
+    // would falsely bind, so seed with totalTasks=1 and callerShare=0
+    // → cap=⌈1/1⌉ × 1.5=1.5 → caller's first task slips under).
+    biasCapInputs: vi
+      .fn()
+      .mockResolvedValue({ totalTasks: 1, nActiveAnnotators: 1, callerShare: 0 }),
     createAssignment: vi.fn(),
     findAssignmentById: vi.fn(),
     markAssignmentSubmitted: vi.fn(),
@@ -158,6 +170,8 @@ beforeEach(() => {
     updateGateState: vi.fn(),
     setAssignmentStatus: vi.fn(),
     findTaskById: vi.fn(),
+    annotatorGoldPairs: vi.fn().mockResolvedValue([]),
+    countGoldSamplesInCampaign: vi.fn().mockResolvedValue(0),
   };
   service = new TaskService(
     campaigns as unknown as CampaignRepository,
@@ -174,7 +188,10 @@ describe('TaskService.seed', () => {
 
     const result = await service.seed({ slug: 'pilot', sampleRefs: ['a', 'b'] });
 
-    expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, ['a', 'b']);
+    expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [
+      { sampleRef: 'a', isGoldStandard: false },
+      { sampleRef: 'b', isGoldStandard: false },
+    ]);
     expect(result).toEqual({ created: 2, skipped: 0 });
   });
 
@@ -193,6 +210,77 @@ describe('TaskService.seed', () => {
     await expect(service.seed({ slug: 'nope', sampleRefs: ['a'] })).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  it('rejects gold-marked rows that lack a goldStandardLabel (#291)', async () => {
+    campaigns.findBySlug.mockResolvedValue(runningCampaign(3));
+    await expect(
+      service.seed({
+        slug: 'pilot',
+        sampleRefs: [{ sampleRef: 's-1', isGoldStandard: true }],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('accepts a mix of regular + gold rows on seed (#291)', async () => {
+    campaigns.findBySlug.mockResolvedValue(runningCampaign(3));
+    tasks.seedTasks.mockResolvedValue({ created: 2, skipped: 0 });
+
+    await service.seed({
+      slug: 'pilot',
+      sampleRefs: [
+        'plain-ref',
+        { sampleRef: 'gold-ref', isGoldStandard: true, goldStandardLabel: { label: 'pneumonia' } },
+      ],
+    });
+
+    expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [
+      { sampleRef: 'plain-ref', isGoldStandard: false },
+      {
+        sampleRef: 'gold-ref',
+        isGoldStandard: true,
+        goldStandardLabel: { label: 'pneumonia' },
+      },
+    ]);
+  });
+});
+
+// --- annotatorQuality (#291) ------------------------------------------------
+
+describe('TaskService.annotatorQuality', () => {
+  it('returns a null score when the annotator has scored no gold samples', async () => {
+    campaigns.findBySlug.mockResolvedValue(runningCampaign(3));
+    tasks.annotatorGoldPairs.mockResolvedValue([]);
+    tasks.countGoldSamplesInCampaign.mockResolvedValue(4);
+
+    const r = await service.annotatorQuality({
+      slug: 'pilot',
+      annotatorUserId: ANNOTATOR_UUID,
+    });
+
+    expect(r.goldSamplesScored).toBe(0);
+    expect(r.goldSamplesTotal).toBe(4);
+    expect(r.irrAgainstGold).toBeNull();
+    expect(r.metric).toBe('fleiss-kappa');
+  });
+
+  it('computes IRR-vs-gold for a perfectly-calibrated annotator', async () => {
+    campaigns.findBySlug.mockResolvedValue(runningCampaign(3));
+    tasks.annotatorGoldPairs.mockResolvedValue([
+      { submission: { label: 'a' }, gold: { label: 'a' } },
+      { submission: { label: 'b' }, gold: { label: 'b' } },
+      { submission: { label: 'a' }, gold: { label: 'a' } },
+      { submission: { label: 'b' }, gold: { label: 'b' } },
+    ]);
+    tasks.countGoldSamplesInCampaign.mockResolvedValue(4);
+
+    const r = await service.annotatorQuality({
+      slug: 'pilot',
+      annotatorUserId: ANNOTATOR_UUID,
+    });
+
+    expect(r.goldSamplesScored).toBe(4);
+    expect(r.irrAgainstGold).toBe(1);
   });
 });
 
@@ -344,6 +432,72 @@ describe('TaskService.pullNext', () => {
     expect(tasks.findNextEligibleTask).toHaveBeenCalledWith(
       expect.objectContaining({ gate: 'INDEPENDENT' }),
     );
+  });
+
+  // --- bias-prevention 1.5× cap (ADR-0009 predicate 4) ---------------------
+
+  it('refuses to assign when the caller would exceed the bias-prevention cap', async () => {
+    tasks.findActiveAssignmentForUser.mockResolvedValue(null);
+    // 8 tasks, 2 active annotators → cap = ceil(8/2) × 1.5 = 6.
+    // Caller already at 6 → next assignment would be 7th → over cap.
+    tasks.biasCapInputs.mockResolvedValueOnce({
+      totalTasks: 8,
+      nActiveAnnotators: 2,
+      callerShare: 6,
+    });
+
+    const result = await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(result.assignment).toBeNull();
+    // Router never even reaches findNextEligibleTask when the cap binds.
+    expect(tasks.findNextEligibleTask).not.toHaveBeenCalled();
+  });
+
+  it('lets a multi-role caller in when their share is still below the cap', async () => {
+    const task = taskRow();
+    tasks.findActiveAssignmentForUser.mockResolvedValue(null);
+    // 8 tasks, 2 active annotators → cap = 6. Caller at 5 → 6 just fits.
+    tasks.biasCapInputs.mockResolvedValueOnce({
+      totalTasks: 8,
+      nActiveAnnotators: 2,
+      callerShare: 5,
+    });
+    tasks.findNextEligibleTask.mockResolvedValue(task);
+    tasks.createAssignment.mockResolvedValue(assignmentRow());
+
+    const result = await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(result.assignment?.taskId).toBe('task-1');
+  });
+
+  it('does not bind when the caller is the only annotator and there is enough work', async () => {
+    const task = taskRow();
+    tasks.findActiveAssignmentForUser.mockResolvedValue(null);
+    // 8 tasks, only this annotator working (n=1) → cap = 8 × 1.5 = 12.
+    // Caller already at 4 → 5 ≤ 12 → fine.
+    tasks.biasCapInputs.mockResolvedValueOnce({
+      totalTasks: 8,
+      nActiveAnnotators: 1,
+      callerShare: 4,
+    });
+    tasks.findNextEligibleTask.mockResolvedValue(task);
+    tasks.createAssignment.mockResolvedValue(assignmentRow());
+
+    const result = await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(result.assignment).not.toBeNull();
   });
 });
 

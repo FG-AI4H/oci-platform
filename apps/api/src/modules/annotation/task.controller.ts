@@ -58,6 +58,22 @@ export class TaskController {
     return this.tasks.listForCampaign(slug);
   }
 
+  @Get('annotation/campaigns/:slug/annotators/:userId/quality')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'IRR-vs-gold quality summary for one annotator on a campaign (#291, supervisor view)',
+    description:
+      "Reads the annotator's SUBMITTED assignments on gold-standard tasks in this campaign and scores them against the campaign's quality metric. Returns null score when no gold samples have been scored yet.",
+  })
+  @UseGuards(CognitoJwtGuard, AnnotationRolesGuard)
+  @AnnotationRoles('campaign-manager', 'task-supervisor')
+  annotatorQuality(
+    @Param('slug', new ZodPipe(CampaignSlugSchema)) slug: CampaignSlug,
+    @Param('userId', new ZodPipe(AssignmentIdSchema)) userId: string,
+  ) {
+    return this.tasks.annotatorQuality({ slug, annotatorUserId: userId });
+  }
+
   @Post('annotation/campaigns/:slug/tasks/next')
   @ApiBearerAuth()
   @ApiOperation({

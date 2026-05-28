@@ -2407,9 +2407,35 @@ export const ANNOTATION_GATE_ROLES = {
   AWAITING_EXPERT: 'expert-reviewer',
 } as const satisfies Partial<Record<AnnotationGateState, string>>;
 
+/**
+ * One entry in the seed request — either a plain ref string (the
+ * legacy shape, treated as a non-gold sample) OR an object with the
+ * gold-standard label attached (#291, ADR-0009 Decision 4).
+ *
+ * Manager workflows that want to load a campaign with a mix of
+ * regular + gold samples can send the object form; the bulk paste-
+ * a-list-of-strings UX keeps working unchanged.
+ */
+export const SeedTaskItemSchema = z.union([
+  z.string().min(1).max(500),
+  z.object({
+    sampleRef: z.string().min(1).max(500),
+    isGoldStandard: z.boolean().default(false),
+    /**
+     * Expected submission for a gold sample. Same JSON shape as the
+     * annotator's submission payload — the supervisor `irrAgainstGold`
+     * computation compares them like-for-like. Required when
+     * `isGoldStandard` is true; the API rejects gold rows with no
+     * label.
+     */
+    goldStandardLabel: z.record(z.string(), z.unknown()).optional(),
+  }),
+]);
+export type SeedTaskItem = z.infer<typeof SeedTaskItemSchema>;
+
 export const SeedTasksRequestSchema = z.object({
-  /** Stable per-sample identifiers; one task created per ref. */
-  sampleRefs: z.array(z.string().min(1).max(500)).min(1).max(10_000),
+  /** Stable per-sample identifiers; one task created per entry. */
+  sampleRefs: z.array(SeedTaskItemSchema).min(1).max(10_000),
 });
 export type SeedTasksRequest = z.infer<typeof SeedTasksRequestSchema>;
 
@@ -2419,10 +2445,34 @@ export const SeedTasksResponseSchema = z.object({
 });
 export type SeedTasksResponse = z.infer<typeof SeedTasksResponseSchema>;
 
+/**
+ * Per-annotator quality summary computed against gold-standard samples
+ * (#291, ADR-0009 Decision 4 — `irrAgainstGold`). Supervisor inbox
+ * reads this to decide which annotators are calibrated and which
+ * should be auto-flagged. Per-modality + per-task-kind decomposition
+ * is the slice-3 follow-up under #292.
+ */
+export const AnnotatorQualitySummarySchema = z.object({
+  annotatorUserId: z.string().uuid(),
+  /** Number of gold samples this annotator has submitted on. */
+  goldSamplesScored: z.number().int().nonnegative(),
+  /** Total gold samples in the campaign (not yet attempted ≤ total). */
+  goldSamplesTotal: z.number().int().nonnegative(),
+  /** Mean IRR-vs-gold score in [0, 1]. Null when no gold samples scored yet. */
+  irrAgainstGold: z.number().min(0).max(1).nullable(),
+  /** Metric the score was computed with — matches CampaignQualityConfig.metric. */
+  metric: AnnotationQualityMetricSchema,
+  /** Threshold the campaign manager set. */
+  threshold: z.number().min(0).max(1),
+});
+export type AnnotatorQualitySummary = z.infer<typeof AnnotatorQualitySummarySchema>;
+
 export const TaskSummarySchema = z.object({
   id: z.string().uuid(),
   campaignId: z.string().uuid(),
   sampleRef: z.string(),
+  /** Gold-standard flag (#291). Drives the supervisor inbox + IRR-vs-gold scoring. */
+  isGoldStandard: z.boolean(),
   gateState: AnnotationGateStateSchema,
   nAnnotatorsRequired: z.number().int().min(1),
   /**
