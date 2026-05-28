@@ -19,6 +19,9 @@ import { TaskController } from './task.controller.js';
 import { TaskRepository } from './task.repository.js';
 import { TaskService } from './task.service.js';
 import { ToolIntegrationController } from './tool-integration.controller.js';
+import { ToolIntegrationContractController } from './tool-integration-contract.controller.js';
+import { ToolIntegrationRepository } from './tool-integration.repository.js';
+import { ToolIntegrationService } from './tool-integration.service.js';
 
 /**
  * Annotation module — Phase B.A.1 + #215 slice 2 surface.
@@ -41,6 +44,7 @@ import { ToolIntegrationController } from './tool-integration.controller.js';
     MetadataVisibilityController,
     TaskController,
     ToolIntegrationController,
+    ToolIntegrationContractController,
   ],
   providers: [
     PrismaService,
@@ -55,6 +59,8 @@ import { ToolIntegrationController } from './tool-integration.controller.js';
     TaskRepository,
     TaskAbandonmentService,
     TaskAbandonmentScheduler,
+    ToolIntegrationService,
+    ToolIntegrationRepository,
     AnnotationRolesGuard,
   ],
   exports: [

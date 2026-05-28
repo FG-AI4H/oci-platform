@@ -956,27 +956,121 @@ model RemoteDataset {
 /// ADR-0007). Phase B.A.1 seeds two stub rows (`monai-label`, `visian`)
 /// so the campaign-create UI has tool options to bind to.
 model AnnotationToolIntegration {
-  id                 String             @id @default(uuid()) @db.Uuid
+  id                     String                   @id @default(uuid()) @db.Uuid
   /// URL-safe identifier, e.g. "monai-label". Unique.
-  slug               String             @unique
-  name               String
-  vendor             String
-  /// Latest semver of the adapter (per ADR-0007 versioning).
-  version            String
-  isActive           Boolean            @default(true) @map("is_active")
+  slug                   String                   @unique
+  name                   String
+  vendor                 String
+  /// Vendor homepage / docs (ADR-0007 capability matrix). Optional.
+  homepageUrl            String?                  @map("homepage_url")
+  /// Latest semver of the adapter (per ADR-0007 versioning). Mirrors
+  /// the `isCurrent` row in `versions`; kept for the picker summary.
+  version                String
+  isActive               Boolean                  @default(true) @map("is_active")
   /// Task kinds this tool can handle. Used to filter the tool picker
   /// on `/annotation/campaigns/new` after a task kind is selected
-  /// (user feedback 2026-05-16). The full per-task capability matrix
-  /// from ADR-0007 (containers, signed-handoff routes, schemaProfiles)
-  /// lands with #214; this column is the minimum to make the picker
-  /// safe today.
-  supportedTaskKinds CampaignTaskKind[] @map("supported_task_kinds")
-  createdAt          DateTime           @default(now()) @map("created_at")
-  updatedAt          DateTime           @updatedAt @map("updated_at")
+  /// (user feedback 2026-05-16).
+  supportedTaskKinds     CampaignTaskKind[]       @map("supported_task_kinds")
+  /// Capability matrix (ADR-0007). Vocabulary enforced by the Zod
+  /// `ToolCapabilityMatrixSchema` in `@oci/shared-types`; stored as
+  /// string arrays so the vocabulary can grow without a migration.
+  modalities             String[]                 @default([])
+  annotationTypes        String[]                 @default([]) @map("annotation_types")
+  supportsPreAnnotation  Boolean                  @default(false) @map("supports_pre_annotation")
+  supportsActiveLearning Boolean                  @default(false) @map("supports_active_learning")
+  /// Auth + launch posture (ADR-0007 §"Auth modes"). `RFC8693` is the
+  /// preferred mode for all new adapters; the live token-exchange wiring
+  /// lands with the security-boundary follow-up.
+  authMode               AnnotationToolAuthMode   @default(RFC8693) @map("auth_mode")
+  launchMode             AnnotationToolLaunchMode @default(REDIRECT) @map("launch_mode")
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
 
   campaigns AnnotationCampaign[]
+  versions  AnnotationToolIntegrationVersion[]
+  receipts  AnnotationToolCallbackReceipt[]
 
   @@map("annotation_tool_integrations")
+  @@schema("annotation")
+}
+
+/// Versioned adapter contract (ADR-0007 §"Versioning"). Every adapter
+/// release is a row; `Campaign.toolVersionId` pins a campaign to the
+/// version it started with (immutable once RUNNING). Breaking changes to
+/// `schemaProfile` / `launchUrlTemplate` require a new major version.
+model AnnotationToolIntegrationVersion {
+  id                String   @id @default(uuid()) @db.Uuid
+  integrationId     String   @map("integration_id") @db.Uuid
+  /// Semver, e.g. "1.2.0". Unique per integration.
+  version           String
+  /// Identifier of the Zod schema (in the annotation module's
+  /// schema-profile registry) used to validate callback payloads for
+  /// this version, e.g. "classification-v1".
+  schemaProfile     String   @map("schema_profile")
+  /// Templated launch URL; `{token}` / `{taskId}` placeholders filled at
+  /// handoff. No secrets — presigned bytes + exchanged token are added
+  /// at the API boundary (security follow-up).
+  launchUrlTemplate String   @map("launch_url_template")
+  /// Path the tool POSTs results back to, relative to the integration.
+  callbackUrlPath   String   @map("callback_url_path")
+  /// Output formats this version can emit (ADR-0007). Vocabulary
+  /// enforced by Zod at the boundary.
+  outputFormats     String[] @default([]) @map("output_formats")
+  releaseNotes      String?  @map("release_notes")
+  /// Exactly one version per integration is current (enforced in the
+  /// service, not the DB, so promotion is a single transaction).
+  isCurrent         Boolean  @default(false) @map("is_current")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  integration AnnotationToolIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  campaigns   AnnotationCampaign[]
+
+  @@unique([integrationId, version])
+  @@index([integrationId, isCurrent])
+  @@map("annotation_tool_integration_versions")
+  @@schema("annotation")
+}
+
+/// Idempotency + audit record for tool callbacks (ADR-0007 §"Submission
+/// contract"). A repeat callback with the same `X-OCI-Idempotency-Key`
+/// returns the cached response instead of re-processing. Durable (DB) so
+/// idempotency survives a restart; Redis is a later optimisation.
+model AnnotationToolCallbackReceipt {
+  id             String   @id @default(uuid()) @db.Uuid
+  /// Client-supplied idempotency key, unique per integration.
+  idempotencyKey String   @map("idempotency_key")
+  integrationId  String   @map("integration_id") @db.Uuid
+  versionId      String?  @map("version_id") @db.Uuid
+  /// sha256 of the canonical validated payload — lets us detect a key
+  /// reused with a *different* body (a client bug worth a 409).
+  payloadHash    String   @map("payload_hash") @db.Char(64)
+  /// HTTP status returned on first processing (202), replayed verbatim.
+  responseStatus Int      @map("response_status")
+  /// Cached response body returned on replay.
+  responseBody   Json     @map("response_body")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  integration AnnotationToolIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, idempotencyKey])
+  @@map("annotation_tool_callback_receipts")
+  @@schema("annotation")
+}
+
+enum AnnotationToolAuthMode {
+  RFC8693
+  API_KEY
+  IFRAME_POSTMESSAGE
+
+  @@schema("annotation")
+}
+
+enum AnnotationToolLaunchMode {
+  REDIRECT
+  IFRAME
+  POPUP
+  DESKTOP_HANDOFF
+
   @@schema("annotation")
 }
 
@@ -1000,9 +1094,15 @@ model AnnotationCampaign {
 
   /// Soft FK → catalog.datasets.id (ADR-0006 Decision 6). Hard FK lands
   /// in B.A.2 along with manifest-version pinning.
-  datasetId         String @map("dataset_id") @db.Uuid
+  datasetId         String  @map("dataset_id") @db.Uuid
   /// Real FK to annotation_tool_integrations.id.
-  toolIntegrationId String @map("tool_integration_id") @db.Uuid
+  toolIntegrationId String  @map("tool_integration_id") @db.Uuid
+  /// FK to annotation_tool_integration_versions.id (ADR-0007 §Versioning).
+  /// Pins the campaign to the adapter version it started with; immutable
+  /// once the campaign transitions to RUNNING (enforced in the service).
+  /// Nullable: campaigns created before #214 have no pinned version and
+  /// resolve the integration's current version at handoff.
+  toolVersionId     String? @map("tool_version_id") @db.Uuid
 
   /// Output license for the resulting annotation distribution (ADR-0012
   /// Decision 3). SPDX identifier or `custom-restricted`. Immutable
@@ -1041,7 +1141,8 @@ model AnnotationCampaign {
   startedAt   DateTime? @map("started_at")
   completedAt DateTime? @map("completed_at")
 
-  toolIntegration AnnotationToolIntegration        @relation(fields: [toolIntegrationId], references: [id])
+  toolIntegration AnnotationToolIntegration         @relation(fields: [toolIntegrationId], references: [id])
+  toolVersion     AnnotationToolIntegrationVersion? @relation(fields: [toolVersionId], references: [id])
   instructions    AnnotationCampaignInstructions[]
 
   @@index([status])
