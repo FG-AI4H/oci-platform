@@ -10,6 +10,8 @@ import { CampaignService } from './campaign.service.js';
 import { CampaignRepository } from './campaign.repository.js';
 import { InstructionsController } from './instructions.controller.js';
 import { InstructionsService } from './instructions.service.js';
+import { MetadataVisibilityController } from './metadata-visibility.controller.js';
+import { MetadataVisibilityService } from './metadata-visibility.service.js';
 import { AnnotationRolesGuard } from './roles.guard.js';
 import { TaskAbandonmentScheduler } from './task-abandonment.scheduler.js';
 import { TaskAbandonmentService } from './task-abandonment.service.js';
@@ -36,6 +38,7 @@ import { ToolIntegrationController } from './tool-integration.controller.js';
     CalibrationController,
     CampaignController,
     InstructionsController,
+    MetadataVisibilityController,
     TaskController,
     ToolIntegrationController,
   ],
@@ -47,6 +50,7 @@ import { ToolIntegrationController } from './tool-integration.controller.js';
     CampaignService,
     CampaignRepository,
     InstructionsService,
+    MetadataVisibilityService,
     TaskService,
     TaskRepository,
     TaskAbandonmentService,
@@ -57,6 +61,7 @@ import { ToolIntegrationController } from './tool-integration.controller.js';
     CalibrationService,
     CampaignService,
     InstructionsService,
+    MetadataVisibilityService,
     TaskService,
     TaskAbandonmentService,
   ],

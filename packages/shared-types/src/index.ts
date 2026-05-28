@@ -2051,6 +2051,212 @@ export const CampaignQualityConfigSchema = z.object({
 export type CampaignQualityConfig = z.infer<typeof CampaignQualityConfigSchema>;
 
 // ---------------------------------------------------------------------------
+// Metadata-exposure + blinding engine (ADR-0010 Decisions 1 + 2 + 4).
+//
+// Four buckets decide what an annotator sees, per field, per gate:
+//   required — always shipped (modality, body part, view, slice index…)
+//   optional — hidden at gate 1; shown at gate 2/3 (age bin, sex, site…)
+//   hidden   — hidden by default; the manager may promote individual
+//              fields per gate (prior diagnoses, radiology reports,
+//              peer labels, scanner make, demographic facets…)
+//   never    — PHI / direct identifiers; SERVER-SIDE FILTERED regardless
+//              of campaign config (the 18 HIPAA Safe-Harbor identifiers)
+//
+// `never` is a hard floor: if the OCI default table or the dataset's
+// Croissant `oci:annotationVisibility` tag classifies a field `never`,
+// no campaign-manager override can ever expose it. Default-hide is the
+// stance for unknown fields — priming bias is real and the burden is
+// flipped onto opting fields *in*, not out.
+// ---------------------------------------------------------------------------
+
+export const MetadataVisibilityBucketSchema = z.enum(['required', 'optional', 'hidden', 'never']);
+export type MetadataVisibilityBucket = z.infer<typeof MetadataVisibilityBucketSchema>;
+
+/**
+ * Gate-progressive unblinding (ADR-0010 Decision 2). The deeper the
+ * review, the more context the reviewer needs. Mapped from the
+ * `AnnotationGateState` machine: INDEPENDENT → independent,
+ * AWAITING_ARBITRATION → arbitration, AWAITING_EXPERT → expert.
+ */
+export const MetadataVisibilityGateSchema = z.enum(['independent', 'arbitration', 'expert']);
+export type MetadataVisibilityGate = z.infer<typeof MetadataVisibilityGateSchema>;
+
+/**
+ * Map an `AnnotationGateState` value to the visibility gate that
+ * governs what the annotator sees while working it. COMPLETED /
+ * SKIPPED (and any unknown value) have no live annotator view, so they
+ * resolve to the most conservative gate (`independent`) — a stray
+ * handoff can never widen exposure.
+ */
+export function visibilityGateForGateState(gateState: string): MetadataVisibilityGate {
+  switch (gateState) {
+    case 'AWAITING_ARBITRATION':
+      return 'arbitration';
+    case 'AWAITING_EXPERT':
+      return 'expert';
+    default:
+      return 'independent';
+  }
+}
+
+/**
+ * Per-field campaign-manager rule (ADR-0010 Decision 1, source-of-truth
+ * priority 1). `rationale` is required by the UI when a manager
+ * promotes a field out of `hidden`; `promotedAtGates` lists the gates
+ * at which an `optional`/`hidden` field becomes visible beyond the
+ * gate defaults (e.g. an expert seeing prior diagnoses at gate 3).
+ */
+export const FieldVisibilityRuleSchema = z.object({
+  bucket: MetadataVisibilityBucketSchema,
+  rationale: z.string().max(500).optional(),
+  promotedAtGates: z.array(MetadataVisibilityGateSchema).default([]),
+});
+export type FieldVisibilityRule = z.infer<typeof FieldVisibilityRuleSchema>;
+
+/**
+ * Campaign metadata-visibility config (ADR-0010 Decisions 1 + 2).
+ * Stored as JSONB on the campaign, versioned by content hash (same
+ * pattern as the workflow config). `fieldOverrides` maps a metadata
+ * field name to a manager rule; fields absent here fall through to the
+ * Croissant tag, then the OCI default table. `trainingGrade` lets
+ * calibration-only campaigns promote more fields at gate 1.
+ */
+export const CampaignVisibilityConfigSchema = z.object({
+  version: z.string().min(1),
+  fieldOverrides: z.record(z.string(), FieldVisibilityRuleSchema).default({}),
+  trainingGrade: z.boolean().default(false),
+});
+export type CampaignVisibilityConfig = z.infer<typeof CampaignVisibilityConfigSchema>;
+
+/**
+ * Per-annotation audit record (ADR-0010 Decision 4) — exactly what was
+ * delivered to one annotator-sample pair. `visibilityConfigHash` ties
+ * the row to an immutable record of the policy in effect;
+ * `deliveredFields` is the concrete field list shipped to the UI
+ * (`optional` fields may have been suppressed per-sample).
+ */
+export const MetadataExposureProfileSchema = z.object({
+  visibilityConfigHash: z.string(),
+  visibilityConfigVersion: z.string(),
+  deliveredFields: z.array(z.string()),
+});
+export type MetadataExposureProfile = z.infer<typeof MetadataExposureProfileSchema>;
+
+/**
+ * Handoff metadata bundle (ADR-0010 amendment to ADR-0007). Only
+ * `required` + gate-permitted `optional` fields ever appear; nothing
+ * from `hidden` or `never` is included. Ships alongside the presigned
+ * sample URL.
+ */
+export const MetadataBundleSchema = z.object({
+  required: z.record(z.string(), z.unknown()).default({}),
+  optional: z.record(z.string(), z.unknown()).default({}),
+});
+export type MetadataBundle = z.infer<typeof MetadataBundleSchema>;
+
+/**
+ * Resolve the effective bucket for a single field (ADR-0010 Decision 1
+ * source-of-truth priority). `never` is a hard floor — a field the OCI
+ * default table or the Croissant tag marks `never` (PHI / direct
+ * identifier) can never be promoted by a campaign-manager override.
+ * Otherwise: manager override → Croissant tag → OCI default → fallback
+ * `hidden` (default-hide is the ADR's whole stance).
+ */
+export function resolveFieldBucket(sources: {
+  managerBucket?: MetadataVisibilityBucket;
+  croissantBucket?: MetadataVisibilityBucket;
+  defaultBucket?: MetadataVisibilityBucket;
+}): MetadataVisibilityBucket {
+  if (sources.defaultBucket === 'never' || sources.croissantBucket === 'never') return 'never';
+  return sources.managerBucket ?? sources.croissantBucket ?? sources.defaultBucket ?? 'hidden';
+}
+
+/**
+ * Whether a field in a given bucket is visible to the annotator at a
+ * given gate (ADR-0010 Decision 2 gate matrix):
+ *   gate 1 (independent): required only
+ *   gate 2 (arbitration): required + optional
+ *   gate 3 (expert):      required + optional + manager-promoted hidden
+ * `trainingGrade` campaigns may promote optional/hidden at gate 1;
+ * `promotedAtGates` widens an individual field beyond the defaults.
+ */
+export function isFieldVisibleAtGate(
+  bucket: MetadataVisibilityBucket,
+  gate: MetadataVisibilityGate,
+  opts: { promotedAtGates?: MetadataVisibilityGate[]; trainingGrade?: boolean } = {},
+): boolean {
+  if (bucket === 'never') return false;
+  if (bucket === 'required') return true;
+  const promoted = opts.promotedAtGates?.includes(gate) ?? false;
+  if (bucket === 'optional') {
+    if (gate === 'arbitration' || gate === 'expert') return true;
+    return promoted || (opts.trainingGrade ?? false);
+  }
+  // hidden — only ever surfaced by an explicit per-field promotion
+  if (gate === 'expert' && promoted) return true;
+  if (gate === 'independent' && (opts.trainingGrade ?? false) && promoted) return true;
+  return false;
+}
+
+/**
+ * Compose the handoff metadata bundle + delivered-field list for one
+ * sample at one gate (ADR-0010 Decisions 1 + 2). The caller supplies a
+ * `resolve` closure (wiring in the manager override / Croissant tag /
+ * OCI default) so this stays pure + table-agnostic. Fields landing in
+ * `never`/`hidden` (or not gate-permitted) are dropped — they never
+ * reach the annotator UI. Field order is sorted for deterministic
+ * `deliveredFields`.
+ */
+export function composeMetadataBundle(
+  sampleMetadata: Record<string, unknown>,
+  gate: MetadataVisibilityGate,
+  resolve: (field: string) => {
+    bucket: MetadataVisibilityBucket;
+    promotedAtGates?: MetadataVisibilityGate[];
+  },
+  opts: { trainingGrade?: boolean } = {},
+): { bundle: MetadataBundle; deliveredFields: string[] } {
+  const bundle: MetadataBundle = { required: {}, optional: {} };
+  const deliveredFields: string[] = [];
+  for (const field of Object.keys(sampleMetadata).sort()) {
+    const { bucket, promotedAtGates } = resolve(field);
+    if (
+      !isFieldVisibleAtGate(bucket, gate, { promotedAtGates, trainingGrade: opts.trainingGrade })
+    ) {
+      continue;
+    }
+    if (bucket === 'required') bundle.required[field] = sampleMetadata[field];
+    else bundle.optional[field] = sampleMetadata[field];
+    deliveredFields.push(field);
+  }
+  return { bundle, deliveredFields };
+}
+
+/**
+ * Deterministic JSON serialisation of a visibility config for hashing
+ * (ADR-0010 Decision 4 `visibilityConfigHash`). Recursively sorts
+ * object keys so structurally-identical configs always hash the same
+ * regardless of key insertion order. Scoped to the JSON shapes a
+ * `CampaignVisibilityConfig` contains — not a general stable-stringify.
+ */
+export function canonicalVisibilityConfigString(config: CampaignVisibilityConfig): string {
+  const sortValue = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(sortValue);
+    if (v !== null && typeof v === 'object') {
+      const obj = v as Record<string, unknown>;
+      return Object.keys(obj)
+        .sort()
+        .reduce<Record<string, unknown>>((acc, k) => {
+          acc[k] = sortValue(obj[k]);
+          return acc;
+        }, {});
+    }
+    return v;
+  };
+  return JSON.stringify(sortValue(config));
+}
+
+// ---------------------------------------------------------------------------
 // Annotator calibration drift detection (#292, ADR-0009 Decision 4 + 5).
 //
 // Two transitions:
@@ -2412,6 +2618,37 @@ export const SeedTasksRequestSchema = z.object({
   sampleRefs: z.array(z.string().min(1).max(500)).min(1).max(10_000),
 });
 export type SeedTasksRequest = z.infer<typeof SeedTasksRequestSchema>;
+
+/**
+ * Request body for `POST .../metadata-visibility/preview` (ADR-0010).
+ * Given a sample's full metadata set + a gate, returns the
+ * server-side-filtered handoff bundle + exposure profile — the same
+ * filtering the real handoff applies (#214). `croissantTags` carries
+ * the dataset's per-field `oci:annotationVisibility` tags when known.
+ */
+export const MetadataVisibilityPreviewRequestSchema = z.object({
+  sampleMetadata: z.record(z.string(), z.unknown()),
+  gateState: AnnotationGateStateSchema.default('INDEPENDENT'),
+  croissantTags: z.record(z.string(), MetadataVisibilityBucketSchema).default({}),
+});
+export type MetadataVisibilityPreviewRequest = z.infer<
+  typeof MetadataVisibilityPreviewRequestSchema
+>;
+
+/**
+ * Request body for `POST .../metadata-visibility/resolve` — the
+ * campaign-create checklist (#222). For each field name, returns the
+ * resolved bucket, the winning source, and whether it's visible at the
+ * requested gate.
+ */
+export const MetadataVisibilityResolveRequestSchema = z.object({
+  fields: z.array(z.string().min(1)).min(1).max(2000),
+  gateState: AnnotationGateStateSchema.default('INDEPENDENT'),
+  croissantTags: z.record(z.string(), MetadataVisibilityBucketSchema).default({}),
+});
+export type MetadataVisibilityResolveRequest = z.infer<
+  typeof MetadataVisibilityResolveRequestSchema
+>;
 
 export const SeedTasksResponseSchema = z.object({
   created: z.number().int().nonnegative(),
