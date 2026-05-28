@@ -2621,6 +2621,153 @@ export const AnnotationAssignmentStatusSchema = z.enum([
 ]);
 export type AnnotationAssignmentStatus = z.infer<typeof AnnotationAssignmentStatusSchema>;
 
+// ---------------------------------------------------------------------------
+// Annotation tool-integration contract (ADR-0007, #214)
+// ---------------------------------------------------------------------------
+
+/** Auth posture for a tool adapter (ADR-0007 §"Auth modes"). `RFC8693`
+ * is preferred for all new adapters; the live token-exchange wiring is a
+ * security-boundary follow-up. */
+export const AnnotationToolAuthModeSchema = z.enum(['RFC8693', 'API_KEY', 'IFRAME_POSTMESSAGE']);
+export type AnnotationToolAuthMode = z.infer<typeof AnnotationToolAuthModeSchema>;
+
+/** How the tool is launched for the annotator (ADR-0007). */
+export const AnnotationToolLaunchModeSchema = z.enum([
+  'REDIRECT',
+  'IFRAME',
+  'POPUP',
+  'DESKTOP_HANDOFF',
+]);
+export type AnnotationToolLaunchMode = z.infer<typeof AnnotationToolLaunchModeSchema>;
+
+/** Sample modalities a tool can edit (ADR-0007 capability matrix). */
+export const ToolModalitySchema = z.enum([
+  'image-2d',
+  'image-3d',
+  'video',
+  'audio',
+  'text',
+  'multimodal',
+]);
+export type ToolModality = z.infer<typeof ToolModalitySchema>;
+
+/** Annotation primitive types a tool can produce (ADR-0007). */
+export const ToolAnnotationTypeSchema = z.enum([
+  'classification',
+  'bbox',
+  'polygon',
+  'polyline',
+  'mask',
+  'keypoint',
+  'segmentation',
+  '3d-roi',
+]);
+export type ToolAnnotationType = z.infer<typeof ToolAnnotationTypeSchema>;
+
+/** Output formats a tool version can emit (ADR-0007). */
+export const ToolOutputFormatSchema = z.enum([
+  'dicom-sr',
+  'fhir-observation',
+  'coco',
+  'jsonl-custom',
+]);
+export type ToolOutputFormat = z.infer<typeof ToolOutputFormatSchema>;
+
+/** Semver string for adapter versions (ADR-0007 §"Versioning"). */
+export const ToolSemVerSchema = z
+  .string()
+  .regex(/^\d+\.\d+\.\d+$/, 'must be a semver string like 1.2.0');
+
+/** Typed capability matrix for an adapter (ADR-0007 Decision). */
+export const ToolCapabilityMatrixSchema = z.object({
+  modalities: z.array(ToolModalitySchema),
+  annotationTypes: z.array(ToolAnnotationTypeSchema),
+  taskKinds: z.array(CampaignTaskKindSchema),
+  supportsPreAnnotation: z.boolean().default(false),
+  supportsActiveLearning: z.boolean().default(false),
+});
+export type ToolCapabilityMatrix = z.infer<typeof ToolCapabilityMatrixSchema>;
+
+/** A versioned adapter contract row (ADR-0007 §"Versioning"). */
+export const ToolIntegrationVersionSchema = z.object({
+  id: z.string().uuid(),
+  integrationId: z.string().uuid(),
+  version: ToolSemVerSchema,
+  /** Zod schema id in the annotation module's schema-profile registry. */
+  schemaProfile: z.string().min(1),
+  launchUrlTemplate: z.string().min(1),
+  callbackUrlPath: z.string().startsWith('/'),
+  outputFormats: z.array(ToolOutputFormatSchema),
+  releaseNotes: z.string().nullable(),
+  isCurrent: z.boolean(),
+  createdAt: z.string(), // ISO 8601
+});
+export type ToolIntegrationVersion = z.infer<typeof ToolIntegrationVersionSchema>;
+
+/** Full integration detail with capability matrix + versions (ADR-0007). */
+export const ToolIntegrationDetailSchema = AnnotationToolIntegrationSummarySchema.extend({
+  homepageUrl: z.string().nullable(),
+  capabilities: ToolCapabilityMatrixSchema,
+  authMode: AnnotationToolAuthModeSchema,
+  launchMode: AnnotationToolLaunchModeSchema,
+  versions: z.array(ToolIntegrationVersionSchema),
+});
+export type ToolIntegrationDetail = z.infer<typeof ToolIntegrationDetailSchema>;
+
+/** `POST /v2/annotation/integrations/:id/handoff` request. */
+export const ToolHandoffRequestSchema = z.object({
+  assignmentId: z.string().uuid(),
+});
+export type ToolHandoffRequest = z.infer<typeof ToolHandoffRequestSchema>;
+
+/**
+ * Handoff descriptor returned to the annotator UI (ADR-0007 §"Handoff
+ * protocol"). The RFC 8693 exchanged `launchToken` and the presigned
+ * `sampleUrl` are added by the security-boundary follow-up; in this
+ * slice they are `null`. The `metadataBundle` is server-side filtered
+ * per ADR-0010 — `hidden`/`never` fields never appear.
+ */
+export const ToolHandoffDescriptorSchema = z.object({
+  integrationId: z.string().uuid(),
+  integrationSlug: z.string(),
+  version: ToolSemVerSchema,
+  schemaProfile: z.string().min(1),
+  launchUrlTemplate: z.string().min(1),
+  callbackUrlPath: z.string().startsWith('/'),
+  authMode: AnnotationToolAuthModeSchema,
+  launchMode: AnnotationToolLaunchModeSchema,
+  assignmentId: z.string().uuid(),
+  taskId: z.string().uuid(),
+  gate: AnnotationGateStateSchema,
+  metadataBundle: MetadataBundleSchema,
+  /** RFC 8693 exchanged token — null until the security follow-up. */
+  launchToken: z.string().nullable(),
+  /** Presigned S3 URL for sample bytes — null until the security follow-up. */
+  sampleUrl: z.string().nullable(),
+});
+export type ToolHandoffDescriptor = z.infer<typeof ToolHandoffDescriptorSchema>;
+
+/**
+ * `POST /v2/annotation/integrations/:id/callback` envelope (ADR-0007
+ * §"Submission contract"). The inner `payload` is validated against the
+ * pinned version's `schemaProfile` by the service, not here.
+ */
+export const ToolCallbackRequestSchema = z.object({
+  assignmentId: z.string().uuid(),
+  versionId: z.string().uuid(),
+  payload: z.record(z.string(), z.unknown()),
+});
+export type ToolCallbackRequest = z.infer<typeof ToolCallbackRequestSchema>;
+
+/** Callback result. `accepted` on first processing, `duplicate` on an
+ * idempotent replay with the same key + body. */
+export const ToolCallbackResponseSchema = z.object({
+  status: z.enum(['accepted', 'duplicate']),
+  receiptId: z.string().uuid(),
+  assignmentId: z.string().uuid(),
+});
+export type ToolCallbackResponse = z.infer<typeof ToolCallbackResponseSchema>;
+
 /**
  * Cognito groups eligible for annotation work at each gate. The router
  * (`apps/api/src/modules/annotation/task.service.ts`) matches the
