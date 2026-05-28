@@ -8,14 +8,17 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { annotatorVsGold } from '@oci/annotation-quality';
 import type { AnnotationGateState, AnnotationTask, AnnotationTaskAssignment } from '@oci/database';
 import type {
+  AnnotatorQualitySummary,
   AssignmentSummary,
   CampaignCompletenessMode,
   CampaignQualityConfig,
   CampaignTaskKind,
   GateTransitionAction,
   PullNextResponse,
+  SeedTaskItem,
   SeedTasksResponse,
   SubmitAssignmentResponse,
   TaskSummary,
@@ -58,7 +61,10 @@ export class TaskService {
 
   // --- Seed --------------------------------------------------------------
 
-  async seed(args: { slug: string; sampleRefs: readonly string[] }): Promise<SeedTasksResponse> {
+  async seed(args: {
+    slug: string;
+    sampleRefs: readonly SeedTaskItem[];
+  }): Promise<SeedTasksResponse> {
     const campaign = await this.campaigns.findBySlug(args.slug);
     if (!campaign) throw new NotFoundException(`Campaign '${args.slug}' not found`);
 
@@ -75,12 +81,63 @@ export class TaskService {
       throw new ConflictException('Cannot seed tasks on a COMPLETED campaign');
     }
 
+    // Normalise the union shape: a string ref is implicitly a non-gold
+    // sample. Gold rows MUST carry a label — the supervisor IRR-vs-
+    // gold computation has nothing to compare against otherwise.
+    const items = args.sampleRefs.map((raw, i) => {
+      if (typeof raw === 'string') return { sampleRef: raw, isGoldStandard: false };
+      if (raw.isGoldStandard && !raw.goldStandardLabel) {
+        throw new BadRequestException(
+          `sampleRefs[${i}]: gold-standard rows must include a goldStandardLabel`,
+        );
+      }
+      return {
+        sampleRef: raw.sampleRef,
+        isGoldStandard: raw.isGoldStandard,
+        ...(raw.goldStandardLabel ? { goldStandardLabel: raw.goldStandardLabel } : {}),
+      };
+    });
+
     const n = this.requireNAnnotators(campaign.workflowConfig);
-    const result = await this.tasks.seedTasks(campaign.id, n, args.sampleRefs);
+    const result = await this.tasks.seedTasks(campaign.id, n, items);
+    const goldCount = items.filter((i) => i.isGoldStandard).length;
     this.logger.log(
-      `seed: campaign=${campaign.slug} created=${result.created} skipped=${result.skipped} n=${n}`,
+      `seed: campaign=${campaign.slug} created=${result.created} skipped=${result.skipped} n=${n} gold=${goldCount}`,
     );
     return result;
+  }
+
+  /**
+   * Supervisor read of an annotator's IRR-vs-gold score for a
+   * campaign (#291, ADR-0009 Decision 4). Used by the supervisor
+   * inbox to decide which annotators are `calibrated` /
+   * `uncalibrated` / `flagged` per the calibration-state model. The
+   * auto-transition logic itself is the slice-3 follow-up (#292).
+   */
+  async annotatorQuality(args: {
+    slug: string;
+    annotatorUserId: string;
+  }): Promise<AnnotatorQualitySummary> {
+    const campaign = await this.campaigns.findBySlug(args.slug);
+    if (!campaign) throw new NotFoundException(`Campaign '${args.slug}' not found`);
+
+    const quality = readQualityConfig(campaign.workflowConfig);
+    const [pairs, goldTotal] = await Promise.all([
+      this.tasks.annotatorGoldPairs({
+        campaignId: campaign.id,
+        annotatorUserId: args.annotatorUserId,
+      }),
+      this.tasks.countGoldSamplesInCampaign(campaign.id),
+    ]);
+    const scored = annotatorVsGold({ metric: quality.metric, pairs });
+    return {
+      annotatorUserId: args.annotatorUserId,
+      goldSamplesScored: scored.scored,
+      goldSamplesTotal: goldTotal,
+      irrAgainstGold: scored.score,
+      metric: quality.metric,
+      threshold: quality.threshold,
+    };
   }
 
   async listForCampaign(slug: string): Promise<TaskSummary[]> {
@@ -475,6 +532,7 @@ function toTaskSummary(row: AnnotationTask, submittedCount: number): TaskSummary
     id: row.id,
     campaignId: row.campaignId,
     sampleRef: row.sampleRef,
+    isGoldStandard: row.isGoldStandard,
     gateState: row.gateState,
     nAnnotatorsRequired: row.nAnnotatorsRequired,
     submittedCount,
