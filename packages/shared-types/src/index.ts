@@ -2199,6 +2199,26 @@ export function isFieldVisibleAtGate(
 }
 
 /**
+ * Prototype-pollution-safe dynamic-property helpers for the
+ * metadata-visibility functions below, which key plain objects by
+ * *external* metadata field names. `security/detect-object-injection`
+ * flags every computed member access; these centralise the guard so the
+ * disable lives in one audited place. `__proto__`/`constructor`/
+ * `prototype` keys are dropped — they are never valid metadata fields.
+ */
+const PROTO_POLLUTION_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+function readFieldValue(record: Record<string, unknown>, key: string): unknown {
+  if (PROTO_POLLUTION_KEYS.has(key) || !Object.hasOwn(record, key)) return undefined;
+  // eslint-disable-next-line security/detect-object-injection -- key screened against prototype-pollution keys and verified own-property above
+  return record[key];
+}
+function writeFieldValue(target: Record<string, unknown>, key: string, value: unknown): void {
+  if (PROTO_POLLUTION_KEYS.has(key)) return;
+  // eslint-disable-next-line security/detect-object-injection -- key screened against prototype-pollution keys above; target is a fresh local record
+  target[key] = value;
+}
+
+/**
  * Compose the handoff metadata bundle + delivered-field list for one
  * sample at one gate (ADR-0010 Decisions 1 + 2). The caller supplies a
  * `resolve` closure (wiring in the manager override / Croissant tag /
@@ -2225,8 +2245,9 @@ export function composeMetadataBundle(
     ) {
       continue;
     }
-    if (bucket === 'required') bundle.required[field] = sampleMetadata[field];
-    else bundle.optional[field] = sampleMetadata[field];
+    const value = readFieldValue(sampleMetadata, field);
+    if (bucket === 'required') writeFieldValue(bundle.required, field, value);
+    else writeFieldValue(bundle.optional, field, value);
     deliveredFields.push(field);
   }
   return { bundle, deliveredFields };
@@ -2247,7 +2268,7 @@ export function canonicalVisibilityConfigString(config: CampaignVisibilityConfig
       return Object.keys(obj)
         .sort()
         .reduce<Record<string, unknown>>((acc, k) => {
-          acc[k] = sortValue(obj[k]);
+          writeFieldValue(acc, k, sortValue(readFieldValue(obj, k)));
           return acc;
         }, {});
     }

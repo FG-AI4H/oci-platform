@@ -80,6 +80,7 @@ describe('composeMetadataBundle', () => {
     prior_diagnosis: 'hidden',
     patient_name: 'never',
   };
+  // eslint-disable-next-line security/detect-object-injection -- test fixture keyed by known field names
   const resolve = (field: string) => ({ bucket: buckets[field] ?? 'hidden' });
 
   it('places required + gate-permitted optional only; sorts deliveredFields', () => {
