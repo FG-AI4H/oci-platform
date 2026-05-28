@@ -26,8 +26,30 @@ import { diceMulticlass } from './dice.js';
  * labels). The supervisor surface renders `—` in that case.
  */
 
+/**
+ * Metric vocabulary accepted by `annotatorVsGold`. Tracks the
+ * canonical `AnnotationQualityMetric` enum in `@oci/shared-types` so
+ * the campaign-side metric choice is passed through verbatim — for
+ * vs-gold scoring all the agreement-style metrics collapse to
+ * Cohen's κ (one rater vs ground truth), and segmentation-style
+ * metrics collapse to per-pair accuracy. Listed here as a literal
+ * union to avoid taking a runtime dep on shared-types from this
+ * leaf package.
+ */
+export type AnnotatorVsGoldMetric =
+  | 'cohens-kappa'
+  | 'fleiss-kappa'
+  | 'dice'
+  | 'krippendorff-alpha-nominal'
+  | 'krippendorff-alpha-ordinal'
+  | 'krippendorff-alpha-interval'
+  | 'hausdorff'
+  | 'hausdorff-95'
+  | 'icc-2-1'
+  | 'euclidean-agreement';
+
 export interface AnnotatorVsGoldInput {
-  metric: 'cohens-kappa' | 'fleiss-kappa' | 'dice';
+  metric: AnnotatorVsGoldMetric;
   /** Parallel arrays — annotator's submission + the gold expected label per gold sample. */
   pairs: ReadonlyArray<{
     submission: Record<string, unknown>;
@@ -59,11 +81,20 @@ export function annotatorVsGold(input: AnnotatorVsGoldInput): AnnotatorVsGoldRes
   const subs = labelPairs.map((p) => p.submission);
   const golds = labelPairs.map((p) => p.gold);
 
-  if (input.metric === 'dice') {
-    // Per-sample multiclass Dice across paired labels, macro-averaged.
-    // Per-pair Dice on a single label vs another label is 1 if equal,
-    // 0 otherwise — equivalent to accuracy. The macro mean over many
-    // pairs is the accuracy of the annotator on gold samples.
+  // Segmentation / spatial / continuous-quantity metrics all collapse
+  // to per-pair accuracy on the extracted `label` string for vs-gold
+  // scoring — `extractLabel` already reduced the submission to a
+  // single string, so Dice / Hausdorff / ICC / Euclidean degenerate
+  // to "1 if labels match, 0 otherwise" macro-averaged. Spatial
+  // payload comparison lands once #214 + #218 wire the structured
+  // submission shape through.
+  if (
+    input.metric === 'dice' ||
+    input.metric === 'hausdorff' ||
+    input.metric === 'hausdorff-95' ||
+    input.metric === 'icc-2-1' ||
+    input.metric === 'euclidean-agreement'
+  ) {
     let agree = 0;
     for (let i = 0; i < subs.length; i += 1) {
       // eslint-disable-next-line security/detect-object-injection -- bounded loop
@@ -72,10 +103,11 @@ export function annotatorVsGold(input: AnnotatorVsGoldInput): AnnotatorVsGoldRes
     return { score: agree / labelPairs.length, scored: labelPairs.length };
   }
 
-  // Cohen's κ — the natural choice when comparing one annotator to a
-  // ground-truth rater. Fleiss reduces to Cohen for two raters; we
-  // use Cohen directly here for clarity. Result clamped to [0, 1]
-  // for the supervisor surface.
+  // Categorical / ordinal metrics (Cohen / Fleiss / Krippendorff) all
+  // reduce to Cohen's κ for one rater vs ground truth — Fleiss
+  // reduces to Cohen for two raters, and Krippendorff matches
+  // Cohen on the nominal case. Result clamped to [0, 1] for the
+  // supervisor surface.
   const k = cohensKappa(subs, golds);
   if (!Number.isFinite(k.kappa)) {
     // Degenerate: zero variance in the gold marginal (every gold

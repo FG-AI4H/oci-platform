@@ -24,5 +24,6 @@ export { euclideanDistance, vectorAgreementScore, type Vector } from './euclidea
 export {
   annotatorVsGold,
   type AnnotatorVsGoldInput,
+  type AnnotatorVsGoldMetric,
   type AnnotatorVsGoldResult,
 } from './vs-gold.js';
