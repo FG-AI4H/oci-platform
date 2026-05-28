@@ -21,20 +21,22 @@ Your dashboard shows every campaign you're a member of. Click into one — the c
 - The output license (CC-BY-4.0 / CC-BY-NC-4.0 / CC-BY-SA-4.0 / CC0-1.0 / custom-restricted — see [your rights and licensing](./your-rights-and-licensing.md)).
 - The status (DRAFT / READY / RUNNING / COMPLETED / ARCHIVED). You can only claim tasks from a RUNNING campaign.
 
-## 3. Sign the annotator agreement
+## 3. Sign the annotator agreement _(not yet wired — see [#234](https://github.com/FG-AI4H/oci-platform/issues/234))_
 
-Before your first claim on any campaign, the platform shows you that campaign's **annotator agreement** (per [ADR-0012](../adr/0012-annotation-rights-licensing-annotator-agreement.md) Decision 1). It's a one-time per-campaign click-through.
+> **Status today:** the platform does **not** currently gate task claims on a signed annotator agreement. [ADR-0012](../adr/0012-annotation-rights-licensing-annotator-agreement.md) Decision 1 mandates this gate, and the implementation is tracked in [#234](https://github.com/FG-AI4H/oci-platform/issues/234) (E12). Once #234 ships, the platform will show you that campaign's annotator agreement before your first claim and block claims until you've signed. Until then, your annotations on dev / int are governed by the campaign's declared output license — but no signed acknowledgement is captured. We'll back-fill the signature on first sign once the flow lands.
+>
+> If you are an annotator on a **production** campaign and have not been asked to sign, contact the campaign manager. ADR-0012-conformant campaigns should not be running in prod until #234 ships.
 
-Read it. The short version is in [your rights and licensing](./your-rights-and-licensing.md), but the agreement itself is the contract — the platform's summary is not.
-
-The agreement covers:
+When the flow is live, the agreement will cover (per [ADR-0012](../adr/0012-annotation-rights-licensing-annotator-agreement.md) Decision 1):
 
 - That the labels you create are **work-for-hire** — the labels belong to the campaign, not to you personally.
 - The **output license** the campaign manager has declared. This determines who can use the labels you produce, and for what.
 - The **data subject consent** the dataset carries (DUO terms — what people whose data this is have agreed to).
 - That you can withdraw from the campaign at any time, but the labels you've already submitted stay (you can't selectively un-label).
 
-You can't claim a task until you've signed.
+It's a one-time per-campaign click-through, and re-signing is required when the agreement template version updates (#234 DoD).
+
+Read [your rights and licensing](./your-rights-and-licensing.md) for the plain-English version; the agreement itself, once shipped, is the contract — the platform's summary is not.
 
 ## 4. Read the campaign instructions
 

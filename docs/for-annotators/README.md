@@ -30,7 +30,7 @@ The platform handles the bookkeeping (routing, gate progression, IRR scoring, pr
 ## What you'll need
 
 - An OCI account in the `annotator` Cognito group (or `arbitration-annotator` / `expert-reviewer` if you've been invited at a higher gate). The campaign manager or your institution's GI-AI4H contact provisions this.
-- A signed **annotator agreement** for the campaign you're joining (one-time per campaign). The platform shows you the agreement before your first claim; submission is blocked until you've signed. See [your rights and licensing](./your-rights-and-licensing.md).
+- **Annotator agreement** — _not yet wired into the platform._ [ADR-0012](../adr/0012-annotation-rights-licensing-annotator-agreement.md) mandates a signed work-for-hire (or contributor-license) agreement before your first claim, and [#234](https://github.com/FG-AI4H/oci-platform/issues/234) tracks the implementation. Until that lands, you can claim tasks without signing — your labels are still aggregated under the campaign's declared output license, and the agreement back-fills on first sign once the flow ships. See [your rights and licensing](./your-rights-and-licensing.md) for what the agreement will cover.
 - A modern browser and a stable connection — the annotation tool (CVAT, MD.ai, RedBrick AI, or whatever the campaign manager chose) runs in a separate tab.
 - Familiarity with the **domain** the campaign covers. The campaign manager can also publish per-campaign instructions and per-sample notes; read those before you start (see [working on tasks](./working-on-tasks.md)).
 

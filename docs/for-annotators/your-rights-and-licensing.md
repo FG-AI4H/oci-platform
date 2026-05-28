@@ -2,9 +2,11 @@
 
 The plain-English version of [ADR-0012](../adr/0012-annotation-rights-licensing-annotator-agreement.md) — the architectural decision governing annotator agreements, output licensing, attribution, and your right to withdraw. **The ADR is the authoritative source; this page is the explainer.** When in doubt, read the ADR and ask the campaign manager.
 
-## The annotator agreement (one per campaign)
+> **Implementation status:** the **annotator-agreement signing gate** described below is **not yet wired into the platform**. [#234](https://github.com/FG-AI4H/oci-platform/issues/234) tracks the implementation; until it ships you can claim tasks without signing. The output-license enforcement (#235), instructions versioning (#230), and audit-trail capture (#257) are live. ADR-0012's substantive policy — work-for-hire, output license tiers, group attribution, right to withdraw, GDPR posture — governs every annotation regardless of whether the click-through flow is built yet.
 
-Before your first claim on a campaign, the OCI shows you that campaign's annotator agreement. You can't claim a task until you've signed.
+## The annotator agreement (one per campaign) — _planned, see [#234](https://github.com/FG-AI4H/oci-platform/issues/234)_
+
+Once [#234](https://github.com/FG-AI4H/oci-platform/issues/234) ships, before your first claim on a campaign the OCI will show you that campaign's annotator agreement. You won't be able to claim a task until you've signed.
 
 It's a **work-for-hire** agreement (ADR-0012 Decision 1). In plain language:
 
