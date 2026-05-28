@@ -349,36 +349,36 @@ model QuizAttempt {
 /// to KMS Verify and confirm authenticity. Null on rows where KMS
 /// wasn't configured at acceptance time.
 model PolicyAcceptance {
-  id              String   @id @default(uuid()) @db.Uuid
+  id               String   @id @default(uuid()) @db.Uuid
   /// Soft FK → identity.users.id.
-  userId          String   @map("user_id") @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
   /// Canonical URL for the policy document (e.g. https://oci.ai4h.net/policies/dua-research-v1).
-  policyUrl       String   @map("policy_url")
+  policyUrl        String   @map("policy_url")
   /// Version slug shown in the policy header (e.g. "v1.0", "2026-05"),
   /// surfaced in the audit trail so a regulator can map the acceptance
   /// to the canonical text-of-record at the time.
-  policyVersion   String   @map("policy_version")
+  policyVersion    String   @map("policy_version")
   /// Verbatim policy text the user clicked to accept. Stored so the
   /// hash can be re-derived and so audit trails don't depend on the
   /// canonical URL still resolving years later.
-  policyText      String   @map("policy_text")
+  policyText       String   @map("policy_text")
   /// Lower-case hex SHA-256 of `policyText`. The actual binding
   /// artifact the API emits to caller as a receipt.
-  textSha256      String   @map("text_sha256") @db.Char(64)
+  textSha256       String   @map("text_sha256") @db.Char(64)
   /// Optional foreign reference: which workflow this acceptance
   /// belongs to. e.g. `contextType=access_request, contextRef=<request id>`.
   /// `null` for top-level platform-ToU acceptances.
-  contextType     String?  @map("context_type")
-  contextRef      String?  @map("context_ref")
+  contextType      String?  @map("context_type")
+  contextRef       String?  @map("context_ref")
   /// KMS-signed receipt blob (base64 DER). Null when KMS signing was
   /// not configured at acceptance time. The receipt's input shape is
   /// fixed (see service code) so verification is deterministic.
-  receiptSignature String? @map("receipt_signature")
+  receiptSignature String?  @map("receipt_signature")
   /// KMS key id used to produce `receiptSignature`. Stored alongside
   /// the signature so a regulator can route Verify to the right key
   /// even after rotations.
-  receiptKeyId    String?  @map("receipt_key_id")
-  acceptedAt      DateTime @default(now()) @map("accepted_at")
+  receiptKeyId     String?  @map("receipt_key_id")
+  acceptedAt       DateTime @default(now()) @map("accepted_at")
 
   @@index([userId, acceptedAt])
   @@index([contextType, contextRef])
@@ -410,30 +410,30 @@ model PolicyAcceptance {
 /// authorises. Required: every signature exists in the context of
 /// an approved AR.
 model DuaSignature {
-  id                String    @id @default(uuid()) @db.Uuid
+  id                   String    @id @default(uuid()) @db.Uuid
   /// Soft FK → identity.users.id (UUIDv5 from Cognito sub).
-  userId            String    @map("user_id") @db.Uuid
+  userId               String    @map("user_id") @db.Uuid
   /// Soft FK → catalog.access_requests.id.
-  accessRequestId   String    @map("access_request_id") @db.Uuid
+  accessRequestId      String    @map("access_request_id") @db.Uuid
   /// PENDING | SIGNED | DECLINED | EXPIRED.
-  status            String    @default("PENDING")
+  status               String    @default("PENDING")
   /// DocuSeal submission id — the canonical reference for inspecting
   /// the envelope state on the DocuSeal side.
-  docusealSubmissionId String? @map("docuseal_submission_id")
+  docusealSubmissionId String?   @map("docuseal_submission_id")
   /// URL the signer follows to complete the signing dance.
-  signerUrl         String?   @map("signer_url")
+  signerUrl            String?   @map("signer_url")
   /// Markdown body rendered by the DUA template engine. Persisted
   /// verbatim so a regulator audit can re-verify the hash even if
   /// the template engine drifts later.
-  documentText      String    @map("document_text")
+  documentText         String    @map("document_text")
   /// Lower-case hex SHA-256 of `documentText`. Audit anchor.
-  documentSha256    String    @map("document_sha256") @db.Char(64)
+  documentSha256       String    @map("document_sha256") @db.Char(64)
   /// DocuSeal-hosted PDF of the completed envelope.
-  signedPdfUrl      String?   @map("signed_pdf_url")
+  signedPdfUrl         String?   @map("signed_pdf_url")
   /// Server-side timestamps.
-  createdAt         DateTime  @default(now()) @map("created_at")
-  signedAt          DateTime? @map("signed_at")
-  declinedAt        DateTime? @map("declined_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  signedAt             DateTime? @map("signed_at")
+  declinedAt           DateTime? @map("declined_at")
 
   @@index([userId, createdAt])
   @@index([accessRequestId])
@@ -566,20 +566,20 @@ enum DistributionUploadStatus {
 }
 
 model Dataset {
-  id                 String            @id @default(uuid()) @db.Uuid
+  id                 String                   @id @default(uuid()) @db.Uuid
   /// URL-safe identifier, e.g. "rsna-pneumonia-2018-v1". Unique. Used in
   /// catalog URLs and as the @id base for the Croissant manifest.
-  slug               String            @unique
+  slug               String                   @unique
   /// Human-readable name; mirrors Croissant `sc:name` on the latest version.
   name               String
   description        String?
   /// Soft FK → identity.users.id. The dataset host (admin / steward).
-  hostId             String            @map("host_id") @db.Uuid
-  visibility         DatasetVisibility @default(PRIVATE)
-  status             DatasetStatus     @default(DRAFT)
+  hostId             String                   @map("host_id") @db.Uuid
+  visibility         DatasetVisibility        @default(PRIVATE)
+  status             DatasetStatus            @default(DRAFT)
   /// Croissant conformance target of `croissant`, e.g. "1.0", "1.1".
   /// Derived from `dct:conformsTo` at publish time.
-  conformanceVersion String?           @map("conformance_version")
+  conformanceVersion String?                  @map("conformance_version")
   /// Latest published Croissant 1.1 (+ RAI + BIOCroissant) manifest.
   /// NULL while in DRAFT; populated on transition to PUBLISHED.
   croissant          Json?
@@ -763,7 +763,7 @@ model AccessRequest {
   /// Human-readable matcher findings. Empty array when MATCHED;
   /// populated for CONFLICT / UNCLEAR so the host sees the *why*
   /// without having to learn DUO themselves.
-  matchExplanations String[] @default([]) @map("match_explanations")
+  matchExplanations String[]                  @default([]) @map("match_explanations")
 
   /// Computed at create time from the `RequesterIdentityContext`
   /// normalizer (#115, ADR-0003 Decision 2). Default `EMAIL_ONLY` keeps
@@ -910,12 +910,12 @@ model RemoteCatalog {
 /// worker validates it via `@oci/croissant` before writing, so any
 /// row that lands here is at minimum Croissant 1.0/1.1 conformant.
 model RemoteDataset {
-  id              String  @id @default(uuid()) @db.Uuid
-  sourceCatalogId String  @map("source_catalog_id") @db.Uuid
+  id              String @id @default(uuid()) @db.Uuid
+  sourceCatalogId String @map("source_catalog_id") @db.Uuid
 
   /// The peer's `@id` for this dataset. Used as the upsert key
   /// alongside sourceCatalogId. Stable across re-harvests.
-  originUrl       String  @map("origin_url")
+  originUrl String @map("origin_url")
 
   /// Denormalised from the manifest. Not unique globally — a peer
   /// might publish the same slug as us or as another peer.
@@ -929,7 +929,7 @@ model RemoteDataset {
 
   /// Full JSON-LD manifest as harvested. Kept verbatim so the upstream
   /// host's signature / formatting isn't mangled.
-  croissant          Json
+  croissant Json
 
   harvestedAt DateTime @default(now()) @map("harvested_at")
   createdAt   DateTime @default(now()) @map("created_at")
@@ -956,14 +956,14 @@ model RemoteDataset {
 /// ADR-0007). Phase B.A.1 seeds two stub rows (`monai-label`, `visian`)
 /// so the campaign-create UI has tool options to bind to.
 model AnnotationToolIntegration {
-  id        String   @id @default(uuid()) @db.Uuid
+  id                 String             @id @default(uuid()) @db.Uuid
   /// URL-safe identifier, e.g. "monai-label". Unique.
-  slug      String   @unique
-  name      String
-  vendor    String
+  slug               String             @unique
+  name               String
+  vendor             String
   /// Latest semver of the adapter (per ADR-0007 versioning).
-  version   String
-  isActive  Boolean  @default(true) @map("is_active")
+  version            String
+  isActive           Boolean            @default(true) @map("is_active")
   /// Task kinds this tool can handle. Used to filter the tool picker
   /// on `/annotation/campaigns/new` after a task kind is selected
   /// (user feedback 2026-05-16). The full per-task capability matrix
@@ -971,8 +971,8 @@ model AnnotationToolIntegration {
   /// lands with #214; this column is the minimum to make the picker
   /// safe today.
   supportedTaskKinds CampaignTaskKind[] @map("supported_task_kinds")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
 
   campaigns AnnotationCampaign[]
 
@@ -990,29 +990,39 @@ model AnnotationToolIntegration {
 /// policy lands when the related schemas are connected at the Prisma
 /// level (Phase B.A.2 / B.A.3).
 model AnnotationCampaign {
-  id          String                @id @default(uuid()) @db.Uuid
+  id          String           @id @default(uuid()) @db.Uuid
   /// URL-safe identifier, unique within campaigns. Same shape as Dataset.slug.
-  slug        String                @unique
+  slug        String           @unique
   name        String
   description String?
-  status      CampaignStatus        @default(DRAFT)
-  taskKind    CampaignTaskKind      @map("task_kind")
+  status      CampaignStatus   @default(DRAFT)
+  taskKind    CampaignTaskKind @map("task_kind")
 
   /// Soft FK → catalog.datasets.id (ADR-0006 Decision 6). Hard FK lands
   /// in B.A.2 along with manifest-version pinning.
-  datasetId   String                @map("dataset_id") @db.Uuid
+  datasetId         String @map("dataset_id") @db.Uuid
   /// Real FK to annotation_tool_integrations.id.
-  toolIntegrationId String          @map("tool_integration_id") @db.Uuid
+  toolIntegrationId String @map("tool_integration_id") @db.Uuid
 
   /// Output license for the resulting annotation distribution (ADR-0012
   /// Decision 3). SPDX identifier or `custom-restricted`. Immutable
   /// once status transitions out of DRAFT.
-  outputLicense   CampaignOutputLicense @map("output_license")
+  outputLicense CampaignOutputLicense @map("output_license")
 
   /// JSONB workflow config (ADR-0009 Decisions 2 + 4). Phase B.A.1 only
   /// stores `{ nAnnotators: number }`. Full shape per ADR-0009 lands
   /// with E4 (#216).
   workflowConfig Json @map("workflow_config")
+
+  /// JSONB metadata-visibility config (ADR-0010 Decisions 1 + 2). The
+  /// four-bucket field overrides (required/optional/hidden/never) +
+  /// per-gate promotions + `trainingGrade` flag, versioned by content
+  /// hash. Null until the campaign manager configures visibility; the
+  /// engine then falls back to the dataset's Croissant
+  /// `oci:annotationVisibility` tags and the OCI default visibility
+  /// table. The `never` bucket (PHI / direct identifiers) is always
+  /// server-side filtered regardless of this config.
+  visibilityConfig Json? @map("visibility_config")
 
   /// Soft FK → identity.users.id. The campaign manager who created it.
   createdById String @map("created_by_id") @db.Uuid
@@ -1023,15 +1033,15 @@ model AnnotationCampaign {
   /// the instructions table on every read.
   currentInstructionsVersion String? @map("current_instructions_version")
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
   /// Set when the campaign transitions to RUNNING (#215, slice 1).
   /// Null while DRAFT / READY / ARCHIVED-before-start; persists once
   /// set so completed campaigns retain the start timestamp.
   startedAt   DateTime? @map("started_at")
   completedAt DateTime? @map("completed_at")
 
-  toolIntegration AnnotationToolIntegration @relation(fields: [toolIntegrationId], references: [id])
+  toolIntegration AnnotationToolIntegration        @relation(fields: [toolIntegrationId], references: [id])
   instructions    AnnotationCampaignInstructions[]
 
   @@index([status])
@@ -1050,20 +1060,20 @@ model AnnotationCampaign {
 /// markdown. `mediaUrls` is a free-form JSON array — captured at
 /// publish time so the auditor can reproduce what the annotator saw.
 model AnnotationCampaignInstructions {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  campaignId    String   @map("campaign_id") @db.Uuid
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId   String   @map("campaign_id") @db.Uuid
   /// Short hex slice of the sha256 of `markdownBody` (16 chars).
   /// Stable across re-publishes of identical content; the
   /// `(campaignId, version)` unique index drops duplicate publishes.
-  version       String
+  version      String
   /// Raw markdown. Capped at 64KB at the API layer.
-  markdownBody  String   @map("markdown_body")
+  markdownBody String   @map("markdown_body")
   /// JSON array of {url, kind} entries the markdown references.
-  mediaUrls     Json     @map("media_urls")
+  mediaUrls    Json     @map("media_urls")
   /// Soft FK → identity.users.id. Same convention as
   /// `AnnotationCampaign.createdById`.
-  createdById   String   @map("created_by_id") @db.Uuid
-  createdAt     DateTime @default(now()) @map("created_at")
+  createdById  String   @map("created_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
 
   campaign AnnotationCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
@@ -1094,10 +1104,10 @@ enum CampaignTaskKind {
 }
 
 enum CampaignOutputLicense {
-  CC_BY_4_0      @map("CC-BY-4.0")
-  CC_BY_NC_4_0   @map("CC-BY-NC-4.0")
-  CC_BY_SA_4_0   @map("CC-BY-SA-4.0")
-  CC0_1_0        @map("CC0-1.0")
+  CC_BY_4_0         @map("CC-BY-4.0")
+  CC_BY_NC_4_0      @map("CC-BY-NC-4.0")
+  CC_BY_SA_4_0      @map("CC-BY-SA-4.0")
+  CC0_1_0           @map("CC0-1.0")
   CUSTOM_RESTRICTED @map("custom-restricted")
 
   @@schema("annotation")
@@ -1133,25 +1143,25 @@ enum AnnotationGateState {
 /// through the tool-integration's signed handoff URL (ADR-0007 / #214).
 /// The task model carries only the pointer + the gate state.
 model AnnotationTask {
-  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  campaignId  String              @map("campaign_id") @db.Uuid
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId          String              @map("campaign_id") @db.Uuid
   /// Stable, campaign-scoped identifier for the underlying sample.
   /// Free-form string today; will be constrained to dataset
   /// `recordSet/record` URIs once #223 lands.
-  sampleRef   String              @map("sample_ref")
+  sampleRef           String              @map("sample_ref")
   /// Denormalised at create time from `campaign.workflowConfig.nAnnotators`
   /// so the gate-completion check doesn't have to re-read the campaign.
   /// Mutating the campaign workflow after RUNNING is intentionally
   /// not in scope — change → clone instead.
-  nAnnotatorsRequired Int         @map("n_annotators_required")
-  gateState   AnnotationGateState @default(INDEPENDENT) @map("gate_state")
+  nAnnotatorsRequired Int                 @map("n_annotators_required")
+  gateState           AnnotationGateState @default(INDEPENDENT) @map("gate_state")
   /// Operator-supplied reason for SKIPPED transitions; null otherwise.
-  skipReason  String?             @map("skip_reason")
+  skipReason          String?             @map("skip_reason")
   /// Optional per-task instructions override (#230). Free-form
   /// markdown shown alongside the campaign-level instructions when
   /// the sample needs special-attention notes. Capped at 4KB at the
   /// API layer.
-  instructionsNote String?        @map("instructions_note")
+  instructionsNote    String?             @map("instructions_note")
   /// Gold-standard sample (#291, ADR-0009 Decision 4). When true the
   /// sample carries an expected label in `goldStandardLabel` that the
   /// supervisor reads to score each annotator's submission against —
@@ -1159,16 +1169,16 @@ model AnnotationTask {
   /// computed off these rows. Gold samples still go through the
   /// normal gate-1/2/3 workflow; the gold-truth comparison is a
   /// supervisor-side overlay.
-  isGoldStandard      Boolean  @default(false) @map("is_gold_standard")
+  isGoldStandard      Boolean             @default(false) @map("is_gold_standard")
   /// Expected submission shape for a gold sample. Same JSON shape as
   /// `AnnotationTaskAssignment.submission` so the IRR functions
   /// compare like-for-like (e.g. `{label: 'pneumonia'}` for
   /// classification; a mask reference for segmentation). Null when
   /// `isGoldStandard` is false.
-  goldStandardLabel   Json?    @map("gold_standard_label")
-  createdAt   DateTime            @default(now()) @map("created_at")
-  updatedAt   DateTime            @updatedAt @map("updated_at")
-  completedAt DateTime?           @map("completed_at")
+  goldStandardLabel   Json?               @map("gold_standard_label")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+  completedAt         DateTime?           @map("completed_at")
 
   assignments AnnotationTaskAssignment[]
 
@@ -1207,34 +1217,42 @@ enum AnnotationAssignmentStatus {
 /// to the annotator's group memberships doesn't retroactively
 /// invalidate a submission already in flight.
 model AnnotationTaskAssignment {
-  id                 String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  taskId             String                     @map("task_id") @db.Uuid
+  id                              String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId                          String                     @map("task_id") @db.Uuid
   /// Soft FK → identity.users.id (matches the existing campaign-side
   /// `createdById` convention). Stored as the v5-derived UUID of the
   /// caller's Cognito sub, per `cognitoSubAsUuid()`.
-  assigneeUserId     String                     @map("assignee_user_id") @db.Uuid
+  assigneeUserId                  String                     @map("assignee_user_id") @db.Uuid
   /// Cognito group at assignment time. Slice 2 supports:
   /// 'annotator' | 'arbitration-annotator' | 'expert-reviewer'.
-  assigneeRole       String                     @map("assignee_role")
+  assigneeRole                    String                     @map("assignee_role")
   /// Snapshot of `task.gateState` at assignment time. The submission
   /// pipeline cross-checks this against the live gateState before
   /// counting the submission, so a stale assignment from a previous
   /// gate is rejected with 409.
-  gateAtAssignment   AnnotationGateState        @map("gate_at_assignment")
-  status             AnnotationAssignmentStatus @default(PENDING)
+  gateAtAssignment                AnnotationGateState        @map("gate_at_assignment")
+  status                          AnnotationAssignmentStatus @default(PENDING)
   /// Free-form JSONB submission payload. Slice 2 stores whatever the
   /// caller passes; tool-integration-aware schema validation per
   /// ADR-0007 lands with #214 / #231.
-  submission         Json?
+  submission                      Json?
   /// Campaign-instructions version the annotator acknowledged at
   /// submission time (#230). Captured into the annotation provenance
   /// alongside `tool_version` / `schema_version`. Null until the
   /// annotator submits with an explicit acknowledgement.
-  acknowledgedInstructionsVersion String? @map("acknowledged_instructions_version")
-  assignedAt         DateTime                   @default(now()) @map("assigned_at")
-  startedAt          DateTime?                  @map("started_at")
-  submittedAt        DateTime?                  @map("submitted_at")
-  expiredAt          DateTime?                  @map("expired_at")
+  acknowledgedInstructionsVersion String?                    @map("acknowledged_instructions_version")
+  /// What the annotator actually saw at annotation time (ADR-0010
+  /// Decision 4): `{ visibilityConfigHash, visibilityConfigVersion,
+  /// deliveredFields }`. Captured server-side at handoff so the
+  /// regulator-facing "what did the annotator see for this annotation?"
+  /// question is answerable per (task × annotator × gate). Null for
+  /// assignments issued before the metadata-exposure engine landed, or
+  /// while the campaign has no catalog-linked sample metadata (pre-#223).
+  metadataExposureProfile         Json?                      @map("metadata_exposure_profile")
+  assignedAt                      DateTime                   @default(now()) @map("assigned_at")
+  startedAt                       DateTime?                  @map("started_at")
+  submittedAt                     DateTime?                  @map("submitted_at")
+  expiredAt                       DateTime?                  @map("expired_at")
 
   task AnnotationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
@@ -1264,24 +1282,24 @@ model AnnotationTaskAssignment {
 ///                despite acceptable peer/gold scores → schedule
 ///                recalibration window.
 model AnnotatorCalibrationFlag {
-  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  campaignId        String   @map("campaign_id")        @db.Uuid
-  annotatorUserId   String   @map("annotator_user_id")  @db.Uuid
-  flagType          String   @map("flag_type")          /// 'SKILL' | 'DRIFT'
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  campaignId      String    @map("campaign_id") @db.Uuid
+  annotatorUserId String    @map("annotator_user_id") @db.Uuid
+  flagType        String    @map("flag_type") /// 'SKILL' | 'DRIFT'
   /// Which metric tripped the flag — 'vs-gold' | 'vs-peers' | 'vs-self'.
-  metric            String
+  metric          String
   /// Numeric value of the metric at flag-raise time (κ, Dice, …).
-  score             Float
+  score           Float
   /// Threshold the metric was compared against.
-  threshold         Float
+  threshold       Float
   /// Number of submissions evaluated in the rolling window.
-  sampleSize        Int      @map("sample_size")
-  status            String   @default("ACTIVE")         /// 'ACTIVE' | 'CLEARED'
+  sampleSize      Int       @map("sample_size")
+  status          String    @default("ACTIVE") /// 'ACTIVE' | 'CLEARED'
   /// Free-form JSONB capturing the window definition (since / until /
   /// task-kind) for audit reproducibility.
-  windowMeta        Json     @map("window_meta")
-  createdAt         DateTime @default(now()) @map("created_at")
-  clearedAt         DateTime? @map("cleared_at")
+  windowMeta      Json      @map("window_meta")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  clearedAt       DateTime? @map("cleared_at")
 
   @@index([campaignId, status])
   @@index([annotatorUserId, status])
@@ -1308,14 +1326,14 @@ model AnnotatorCalibrationFlag {
 /// Cognito itself is the source of truth for group definitions. The
 /// `PlatformGroupSchema` in `@oci/shared-types` is the curated UI list.
 model IdentityAdminAuditEvent {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  actorSub      String   @map("actor_sub")       @db.Uuid
-  actorUsername String   @map("actor_username")
-  targetSub     String   @map("target_sub")      @db.Uuid
-  targetUsername String  @map("target_username")
-  action        String                       /// 'grant' | 'revoke'
-  groupName     String   @map("group_name")
-  createdAt     DateTime @default(now())       @map("created_at")
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actorSub       String   @map("actor_sub") @db.Uuid
+  actorUsername  String   @map("actor_username")
+  targetSub      String   @map("target_sub") @db.Uuid
+  targetUsername String   @map("target_username")
+  action         String /// 'grant' | 'revoke'
+  groupName      String   @map("group_name")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   @@index([targetSub, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
@@ -1338,11 +1356,11 @@ model IdentityAdminAuditEvent {
 /// the catalog + annotation modules); the username is cached for UI
 /// display.
 model PlatformSetting {
-  key                  String   @id        /// always 'current'
-  value                Json
-  lastUpdatedBySub     String?  @map("last_updated_by_sub")      @db.Uuid
-  lastUpdatedByUsername String? @map("last_updated_by_username")
-  updatedAt            DateTime @updatedAt  @map("updated_at")
+  key                   String   @id /// always 'current'
+  value                 Json
+  lastUpdatedBySub      String?  @map("last_updated_by_sub") @db.Uuid
+  lastUpdatedByUsername String?  @map("last_updated_by_username")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   @@map("platform_settings")
   @@schema("platform")
@@ -1362,21 +1380,21 @@ model PlatformSetting {
 /// verification Lambda + regulator export are Phase C follow-ups
 /// (#259); this issue lands the table, the triggers, and the emitter.
 model AuditEvent {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  occurredAt      DateTime @default(now())                                  @map("occurred_at")
-  emittedAt       DateTime @default(now())                                  @map("emitted_at")
-  sequenceNumber  BigInt   @default(autoincrement())                        @map("sequence_number")
-  module          String
-  action          String
-  subjectType     String   @map("subject_type")
-  subjectId       String   @map("subject_id")
-  actorUserId     String?  @map("actor_user_id")  @db.Uuid
-  actorRoles      String[] @default([])           @map("actor_roles")
-  payload         Json
-  payloadHash     String   @map("payload_hash")     /// sha256 of RFC 8785 canonical JSON of `payload`
-  previousHash    String?  @map("previous_hash")    /// recordHash of the row with the immediately preceding sequence_number; trigger-populated
-  recordHash      String   @map("record_hash")      /// sha256 over the pipe-delimited canonical form; trigger-populated
-  retentionClass  String   @default("standard-7y") @map("retention_class") /// 'short-1y' | 'standard-7y' | 'legal-hold'
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  occurredAt     DateTime @default(now()) @map("occurred_at")
+  emittedAt      DateTime @default(now()) @map("emitted_at")
+  sequenceNumber BigInt   @default(autoincrement()) @map("sequence_number")
+  module         String
+  action         String
+  subjectType    String   @map("subject_type")
+  subjectId      String   @map("subject_id")
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  actorRoles     String[] @default([]) @map("actor_roles")
+  payload        Json
+  payloadHash    String   @map("payload_hash") /// sha256 of RFC 8785 canonical JSON of `payload`
+  previousHash   String?  @map("previous_hash") /// recordHash of the row with the immediately preceding sequence_number; trigger-populated
+  recordHash     String   @map("record_hash") /// sha256 over the pipe-delimited canonical form; trigger-populated
+  retentionClass String   @default("standard-7y") @map("retention_class") /// 'short-1y' | 'standard-7y' | 'legal-hold'
 
   @@index([subjectType, subjectId, occurredAt])
   @@index([module, action, occurredAt])
