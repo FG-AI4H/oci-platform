@@ -175,7 +175,7 @@ describe('ToolIntegrationService.callback', () => {
     repo.findReceipt.mockResolvedValueOnce(null);
     repo.createReceipt.mockResolvedValue({ id: 'rcpt-1' });
     await service.callback('int-1', validBody, 'key-1');
-    const persistedHash = repo.createReceipt.mock.calls[0][0].payloadHash as string;
+    const persistedHash = repo.createReceipt.mock.calls[0]?.[0]?.payloadHash as string;
 
     repo.findReceipt.mockResolvedValue({ id: 'rcpt-1', payloadHash: persistedHash });
     const { response, httpStatus } = await service.callback('int-1', validBody, 'key-1');
