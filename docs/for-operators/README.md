@@ -2,18 +2,19 @@
 
 You're deploying or running an OCI instance. The platform is designed to run as a fleet — the global instance at `oci.ai4h.net`, plus member-state and regional-office instances that federate with it.
 
-| Guide                                                    | Read when                                                                 |
-| -------------------------------------------------------- | ------------------------------------------------------------------------- |
-| [Deployment](../deployment.md)                           | First-time deploy of a new environment.                                   |
-| [Architecture](../architecture.md)                       | High-level reference for what's where.                                    |
-| [Security baseline](../security.md)                      | The controls expected on every instance (KMS, WAF, OIDC, etc.).           |
-| [Runbooks](../runbooks/)                                 | Day-2 operations: incidents, rotations, restores.                         |
-| [DocuSeal bootstrap](./docuseal.md)                      | First-time DocuSeal admin / API-token / webhook configuration.            |
-| [SES mail](./ses.md)                                     | Domain identity, SMTP-credential rotation, DMARC tightening.              |
-| [Admin: users & groups](./admin-user-management.md)      | Granting / revoking Cognito group membership (campaign-manager, host, …). |
-| [Admin: platform settings](./admin-platform-settings.md) | Maintenance banner, tool registry (future), license defaults (future).    |
-| [Demo-data seed](./demo-seed.md)                         | How baseline rows reach dev/int on every deploy; how to add new entities. |
-| Observability _(not yet written)_                        | What to wire to your CloudWatch / X-Ray / Grafana.                        |
+| Guide                                                                 | Read when                                                                                       |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| [Deployment](../deployment.md)                                        | First-time deploy of a new environment.                                                         |
+| [Architecture](../architecture.md)                                    | High-level reference for what's where.                                                          |
+| [Security baseline](../security.md)                                   | The controls expected on every instance (KMS, WAF, OIDC, etc.).                                 |
+| [Runbooks](../runbooks/)                                              | Day-2 operations: incidents, rotations, restores.                                               |
+| [DocuSeal bootstrap](./docuseal.md)                                   | First-time DocuSeal admin / API-token / webhook configuration.                                  |
+| [SES mail](./ses.md)                                                  | Domain identity, SMTP-credential rotation, DMARC tightening.                                    |
+| [Admin: users & groups](./admin-user-management.md)                   | Granting / revoking Cognito group membership (campaign-manager, host, …).                       |
+| [Admin: platform settings](./admin-platform-settings.md)              | Maintenance banner, tool registry (future), license defaults (future).                          |
+| [Demo-data seed](./demo-seed.md)                                      | How baseline rows reach dev/int on every deploy; how to add new entities.                       |
+| [Writing annotation instructions](./annotation-instructions-guide.md) | You're a campaign manager and need to write effective per-campaign instructions for annotators. |
+| Observability _(not yet written)_                                     | What to wire to your CloudWatch / X-Ray / Grafana.                                              |
 
 ## Trust model summary
 
