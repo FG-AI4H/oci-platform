@@ -1503,3 +1503,65 @@ model AuditEvent {
   @@map("audit_events")
   @@schema("platform")
 }
+
+/// Consent record for a dataset used in annotation campaigns (ADR-0012
+/// Decision 2 + #224). Grant + revocation are both signed-receipt
+/// events (same KMS-CMK pattern as click-wrap #118 / DocuSeal #128).
+/// A REVOKED consent halts the dataset's use in active campaigns
+/// (gate predicate in ConsentService). Soft FK to catalog.datasets.id.
+model ConsentRecord {
+  id                  String        @id @default(uuid()) @db.Uuid
+  /// Soft FK → catalog.datasets.id.
+  datasetId           String        @map("dataset_id") @db.Uuid
+  /// GA4GH `sub` of the consenter (data subject / data controller rep).
+  consenterSub        String        @map("consenter_sub")
+  /// Soft FK → identity.users.id when the consenter is a platform user.
+  consenterUserId     String?       @map("consenter_user_id") @db.Uuid
+  consentType         ConsentType   @map("consent_type")
+  status              ConsentStatus @default(ACTIVE)
+  /// What the consent covers (purposes, sub-populations, expiry terms).
+  scope               Json
+  /// Verbatim consent-disclosure text the consenter agreed to; stored so
+  /// the hash can be re-derived for receipt verification years later.
+  disclosureText      String        @map("disclosure_text")
+  /// Lower-case hex SHA-256 of `disclosureText` (the binding artifact).
+  textSha256          String        @map("text_sha256") @db.Char(64)
+  validFrom           DateTime      @default(now()) @map("valid_from")
+  validUntil          DateTime?     @map("valid_until")
+  /// S3 ARN of the signed-receipt material (Object Lock), when stored.
+  signedReceiptArn    String?       @map("signed_receipt_arn")
+  /// KMS-signed grant receipt (base64). Null when KMS not configured.
+  receiptSignature    String?       @map("receipt_signature")
+  receiptKeyId        String?       @map("receipt_key_id")
+  /// Revocation (ADR-0012 Decision 5 / GDPR Art. 17). Set on revoke.
+  revokedAt           DateTime?     @map("revoked_at")
+  revocationReason    String?       @map("revocation_reason")
+  revocationSignature String?       @map("revocation_signature")
+  revocationKeyId     String?       @map("revocation_key_id")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  @@index([datasetId, status])
+  @@index([datasetId, consentType, status])
+  @@map("consent_records")
+  @@schema("catalog")
+}
+
+enum ConsentType {
+  /// Consent to use the data for annotation work at all.
+  ANNOTATION_USE
+  /// Consent to redistribute the resulting annotated distribution.
+  REDISTRIBUTION
+  /// Consent covering identifiable sub-population / demographic facets.
+  SENSITIVE_FACETS
+
+  @@schema("catalog")
+}
+
+enum ConsentStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+
+  @@schema("catalog")
+}
