@@ -122,4 +122,7 @@ export type {
   IdentityAdminAuditEvent,
   PlatformSetting,
   AuditEvent,
+  ConsentRecord,
+  ConsentType,
+  ConsentStatus,
 } from './generated/client/index.js';

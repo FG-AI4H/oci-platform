@@ -3198,6 +3198,68 @@ export interface PublicBannerResponse {
   banner: MaintenanceBanner | null;
 }
 
+// ---------------------------------------------------------------------------
+// Dataset consent records (ADR-0012 Decision 2 + 5, #224)
+// ---------------------------------------------------------------------------
+
+export const ConsentTypeSchema = z.enum(['ANNOTATION_USE', 'REDISTRIBUTION', 'SENSITIVE_FACETS']);
+export type ConsentType = z.infer<typeof ConsentTypeSchema>;
+
+export const ConsentStatusSchema = z.enum(['ACTIVE', 'REVOKED', 'EXPIRED']);
+export type ConsentStatus = z.infer<typeof ConsentStatusSchema>;
+
+/** `POST /v2/consent` — record a dataset consent (grant). */
+export const CreateConsentRequestSchema = z.object({
+  datasetId: z.string().uuid(),
+  consentType: ConsentTypeSchema,
+  /** Free-form coverage terms (purposes, sub-populations, expiry notes). */
+  scope: z.record(z.string(), z.unknown()),
+  /** Verbatim consent-disclosure text the consenter agreed to. */
+  disclosureText: z.string().min(1),
+  validUntil: z.string().datetime().nullable().optional(),
+  /** Optional: the consenter's platform user id when not the caller. */
+  consenterUserId: z.string().uuid().nullable().optional(),
+});
+export type CreateConsentRequest = z.infer<typeof CreateConsentRequestSchema>;
+
+/** `POST /v2/consent/:id/revoke` — revoke a consent (GDPR Art. 17). */
+export const RevokeConsentRequestSchema = z.object({
+  reason: z.string().min(1).max(2000),
+});
+export type RevokeConsentRequest = z.infer<typeof RevokeConsentRequestSchema>;
+
+/** Consent record + receipt returned by the API (full audit shape). */
+export const ConsentRecordResponseSchema = z.object({
+  id: z.string().uuid(),
+  datasetId: z.string().uuid(),
+  consenterSub: z.string(),
+  consenterUserId: z.string().uuid().nullable(),
+  consentType: ConsentTypeSchema,
+  status: ConsentStatusSchema,
+  scope: z.record(z.string(), z.unknown()),
+  /** SHA-256 of the disclosure text — the binding receipt artifact. */
+  textSha256: z.string(),
+  validFrom: z.string(),
+  validUntil: z.string().nullable(),
+  /** Present only when KMS signing was configured at grant time. */
+  signatureKeyId: z.string().nullable(),
+  signed: z.boolean(),
+  revokedAt: z.string().nullable(),
+  revocationReason: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type ConsentRecordResponse = z.infer<typeof ConsentRecordResponseSchema>;
+
+/** Per-dataset audit-trail response (full grant + revocation history). */
+export const DatasetConsentHistorySchema = z.object({
+  datasetId: z.string().uuid(),
+  /** True when no ACTIVE consent is blocked by a revocation — the gate
+   * predicate the annotation workflow reads. */
+  annotationAllowed: z.boolean(),
+  records: z.array(ConsentRecordResponseSchema),
+});
+export type DatasetConsentHistory = z.infer<typeof DatasetConsentHistorySchema>;
+
 export const tokens = {
   /** Phase B.A.1 added: Campaign, AnnotationToolIntegration (stub registry). */
   /** Phase B.A.2 will add: Task, TaskAssignment, Annotation, gate decisions. */
