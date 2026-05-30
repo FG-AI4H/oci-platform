@@ -19,6 +19,7 @@ import {
 } from '@oci/ui';
 import type { ListDatasetsResponse } from '@oci/shared-types';
 import { auth } from '../auth';
+import { isHost } from '../lib/groups';
 
 // Label varies per env so the CTA matches reality. NextAuth's
 // `pages.signIn = '/signin'` (auth.ts) routes both flows through
@@ -281,15 +282,15 @@ export default async function HomePage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap items-center gap-3">
-                {session?.user ? (
+                {isHost(session) ? (
                   <Button asChild>
                     <Link href="/catalog/new">Create a dataset</Link>
                   </Button>
-                ) : (
+                ) : !session?.user ? (
                   <Button asChild>
                     <Link href="/signin?callbackUrl=%2Fcatalog%2Fnew">Sign in to publish</Link>
                   </Button>
-                )}
+                ) : null}
                 <Link
                   href="/catalog"
                   className="text-sm font-medium text-[var(--color-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"

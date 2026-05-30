@@ -25,6 +25,7 @@ import type {
 } from '@oci/shared-types';
 import { DUO_REGISTRY, lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../auth';
+import { isHost } from '../../lib/groups';
 import { apiFetch } from '../../lib/api';
 
 /**
@@ -231,6 +232,7 @@ export default async function CatalogPage({
 }) {
   const params = await searchParams;
   const session = await auth();
+  const canCreateDataset = isHost(session);
   const filters = parseFilters(params);
 
   const apiQs = new URLSearchParams();
@@ -267,22 +269,29 @@ export default async function CatalogPage({
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Datasets</h1>
-            {response ? (
-              <p className="text-sm text-[var(--color-muted-foreground)]">
-                <span className="text-[var(--color-foreground)] font-medium tabular-nums">
-                  {response.totalEstimate.toLocaleString('en-GB')}
-                </span>{' '}
-                {response.totalEstimate === 1 ? 'dataset' : 'datasets'}
-                {filters.q ? (
-                  <>
-                    {' matching '}
-                    <span className="text-[var(--color-foreground)]">
-                      &ldquo;{filters.q}&rdquo;
-                    </span>
-                  </>
-                ) : null}
-              </p>
-            ) : null}
+            <div className="flex items-center gap-4">
+              {response ? (
+                <p className="text-sm text-[var(--color-muted-foreground)]">
+                  <span className="text-[var(--color-foreground)] font-medium tabular-nums">
+                    {response.totalEstimate.toLocaleString('en-GB')}
+                  </span>{' '}
+                  {response.totalEstimate === 1 ? 'dataset' : 'datasets'}
+                  {filters.q ? (
+                    <>
+                      {' matching '}
+                      <span className="text-[var(--color-foreground)]">
+                        &ldquo;{filters.q}&rdquo;
+                      </span>
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+              {canCreateDataset ? (
+                <Button asChild size="sm">
+                  <Link href="/catalog/new">New dataset</Link>
+                </Button>
+              ) : null}
+            </div>
           </div>
           <p className="max-w-2xl text-[var(--color-muted-foreground)]">
             Browse the GI-AI4H curated catalogue. Each dataset ships a Croissant 1.1 manifest with
