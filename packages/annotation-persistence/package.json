@@ -1,0 +1,23 @@
+{
+  "name": "@oci/annotation-persistence",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Derive the three canonical annotation persistence forms (DICOM SR, FHIR R5, Croissant-RAI) from a single internal source-of-truth (ADR-0008). Pure functions — no DB, no Prisma.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "@types/node": "^25.6.0",
+    "eslint": "^9.39.4",
+    "vitest": "^4.1.5"
+  }
+}
