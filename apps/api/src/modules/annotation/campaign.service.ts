@@ -163,12 +163,23 @@ export class CampaignService {
       });
     }
 
+    // ADR-0016 Decision 1: pin the exact Croissant manifest version. When
+    // the caller supplies one, validate it exists AND belongs to this
+    // dataset (mirror the tool-version check in tool-integration.service).
+    // When omitted, default-pin the dataset's latest published version;
+    // if the dataset has none, leave null (legacy resolve-at-use posture).
+    const manifestVersionId = await this.resolveManifestVersionId(
+      body.datasetId,
+      body.manifestVersionId,
+    );
+
     const created = await this.repo.create({
       slug: body.slug,
       name: body.name,
       description: body.description ?? null,
       taskKind: body.taskKind,
       datasetId: body.datasetId,
+      manifestVersionId,
       toolIntegrationId: body.toolIntegrationId,
       outputLicense: this.toPrismaLicense(outputLicense),
       workflowConfig: body.workflowConfig ?? { nAnnotators: 3 },
@@ -176,6 +187,48 @@ export class CampaignService {
     });
 
     return this.toDetail(created, created.toolIntegration);
+  }
+
+  /**
+   * Resolve + validate the pinned manifest version (ADR-0016 Decision 1).
+   * Returns the id to pin, or null when the dataset has no published
+   * version and the caller didn't specify one.
+   */
+  private async resolveManifestVersionId(
+    datasetId: string,
+    requested: string | undefined,
+  ): Promise<string | null> {
+    if (requested) {
+      const mv = await this.repo.findDatasetVersion(requested);
+      if (!mv) {
+        throw new BadRequestException(
+          `manifestVersionId '${requested}' is not a registered dataset version`,
+        );
+      }
+      if (mv.datasetId !== datasetId) {
+        throw new BadRequestException(
+          `manifestVersionId '${requested}' does not belong to dataset '${datasetId}'`,
+        );
+      }
+      return mv.id;
+    }
+    const latest = await this.repo.findLatestDatasetVersion(datasetId);
+    return latest?.id ?? null;
+  }
+
+  /**
+   * Enforce ADR-0016 Decision 1 manifest immutability: the pinned manifest
+   * version cannot change once the campaign has started. Called by any
+   * future campaign-edit path; today campaigns are create-only so this is
+   * the guard a PATCH endpoint will use. RUNNING/COMPLETED/ARCHIVED are
+   * post-start; DRAFT/READY are still mutable.
+   */
+  assertManifestVersionMutable(status: string): void {
+    if (status === 'RUNNING' || status === 'COMPLETED' || status === 'ARCHIVED') {
+      throw new ConflictException(
+        `manifestVersionId is immutable once the campaign has started (status=${status})`,
+      );
+    }
   }
 
   /**
@@ -271,6 +324,7 @@ export class CampaignService {
       status: row.status,
       taskKind: row.taskKind,
       datasetId: row.datasetId,
+      manifestVersionId: row.manifestVersionId,
       toolIntegrationId: row.toolIntegrationId,
       outputLicense: this.toContractLicense(row.outputLicense),
       createdAt: row.createdAt.toISOString(),

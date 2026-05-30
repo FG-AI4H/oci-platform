@@ -36,6 +36,7 @@ const ROW: AnnotationCampaign & { toolIntegration: AnnotationToolIntegration } =
   status: 'DRAFT',
   taskKind: 'CLASSIFICATION',
   datasetId: 'ds-1',
+  manifestVersionId: null,
   toolIntegrationId: TOOL.id,
   outputLicense: 'CC_BY_4_0',
   workflowConfig: { nAnnotators: 3 },
@@ -53,6 +54,8 @@ interface RepoMock {
   listActiveToolIntegrations: ReturnType<typeof vi.fn>;
   findDatasetModalities: ReturnType<typeof vi.fn>;
   findDatasetLicenseContext: ReturnType<typeof vi.fn>;
+  findDatasetVersion: ReturnType<typeof vi.fn>;
+  findLatestDatasetVersion: ReturnType<typeof vi.fn>;
   create: ReturnType<typeof vi.fn>;
   updateStatus: ReturnType<typeof vi.fn>;
 }
@@ -78,6 +81,11 @@ beforeEach(() => {
     findDatasetLicenseContext: vi
       .fn()
       .mockResolvedValue({ accessTier: 'OPEN', commercialUseTerms: 'OK' }),
+    // Default: dataset has no published version → manifestVersionId
+    // resolves to null (legacy resolve-at-use posture). Per-test
+    // overrides exercise the pin + mismatch branches.
+    findDatasetVersion: vi.fn(),
+    findLatestDatasetVersion: vi.fn().mockResolvedValue(null),
     create: vi.fn(),
     updateStatus: vi.fn(),
   };
@@ -573,5 +581,114 @@ describe('CampaignService.transition (lifecycle state machine, #215 slice 1)', (
       service.transition('chest-xr-pilot', 'mark-ready', undefined, user(SUB_UUID)),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repo.updateStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe('CampaignService — manifest version pin (ADR-0016 Decision 1, #320)', () => {
+  beforeEach(() => {
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue(TOOL);
+    mockDatasetModalities(['X-ray']);
+    repo.create.mockResolvedValue(ROW);
+  });
+
+  it('default-pins the dataset latest version when manifestVersionId is omitted', async () => {
+    repo.findLatestDatasetVersion.mockResolvedValue({
+      id: 'dv-9',
+      datasetId: 'ds-1',
+      version: '2.0.0',
+    });
+    await service.create(
+      {
+        slug: 'chest-xr-pilot',
+        name: 'X',
+        datasetId: 'ds-1',
+        toolIntegrationId: TOOL.id,
+        taskKind: 'CLASSIFICATION',
+      },
+      user(SUB_UUID),
+    );
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ manifestVersionId: 'dv-9' }),
+    );
+  });
+
+  it('leaves manifestVersionId null when the dataset has no published version', async () => {
+    repo.findLatestDatasetVersion.mockResolvedValue(null);
+    await service.create(
+      {
+        slug: 'chest-xr-pilot',
+        name: 'X',
+        datasetId: 'ds-1',
+        toolIntegrationId: TOOL.id,
+        taskKind: 'CLASSIFICATION',
+      },
+      user(SUB_UUID),
+    );
+    expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ manifestVersionId: null }));
+  });
+
+  it('pins a supplied manifestVersionId that belongs to the dataset', async () => {
+    repo.findDatasetVersion.mockResolvedValue({ id: 'dv-1', datasetId: 'ds-1', version: '1.0.0' });
+    await service.create(
+      {
+        slug: 'chest-xr-pilot',
+        name: 'X',
+        datasetId: 'ds-1',
+        manifestVersionId: 'dv-1',
+        toolIntegrationId: TOOL.id,
+        taskKind: 'CLASSIFICATION',
+      },
+      user(SUB_UUID),
+    );
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ manifestVersionId: 'dv-1' }),
+    );
+  });
+
+  it('400s a supplied manifestVersionId that belongs to a different dataset', async () => {
+    repo.findDatasetVersion.mockResolvedValue({
+      id: 'dv-x',
+      datasetId: 'other-ds',
+      version: '1.0.0',
+    });
+    await expect(
+      service.create(
+        {
+          slug: 'chest-xr-pilot',
+          name: 'X',
+          datasetId: 'ds-1',
+          manifestVersionId: 'dv-x',
+          toolIntegrationId: TOOL.id,
+          taskKind: 'CLASSIFICATION',
+        },
+        user(SUB_UUID),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('400s a supplied manifestVersionId that does not exist', async () => {
+    repo.findDatasetVersion.mockResolvedValue(null);
+    await expect(
+      service.create(
+        {
+          slug: 'chest-xr-pilot',
+          name: 'X',
+          datasetId: 'ds-1',
+          manifestVersionId: 'dv-missing',
+          toolIntegrationId: TOOL.id,
+          taskKind: 'CLASSIFICATION',
+        },
+        user(SUB_UUID),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('assertManifestVersionMutable throws 409 once started, passes while DRAFT/READY', () => {
+    expect(() => service.assertManifestVersionMutable('DRAFT')).not.toThrow();
+    expect(() => service.assertManifestVersionMutable('READY')).not.toThrow();
+    expect(() => service.assertManifestVersionMutable('RUNNING')).toThrow(ConflictException);
+    expect(() => service.assertManifestVersionMutable('COMPLETED')).toThrow(ConflictException);
   });
 });
