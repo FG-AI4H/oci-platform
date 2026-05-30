@@ -105,12 +105,39 @@ export class CampaignRepository {
     });
   }
 
+  /**
+   * Resolve a catalog DatasetVersion by id (ADR-0016 Decision 1). Direct
+   * cross-schema read, matching the `findDatasetModalities` soft-lookup
+   * pattern — the annotation module does not inject CatalogService.
+   */
+  async findDatasetVersion(
+    id: string,
+  ): Promise<{ id: string; datasetId: string; version: string } | null> {
+    return this.prisma.client.datasetVersion.findUnique({
+      where: { id },
+      select: { id: true, datasetId: true, version: true },
+    });
+  }
+
+  /** The dataset's latest published version, used to default-pin a campaign
+   * (ADR-0016 Decision 5). Null when the dataset has no published version. */
+  async findLatestDatasetVersion(
+    datasetId: string,
+  ): Promise<{ id: string; datasetId: string; version: string } | null> {
+    return this.prisma.client.datasetVersion.findFirst({
+      where: { datasetId },
+      orderBy: { publishedAt: 'desc' },
+      select: { id: true, datasetId: true, version: true },
+    });
+  }
+
   async create(args: {
     slug: string;
     name: string;
     description: string | null;
     taskKind: PrismaTaskKind;
     datasetId: string;
+    manifestVersionId: string | null;
     toolIntegrationId: string;
     outputLicense: PrismaOutputLicense;
     workflowConfig: { nAnnotators: number };
@@ -124,6 +151,7 @@ export class CampaignRepository {
         status: 'DRAFT' as PrismaStatus,
         taskKind: args.taskKind,
         datasetId: args.datasetId,
+        manifestVersionId: args.manifestVersionId,
         toolIntegrationId: args.toolIntegrationId,
         outputLicense: args.outputLicense,
         workflowConfig: args.workflowConfig,

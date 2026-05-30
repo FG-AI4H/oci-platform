@@ -643,8 +643,9 @@ model Dataset {
   /// `commercialUseTerms` band.
   commercialClauses String? @map("commercial_clauses")
 
-  versions       DatasetVersion[]
-  accessRequests AccessRequest[]
+  versions            DatasetVersion[]
+  accessRequests      AccessRequest[]
+  annotationCampaigns AnnotationCampaign[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -670,8 +671,9 @@ model DatasetVersion {
 
   publishedAt DateTime @default(now()) @map("published_at")
 
-  dataset       Dataset        @relation(fields: [datasetId], references: [id], onDelete: Cascade)
-  distributions Distribution[]
+  dataset             Dataset              @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  distributions       Distribution[]
+  annotationCampaigns AnnotationCampaign[]
 
   @@unique([datasetId, version])
   @@index([datasetId, publishedAt])
@@ -1092,9 +1094,15 @@ model AnnotationCampaign {
   status      CampaignStatus   @default(DRAFT)
   taskKind    CampaignTaskKind @map("task_kind")
 
-  /// Soft FK → catalog.datasets.id (ADR-0006 Decision 6). Hard FK lands
-  /// in B.A.2 along with manifest-version pinning.
+  /// Hard FK → catalog.datasets.id (ADR-0016 Decision 2; was a soft FK
+  /// pre-#320). A campaign can no longer reference a non-existent dataset.
   datasetId         String  @map("dataset_id") @db.Uuid
+  /// FK → catalog.dataset_versions.id (ADR-0016 Decision 1). Pins the
+  /// exact Croissant manifest version the campaign runs against; immutable
+  /// once status = RUNNING (enforced in the service). Nullable: campaigns
+  /// created before #320 have none and resolve the dataset's latest
+  /// published version at use; new campaigns default-pin the latest.
+  manifestVersionId String? @map("manifest_version_id") @db.Uuid
   /// Real FK to annotation_tool_integrations.id.
   toolIntegrationId String  @map("tool_integration_id") @db.Uuid
   /// FK to annotation_tool_integration_versions.id (ADR-0007 §Versioning).
@@ -1141,12 +1149,15 @@ model AnnotationCampaign {
   startedAt   DateTime? @map("started_at")
   completedAt DateTime? @map("completed_at")
 
+  dataset         Dataset                           @relation(fields: [datasetId], references: [id], onDelete: Restrict)
+  manifestVersion DatasetVersion?                   @relation(fields: [manifestVersionId], references: [id], onDelete: Restrict)
   toolIntegration AnnotationToolIntegration         @relation(fields: [toolIntegrationId], references: [id])
   toolVersion     AnnotationToolIntegrationVersion? @relation(fields: [toolVersionId], references: [id])
   instructions    AnnotationCampaignInstructions[]
 
   @@index([status])
   @@index([datasetId])
+  @@index([manifestVersionId])
   @@index([createdById])
   @@map("annotation_campaigns")
   @@schema("annotation")

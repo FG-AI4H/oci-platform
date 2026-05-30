@@ -2458,6 +2458,9 @@ export const CampaignSummarySchema = z.object({
   taskKind: CampaignTaskKindSchema,
   /** FK to catalog.datasets.id — set at creation, immutable per ADR-0006. */
   datasetId: z.string().uuid(),
+  /** FK to catalog.dataset_versions.id (ADR-0016 Decision 1). The pinned
+   * Croissant manifest version; null on pre-#320 campaigns. */
+  manifestVersionId: z.string().uuid().nullable(),
   /** FK to annotation_tool_integrations.id — immutable once campaign runs. */
   toolIntegrationId: z.string().uuid(),
   /** Output license declared at creation (ADR-0012). */
@@ -2492,6 +2495,10 @@ export const CreateCampaignRequestSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).nullable().optional(),
   datasetId: z.string().uuid(),
+  /** Optional pinned manifest version (ADR-0016 Decision 1). When omitted,
+   * the API pins the dataset's latest published version. Immutable once
+   * status = RUNNING. */
+  manifestVersionId: z.string().uuid().optional(),
   toolIntegrationId: z.string().uuid(),
   taskKind: CampaignTaskKindSchema,
   workflowConfig: CampaignWorkflowConfigSchema.optional(),
