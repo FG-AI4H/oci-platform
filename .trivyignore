@@ -13,7 +13,8 @@
 # -----------------------------------------------------------------------------
 # libssl3 (Debian 12 / distroless gcr.io/distroless/nodejs24-debian12)
 # Installed: 3.0.18-1~deb12u2
-# Fixed:     3.0.19-1~deb12u2 (not yet in the distroless image as of 2026-05-03)
+# Fixed:     3.0.20-1~deb12u2 (still not in the distroless image as of 2026-06-11;
+#            distroless remains on 3.0.18 — it has lagged both the .19 and .20 bumps)
 # Rationale: the NestJS API container only handles inbound HTTP from
 # CloudFront/ALB (TLS terminated upstream) and outbound TLS to AWS
 # service endpoints. It does not validate arbitrary X.509 client
@@ -27,6 +28,13 @@ CVE-2026-28387
 CVE-2026-28388
 CVE-2026-28389
 CVE-2026-28390
+# Added 2026-06-11: CVE-2026-45447 (libssl3 HIGH) — crafted PKCS#7 / S/MIME
+# (CMS) signed-message parsing. Same package and the same unreachable surface
+# as the block above (the API parses no CMS payloads; TLS is terminated
+# upstream). Fix 3.0.20-1~deb12u2 is not yet in the distroless base, and the
+# HIGH gate was blocking all deploys. Remove when distroless ships the patch —
+# the scheduled suppression audit will flag it.
+CVE-2026-45447
 
 # -----------------------------------------------------------------------------
 # Removed 2026-05-26: the scheduled Trivy suppression audit confirmed
