@@ -15,7 +15,13 @@ export interface IdentityStackProps extends cdk.StackProps {
  * Cognito user pool — unified identity across all OCI packages.
  * Replaces Django allauth (eval platform) and the per-app Cognito pool (annotation tool).
  *
- * Groups model: admin, host, participant, annotator, reviewer, supervisor, regulator.
+ * Groups model: must stay in lock-step with `PlatformGroupSchema` in
+ * `@oci/shared-types` (the contract the admin UI offers as toggleable
+ * roles). A group present in the enum but missing here makes
+ * `AdminAddUserToGroup` fail with `ResourceNotFoundException` → 500.
+ * Current set: admin, regulator, supervisor, campaign-manager,
+ * task-supervisor, reviewer, expert-reviewer, host, arbitration-annotator,
+ * annotator, participant.
  * Advanced security ON in prod for adaptive risk and compromised-creds detection.
  */
 export class IdentityStack extends cdk.Stack {
@@ -60,12 +66,18 @@ export class IdentityStack extends cdk.Stack {
     });
 
     // Roles as Cognito groups (precedence reflects org seniority)
+    // Keep in lock-step with PlatformGroupSchema (@oci/shared-types).
+    // Precedence reflects org seniority (lower = higher priority).
     [
       ['admin', 1],
       ['regulator', 5],
       ['supervisor', 10],
+      ['campaign-manager', 12],
+      ['task-supervisor', 13],
       ['reviewer', 15],
+      ['expert-reviewer', 16],
       ['host', 20],
+      ['arbitration-annotator', 23],
       ['annotator', 25],
       ['participant', 30],
     ].forEach(([groupName, precedence]) => {

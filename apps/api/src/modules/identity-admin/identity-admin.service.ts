@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -78,7 +79,22 @@ export class IdentityAdminService {
       return this.getUser(username);
     }
 
-    await this.cognito.addUserToGroup(username, group);
+    try {
+      await this.cognito.addUserToGroup(username, group);
+    } catch (err) {
+      if (isMissingCognitoGroup(err)) {
+        // Contract↔infra drift: the group is in PlatformGroupSchema (so the
+        // admin UI offers it) but not provisioned in this pool's CDK identity
+        // stack. Surface the cause instead of an opaque 500.
+        this.logger.error(
+          `grant failed: Cognito group '${group}' is not provisioned in this user pool — add it to CDK identity-stack and deploy`,
+        );
+        throw new InternalServerErrorException(
+          `Cognito group '${group}' is not provisioned in this environment. It must be added to the CDK identity stack and deployed.`,
+        );
+      }
+      throw err;
+    }
     await this.repo.recordEvent({
       actorSub: cognitoSubAsUuid(actor.sub),
       actorUsername: pickActorUsername(actor),
@@ -153,6 +169,21 @@ export class IdentityAdminService {
     this.logger.log(`revoke: actor=${actor.sub} target=${target.username} group=${group}`);
     return this.getUser(username);
   }
+}
+
+/**
+ * True when the error is the Cognito SDK's `ResourceNotFoundException`,
+ * which `AdminAddUserToGroup` throws for a group that doesn't exist in
+ * the pool. Matched on `.name` rather than `instanceof` so it holds
+ * across SDK module instances.
+ */
+function isMissingCognitoGroup(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'name' in err &&
+    (err as { name?: unknown }).name === 'ResourceNotFoundException'
+  );
 }
 
 function pickActorUsername(actor: CognitoAccessTokenPayload): string {

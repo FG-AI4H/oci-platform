@@ -113,6 +113,20 @@ describe('IdentityAdminService.grant', () => {
       service.grant('nope', 'campaign-manager' as PlatformGroup, actor()),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('surfaces a clear error when the Cognito group is not provisioned', async () => {
+    cognito.getUser.mockResolvedValueOnce(SUMMARY);
+    cognito.addUserToGroup.mockRejectedValueOnce(
+      Object.assign(new Error('Group not found.'), { name: 'ResourceNotFoundException' }),
+    );
+
+    await expect(
+      service.grant('bob', 'campaign-manager' as PlatformGroup, actor()),
+    ).rejects.toMatchObject({ message: expect.stringContaining('not provisioned') });
+    // No audit row for a grant that never happened.
+    expect(repo.recordEvent).not.toHaveBeenCalled();
+    expect(audit.emitSync).not.toHaveBeenCalled();
+  });
 });
 
 describe('IdentityAdminService.revoke', () => {
