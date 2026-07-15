@@ -19,6 +19,7 @@
     "clean": "rm -rf dist cdk.out .turbo"
   },
   "dependencies": {
+    "@oci/shared-types": "workspace:*",
     "aws-cdk-lib": "^2.252.0",
     "cdk-nag": "^2.36.0",
     "constructs": "^10.4.2",
