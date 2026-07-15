@@ -354,6 +354,9 @@ importers:
 
   infra/cdk:
     dependencies:
+      '@oci/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
       aws-cdk-lib:
         specifier: ^2.252.0
         version: 2.252.0(constructs@10.6.0)
