@@ -211,8 +211,8 @@ importers:
         specifier: ^9.5.0
         version: 9.14.0
       smtp-server:
-        specifier: ^3.18.4
-        version: 3.18.4
+        specifier: ^3.19.2
+        version: 3.19.2
     devDependencies:
       '@types/node':
         specifier: ^25.6.0
@@ -3915,8 +3915,8 @@ packages:
     resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
     hasBin: true
 
-  nodemailer@8.0.5:
-    resolution: {integrity: sha512-0PF8Yb1yZuQfQbq+5/pZJrtF6WQcjTd5/S4JOHs9PGFxuTqoB/icwuB44pOdURHJbRKX1PPoJZtY7R4VUoCC8w==}
+  nodemailer@9.0.3:
+    resolution: {integrity: sha512-n+YP+NKwR5zRWa60k3GiQ6Q3B4KXCoAw40dAKeCtYn020iNN74aWK2liXIC3ZEATeGql7we3tE3t8QwhY0eskw==}
     engines: {node: '>=6.0.0'}
 
   oauth4webapi@3.8.6:
@@ -4396,8 +4396,8 @@ packages:
     resolution: {integrity: sha512-stxByr12oeeOyY2BlviTNQlYV5xOj47GirPr4yA1hE9JCtxfQN0+tVbkxwCtYDQWhEKWFHsEK48ORg5jrouCAg==}
     engines: {node: '>=20'}
 
-  smtp-server@3.18.4:
-    resolution: {integrity: sha512-9EnXPG4Tv+2P/TSEUdFTduYn9IxtxNRsOq/ryVj8ZlT+6MU2um9gn2Td2hHlgH1n+saagMWtici3hn5J5PhU+g==}
+  smtp-server@3.19.2:
+    resolution: {integrity: sha512-kZVHvcynQ/Nq7EscK02OjbivmdGtlmhGXYgDjZDCTu4RPyuW3OijuGcLuzXbPvGs6drdATWoVhKOIIueLhJ8rQ==}
     engines: {node: '>=18.18.0'}
 
   sonic-boom@4.2.1:
@@ -8897,7 +8897,7 @@ snapshots:
       detect-libc: 2.1.2
     optional: true
 
-  nodemailer@8.0.5: {}
+  nodemailer@9.0.3: {}
 
   oauth4webapi@3.8.6: {}
 
@@ -9434,10 +9434,10 @@ snapshots:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 5.1.0
 
-  smtp-server@3.18.4:
+  smtp-server@3.19.2:
     dependencies:
       ipv6-normalize: 1.0.1
-      nodemailer: 8.0.5
+      nodemailer: 9.0.3
       punycode.js: 2.3.1
 
   sonic-boom@4.2.1:
