@@ -4,7 +4,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
-import { PlatformGroupSchema, type PlatformGroup } from '@oci/shared-types';
+import type { PlatformGroup } from '@oci/shared-types';
 import type { OciEnvConfig } from './environments.js';
 
 /**
@@ -84,14 +84,16 @@ export class IdentityStack extends cdk.Stack {
       deletionProtection: true,
     });
 
-    // Roles as Cognito groups — the group set IS PlatformGroupSchema, so a
-    // new contract role is provisioned automatically (and forced to declare a
-    // precedence via GROUP_PRECEDENCE's total typing).
-    for (const groupName of PlatformGroupSchema.options) {
+    // Roles as Cognito groups. GROUP_PRECEDENCE is a total Record over
+    // PlatformGroup, so its keys ARE exactly the contract's groups — iterating
+    // its entries provisions the full contract set. Adding a role to
+    // PlatformGroupSchema forces a precedence here (tsc) before it compiles.
+    // (Object.entries avoids a dynamic-key index — security/detect-object-injection.)
+    for (const [groupName, precedence] of Object.entries(GROUP_PRECEDENCE)) {
       new cognito.CfnUserPoolGroup(this, `Group-${groupName}`, {
         userPoolId: this.userPool.userPoolId,
         groupName,
-        precedence: GROUP_PRECEDENCE[groupName],
+        precedence,
       });
     }
 
