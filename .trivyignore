@@ -37,6 +37,21 @@ CVE-2026-28390
 CVE-2026-45447
 
 # -----------------------------------------------------------------------------
+# undici (npm) — image scan only (build-images), not the CI filesystem scan.
+# Installed: 6.26.0    Fixed: 6.27.0
+# CVE-2026-12151: DoS via unbounded memory growth over WebSocket.
+# Why suppressed: undici is a *devDependency* of transitives (hono,
+# light-my-request, oauth4webapi) — NOT a runtime dependency. It leaks into
+# app/node_modules via `pnpm deploy --prod --legacy` (a prod-isolate bug),
+# and the API never uses undici's WebSocket *client* (it is an HTTP server;
+# outbound calls go through the AWS SDK). The DoS surface is not reachable.
+# A pnpm.overrides pin to undici ^6.27.0 exists but does NOT reach the
+# --legacy isolate, so it can't fix the image on its own.
+# Root-cause fix (stop shipping devDeps in the prod image) tracked separately;
+# remove this once that lands. Scheduled suppression audit will flag it.
+CVE-2026-12151
+
+# -----------------------------------------------------------------------------
 # Removed 2026-05-26: the scheduled Trivy suppression audit confirmed
 # both CVE-2026-33671 (picomatch in the Prisma CLI tarball) and
 # CVE-2026-0861 (libc6 in distroless/nodejs24-debian12) are no longer
