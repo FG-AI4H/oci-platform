@@ -4,7 +4,29 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
+import type { PlatformGroup } from '@oci/shared-types';
 import type { OciEnvConfig } from './environments.js';
+
+/**
+ * Cognito group precedence (lower = higher priority / seniority). This is a
+ * total map over `PlatformGroup`, so `tsc` fails if a group is added to
+ * `PlatformGroupSchema` without a precedence here — which also means the
+ * group can't be forgotten in the pool (the drift that made
+ * `AdminAddUserToGroup` 500 for `campaign-manager`). See FG-AI4H/oci-platform#337.
+ */
+const GROUP_PRECEDENCE: Record<PlatformGroup, number> = {
+  admin: 1,
+  regulator: 5,
+  supervisor: 10,
+  'campaign-manager': 12,
+  'task-supervisor': 13,
+  reviewer: 15,
+  'expert-reviewer': 16,
+  host: 20,
+  'arbitration-annotator': 23,
+  annotator: 25,
+  participant: 30,
+};
 
 export interface IdentityStackProps extends cdk.StackProps {
   cfg: OciEnvConfig;
@@ -15,13 +37,10 @@ export interface IdentityStackProps extends cdk.StackProps {
  * Cognito user pool — unified identity across all OCI packages.
  * Replaces Django allauth (eval platform) and the per-app Cognito pool (annotation tool).
  *
- * Groups model: must stay in lock-step with `PlatformGroupSchema` in
+ * Groups model: derived directly from `PlatformGroupSchema` in
  * `@oci/shared-types` (the contract the admin UI offers as toggleable
- * roles). A group present in the enum but missing here makes
- * `AdminAddUserToGroup` fail with `ResourceNotFoundException` → 500.
- * Current set: admin, regulator, supervisor, campaign-manager,
- * task-supervisor, reviewer, expert-reviewer, host, arbitration-annotator,
- * annotator, participant.
+ * roles), so the pool always provisions exactly the contract's groups —
+ * no hand-maintained list to drift out of sync. See `GROUP_PRECEDENCE`.
  * Advanced security ON in prod for adaptive risk and compromised-creds detection.
  */
 export class IdentityStack extends cdk.Stack {
@@ -65,28 +84,18 @@ export class IdentityStack extends cdk.Stack {
       deletionProtection: true,
     });
 
-    // Roles as Cognito groups (precedence reflects org seniority)
-    // Keep in lock-step with PlatformGroupSchema (@oci/shared-types).
-    // Precedence reflects org seniority (lower = higher priority).
-    [
-      ['admin', 1],
-      ['regulator', 5],
-      ['supervisor', 10],
-      ['campaign-manager', 12],
-      ['task-supervisor', 13],
-      ['reviewer', 15],
-      ['expert-reviewer', 16],
-      ['host', 20],
-      ['arbitration-annotator', 23],
-      ['annotator', 25],
-      ['participant', 30],
-    ].forEach(([groupName, precedence]) => {
+    // Roles as Cognito groups. GROUP_PRECEDENCE is a total Record over
+    // PlatformGroup, so its keys ARE exactly the contract's groups — iterating
+    // its entries provisions the full contract set. Adding a role to
+    // PlatformGroupSchema forces a precedence here (tsc) before it compiles.
+    // (Object.entries avoids a dynamic-key index — security/detect-object-injection.)
+    for (const [groupName, precedence] of Object.entries(GROUP_PRECEDENCE)) {
       new cognito.CfnUserPoolGroup(this, `Group-${groupName}`, {
         userPoolId: this.userPool.userPoolId,
-        groupName: groupName as string,
-        precedence: precedence as number,
+        groupName,
+        precedence,
       });
-    });
+    }
 
     this.userPoolClient = this.userPool.addClient('WebClient', {
       userPoolClientName: `oci-${props.cfg.envName}-web`,
