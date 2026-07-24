@@ -37,7 +37,12 @@ COPY packages/database/seed ./seed
 # keeps the image small.
 RUN --mount=type=cache,id=npm-migrate,target=/root/.npm \
     npm install --omit=dev --no-audit --no-fund \
- && chmod +x ./entrypoint.sh
+ && chmod +x ./entrypoint.sh \
+ # npm is only needed for the install above. Drop it (+ npx) from the runtime
+ # image so it doesn't ship npm's bundled tar / brace-expansion CVEs
+ # (CVE-2026-59873 CRITICAL / -13149 HIGH — image scan, #374). node stays;
+ # entrypoint.sh invokes prisma directly via ./node_modules/.bin/prisma.
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 # Non-root for parity with the API container security baseline.
 USER node
