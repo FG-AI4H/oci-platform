@@ -23,7 +23,7 @@ DB_PASSWORD_ENC=$(node -e "process.stdout.write(encodeURIComponent(process.env.D
 export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD_ENC}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public&sslmode=require"
 
 echo "migrate: running prisma migrate deploy"
-npx --no-install prisma migrate deploy
+./node_modules/.bin/prisma migrate deploy
 
 # Demo-data seed (#249, #251). Skipped in prod because the seed
 # references fake created_by_id values + placeholder dataset rows that
@@ -56,7 +56,7 @@ if [ -n "${OCI_ENV:-}" ] && [ "${OCI_ENV}" != "prod" ]; then
     # Prisma 7 removed the `--url` flag on `prisma db execute`; the
     # datasource URL is now resolved from prisma.config.ts, which reads
     # DATABASE_URL from the environment (we exported it above).
-    npx --no-install prisma db execute --file "${SEED_SCRIPT}"
+    ./node_modules/.bin/prisma db execute --file "${SEED_SCRIPT}"
     rm -f "${SEED_SCRIPT}"
     echo "seed: done"
   fi
