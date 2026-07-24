@@ -38,7 +38,12 @@ RUN pnpm --filter @oci/database build \
  && pnpm --filter @oci/audit build \
  && pnpm --filter @oci/annotation-quality build \
  && pnpm --filter @oci/api build \
- && pnpm --filter @oci/api deploy --prod --legacy /out
+ # Deterministic prod isolate: the non-legacy (injected) deploy resolves from
+ # the committed lockfile + pnpm.overrides, so the image ships the SAME patched
+ # versions as CI — unlike `--legacy`, which re-resolves and drifted in vulnerable
+ # tar / brace-expansion versions not even in the lockfile (#374). inject is set
+ # for THIS command only (packages are built above; deploy copies their dist).
+ && npm_config_inject_workspace_packages=true pnpm --filter @oci/api deploy --prod /out
 
 FROM gcr.io/distroless/nodejs24-debian12:nonroot
 WORKDIR /app
