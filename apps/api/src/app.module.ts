@@ -22,6 +22,7 @@ import { PolicyAcceptanceModule } from './modules/policy-acceptance/policy-accep
 import { PreferencesModule } from './modules/preferences/preferences.module.js';
 import { RenewalModule } from './modules/renewal/renewal.module.js';
 import { StorageModule } from './modules/storage/storage.module.js';
+import { PredictionModule } from './modules/prediction/prediction.module.js';
 import { HealthController } from './health.controller.js';
 import { MeController } from './me/me.controller.js';
 
@@ -57,7 +58,8 @@ import { MeController } from './me/me.controller.js';
     PlatformSettingsModule,
     PolicyAcceptanceModule,
     RenewalModule,
-    // Phase C: PredictionModule, EvaluationModule
+    PredictionModule,
+    // Phase C: EvaluationModule
     // Phase D: ReportingModule
   ],
   controllers: [HealthController, MeController],

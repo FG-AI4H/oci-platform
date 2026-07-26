@@ -125,4 +125,5 @@ export type {
   ConsentRecord,
   ConsentType,
   ConsentStatus,
+  ModelCard,
 } from './generated/client/index.js';
