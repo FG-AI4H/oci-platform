@@ -13,7 +13,9 @@ import { ModelClassSchema } from './evaluation-task-kind.js';
  */
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
-const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+// Lowercase alphanumerics + hyphens. Kept as a single character class
+// (no nested quantifier) so it's linear-time — security/detect-unsafe-regex.
+const SLUG = /^[a-z0-9-]+$/;
 
 export const CreateModelCardRequestSchema = z
   .object({
