@@ -52,6 +52,21 @@ CVE-2026-45447
 CVE-2026-12151
 
 # -----------------------------------------------------------------------------
+# brace-expansion 1.1.16 (npm) — CVE-2026-14257 (DoS). Lockfile scan only.
+# Fixed only in 5.0.8 — the 1.x and 2.x lines have no patched release.
+# Why suppressed rather than bumped: the 1.x instance exists solely for
+# `minimatch@3.1.5`, which is a **lint-time dev dependency** pulled by eslint
+# (`eslint`, `@eslint/config-array`, `@eslint/eslintrc`, `eslint-plugin-import`).
+# brace-expansion 5.x changed its export shape, so minimatch 3.x throws
+# `TypeError: expand is not a function` against it — verified: forcing 5.0.8
+# tree-wide breaks `pnpm lint` in every package. eslint 10 does NOT resolve this
+# either (`@eslint/eslintrc@latest` still depends on minimatch ^3.1.5).
+# Everything outside eslint's tooling IS on the patched 5.0.8 (override below).
+# Not reachable at runtime: eslint never ships in a prod image and is not on any
+# request path. Remove when @eslint/eslintrc drops minimatch 3.x.
+CVE-2026-14257
+
+# -----------------------------------------------------------------------------
 # Removed 2026-05-26: the scheduled Trivy suppression audit confirmed
 # both CVE-2026-33671 (picomatch in the Prisma CLI tarball) and
 # CVE-2026-0861 (libc6 in distroless/nodejs24-debian12) are no longer
