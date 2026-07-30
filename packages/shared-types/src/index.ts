@@ -3267,10 +3267,175 @@ export const DatasetConsentHistorySchema = z.object({
 });
 export type DatasetConsentHistory = z.infer<typeof DatasetConsentHistorySchema>;
 
+// ==== Evaluation surface (EP package, Phase C-lite / ADR-0017) ============
+//
+// Model-to-data scoring. An `EvaluationTask` binds a dataset slug + task
+// kind + metric config + the HIDDEN ground-truth labels; a `Submission` is
+// one scored (or failed) run against it. Ground truth is NEVER part of any
+// DTO in this section — it lives server-side only and is stripped from
+// every read response. ADR-0017 ships Mode 1 (predictions file, scored
+// in-process) only; the mode enum carries the Mode 2 (sealed container)
+// door.
+//
+// Note: the DB-backed evaluation *task kind* here is a CLOSED enum
+// (`GRADING` only) and is deliberately distinct from the OPEN
+// model-submission `EvaluationTaskKind` vocabulary above (ADR-0015) — a
+// different concept in a different layer.
+
+/** Slug rules for an evaluation task — same shape as `DatasetSlug`. */
+export const EvaluationTaskSlugSchema = DatasetSlugSchema;
+export type EvaluationTaskSlug = z.infer<typeof EvaluationTaskSlugSchema>;
+
+/** Scoring family (DB-backed closed enum). ADR-0017 ships `GRADING` only. */
+export const EvaluationTaskKindDbSchema = z.enum(['GRADING']);
+export type EvaluationTaskKindDb = z.infer<typeof EvaluationTaskKindDbSchema>;
+
+/** How a submission delivered predictions. `PREDICTIONS` = Mode 1 (shipped);
+ *  `CONTAINER` = Mode 2 (reserved, no execution path yet). */
+export const SubmissionModeSchema = z.enum(['PREDICTIONS', 'CONTAINER']);
+export type SubmissionMode = z.infer<typeof SubmissionModeSchema>;
+
+/** Submission lifecycle. `PENDING` on insert; `SCORED` once scores are
+ *  written; `FAILED` with a populated `error`. */
+export const SubmissionStatusSchema = z.enum(['PENDING', 'SCORED', 'FAILED']);
+export type SubmissionStatus = z.infer<typeof SubmissionStatusSchema>;
+
+/**
+ * Computed metrics for a scored submission (each rounded to 4 decimals).
+ * Structural mirror of the pure scoring service's output shape.
+ */
+export const EvaluationScoresSchema = z.object({
+  /** Quadratic-weighted kappa over the matched set. */
+  qwk: z.number(),
+  /** Exact-match accuracy over the matched set. */
+  accuracy: z.number(),
+  /** Sensitivity for the referable class (label ≥ threshold). */
+  referableSensitivity: z.number(),
+  /** Specificity for the non-referable class (label < threshold). */
+  referableSpecificity: z.number(),
+  /** matched / |groundTruth| — fraction of the GT set predicted. */
+  coverage: z.number(),
+});
+export type EvaluationScores = z.infer<typeof EvaluationScoresSchema>;
+
+/** Summary row for `GET /v2/evaluation/tasks`. NEVER carries groundTruth. */
+export const EvaluationTaskSummarySchema = z.object({
+  id: z.string().uuid(),
+  slug: EvaluationTaskSlugSchema,
+  name: z.string(),
+  datasetSlug: z.string(),
+  taskKind: EvaluationTaskKindDbSchema,
+  submissionCount: z.number().int(),
+});
+export type EvaluationTaskSummary = z.infer<typeof EvaluationTaskSummarySchema>;
+
+/** One submission's public result. NEVER carries predictions or GT. */
+export const EvaluationSubmissionResultSchema = z.object({
+  id: z.string().uuid(),
+  methodName: z.string(),
+  status: SubmissionStatusSchema,
+  /** `null` until SCORED (PENDING) or when FAILED. */
+  scores: EvaluationScoresSchema.nullable(),
+  createdAt: z.string(),
+});
+export type EvaluationSubmissionResult = z.infer<typeof EvaluationSubmissionResultSchema>;
+
+/**
+ * Detail for `GET /v2/evaluation/tasks/:slug` — task meta + its submissions'
+ * results, ordered best-QWK first. NEVER carries groundTruth.
+ */
+export const EvaluationTaskDetailSchema = z.object({
+  id: z.string().uuid(),
+  slug: EvaluationTaskSlugSchema,
+  name: z.string(),
+  datasetSlug: z.string(),
+  taskKind: EvaluationTaskKindDbSchema,
+  numClasses: z.number().int(),
+  referableThreshold: z.number().int(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  submissions: z.array(EvaluationSubmissionResultSchema),
+});
+export type EvaluationTaskDetail = z.infer<typeof EvaluationTaskDetailSchema>;
+
+/**
+ * `POST /v2/evaluation/tasks/:slug/submissions` — Mode 1 submit.
+ *
+ * `grade` is bounded to a non-negative integer with a generous static
+ * ceiling here so a malformed payload is rejected at the DTO boundary; the
+ * exact `0..(numClasses-1)` range is enforced task-aware in the scoring
+ * service (which knows N) and a violation there persists a FAILED
+ * submission + returns 4xx.
+ */
+export const SubmitPredictionsRequestSchema = z.object({
+  methodName: z.string().min(1).max(120),
+  predictions: z
+    .array(
+      z.object({
+        imageId: z.string().min(1).max(200),
+        grade: z.number().int().min(0).max(1000),
+      }),
+    )
+    .min(1)
+    .max(100_000),
+});
+export type SubmitPredictionsRequest = z.infer<typeof SubmitPredictionsRequestSchema>;
+
+/** `POST .../submissions` response — the new submission id + its scores. */
+export const SubmitPredictionsResponseSchema = z.object({
+  id: z.string().uuid(),
+  scores: EvaluationScoresSchema,
+});
+export type SubmitPredictionsResponse = z.infer<typeof SubmitPredictionsResponseSchema>;
+
+/**
+ * `POST /v2/evaluation/tasks` — admin/host create a task, including the
+ * HIDDEN ground-truth map. This is how a task + labels are created outside
+ * of raw SQL. `groundTruth` is validated to be a non-empty `imageId ->
+ * integer label` map with every label inside `[0, numClasses-1]`.
+ */
+export const CreateEvaluationTaskRequestSchema = z
+  .object({
+    slug: EvaluationTaskSlugSchema,
+    name: z.string().min(1).max(200),
+    datasetSlug: z.string().min(1).max(200),
+    taskKind: EvaluationTaskKindDbSchema.default('GRADING'),
+    numClasses: z.number().int().min(2).max(1000).default(5),
+    referableThreshold: z.number().int().min(1).default(2),
+    groundTruth: z.record(z.string().min(1).max(200), z.number().int().min(0)),
+  })
+  .superRefine((value, ctx) => {
+    const entries = Object.entries(value.groundTruth);
+    if (entries.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['groundTruth'],
+        message: 'groundTruth must have at least one entry',
+      });
+    }
+    if (value.referableThreshold > value.numClasses - 1) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['referableThreshold'],
+        message: `referableThreshold must be ≤ numClasses - 1 (${value.numClasses - 1})`,
+      });
+    }
+    for (const [imageId, label] of entries) {
+      if (label > value.numClasses - 1) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['groundTruth', imageId],
+          message: `ground-truth label ${label} for "${imageId}" is out of range [0, ${value.numClasses - 1}]`,
+        });
+      }
+    }
+  });
+export type CreateEvaluationTaskRequest = z.infer<typeof CreateEvaluationTaskRequestSchema>;
+
 export const tokens = {
   /** Phase B.A.1 added: Campaign, AnnotationToolIntegration (stub registry). */
   /** Phase B.A.2 will add: Task, TaskAssignment, Annotation, gate decisions. */
-  /** Phase C will add: Challenge, Submission, Phase, Leaderboard */
+  /** Phase C added (ADR-0017): EvaluationTask, Submission (evaluation surface). */
   /** Phase D will add: Report, ReportTemplate, AuditEvent */
   /** Phase E will add: DMXP transaction envelope, FederatedConnector */
   /** PR E.2 will add: RemoteDataset, ListDatasetsQuery.source */

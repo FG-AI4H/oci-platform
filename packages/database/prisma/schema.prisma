@@ -1576,3 +1576,111 @@ enum ConsentStatus {
 
   @@schema("catalog")
 }
+
+// ==========================================================================
+// evaluation — model-to-data scoring (EP package, Phase C-lite / ADR-0017)
+//
+// The OCI differentiator: a submission is scored against a HIDDEN ground
+// truth held server-side; only the metrics come back. ADR-0017 ships
+// Mode 1 (predictions-file, scored in-process) first — the two models
+// below carry both Mode 1 and the future Mode 2 (sealed container via the
+// worker-eval SQS contract) so Mode 2 is an execution-path upgrade, not a
+// rewrite. Ground truth is NEVER exposed as a dataset distribution and is
+// stripped from every read DTO.
+// ==========================================================================
+
+/// Kind of evaluation an `EvaluationTask` runs. Closed PostgreSQL enum on
+/// purpose here (unlike the open `EvaluationTaskKind` vocabulary in
+/// `@oci/shared-types`, which is the model-submission taxonomy): ADR-0017
+/// ships only `GRADING` (ordinal-grade scoring — IDRiD DR grades 0-4).
+/// Extend with an additive enum value + migration when a new scoring
+/// family lands.
+enum EvaluationTaskKind {
+  GRADING
+
+  @@schema("evaluation")
+}
+
+/// How a submission delivered its predictions. `PREDICTIONS` = Mode 1
+/// (participant uploaded a predictions file, scored in-process).
+/// `CONTAINER` = Mode 2 (sealed Docker image run by worker-eval) —
+/// reserved; no execution path yet (ADR-0017).
+enum SubmissionMode {
+  PREDICTIONS
+  CONTAINER
+
+  @@schema("evaluation")
+}
+
+/// Lifecycle of a `Submission`. `PENDING` on insert; `SCORED` once the
+/// scoring service has written `scores`; `FAILED` with a populated
+/// `error` when scoring/validation rejected the payload.
+enum SubmissionStatus {
+  PENDING
+  SCORED
+  FAILED
+
+  @@schema("evaluation")
+}
+
+/// An evaluation task binds a dataset (soft slug reference — no Prisma
+/// relation, the dataset lives in the `catalog` schema and may be
+/// retired independently) + a task kind + metric config + the HIDDEN
+/// ground-truth labels. `groundTruth` is a JSON map `imageId -> integer
+/// label`; it is held server-side only and never returned by any read
+/// endpoint.
+model EvaluationTask {
+  id                 String             @id @default(uuid()) @db.Uuid
+  /// URL-safe identifier used in `/v2/evaluation/tasks/:slug` routes. Unique.
+  slug               String             @unique
+  /// Human-readable task name.
+  name               String
+  /// Soft FK → catalog.datasets.slug. No Prisma relation (cross-schema,
+  /// and the evaluation surface must survive the dataset being retired).
+  datasetSlug        String             @map("dataset_slug")
+  /// Scoring family. ADR-0017 ships `GRADING` only.
+  taskKind           EvaluationTaskKind @default(GRADING) @map("task_kind")
+  /// Number of ordinal classes (e.g. 5 → grades 0-4). Drives the QWK
+  /// matrix dimension and the valid prediction-label range [0, N-1].
+  numClasses         Int                @default(5) @map("num_classes")
+  /// Referable threshold T: a label ≥ T is "referable" for the
+  /// binary sensitivity/specificity split (IDRiD DR: grade ≥ 2).
+  referableThreshold Int                @default(2) @map("referable_threshold")
+  /// HIDDEN ground truth: a JSON map `{ imageId: integerLabel }`. Held
+  /// server-side; NEVER serialised to a read DTO or a distribution.
+  groundTruth        Json               @map("ground_truth")
+
+  submissions Submission[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("evaluation_tasks")
+  @@schema("evaluation")
+}
+
+/// One scored (or failed) submission against an `EvaluationTask`.
+model Submission {
+  id          String           @id @default(uuid()) @db.Uuid
+  /// FK → evaluation.evaluation_tasks.id.
+  taskId      String           @map("task_id") @db.Uuid
+  /// Display name of the method / model being evaluated.
+  methodName  String           @map("method_name")
+  /// Soft FK → identity.users.id (UUIDv5 from the Cognito sub). Null for
+  /// anonymous / system submissions.
+  submittedBy String?          @map("submitted_by") @db.Uuid
+  mode        SubmissionMode   @default(PREDICTIONS)
+  status      SubmissionStatus @default(PENDING)
+  /// Computed metrics (`EvaluationScores` shape). Null until SCORED.
+  scores      Json?
+  /// Human-readable failure reason. Set only when status = FAILED.
+  error       String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  task EvaluationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("submissions")
+  @@schema("evaluation")
+}
