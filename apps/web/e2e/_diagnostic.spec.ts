@@ -155,6 +155,31 @@ test.describe('ui/ux diagnostic', () => {
     sections.push({ label: 'catalog-detail', runs });
   });
 
+  test('evaluation tasks list (anonymous)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'evaluation-list', async (page) => {
+      await page.goto('/evaluation');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'evaluation-list', runs });
+  });
+
+  test('evaluation task detail (anonymous)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'evaluation-detail', async (page) => {
+      await page.goto('/evaluation');
+      // Unlike the catalog, an environment can legitimately have zero
+      // evaluation tasks (ADR-0017 is new). Capture the list's empty
+      // state in that case rather than failing the audit run.
+      const firstLink = page.locator('a[href^="/evaluation/"]').first();
+      if ((await firstLink.count()) > 0) {
+        await firstLink.click();
+      }
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'evaluation-detail', runs });
+  });
+
   test('dashboard (signed in)', async ({ browser }) => {
     const runs = await runMatrix(browser, 'dashboard', async (page) => {
       await signInAs(page, 'bob', 'host');

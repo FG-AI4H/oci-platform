@@ -24,6 +24,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [
     { url: `${base}/`, changeFrequency: 'weekly', priority: 1 },
     { url: `${base}/catalog`, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${base}/evaluation`, changeFrequency: 'daily', priority: 0.8 },
   ];
 
   let cursor: string | null = null;

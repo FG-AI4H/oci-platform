@@ -782,8 +782,10 @@ function DatasetCard({ d }: { d: DatasetSummary }) {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-4 text-xs text-[var(--color-muted-foreground)]">
-          <span className="font-mono truncate">{d.slug}</span>
-          <span className="flex items-center gap-1.5">
+          <span className="min-w-0 truncate font-mono">{d.slug}</span>
+          {/* `shrink-0`: the badge row keeps its intrinsic width and the slug
+              truncates instead — otherwise a long slug squeezes the badges. */}
+          <span className="flex shrink-0 items-center gap-1.5">
             {/* Commercial-use band on the card (#119). Only emphasised
                 when the host has explicitly granted (`OK`) or refused
                 (`NON_COMMERCIAL_ONLY`); CASE_BY_CASE is the conservative

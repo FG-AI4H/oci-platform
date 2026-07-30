@@ -3,7 +3,11 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../lib/cn.js';
 
 const badge = cva(
-  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
+  // `whitespace-nowrap`: a badge is a short label, never a paragraph. Without it
+  // a two-word badge ("commercial OK", "no version") breaks across lines as soon
+  // as its flex parent is squeezed, which reads as a layout bug on the catalog
+  // cards. Callers that genuinely need wrapping can override via `className`.
+  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ring-inset',
   {
     variants: {
       tone: {
