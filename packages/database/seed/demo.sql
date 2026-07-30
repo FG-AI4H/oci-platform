@@ -514,3 +514,29 @@ BEGIN
      'idrid-grading-demo/1adb23a5-543b-5fb9-a195-f27eb31bc3e2/IDRiD_101.jpg', 'READY'::"catalog"."DistributionUploadStatus")
   ON CONFLICT (id) DO NOTHING;
 END $idrid_demo$;
+
+-- ----------------------------------------------------------------------------
+-- Section 5 — IDRiD DR-grading EVALUATION TASK (ADR-0017, Mode 1).
+-- Binds the `idrid-grading-demo` dataset to a GRADING task and carries the
+-- HIDDEN ground truth (30 images, ICDR grades 0-4; referable = grade >= 2).
+-- Seeded here rather than via POST /v2/evaluation/tasks so the demo is
+-- reproducible on any non-prod environment without an operator token.
+-- Ground truth is never exposed by a read endpoint or a distribution.
+-- ----------------------------------------------------------------------------
+
+INSERT INTO "evaluation"."evaluation_tasks"
+    (id, slug, name, dataset_slug, task_kind, num_classes, referable_threshold,
+     ground_truth, created_at, updated_at)
+VALUES (
+    'cc3bc9ea-9506-54da-a571-7459684bbbdf'::uuid,
+    'idrid-dr-grading',
+    'IDRiD — diabetic retinopathy severity grading (demo)',
+    'idrid-grading-demo',
+    'GRADING'::"evaluation"."EvaluationTaskKind",
+    5,
+    2,
+    '{"IDRiD_001":4,"IDRiD_002":4,"IDRiD_003":4,"IDRiD_004":4,"IDRiD_005":4,"IDRiD_006":3,"IDRiD_007":3,"IDRiD_008":2,"IDRiD_009":2,"IDRiD_010":2,"IDRiD_011":2,"IDRiD_012":2,"IDRiD_013":3,"IDRiD_014":3,"IDRiD_015":2,"IDRiD_016":3,"IDRiD_018":3,"IDRiD_029":0,"IDRiD_030":0,"IDRiD_032":4,"IDRiD_037":0,"IDRiD_038":0,"IDRiD_039":0,"IDRiD_041":0,"IDRiD_043":0,"IDRiD_063":1,"IDRiD_073":1,"IDRiD_074":1,"IDRiD_085":1,"IDRiD_101":1}'::jsonb,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+)
+ON CONFLICT (slug) DO NOTHING;
