@@ -3,9 +3,10 @@
 // Tone: calm, clinical, forward-looking. Built on Tailwind CSS v4 design
 // tokens (declared in apps/web/src/app/globals.css under @theme) plus
 // CVA-based primitives. No Radix dependency yet — components added here
-// are pure DOM + Tailwind. Complex primitives that need accessibility
-// orchestration (Dialog, DropdownMenu, Combobox) will pull @radix-ui/*
-// when introduced.
+// are pure DOM + Tailwind. `Dialog` gets its focus trap, inertness and
+// Escape handling from the native `<dialog>` element rather than a
+// library; primitives that the platform genuinely can't do on its own
+// (DropdownMenu, Combobox) will pull @radix-ui/* when introduced.
 
 export { cn } from './lib/cn.js';
 
@@ -22,6 +23,7 @@ export {
   type CardTitleProps,
 } from './components/card.js';
 export { Badge, type BadgeProps } from './components/badge.js';
+export { Dialog, type DialogProps } from './components/dialog.js';
 export {
   Alert,
   AlertTitle,
@@ -62,4 +64,7 @@ export {
   KeyIcon,
   GlobeIcon,
   ClockIcon,
+  CloseIcon,
+  DownloadIcon,
+  EyeIcon,
 } from './components/icon.js';
