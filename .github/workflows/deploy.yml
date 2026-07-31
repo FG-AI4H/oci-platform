@@ -431,7 +431,7 @@ jobs:
         # below for rationale. Diff target == deploy target.
         run: |
           ENV='${{ inputs.target || 'dev' }}'
-          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-mail oci-$ENV-docuseal oci-$ENV-web"
+          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-eval oci-$ENV-api oci-$ENV-mail oci-$ENV-docuseal oci-$ENV-web"
           MIGRATE_CTX=""
           if [[ -n "${{ needs.build-images.outputs.migrate-image }}" ]]; then
             MIGRATE_CTX="--context migrateImage=${{ needs.build-images.outputs.migrate-image }}"
@@ -459,7 +459,7 @@ jobs:
           APPROVAL=never
           if [[ "$ENV" == "prod" ]]; then APPROVAL=broadening; fi
           if [[ "$ENV" == "int" ]]; then APPROVAL=any-change; fi
-          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-api oci-$ENV-mail oci-$ENV-docuseal oci-$ENV-web"
+          STACKS="oci-$ENV-network oci-$ENV-identity oci-$ENV-observability oci-$ENV-data oci-$ENV-eval oci-$ENV-api oci-$ENV-mail oci-$ENV-docuseal oci-$ENV-web"
           MIGRATE_CTX=""
           if [[ -n "${{ needs.build-images.outputs.migrate-image }}" ]]; then
             MIGRATE_CTX="--context migrateImage=${{ needs.build-images.outputs.migrate-image }}"

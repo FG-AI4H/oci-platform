@@ -18,8 +18,8 @@ export interface BootstrapOidcStackProps extends cdk.StackProps {
  * - The `gha-oci-deploy-{env}` IAM role assumable from `FG-AI4H/oci-platform`
  *   when running under GitHub Environment `{env}`.
  * - ECR repositories `oci-api`, `oci-web`, `oci-worker-ingest`,
- *   `oci-migrate`, `oci-smtp-relay` (image scanning on push, IMMUTABLE
- *   tags, KMS).
+ *   `oci-migrate`, `oci-smtp-relay`, `oci-worker-eval` (image scanning on
+ *   push, IMMUTABLE tags, KMS).
  *
  * The OIDC provider this role trusts is account-scoped and lives in
  * `SharedBootstrapStack`. This stack only LOOKS UP the provider by its
@@ -41,6 +41,7 @@ export class BootstrapOidcStack extends cdk.Stack {
   public readonly workerIngestRepo: ecr.Repository;
   public readonly migrateRepo: ecr.Repository;
   public readonly smtpRelayRepo: ecr.Repository;
+  public readonly workerEvalRepo: ecr.Repository;
 
   constructor(scope: Construct, id: string, props: BootstrapOidcStackProps) {
     super(scope, id, props);
@@ -216,12 +217,25 @@ export class BootstrapOidcStack extends cdk.Stack {
       repositoryName: 'oci-smtp-relay',
     });
 
+    // Sealed-execution runner (`apps/worker-eval`, ADR-0018 Mode 2). Created
+    // here with the others so WP1 has somewhere to push; eval-stack imports
+    // it by name once `--context workerEvalImage=...` is supplied. NOTE: this
+    // stack is deployed manually per environment, so the repo does not exist
+    // until an operator runs
+    //   AWS_PROFILE=ai4h pnpm --filter @oci/cdk exec cdk deploy \
+    //     oci-{env}-bootstrap --context env={env}
+    this.workerEvalRepo = new ecr.Repository(this, 'WorkerEvalRepo', {
+      ...repoDefaults,
+      repositoryName: 'oci-worker-eval',
+    });
+
     new cdk.CfnOutput(this, 'DeployRoleArn', { value: this.deployRole.roleArn });
     new cdk.CfnOutput(this, 'ApiRepoUri', { value: this.apiRepo.repositoryUri });
     new cdk.CfnOutput(this, 'WebRepoUri', { value: this.webRepo.repositoryUri });
     new cdk.CfnOutput(this, 'WorkerIngestRepoUri', { value: this.workerIngestRepo.repositoryUri });
     new cdk.CfnOutput(this, 'MigrateRepoUri', { value: this.migrateRepo.repositoryUri });
     new cdk.CfnOutput(this, 'SmtpRelayRepoUri', { value: this.smtpRelayRepo.repositoryUri });
+    new cdk.CfnOutput(this, 'WorkerEvalRepoUri', { value: this.workerEvalRepo.repositoryUri });
 
     NagSuppressions.addResourceSuppressions(
       this.deployRole,

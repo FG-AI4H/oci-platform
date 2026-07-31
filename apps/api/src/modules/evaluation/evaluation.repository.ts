@@ -1,6 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@oci/database';
-import type { EvaluationScores, EvaluationTaskKindDb, SubmissionStatus } from '@oci/shared-types';
+import type {
+  EvaluationScores,
+  EvaluationTaskKindDb,
+  SubmissionMode,
+  SubmissionStatus,
+} from '@oci/shared-types';
 import { PrismaService } from '../../prisma.service.js';
 
 /**
@@ -48,6 +53,47 @@ export interface EvaluationTaskScoringRow {
   numClasses: number;
   referableThreshold: number;
   groundTruth: Record<string, number>;
+}
+
+/**
+ * Identity of a task, with NO ground truth attached. Used by the CONTAINER
+ * dispatch path, which resolves the task only to bind the submission and name
+ * the dataset mount — it must never load hidden labels it has no use for.
+ */
+export interface EvaluationTaskRefRow {
+  id: string;
+  slug: string;
+}
+
+/**
+ * What the result outbox needs to decide accept / replay / reject for one
+ * submission. No ground truth: the predictions branch loads the scoring context
+ * separately, and only after the idempotency and route checks have passed.
+ */
+export interface SubmissionResultContextRow {
+  id: string;
+  taskId: string;
+  mode: SubmissionMode;
+  status: SubmissionStatus;
+  /** Route version pinned at dispatch. Null until WP5 populates it. */
+  routeVersion: string | null;
+  /** Fingerprint of the already-applied result, if any. */
+  resultFingerprint: string | null;
+  /** Classified failure code of the already-applied result, if any. */
+  failureCode: string | null;
+  /** Raw JSON as stored; the service parses it into `EvaluationScores`. */
+  scores: unknown;
+}
+
+/** Values the outbox writes when it applies a result. */
+export interface SubmissionResultUpdate {
+  status: SubmissionStatus;
+  scores: EvaluationScores | null;
+  /** PARTICIPANT-FACING text only — never the worker's operator detail. */
+  error: string | null;
+  failureCode: string | null;
+  durationMs: number | null;
+  resultFingerprint: string | null;
 }
 
 /**
@@ -156,6 +202,79 @@ export class EvaluationRepository {
     };
   }
 
+  /**
+   * Resolve a task by slug WITHOUT its ground truth — the CONTAINER dispatch
+   * path's only read. Keeping it separate from `findScoringContext` means the
+   * dispatcher physically cannot hold hidden labels.
+   */
+  async findTaskRefBySlug(slug: string): Promise<EvaluationTaskRefRow | null> {
+    const t = await this.prisma.client.evaluationTask.findUnique({
+      where: { slug },
+      select: { id: true, slug: true },
+    });
+    if (!t) return null;
+    return { id: t.id, slug: t.slug };
+  }
+
+  /**
+   * Load the scoring context (incl. the HIDDEN ground truth) for the task a
+   * submission belongs to. Server-side use only, and called only on the outbox
+   * `predictions` branch — the `metrics` branch never touches ground truth
+   * because the host already scored against its own labels.
+   */
+  async findScoringContextBySubmissionId(
+    submissionId: string,
+  ): Promise<EvaluationTaskScoringRow | null> {
+    const s = await this.prisma.client.submission.findUnique({
+      where: { id: submissionId },
+      select: {
+        task: {
+          select: {
+            id: true,
+            numClasses: true,
+            referableThreshold: true,
+            groundTruth: true,
+          },
+        },
+      },
+    });
+    if (!s) return null;
+    return {
+      id: s.task.id,
+      numClasses: s.task.numClasses,
+      referableThreshold: s.task.referableThreshold,
+      groundTruth: s.task.groundTruth as unknown as Record<string, number>,
+    };
+  }
+
+  /** Outbox pre-flight state for one submission. Never carries ground truth. */
+  async findSubmissionForResult(submissionId: string): Promise<SubmissionResultContextRow | null> {
+    const s = await this.prisma.client.submission.findUnique({
+      where: { id: submissionId },
+      select: {
+        id: true,
+        taskId: true,
+        mode: true,
+        status: true,
+        routeVersion: true,
+        resultFingerprint: true,
+        failureCode: true,
+        scores: true,
+      },
+    });
+    if (!s) return null;
+    return {
+      id: s.id,
+      taskId: s.taskId,
+      mode: s.mode,
+      status: s.status,
+      routeVersion: s.routeVersion,
+      resultFingerprint: s.resultFingerprint,
+      failureCode: s.failureCode,
+      scores: s.scores,
+    };
+  }
+
   async createTask(data: {
     slug: string;
     name: string;
@@ -203,5 +322,64 @@ export class EvaluationRepository {
       },
       select: { id: true },
     });
+  }
+
+  /**
+   * Insert a PENDING sealed-run (Mode 2) submission. Distinct from
+   * `createSubmission` (which hard-codes `PREDICTIONS` and writes a terminal
+   * row) because this one is the *dispatch record*: it exists so the result
+   * that arrives later can be correlated back to the image that produced it.
+   */
+  async createContainerSubmission(data: {
+    taskId: string;
+    methodName: string;
+    submittedBy: string | null;
+    imageRef: string;
+    imageDigest: string;
+    routeId: string | null;
+    routeVersion: string | null;
+  }): Promise<{ id: string }> {
+    return this.prisma.client.submission.create({
+      data: {
+        taskId: data.taskId,
+        methodName: data.methodName,
+        submittedBy: data.submittedBy,
+        mode: 'CONTAINER',
+        status: 'PENDING',
+        imageRef: data.imageRef,
+        imageDigest: data.imageDigest,
+        routeId: data.routeId,
+        routeVersion: data.routeVersion,
+      },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * Apply an outbox result, **conditionally on the submission still being
+   * PENDING**. This single predicated UPDATE is the idempotency guard: two
+   * concurrent POSTs for the same submission cannot both win it, so a result
+   * can be applied — and a score written — at most once. Returns the number of
+   * rows actually updated; `0` means someone else got there first (or the row
+   * is gone), and the caller re-reads to decide replay (200) vs conflict (409).
+   */
+  async applyResult(submissionId: string, data: SubmissionResultUpdate): Promise<number> {
+    const res = await this.prisma.client.submission.updateMany({
+      where: { id: submissionId, status: 'PENDING' },
+      data: {
+        status: data.status,
+        error: data.error,
+        failureCode: data.failureCode,
+        durationMs: data.durationMs,
+        resultFingerprint: data.resultFingerprint,
+        resultReceivedAt: new Date(),
+        // Omit `scores` when null so the column stays SQL NULL (same
+        // DbNull / JsonNull sidestep as `createSubmission`).
+        ...(data.scores !== null
+          ? { scores: data.scores as unknown as Prisma.InputJsonValue }
+          : {}),
+      },
+    });
+    return res.count;
   }
 }

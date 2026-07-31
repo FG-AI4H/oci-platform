@@ -3,7 +3,9 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma } from '@oci/database';
 import type {
@@ -11,20 +13,32 @@ import type {
   EvaluationSubmissionResult,
   EvaluationTaskDetail,
   EvaluationTaskSummary,
+  SealedRunMessage,
   SubmissionStatus,
+  SubmitContainerRequest,
+  SubmitContainerResponse,
   SubmitPredictionsRequest,
   SubmitPredictionsResponse,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
+import { EvalQueueProvider } from './eval-queue.js';
 import { EvaluationRepository } from './evaluation.repository.js';
+import {
+  imageRefMatchesDigest,
+  participantFacingFailureMessage,
+  SEALED_RUN_DEADLINE_SEC,
+} from './sealed-run.js';
 import { scoreSubmission, ScoringError, type EvaluationScores } from './scoring.js';
 
 /**
- * Evaluation service (ADR-0017, Mode 1). Owns:
+ * Evaluation service (ADR-0017 / ADR-0018). Owns:
  *   - the public read surface (list + detail), which strips ground truth;
- *   - in-process scoring of a predictions-file submission against the
- *     task's HIDDEN ground truth, persisting SCORED / FAILED;
+ *   - Mode 1: in-process scoring of a predictions-file submission against
+ *     the task's HIDDEN ground truth, persisting SCORED / FAILED;
+ *   - Mode 2: dispatch of a sealed-container submission — persist PENDING
+ *     and enqueue, never score here. The result comes back through
+ *     `SubmissionResultService` (the outbox);
  *   - admin/host task creation (the only non-SQL way a task + hidden
  *     labels get created).
  *
@@ -32,7 +46,12 @@ import { scoreSubmission, ScoringError, type EvaluationScores } from './scoring.
  */
 @Injectable()
 export class EvaluationService {
-  constructor(@Inject(EvaluationRepository) private readonly repo: EvaluationRepository) {}
+  private readonly logger = new Logger(EvaluationService.name);
+
+  constructor(
+    @Inject(EvaluationRepository) private readonly repo: EvaluationRepository,
+    @Inject(EvalQueueProvider) private readonly queue: EvalQueueProvider,
+  ) {}
 
   async listTasks(): Promise<EvaluationTaskSummary[]> {
     const rows = await this.repo.listTasks();
@@ -133,6 +152,97 @@ export class EvaluationService {
     return { id: created.id, scores };
   }
 
+  /**
+   * Mode 2 submit (sealed container). Persists a PENDING dispatch record and
+   * publishes a `SealedRunMessage`; **no scoring happens here** — the worker
+   * runs the image against host-resident data and POSTs back to the outbox,
+   * which scores. Ground truth is never read on this path, and the task's
+   * hidden labels are never loaded into this request at all.
+   *
+   * Order of operations matters:
+   *   1. resolve the task (404 if unknown);
+   *   2. refuse loudly if dispatch is not configured — a 503 BEFORE any row is
+   *      written, so an un-enqueueable submission never leaves a PENDING row
+   *      that no worker will ever consume;
+   *   3. assert the ref and the digest agree (image-substitution guard);
+   *   4. persist, then publish. If the publish fails the row is marked FAILED
+   *      immediately for the same reason as (2).
+   */
+  async submitContainer(
+    slug: string,
+    body: SubmitContainerRequest,
+    user?: CognitoAccessTokenPayload,
+  ): Promise<SubmitContainerResponse> {
+    const task = await this.repo.findTaskRefBySlug(slug);
+    if (!task) throw new NotFoundException(`evaluation task "${slug}" not found`);
+
+    const missing = this.queue.missingConfig();
+    if (missing.length > 0) {
+      this.logger.error(
+        `sealed-container submission refused — dispatch not configured (missing ${missing.join(', ')})`,
+      );
+      throw new ServiceUnavailableException(
+        `sealed execution is not configured on this environment (missing ${missing.join(', ')})`,
+      );
+    }
+
+    if (!imageRefMatchesDigest(body.imageRef, body.imageDigest)) {
+      throw new BadRequestException(
+        'imageRef must be pinned to the submitted imageDigest — the two disagree',
+      );
+    }
+
+    const submittedBy = user?.sub ? cognitoSubAsUuid(user.sub) : null;
+
+    const created = await this.repo.createContainerSubmission({
+      taskId: task.id,
+      methodName: body.methodName,
+      submittedBy,
+      imageRef: body.imageRef,
+      imageDigest: body.imageDigest,
+      // No route registry yet (WP5). Dispatching an invented uuid/version that
+      // resolves to nothing would be worse than an absent value, and the outbox
+      // only enforces a routeVersion match when one WAS dispatched.
+      routeId: null,
+      routeVersion: null,
+    });
+
+    const message: SealedRunMessage = {
+      submissionId: created.id,
+      taskSlug: task.slug,
+      imageRef: body.imageRef,
+      imageDigest: body.imageDigest,
+      timeoutSec: this.queue.runTimeoutSec,
+      callbackUrl: this.queue.callbackUrlFor(created.id),
+      deadline: new Date(Date.now() + SEALED_RUN_DEADLINE_SEC * 1000).toISOString(),
+    };
+
+    try {
+      await this.queue.publish(message);
+    } catch (err: unknown) {
+      // A PENDING row nobody will ever consume is worse than a visible failure:
+      // it reads as "still running" forever. Mark it FAILED and tell the caller.
+      await this.repo.applyResult(created.id, {
+        status: 'FAILED',
+        scores: null,
+        error: participantFacingFailureMessage('INTERNAL_ERROR'),
+        failureCode: 'INTERNAL_ERROR',
+        durationMs: null,
+        resultFingerprint: null,
+      });
+      this.logger.error(
+        `sealed-run dispatch failed submissionId=${created.id} task=${task.slug}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      throw new ServiceUnavailableException(
+        'sealed execution dispatch failed; the submission was recorded as failed',
+      );
+    }
+
+    return { id: created.id, status: 'PENDING' };
+  }
+
   async createTask(body: CreateEvaluationTaskRequest): Promise<EvaluationTaskSummary> {
     try {
       const created = await this.repo.createTask({
@@ -188,10 +298,12 @@ export class EvaluationService {
 
 /**
  * Coerce a stored `scores` JSON blob to `EvaluationScores | null`. Rows are
- * written by this service, so the shape is trusted; we still guard against
- * a null / non-object so a corrupt row can't crash the detail render.
+ * written by this service (or by the outbox), so the shape is trusted; we still
+ * guard against a null / non-object so a corrupt row can't crash the detail
+ * render. Exported so the result outbox reuses this one coercion rather than
+ * growing a second, slightly-different copy.
  */
-function parseScores(raw: unknown): EvaluationScores | null {
+export function parseScores(raw: unknown): EvaluationScores | null {
   if (raw === null || typeof raw !== 'object') return null;
   const s = raw as Record<string, unknown>;
   if (

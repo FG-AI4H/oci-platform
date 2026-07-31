@@ -1603,8 +1603,9 @@ enum EvaluationTaskKind {
 
 /// How a submission delivered its predictions. `PREDICTIONS` = Mode 1
 /// (participant uploaded a predictions file, scored in-process).
-/// `CONTAINER` = Mode 2 (sealed Docker image run by worker-eval) —
-/// reserved; no execution path yet (ADR-0017).
+/// `CONTAINER` = Mode 2 (sealed Docker image run by worker-eval): the API
+/// enqueues to `oci-eval-submissions-{env}` and the worker POSTs back to
+/// `/v2/submissions/:id/result` (ADR-0017, ADR-0018).
 enum SubmissionMode {
   PREDICTIONS
   CONTAINER
@@ -1673,8 +1674,43 @@ model Submission {
   status      SubmissionStatus @default(PENDING)
   /// Computed metrics (`EvaluationScores` shape). Null until SCORED.
   scores      Json?
-  /// Human-readable failure reason. Set only when status = FAILED.
+  /// Human-readable failure reason. Set only when status = FAILED. For a
+  /// sealed run (Mode 2) this is the PARTICIPANT-FACING text derived from
+  /// `failureCode` alone — never the worker's operator detail, which is an
+  /// exfiltration channel and stays in the logs
+  /// (sealed-execution-contract §6).
   error       String?
+
+  // ---- Sealed-run dispatch + outbox (Mode 2 / CONTAINER, WP3) ----------
+  // All nullable and all null for Mode 1 (PREDICTIONS) rows, which are
+  // scored in-process and never dispatched.
+
+  /// Registry reference the dispatch pinned, digest-included. Tags are
+  /// rejected at the API boundary: a tag can be repointed after review.
+  imageRef          String?   @map("image_ref")
+  /// `sha256:…` digest the worker must verify after pulling `imageRef`.
+  imageDigest       String?   @map("image_digest")
+  /// Route + route version that produced this result (ADR-0018). Null until
+  /// the `EvaluationRoute` registry exists (WP5); the outbox refuses a
+  /// result whose `routeVersion` disagrees with a NON-null value here.
+  routeId           String?   @map("route_id") @db.Uuid
+  routeVersion      String?   @map("route_version")
+  /// Wall-clock duration of the sealed run in ms, as reported by the worker.
+  durationMs        Int?      @map("duration_ms")
+  /// Classified failure code — a member of `SealedRunFailureCodeSchema`
+  /// (`@oci/shared-types`). Kept as text rather than a PostgreSQL enum so
+  /// the taxonomy can grow with a new execution mode without a migration;
+  /// Zod is the validator on both sides of the wire.
+  failureCode       String?   @map("failure_code")
+  /// Idempotency key for `POST /v2/submissions/:id/result`: a sha256 over
+  /// the outcome-determining content of the applied result (kind + labels /
+  /// metrics / failure code), deliberately excluding `durationMs` and the
+  /// operator detail so a worker retry fingerprints identically. A replay
+  /// matching this value is a 200 no-op; a DIFFERENT result for a terminal
+  /// submission is a 409.
+  resultFingerprint String?   @map("result_fingerprint")
+  /// When the outbox applied a result. Null while PENDING.
+  resultReceivedAt  DateTime? @map("result_received_at")
 
   createdAt DateTime @default(now()) @map("created_at")
 
