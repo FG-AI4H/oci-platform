@@ -48,12 +48,19 @@ jobs:
       contents: read
       checks: read
       actions: read
+    outputs:
+      # 'true' when this SHA was overtaken on the branch while we waited.
+      # Downstream jobs skip on it, so a superseded commit is never built
+      # or deployed — the newer commit's own Deploy run does that.
+      superseded: ${{ steps.wait.outputs.superseded }}
     steps:
       - name: Wait for CI to pass on ${{ github.sha }}
+        id: wait
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ github.sha }}
           REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           # Poll up to 15 min for CI on this SHA to reach a terminal state.
@@ -61,6 +68,22 @@ jobs:
           # usually still in progress when Deploy's preflight starts.
           MAX_TRIES=60   # 60 × 15 s = 15 min
           TRY=0
+
+          # Two merges landing back-to-back on main used to burn a failed
+          # deploy every time: CI runs with `cancel-in-progress: true`, so
+          # the older commit's CI is cancelled by the newer one, while
+          # Deploy runs with `cancel-in-progress: false` and therefore
+          # still executes — and then failed here on `conclusion=cancelled`.
+          # A cancelled CI is only a real failure if this SHA is still the
+          # branch head; if something newer landed, we're superseded and
+          # must stop WITHOUT deploying stale code (hence the output flag
+          # rather than `exit 0`, which would have deployed the old SHA).
+          superseded() {
+            local head
+            head=$(gh api "repos/$REPO/commits/$REF_NAME" --jq '.sha' 2>/dev/null || echo '')
+            [[ -n "$head" && "$head" != "$SHA" ]]
+          }
+
           while (( TRY < MAX_TRIES )); do
             CI=$(gh api "repos/$REPO/actions/runs?head_sha=$SHA" \
               --jq '[.workflow_runs[] | select(.name == "CI")][0]' || echo '{}')
@@ -69,6 +92,12 @@ jobs:
             if [[ "$STATUS" == "completed" ]]; then
               if [[ "$CONC" == "success" ]]; then
                 echo "CI green for $SHA — proceeding."
+                echo "superseded=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              if [[ "$CONC" == "cancelled" ]] && superseded; then
+                echo "::notice::CI for $SHA was cancelled and $REF_NAME has moved on — this deploy is superseded, skipping. The newer commit's Deploy run covers it."
+                echo "superseded=true" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
               echo "::error::CI for $SHA finished with conclusion='$CONC'."
@@ -78,11 +107,21 @@ jobs:
             TRY=$((TRY + 1))
             sleep 15
           done
+          # A timeout on a SHA that is no longer the head is the same
+          # supersession case: don't fail, don't deploy.
+          if superseded; then
+            echo "::notice::CI for $SHA did not finish within 15 min and $REF_NAME has moved on — superseded, skipping."
+            echo "superseded=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "::error::CI for $SHA did not complete within 15 min."
           exit 1
 
   build-images:
     needs: preflight
+    # Skip the whole pipeline when preflight found this SHA superseded.
+    # `cdk-deploy` needs this job, so it skips too — nothing stale ships.
+    if: needs.preflight.outputs.superseded != 'true'
     # Native ARM64 runner — builds linux/arm64 images directly without
     # QEMU emulation. Avoids "qemu: uncaught target signal 4 (Illegal
     # instruction)" crashes that hit Turbopack / SWC native binaries
