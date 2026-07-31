@@ -53,6 +53,9 @@
   --color-muted-foreground: oklch(0.5 0.02 240);
   --color-subtle: oklch(0.97 0.004 230);
   --color-elevated: oklch(1 0 0);
+  /* Scrim behind a modal surface (`Dialog`'s ::backdrop). Carries its
+     own alpha so it works over any page content. */
+  --color-overlay: oklch(0.22 0.02 240 / 0.55);
 
   /* Borders & focus */
   --color-border: oklch(0.91 0.008 230);
@@ -142,6 +145,7 @@
   --color-muted-foreground: oklch(0.7 0.015 230);
   --color-subtle: oklch(0.24 0.022 240);
   --color-elevated: oklch(0.26 0.025 240);
+  --color-overlay: oklch(0.12 0.02 240 / 0.7);
 
   --color-border: oklch(0.3 0.02 240);
   --color-border-strong: oklch(0.38 0.02 240);
@@ -173,8 +177,7 @@
   --color-phase-c: oklch(0.78 0.13 175);
   --color-phase-d: oklch(0.82 0.14 80);
 
-  --shadow-glow:
-    0 0 0 1px oklch(0.7 0.12 215 / 0.25), 0 8px 24px -8px oklch(0.7 0.12 215 / 0.2);
+  --shadow-glow: 0 0 0 1px oklch(0.7 0.12 215 / 0.25), 0 8px 24px -8px oklch(0.7 0.12 215 / 0.2);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -187,6 +190,7 @@
     --color-muted-foreground: oklch(0.7 0.015 230);
     --color-subtle: oklch(0.24 0.022 240);
     --color-elevated: oklch(0.26 0.025 240);
+    --color-overlay: oklch(0.12 0.02 240 / 0.7);
 
     --color-border: oklch(0.3 0.02 240);
     --color-border-strong: oklch(0.38 0.02 240);
@@ -218,8 +222,7 @@
     --color-phase-c: oklch(0.78 0.13 175);
     --color-phase-d: oklch(0.82 0.14 80);
 
-    --shadow-glow:
-      0 0 0 1px oklch(0.7 0.12 215 / 0.25), 0 8px 24px -8px oklch(0.7 0.12 215 / 0.2);
+    --shadow-glow: 0 0 0 1px oklch(0.7 0.12 215 / 0.25), 0 8px 24px -8px oklch(0.7 0.12 215 / 0.2);
   }
 }
 
@@ -299,11 +302,7 @@
      metadata strips and footer divisions to feel less heavy than a
      solid border. */
   .rule-dotted {
-    background-image: linear-gradient(
-      to right,
-      var(--color-border-strong) 50%,
-      transparent 50%
-    );
+    background-image: linear-gradient(to right, var(--color-border-strong) 50%, transparent 50%);
     background-size: 6px 1px;
     background-repeat: repeat-x;
     background-position: 0 50%;
