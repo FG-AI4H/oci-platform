@@ -23,24 +23,12 @@ import {
   type InitUploadRequest,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
-import { z } from 'zod';
 import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
 import { OptionalCognitoJwtGuard } from '../../auth/optional-cognito-jwt.guard.js';
 import { ZodPipe } from '../catalog/dto/zod-pipe.js';
+import { BulkDownloadManifestFlagSchema } from './bulk-download-query.js';
 import { BulkDownloadService } from './bulk-download.service.js';
 import { StorageService } from './storage.service.js';
-
-/**
- * `?manifest=true|false` on the bulk-download route. Absent → false, so
- * the default archive carries data + notices but not the JSON-LD.
- * Anything other than the two literals is a 400 rather than a silent
- * falsy — a typo'd `manifest=1` should be loud.
- */
-const BulkDownloadManifestFlagSchema = z
-  .enum(['true', 'false'])
-  .optional()
-  .default('false')
-  .transform((v) => v === 'true');
 
 interface FastifyLikeReply {
   redirect(url: string, statusCode?: number): unknown;
