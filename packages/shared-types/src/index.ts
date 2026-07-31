@@ -59,6 +59,10 @@ export {
   deriveRiskTier,
   overrideRequiresJustification,
 } from './intended-use.js';
+
+// Model Card — AI-submission carrier; the IUS attaches here (#260, ADR-0013/0015).
+export { CreateModelCardRequestSchema, ModelCardResponseSchema } from './model-card.js';
+export type { CreateModelCardRequest, ModelCardResponse } from './model-card.js';
 export type {
   RiskTier,
   MedicalPurpose,

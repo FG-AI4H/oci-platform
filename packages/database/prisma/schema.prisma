@@ -1684,3 +1684,40 @@ model Submission {
   @@map("submissions")
   @@schema("evaluation")
 }
+
+/// AI-submission carrier (#260, ADR-0013 amended + ADR-0015). The
+/// Intended-Use Statement attaches HERE — on the model submission, never
+/// on a dataset. A model card is a semver-versioned submission;
+/// `parentModelCardId` links a new version to the one it supersedes.
+model ModelCard {
+  id              String  @id @default(uuid()) @db.Uuid
+  slug            String  @unique
+  /// GA4GH `sub` (UUIDv5) of the submitter. Soft ref → identity.users.id.
+  submitterUserId String? @map("submitter_user_id") @db.Uuid
+  /// Validated by IntendedUseStatementSchema (@oci/shared-types). Non-null:
+  /// a submission without an intended use is rejected at the API boundary.
+  intendedUse     Json    @map("intended_use")
+  /// ModelClassSchema (ADR-0015): classical | time-series | foundation | lmm | agent.
+  modelClass      String  @map("model_class") @db.VarChar(64)
+
+  architectureSummary String @map("architecture_summary")
+  trainingDataLineage Json   @default("{}") @map("training_data_lineage")
+
+  /// Semver parent — a new version points at the model card it supersedes.
+  parentModelCardId String?     @map("parent_model_card_id") @db.Uuid
+  parent            ModelCard?  @relation("ModelCardVersions", fields: [parentModelCardId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  children          ModelCard[] @relation("ModelCardVersions")
+
+  versionMajorMinorPatch    String   @map("version_major_minor_patch") @db.VarChar(32)
+  changeJustification       String?  @map("change_justification")
+  materialChange            Boolean  @default(false) @map("material_change")
+  trainingDataJurisdictions String[] @map("training_data_jurisdictions")
+  generativeAi              Boolean  @default(false) @map("generative_ai")
+  lmmSpecificLimitations    Json?    @map("lmm_specific_limitations")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("model_cards")
+  @@schema("prediction")
+}
