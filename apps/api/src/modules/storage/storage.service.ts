@@ -277,10 +277,50 @@ export class StorageService {
       throw new NotFoundException('distribution upload is not complete');
     }
 
+    await this.authoriseDatasetBytes({
+      datasetId: ds.id,
+      requiresAccess: dist.requiresAccess,
+      user: args.user,
+    });
+
+    const cmd = new GetObjectCommand({ Bucket: dist.s3Bucket, Key: dist.s3Key });
+    return this.presign(cmd, StorageService.DOWNLOAD_URL_TTL_S);
+  }
+
+  /**
+   * THE gate for handing out dataset bytes. Extracted verbatim from
+   * `getDownloadUrl` so the bulk-download path (`GET /v2/catalog/
+   * datasets/:slug/download`, `BulkDownloadService`) enforces the same
+   * rules rather than a parallel re-implementation — a bulk endpoint
+   * that drifted from this would be an access-control bypass.
+   *
+   *   - PRIVATE                      → host or admin only
+   *   - RESTRICTED OR requiresAccess → host, admin, or an APPROVED
+   *                                    AccessRequest for the dataset
+   *   - PUBLIC + !requiresAccess     → anyone (including anonymous)
+   *
+   * Throws ForbiddenException on failure; returns the dataset row the
+   * decision was made on so callers can reuse it.
+   */
+  async authoriseDatasetBytes(args: {
+    datasetId: string;
+    /**
+     * The distribution-level override. Bulk download passes `false`
+     * because it *excludes* `requiresAccess` rows from the archive
+     * outright, so the archive never contains bytes this flag guards.
+     */
+    requiresAccess: boolean;
+    user: CognitoAccessTokenPayload | undefined;
+  }): Promise<{
+    visibility: 'PRIVATE' | 'RESTRICTED' | 'PUBLIC';
+    status: 'DRAFT' | 'REVIEW' | 'PUBLISHED' | 'ARCHIVED';
+    hostId: string;
+    slug: string;
+  }> {
     // Fetch dataset visibility separately — `findOwnerBySlug` only
     // returns id+hostId. The full row is needed for the gating below.
     const fullDataset = (await this.prisma.client.dataset.findUnique({
-      where: { id: ds.id },
+      where: { id: args.datasetId },
       select: { visibility: true, status: true, hostId: true, slug: true },
     })) as {
       visibility: 'PRIVATE' | 'RESTRICTED' | 'PUBLIC';
@@ -297,13 +337,13 @@ export class StorageService {
       if (!isAdmin && callerHostId !== fullDataset.hostId) {
         throw new ForbiddenException('private dataset; host or admin only');
       }
-    } else if (fullDataset.visibility === 'RESTRICTED' || dist.requiresAccess) {
+    } else if (fullDataset.visibility === 'RESTRICTED' || args.requiresAccess) {
       if (!isAdmin && callerHostId !== fullDataset.hostId) {
         // Must have APPROVED request.
         if (!args.user) {
           throw new ForbiddenException('sign in and request access first');
         }
-        const approved = await this.hasApprovedRequest(ds.id, args.user);
+        const approved = await this.hasApprovedRequest(args.datasetId, args.user);
         if (!approved) {
           throw new ForbiddenException('access not approved');
         }
@@ -311,8 +351,7 @@ export class StorageService {
     }
     // PUBLIC + !requiresAccess: anyone (incl. anonymous in a follow-up)
 
-    const cmd = new GetObjectCommand({ Bucket: dist.s3Bucket, Key: dist.s3Key });
-    return this.presign(cmd, StorageService.DOWNLOAD_URL_TTL_S);
+    return fullDataset;
   }
 
   // ----- helpers ---------------------------------------------------

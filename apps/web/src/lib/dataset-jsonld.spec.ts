@@ -39,6 +39,7 @@ const baseDetail: DatasetDetail = {
     {
       id: '00000000-0000-0000-0000-000000000020',
       croissantId: 'images.zip',
+      filename: 'images.zip',
       contentUrl: 'https://example.org/images.zip',
       contentType: 'application/zip',
       contentSizeBytes: 1024,
