@@ -540,3 +540,102 @@ VALUES (
     CURRENT_TIMESTAMP
 )
 ON CONFLICT (slug) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- Section 6 — IDRiD annotation campaign (Phase B; ADR-0006 / 0009 / 0010).
+--
+-- A RUNNING multi-rater grading campaign over the 30 hosted IDRiD
+-- images, so /annotation/campaigns shows real work rather than a
+-- placeholder. Ordinal DR severity (ICDR 0-4) is a whole-image
+-- CLASSIFICATION task, and ohif-viewer is the 2D image viewer that
+-- supports it (MONAI Label is pixel-level oriented).
+--
+-- nAnnotators = 3 is the ADR-0009 default, which also mirrors how IDRiD
+-- itself was labelled -- two graders plus an adjudicator on disagreement --
+-- so the campaign reproduces the source protocol instead of inventing one.
+--
+-- Sample refs are the REAL filenames of the hosted distributions
+-- (<dataset-slug>/<filename>), not synthetic sample-NNN pointers, so an
+-- annotator can be shown the actual image behind the platform download
+-- route.
+--
+-- output_license is CC-BY-4.0 to match the source dataset: annotations
+-- derived from CC BY data inherit the attribution obligation.
+--
+-- Note the campaign slug (idrid-dr-grading) collides by name with the
+-- evaluation task of Section 5, which is intentional: they are the two
+-- halves of the same story -- humans produce the labels here, models are
+-- scored against held-back labels there -- and they live in different
+-- schemas (annotation vs evaluation).
+-- ----------------------------------------------------------------------------
+
+INSERT INTO "annotation"."annotation_campaigns"
+    (id, slug, name, description, status, task_kind, dataset_id, tool_integration_id,
+     output_license, workflow_config, created_by_id,
+     created_at, updated_at, started_at, completed_at)
+SELECT
+    gen_random_uuid(),
+    'idrid-dr-grading',
+    'IDRiD: diabetic retinopathy severity grading',
+    'Multi-rater ICDR grading (0-4) of the hosted IDRiD slice. Three independent annotators per image, adjudicated on disagreement -- the protocol the source dataset used.',
+    'RUNNING'::"annotation"."CampaignStatus",
+    'CLASSIFICATION'::"annotation"."CampaignTaskKind",
+    ds.id,
+    tool.id,
+    'CC-BY-4.0'::"annotation"."CampaignOutputLicense",
+    '{"nAnnotators": 3}'::jsonb,
+    '00000000-0000-4000-8000-000000000099',
+    CURRENT_TIMESTAMP - INTERVAL '1 day',
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP - INTERVAL '1 day',
+    NULL
+FROM "catalog"."datasets" ds,
+     "annotation"."annotation_tool_integrations" tool
+WHERE ds.slug = 'idrid-grading-demo'
+  AND tool.slug = 'ohif-viewer'
+ON CONFLICT (slug) DO NOTHING;
+
+-- One task per hosted image, each awaiting three independent gradings.
+INSERT INTO "annotation"."annotation_tasks"
+    (campaign_id, sample_ref, n_annotators_required, gate_state, updated_at)
+SELECT
+    c.id,
+    r.sample_ref,
+    3,
+    'INDEPENDENT'::"annotation"."AnnotationGateState",
+    CURRENT_TIMESTAMP
+FROM "annotation"."annotation_campaigns" c,
+     (VALUES
+        ('idrid-grading-demo/IDRiD_001.jpg'),
+        ('idrid-grading-demo/IDRiD_002.jpg'),
+        ('idrid-grading-demo/IDRiD_003.jpg'),
+        ('idrid-grading-demo/IDRiD_004.jpg'),
+        ('idrid-grading-demo/IDRiD_005.jpg'),
+        ('idrid-grading-demo/IDRiD_006.jpg'),
+        ('idrid-grading-demo/IDRiD_007.jpg'),
+        ('idrid-grading-demo/IDRiD_008.jpg'),
+        ('idrid-grading-demo/IDRiD_009.jpg'),
+        ('idrid-grading-demo/IDRiD_010.jpg'),
+        ('idrid-grading-demo/IDRiD_011.jpg'),
+        ('idrid-grading-demo/IDRiD_012.jpg'),
+        ('idrid-grading-demo/IDRiD_013.jpg'),
+        ('idrid-grading-demo/IDRiD_014.jpg'),
+        ('idrid-grading-demo/IDRiD_015.jpg'),
+        ('idrid-grading-demo/IDRiD_016.jpg'),
+        ('idrid-grading-demo/IDRiD_018.jpg'),
+        ('idrid-grading-demo/IDRiD_029.jpg'),
+        ('idrid-grading-demo/IDRiD_030.jpg'),
+        ('idrid-grading-demo/IDRiD_032.jpg'),
+        ('idrid-grading-demo/IDRiD_037.jpg'),
+        ('idrid-grading-demo/IDRiD_038.jpg'),
+        ('idrid-grading-demo/IDRiD_039.jpg'),
+        ('idrid-grading-demo/IDRiD_041.jpg'),
+        ('idrid-grading-demo/IDRiD_043.jpg'),
+        ('idrid-grading-demo/IDRiD_063.jpg'),
+        ('idrid-grading-demo/IDRiD_073.jpg'),
+        ('idrid-grading-demo/IDRiD_074.jpg'),
+        ('idrid-grading-demo/IDRiD_085.jpg'),
+        ('idrid-grading-demo/IDRiD_101.jpg')
+     ) AS r(sample_ref)
+WHERE c.slug = 'idrid-dr-grading'
+ON CONFLICT (campaign_id, sample_ref) DO NOTHING;
