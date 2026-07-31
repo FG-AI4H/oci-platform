@@ -10,6 +10,7 @@ import type {
   DatasetStatus,
 } from '@oci/shared-types';
 import { PrismaService } from '../../prisma.service.js';
+import { deriveDistributionFilename } from './distribution-filename.js';
 
 /**
  * Prisma 7 ships its model types as conditional generics
@@ -64,6 +65,13 @@ interface DistributionRow {
   contentSizeBytes: bigint | null;
   contentHash: string | null;
   requiresAccess: boolean;
+  /**
+   * Read only to derive the `filename` on the read DTO — see
+   * `deriveDistributionFilename`. Never surfaced to clients: the key
+   * leaks the bucket layout, and the presigned-GET route is the only
+   * sanctioned way to reach the bytes.
+   */
+  s3Key: string | null;
 }
 
 interface DatasetWithLatest extends DatasetRow {
@@ -345,6 +353,7 @@ export class CatalogRepository {
         latest?.distributions.map((d: DistributionRow) => ({
           id: d.id,
           croissantId: d.croissantId,
+          filename: deriveDistributionFilename(d),
           contentUrl: d.contentUrl,
           contentType: d.contentType,
           contentSizeBytes: d.contentSizeBytes == null ? null : Number(d.contentSizeBytes),

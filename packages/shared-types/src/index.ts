@@ -341,6 +341,18 @@ export type DatasetSummary = z.infer<typeof DatasetSummarySchema>;
 export const DistributionSchema = z.object({
   id: z.string().uuid(),
   croissantId: z.string(),
+  /**
+   * Human-readable filename, derived server-side — there is no
+   * `filename` column on the row, so this can never drift from the
+   * bytes. Basename of `s3Key` for platform-hosted rows, else the
+   * basename of `contentUrl`'s path when that reads as a filename,
+   * else `null`. Always a single path segment: no separators, no
+   * leading dot, never `..`.
+   *
+   * The detail page renders this instead of `croissantId`, which for
+   * uploaded rows is a bare UUID.
+   */
+  filename: z.string().nullable(),
   contentUrl: z.string().nullable(),
   contentType: z.string(),
   contentSizeBytes: z.number().int().nullable(),
