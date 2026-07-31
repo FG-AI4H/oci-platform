@@ -9,6 +9,7 @@ import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { ConsentModule } from './modules/consent/consent.module.js';
 import { DuaSigningModule } from './modules/dua-signing/dua-signing.module.js';
 import { DuaTemplateModule } from './modules/dua-template/dua-template.module.js';
+import { EvaluationModule } from './modules/evaluation/evaluation.module.js';
 import { RemoteCatalogModule } from './modules/remote-catalog/remote-catalog.module.js';
 import { AccessRequestModule } from './modules/access-request/access-request.module.js';
 import { CertificationModule } from './modules/certification/certification.module.js';
@@ -58,8 +59,10 @@ import { MeController } from './me/me.controller.js';
     PlatformSettingsModule,
     PolicyAcceptanceModule,
     RenewalModule,
+    // Phase C: both halves now exist — prediction (model cards + IUS on
+    // submission, #260) and evaluation (scoring, ADR-0017).
     PredictionModule,
-    // Phase C: EvaluationModule
+    EvaluationModule,
     // Phase D: ReportingModule
   ],
   controllers: [HealthController, MeController],

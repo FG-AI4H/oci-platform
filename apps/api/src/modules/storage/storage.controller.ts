@@ -23,16 +23,51 @@ import {
   type InitUploadRequest,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
+import { z } from 'zod';
 import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
 import { OptionalCognitoJwtGuard } from '../../auth/optional-cognito-jwt.guard.js';
 import { ZodPipe } from '../catalog/dto/zod-pipe.js';
+import { BulkDownloadService } from './bulk-download.service.js';
 import { StorageService } from './storage.service.js';
+
+/**
+ * `?manifest=true|false` on the bulk-download route. Absent → false, so
+ * the default archive carries data + notices but not the JSON-LD.
+ * Anything other than the two literals is a 400 rather than a silent
+ * falsy — a typo'd `manifest=1` should be loud.
+ */
+const BulkDownloadManifestFlagSchema = z
+  .enum(['true', 'false'])
+  .optional()
+  .default('false')
+  .transform((v) => v === 'true');
 
 interface FastifyLikeReply {
   redirect(url: string, statusCode?: number): unknown;
 }
+/**
+ * Fastify's reply, narrowed to what the ZIP route needs. `send()`
+ * accepts a Readable natively — this is why the route takes
+ * `@Res({ passthrough: false })` rather than returning a
+ * `StreamableFile` (which Nest's Express-shaped helper wraps).
+ */
+interface FastifyLikeStreamReply {
+  header(name: string, value: string): unknown;
+  send(payload: unknown): unknown;
+}
 interface FastifyLikeRequest {
   user?: CognitoAccessTokenPayload;
+}
+
+/**
+ * `Content-Disposition` with both the plain and RFC 5987 forms. Slugs
+ * are already `[a-z0-9-]` (DatasetSlugSchema), so the ASCII form is
+ * always exact; `filename*` is belt-and-braces for any future
+ * non-ASCII archive name.
+ */
+function attachmentDisposition(name: string): string {
+  const ascii = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
 
 /**
@@ -50,7 +85,10 @@ interface FastifyLikeRequest {
 @ApiBearerAuth()
 @Controller({ version: '2' })
 export class StorageController {
-  constructor(@Inject(StorageService) private readonly storage: StorageService) {}
+  constructor(
+    @Inject(StorageService) private readonly storage: StorageService,
+    @Inject(BulkDownloadService) private readonly bulk: BulkDownloadService,
+  ) {}
 
   @Post('catalog/datasets/:slug/uploads')
   @UseGuards(CognitoJwtGuard)
@@ -138,5 +176,36 @@ export class StorageController {
       user: req.user,
     });
     reply.redirect(url, 302);
+  }
+
+  @Get('catalog/datasets/:slug/download')
+  @UseGuards(OptionalCognitoJwtGuard)
+  @ApiOperation({
+    summary: 'Bulk download — stream the whole dataset as a ZIP',
+    description:
+      'Archives every platform-hosted (storageBackend=S3, uploadStatus=READY), non-access-gated ' +
+      'distribution of the latest published version, plus a mandatory LICENSE.txt and CITATION.txt. ' +
+      'Pass `?manifest=true` to include croissant.json. Externally-hosted distributions are never ' +
+      'proxied. Authz is identical to the single-distribution download: PRIVATE → host or admin; ' +
+      'RESTRICTED → host, admin, or an APPROVED AccessRequest; PUBLIC → anyone. ' +
+      '409 when nothing is eligible, 413 when the total exceeds OCI_BULK_DOWNLOAD_MAX_BYTES.',
+  })
+  async downloadAll(
+    @Param('slug', new ZodPipe(DatasetSlugSchema)) slug: DatasetSlug,
+    @Query('manifest', new ZodPipe(BulkDownloadManifestFlagSchema)) manifest: boolean,
+    @Req() req: FastifyLikeRequest,
+    @Res({ passthrough: false }) reply: FastifyLikeStreamReply,
+  ): Promise<void> {
+    // `plan` throws every 4xx before we touch the reply, so the status
+    // line is never committed ahead of a failure.
+    const plan = await this.bulk.plan({ slug, includeManifest: manifest, user: req.user });
+    const zip = this.bulk.buildZip(plan);
+
+    reply.header('Content-Type', 'application/zip');
+    reply.header('Content-Disposition', attachmentDisposition(`${slug}.zip`));
+    // The archive is assembled per-request (timestamped notices, live
+    // eligibility) — never let a proxy or the browser reuse it.
+    reply.header('Cache-Control', 'no-store');
+    reply.send(zip);
   }
 }

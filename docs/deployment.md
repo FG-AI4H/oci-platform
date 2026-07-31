@@ -76,6 +76,17 @@ Each deploy job runs a final job that hits `/health` on the deployed ALB and wai
 A second smoke job exercises a known-stable `/v2/healthz/db` endpoint that performs a read-only
 Postgres query.
 
+## Runtime configuration (operator-tunable)
+
+Most runtime config is injected by CDK into the ECS task definition. The variables below are the
+ones an operator may reasonably want to change per environment without a code change. All are
+optional — the API boots with the documented default when unset. See `apps/api/.env.example` for
+the local-development set.
+
+| Variable                      | Default              | Effect                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OCI_BULK_DOWNLOAD_MAX_BYTES` | `2147483648` (2 GiB) | Cap on the total size of a whole-dataset ZIP from `GET /v2/catalog/datasets/:slug/download`. Summed over the eligible distributions' `contentSizeBytes` **before** streaming starts; over the cap the request gets `413` with the total, the cap, and a pointer to the per-file download route. Raise with care: the archive streams through the Fargate task, so a larger cap means longer-lived connections and more egress per request. A non-numeric or non-positive value is ignored (logged as a warning) and the default applies. |
+
 ## Pinned tooling versions
 
 See `package.json` (authoritative) and `.nvmrc`. Anything that pins must also be present in

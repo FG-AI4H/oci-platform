@@ -155,6 +155,50 @@ test.describe('ui/ux diagnostic', () => {
     sections.push({ label: 'catalog-detail', runs });
   });
 
+  // The generic catalog-detail capture lands on whichever dataset sorts
+  // first, which may have no files at all. This one targets the seeded
+  // 30-image demo slice so the Files card's new controls — "Download
+  // all" + the per-file preview dialog — are actually in frame, with
+  // the dialog open (axe then sees the modal, not just the trigger).
+  test('catalog detail — files card + image preview (anonymous)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'catalog-detail-files', async (page) => {
+      await page.goto('/catalog/idrid-grading-demo');
+      await page.waitForLoadState('networkidle');
+      const preview = page.getByRole('button', { name: /^Preview / }).first();
+      if ((await preview.count()) > 0) {
+        await preview.click();
+        await page.waitForSelector('dialog[open]');
+      }
+      return page.url();
+    });
+    sections.push({ label: 'catalog-detail-files', runs });
+  });
+
+  test('evaluation tasks list (anonymous)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'evaluation-list', async (page) => {
+      await page.goto('/evaluation');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'evaluation-list', runs });
+  });
+
+  test('evaluation task detail (anonymous)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'evaluation-detail', async (page) => {
+      await page.goto('/evaluation');
+      // Unlike the catalog, an environment can legitimately have zero
+      // evaluation tasks (ADR-0017 is new). Capture the list's empty
+      // state in that case rather than failing the audit run.
+      const firstLink = page.locator('a[href^="/evaluation/"]').first();
+      if ((await firstLink.count()) > 0) {
+        await firstLink.click();
+      }
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'evaluation-detail', runs });
+  });
+
   test('dashboard (signed in)', async ({ browser }) => {
     const runs = await runMatrix(browser, 'dashboard', async (page) => {
       await signInAs(page, 'bob', 'host');
