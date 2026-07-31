@@ -3,15 +3,18 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import {
   CreateEvaluationTaskRequestSchema,
   EvaluationTaskSlugSchema,
-  SubmitPredictionsRequestSchema,
   type CreateEvaluationTaskRequest,
   type EvaluationTaskSlug,
-  type SubmitPredictionsRequest,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CognitoJwtGuard } from '../../auth/cognito-jwt.guard.js';
 import { OptionalCognitoJwtGuard } from '../../auth/optional-cognito-jwt.guard.js';
 import { Roles, RolesGuard } from '../../auth/roles.guard.js';
+import {
+  isContainerSubmission,
+  SubmissionBodyPipe,
+  type SubmitRequestBody,
+} from './dto/submission-body.pipe.js';
 import { ZodPipe } from './dto/zod-pipe.js';
 import { EvaluationService } from './evaluation.service.js';
 
@@ -54,17 +57,20 @@ export class EvaluationController {
 
   @Post('tasks/:slug/submissions')
   @ApiOperation({
-    summary: 'Submit a predictions file for in-process scoring (Mode 1)',
+    summary: 'Submit predictions (Mode 1) or a sealed container (Mode 2)',
     description:
-      'Scores the predictions against the task’s hidden ground truth and records the result. Returns the new submission id + its scores. A validation / scoring error records a FAILED submission and returns 400.',
+      'Without `mode`, or with `mode: PREDICTIONS`: scores the predictions against the task’s hidden ground truth and records the result, returning the new submission id + its scores; a validation / scoring error records a FAILED submission and returns 400. With `mode: CONTAINER`: records a PENDING submission and enqueues a sealed run — nothing is scored in-process, and the result arrives later through the worker outbox. Returns 503 if sealed execution is not configured on this environment.',
   })
-  @ApiOkResponse({ description: 'Submission id + computed scores.' })
+  @ApiOkResponse({ description: 'Mode 1: submission id + computed scores. Mode 2: id + PENDING.' })
   @UseGuards(OptionalCognitoJwtGuard)
   submit(
     @Param('slug', new ZodPipe(EvaluationTaskSlugSchema)) slug: EvaluationTaskSlug,
-    @Body(new ZodPipe(SubmitPredictionsRequestSchema)) body: SubmitPredictionsRequest,
+    @Body(SubmissionBodyPipe) body: SubmitRequestBody,
     @Req() req: FastifyLikeRequest,
   ) {
+    if (isContainerSubmission(body)) {
+      return this.evaluation.submitContainer(slug, body, req.user);
+    }
     return this.evaluation.submitPredictions(slug, body, req.user);
   }
 

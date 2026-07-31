@@ -7,6 +7,7 @@ import { NetworkStack } from '../lib/network-stack.js';
 import { DataStack } from '../lib/data-stack.js';
 import { IdentityStack } from '../lib/identity-stack.js';
 import { ApiStack } from '../lib/api-stack.js';
+import { EvalStack } from '../lib/eval-stack.js';
 import { DocusealStack } from '../lib/docuseal-stack.js';
 import { MailStack } from '../lib/mail-stack.js';
 import { WebStack } from '../lib/web-stack.js';
@@ -30,6 +31,11 @@ const webImage = app.node.tryGetContext('webImage') as string | undefined;
 const migrateImage = app.node.tryGetContext('migrateImage') as string | undefined;
 const workerIngestImage = app.node.tryGetContext('workerIngestImage') as string | undefined;
 const smtpRelayImage = app.node.tryGetContext('smtpRelayImage') as string | undefined;
+// Sealed-execution runner (`apps/worker-eval`). Not built by the Deploy
+// workflow yet — WP1 adds the build job. Until then eval-stack renders its
+// task definition against a public placeholder so the queue, IAM and alarms
+// are deployable today.
+const workerEvalImage = app.node.tryGetContext('workerEvalImage') as string | undefined;
 
 // Route 53 hosted zone for ai4h.net (ADR-0001). Single account-wide zone
 // shared with other FG-AI4H tenants; OCI Platform records all live under
@@ -73,6 +79,20 @@ const data = new DataStack(app, `oci-${envName}-data`, {
   vpc: network.vpc,
   accessLogsBucket: observability.accessLogsBucket,
 });
+// Sealed-execution boundary (ADR-0018 Mode 2, WP2): SQS submission queue +
+// DLQ, the worker-eval task definition, its scoped task role, and the DLQ /
+// run-duration alarms. Constructed BEFORE api so api can take the queue as a
+// prop; eval depends only on observability (worker log group + alarms topic),
+// so there is no cycle.
+const evaluation = new EvalStack(app, `oci-${envName}-eval`, {
+  env: cfg.env,
+  cfg,
+  tags,
+  logGroup: observability.workerLogGroup,
+  alarmsTopic: observability.alarmsTopic,
+  workerEvalImage,
+});
+
 const api = new ApiStack(app, `oci-${envName}-api`, {
   env: cfg.env,
   cfg,
@@ -82,6 +102,7 @@ const api = new ApiStack(app, `oci-${envName}-api`, {
   logGroup: observability.apiLogGroup,
   accessLogsBucket: observability.accessLogsBucket,
   datasetsBucket: data.datasetsBucket,
+  evalQueue: evaluation.submissionQueue,
   apiImage,
   migrateImage,
   workerIngestImage,

@@ -11,6 +11,7 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
@@ -33,6 +34,14 @@ export interface ApiStackProps extends cdk.StackProps {
    * `OCI_DATASETS_BUCKET`.
    */
   datasetsBucket: s3.IBucket;
+  /**
+   * Sealed-execution submission queue from eval-stack (ADR-0018 Mode 2,
+   * WP2). The API is the only publisher: a `mode: CONTAINER` submission is
+   * enqueued rather than scored in-process. The task role gets
+   * `sqs:SendMessage` on this queue alone, and the container reads the URL
+   * from `OCI_EVAL_QUEUE_URL`.
+   */
+  evalQueue: sqs.IQueue;
   /**
    * ECR image URI (`<account>.dkr.ecr.<region>.amazonaws.com/oci-api:<sha>`)
    * built and pushed by the GitHub Actions Deploy workflow.
@@ -167,6 +176,19 @@ export class ApiStack extends cdk.Stack {
           // bucket to multipart-upload + presign against. Region
           // already injected above.
           OCI_DATASETS_BUCKET: props.datasetsBucket.bucketName,
+          // Sealed-execution inbox (ADR-0018 Mode 2). The evaluation module
+          // publishes one message per CONTAINER submission; send permission
+          // is granted below and is scoped to this queue only.
+          OCI_EVAL_QUEUE_URL: props.evalQueue.queueUrl,
+          // Absolute origin of THIS api. The dispatcher builds the worker's
+          // outbox `callbackUrl` from it; without it the CONTAINER path
+          // refuses with 503 rather than enqueueing an unanswerable run.
+          OCI_API_URL: `https://${props.cfg.domainName}`,
+          // The run cap dispatched in every queue message. Pinned to the same
+          // per-env envelope the queue's visibility timeout is derived from
+          // (eval-stack: visibility = maxRunSeconds + pull + outbox), so the
+          // two cannot drift into a queue that redelivers a healthy run.
+          OCI_EVAL_RUN_TIMEOUT_SEC: String(props.cfg.evalRunner.maxRunSeconds),
           // DocuSeal endpoint (#128). Gated on `--context docusealEnabled=true`
           // so a greenfield environment can deploy api-stack first
           // (docuseal-stack depends on api.cluster + api.listener, so
@@ -311,6 +333,14 @@ export class ApiStack extends cdk.Stack {
       }),
     );
 
+    // Sealed-execution dispatch (WP2 / ADR-0018 Mode 2). Send-only: the API
+    // publishes a submission message and never receives or deletes — the
+    // runner owns consumption, and the result comes back over the outbox
+    // HTTP endpoint, not the queue. The grant also covers kms:Encrypt /
+    // GenerateDataKey* on the eval CMK, which the queue's encryption key
+    // requires for a CMK-encrypted send.
+    props.evalQueue.grantSendMessages(fargate.taskDefinition.taskRole);
+
     // Identity-admin module (#241) — list users + view detail + grant /
     // revoke group memberships from `/admin/users`. The pool ID is
     // resolved lazily from SSM at synth time (same dynamic reference
@@ -347,7 +377,7 @@ export class ApiStack extends cdk.Stack {
         {
           id: 'AwsSolutions-IAM5',
           reason:
-            "S3 action wildcards on `${datasetsBucket.bucketArn}/*` are the standard CDK shape for `bucket.grantReadWrite()`; the principal is the API task role and the resource is scoped to one bucket. KMS wildcards are needed because the bucket's CMK is rotated and the SDK transparently calls GenerateDataKey + ReEncrypt during multipart uploads; both are scoped to the bucket's encryption key.",
+            "S3 action wildcards on `${datasetsBucket.bucketArn}/*` are the standard CDK shape for `bucket.grantReadWrite()`; the principal is the API task role and the resource is scoped to one bucket. KMS wildcards are needed because the bucket's CMK is rotated and the SDK transparently calls GenerateDataKey + ReEncrypt during multipart uploads; both are scoped to the bucket's encryption key. The same two KMS action wildcards also arrive from `evalQueue.grantSendMessages()` and are scoped to the eval stack's CMK, which encrypts only the sealed-execution queue pair.",
           appliesTo: [
             'Action::s3:GetObject*',
             'Action::s3:GetBucket*',
@@ -688,7 +718,7 @@ export class ApiStack extends cdk.Stack {
         {
           id: 'AwsSolutions-ECS2',
           reason:
-            'Plaintext envs on the API task are non-secret runtime configuration only (NODE_ENV, OCI_ENV, AWS_REGION, COGNITO_USER_POOL_ID, COGNITO_REGION). Real secrets (DB credentials, Cognito client secrets) are read from Secrets Manager via IAM at runtime, not injected via task env.',
+            'Plaintext envs on the API task are non-secret runtime configuration only (NODE_ENV, OCI_ENV, AWS_REGION, COGNITO_USER_POOL_ID, COGNITO_REGION, OCI_DATASETS_BUCKET, OCI_EVAL_QUEUE_URL). Real secrets (DB credentials, Cognito client secrets) are read from Secrets Manager via IAM at runtime, not injected via task env.',
         },
       ],
       true,

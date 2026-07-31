@@ -3448,6 +3448,155 @@ export const CreateEvaluationTaskRequestSchema = z
   });
 export type CreateEvaluationTaskRequest = z.infer<typeof CreateEvaluationTaskRequestSchema>;
 
+// ==== Sealed execution (Mode 2 / CONTAINER) ================================
+//
+// The wire contract between three components, so all three validate the same
+// shape: the API enqueues, `apps/worker-eval` consumes, and the worker POSTs
+// back to the outbox. Spec:
+// docs/planning/evaluation-challenge-2026-08/sealed-execution-contract.md.
+//
+// Two guarantees drive every field: the host's data is never disclosed to the
+// participant, and the participant's model is executed but never inspected or
+// retained. Notably absent from the queue message is anything the container
+// could use to phone home or identify the submission — the worker holds the
+// callback URL, the container never sees it.
+// ===========================================================================
+
+/**
+ * A registry reference pinned by digest. Tags are rejected outright: a tag can
+ * be repointed after review, which would let a different image run under an
+ * approved route (sealed-execution-contract §4, "pull and run by digest").
+ */
+export const ImageDigestSchema = z
+  .string()
+  .regex(/^sha256:[a-f0-9]{64}$/, 'must be a sha256 digest, e.g. sha256:<64 hex chars>');
+export type ImageDigest = z.infer<typeof ImageDigestSchema>;
+
+export const ImageRefSchema = z
+  .string()
+  .min(1)
+  .max(1000)
+  .refine((v) => v.includes('@sha256:'), {
+    message: 'imageRef must include an @sha256: digest — tags are rejected',
+  });
+export type ImageRef = z.infer<typeof ImageRefSchema>;
+
+/**
+ * Body of a message on `oci-eval-submissions-{env}`. Mirror this as a Pydantic
+ * model in the worker; drift between the two is the likeliest source of a
+ * silently skipped control.
+ *
+ * `routeId` / `routeVersion` are optional until WP5 lands the
+ * `EvaluationRoute` model. The fields are in the contract now so the worker can
+ * be built against the final shape, but the API cannot populate a real route
+ * reference before the registry exists, and inventing a UUID that resolves to
+ * nothing would be worse than an absent value. WP5 makes them required.
+ */
+export const SealedRunMessageSchema = z.object({
+  submissionId: z.string().uuid(),
+  taskSlug: EvaluationTaskSlugSchema,
+  routeId: z.string().uuid().optional(),
+  routeVersion: z.string().min(1).max(64).optional(),
+  imageRef: ImageRefSchema,
+  imageDigest: ImageDigestSchema,
+  /**
+   * Hard wall-clock cap, from the task's operational envelope.
+   *
+   * Capped at SQS's 43200 s `VisibilityTimeout` ceiling, because the queue's
+   * visibility timeout must exceed this value plus pull and outbox time
+   * (sealed-execution-contract §2). A larger value here could not be covered
+   * by any queue, so it is refused at the contract rather than at synth. The
+   * real per-environment cap is `evalRunner.maxRunSeconds`, which the eval
+   * stack asserts leaves room for its allowances.
+   */
+  timeoutSec: z.number().int().min(1).max(43_200),
+  /** Absolute outbox URL. Held by the worker; never passed into the container. */
+  callbackUrl: z.string().url(),
+  /** After this instant the worker abandons rather than starts a run. */
+  deadline: z.string().datetime(),
+});
+export type SealedRunMessage = z.infer<typeof SealedRunMessageSchema>;
+
+/**
+ * Classified failure codes. Participant-facing text is derived from the code
+ * alone — operator detail stays server-side, because container stdout is an
+ * exfiltration channel (sealed-execution-contract §6).
+ */
+export const SealedRunFailureCodeSchema = z.enum([
+  'IMAGE_PULL_FAILED',
+  'DIGEST_MISMATCH',
+  'STARTUP_FAILED',
+  'TIMEOUT',
+  'OOM_KILLED',
+  'NONZERO_EXIT',
+  'NO_OUTPUT',
+  'MALFORMED_OUTPUT',
+  'UNKNOWN_ITEM_IDS',
+  'OUTPUT_TOO_LARGE',
+  'NETWORK_ATTEMPT_DETECTED',
+  'INTERNAL_ERROR',
+]);
+export type SealedRunFailureCode = z.infer<typeof SealedRunFailureCodeSchema>;
+
+/**
+ * `POST /v2/submissions/:id/result` — the worker's outbox call.
+ *
+ * Exactly one of `predictions`, `metrics` or `failure` is present. `predictions`
+ * is the demo path: the worker returns labels and the API scores them against
+ * ground truth it already holds, which keeps ground truth out of the sandbox
+ * and `scoring.ts` the single scoring implementation. `metrics` is the
+ * genuinely host-resident path, where the API cannot see the data and the
+ * worker scored against host-side labels.
+ */
+export const SealedRunResultSchema = z
+  .object({
+    routeVersion: z.string().min(1).max(64).optional(),
+    durationMs: z.number().int().min(0),
+    predictions: z.record(z.string().min(1).max(200), z.number().int().min(0)).optional(),
+    metrics: EvaluationScoresSchema.optional(),
+    failure: z
+      .object({
+        code: SealedRunFailureCodeSchema,
+        /** Operator-facing. Never echoed to the participant verbatim. */
+        detail: z.string().max(4000).optional(),
+      })
+      .optional(),
+  })
+  .superRefine((value, ctx) => {
+    const present = [
+      value.predictions !== undefined,
+      value.metrics !== undefined,
+      value.failure !== undefined,
+    ].filter(Boolean).length;
+    if (present !== 1) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'exactly one of predictions, metrics or failure must be present',
+      });
+    }
+  });
+export type SealedRunResult = z.infer<typeof SealedRunResultSchema>;
+
+/**
+ * `POST .../submissions` with `mode: CONTAINER` — enqueue rather than score.
+ * The image must be digest-pinned at submission time; a tag is refused at the
+ * boundary rather than at dispatch.
+ */
+export const SubmitContainerRequestSchema = z.object({
+  methodName: z.string().min(1).max(120),
+  mode: z.literal('CONTAINER'),
+  imageRef: ImageRefSchema,
+  imageDigest: ImageDigestSchema,
+});
+export type SubmitContainerRequest = z.infer<typeof SubmitContainerRequestSchema>;
+
+/** `POST .../submissions` (CONTAINER) response — accepted, not yet scored. */
+export const SubmitContainerResponseSchema = z.object({
+  id: z.string().uuid(),
+  status: SubmissionStatusSchema,
+});
+export type SubmitContainerResponse = z.infer<typeof SubmitContainerResponseSchema>;
+
 export const tokens = {
   /** Phase B.A.1 added: Campaign, AnnotationToolIntegration (stub registry). */
   /** Phase B.A.2 will add: Task, TaskAssignment, Annotation, gate decisions. */
