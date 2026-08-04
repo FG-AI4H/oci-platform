@@ -52,6 +52,62 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+  # apps/worker-eval is the sealed-execution runner and the only Python in the
+  # repo, so it sits outside the pnpm workspace and needs its own job. uv +
+  # pyproject.toml + uv.lock; the uv version is pinned so `--locked` is
+  # deterministic.
+  worker-eval:
+    name: worker-eval (ruff + pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/worker-eval
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          version: '0.12.1'
+          python-version: '3.14'
+          enable-cache: true
+          cache-dependency-glob: apps/worker-eval/uv.lock
+
+      - name: Install
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Format check
+        run: uv run ruff format --check
+
+      # The sealed-execution control tests (contract §7) are marked
+      # `requires_docker` and SKIP when no daemon is reachable. GitHub-hosted
+      # Ubuntu runners have one, so they must RUN here — a security suite that
+      # skips everywhere is worse than no suite, because it looks green. This
+      # step uses the test harness's own daemon probe so CI fails loudly if the
+      # runner image ever stops shipping a daemon, instead of silently skipping.
+      - name: Refuse to skip the sealed-execution controls
+        run: |
+          uv run python - <<'PY'
+          import sys
+
+          from tests.conftest import _docker_available
+
+          available, reason = _docker_available()
+          if not available:
+              sys.exit(
+                  "no reachable Docker daemon: the sealed-execution control tests "
+                  f"would SKIP instead of running ({reason})"
+              )
+          print("Docker daemon reachable; the sealed-execution controls will run.")
+          PY
+
+      - name: Test
+        run: uv run pytest -q -rs
+
   security-scan:
     runs-on: ubuntu-latest
     steps:
