@@ -85,6 +85,9 @@ Phase C-lite, tracked under [#46](https://github.com/FG-AI4H/oci-platform/issues
 - **Run the whole demo on the FG-AI4H EvalAI platform** (no OCI build) — rejected as the primary
   path: it leaves the evaluation surface a permanent external dependency and does not advance
   Phase C. (Retained only as a possible short-term compute fallback for Mode 2.)
+  **Superseded in part by [ADR-0018](./0018-evalai-front-door-oci-evaluation-backend.md):** EvalAI is
+  rejected as the _evaluation_ path but adopted as the challenge _front door_, with the OCI as the
+  evaluation backend behind an SQS seam.
 - **Build the full Phase C surface now** (multi-phase challenges, GPU worker pool, regulator
   export, public leaderboards) — rejected: far too large for the demo window; violates "minimal".
 - **Stub/mock the result in the UI** — rejected: not a real run; misleads reviewers who probe it.
