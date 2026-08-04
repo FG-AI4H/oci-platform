@@ -9,13 +9,40 @@ TypeScript.
 
 ## Status
 
-Phase C deliverable. For now this directory is a placeholder; the actual implementation will
-either:
+Implemented. The runner is a lean `boto3` + Docker SDK rewrite (option 2 of the original plan —
+the legacy `submission_worker.py` carried too much EvalAI coupling to wrap).
 
-1. Wrap the existing `scripts/workers/submission_worker.py` from the legacy
-   `fgai4h-evaluation-platform` repo (preferred), or
-2. Be rewritten leanly using `boto3` + Docker SDK if the existing one carries too much
-   coupling.
+```
+src/worker_eval/
+  __main__.py      fail-fast startup: config, /output verification, daemon ping, signal handlers
+  config.py        the whole envelope, read from the environment — no built-in sandbox defaults
+  contract.py      Pydantic mirror of the shared Zod schemas (message, failure taxonomy, result)
+  inputs.py        /input resolution and index.json parsing (identifiers only, never content)
+  sandbox.py       pull by digest, run sealed, hard-kill on breach, collect, remove, prune
+  predictions.py   /output/predictions.json reading and validation
+  failures.py      classification precedence + the complete operator-detail vocabulary
+  runner.py        one sealed run, start to finish
+  pump.py          SQS consume loop, visibility heartbeat, DLQ reaping
+  outbox.py        POST /v2/submissions/:id/result with a Cognito M2M bearer token
+  metrics.py       run-duration metric (never load-bearing)
+  logging_setup.py structured JSON logs; participant output is operator-only
+```
+
+Tests: `uv run pytest`. The suite is deliberately in two halves.
+
+- **Unit tests** run anywhere. They assert the exact kwargs handed to `containers.run(...)`, the
+  failure-classification table, digest enforcement, output validation, and the outbox payload.
+- **Sealed-execution control tests** (`tests/test_sealed_execution_integration.py`) need a real
+  Docker daemon: they build adversarial images from inline Dockerfiles, push them to a throwaway
+  registry so they can be pulled by digest, and run them. Without a daemon they **skip loudly**
+  and the terminal summary lists them as `UNVERIFIED` — a control with no test must look
+  untested, never quietly pass. CI runs them on a GitHub-hosted runner, which has a daemon.
+
+**Known deviation:** `/output` is a per-run directory bind-mounted from a memory-backed root,
+not a Docker `--tmpfs` mount, because a `--tmpfs` mount is destroyed when the container stops and
+the run's only artefact would be unreadable. The two properties that matter — memory-backed and
+size-capped — are enforced explicitly, and the reasoning is in the module docstring of
+[`src/worker_eval/sandbox.py`](./src/worker_eval/sandbox.py).
 
 ## Contract
 
@@ -26,10 +53,23 @@ issued via the worker's IAM role.
 
 ## Local development
 
+Dependencies are managed with [`uv`](https://docs.astral.sh/uv/) and `pyproject.toml` /
+`uv.lock` — there is no `requirements.txt`.
+
 ```bash
-cp .env.example .env
-docker compose -f infra/local/docker-compose.yml up postgres redis localstack
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python -m worker_eval
+uv sync                      # create .venv from the lockfile
+uv run ruff check             # lint
+uv run ruff format --check    # formatting
+uv run pytest -q -rs          # tests; -rs shows which controls were skipped and why
+uv run pytest -m requires_docker   # just the sealed-execution controls (needs a daemon)
+```
+
+To run the worker itself against local AWS emulation:
+
+```bash
+docker compose -f infra/local/docker-compose.yml up localstack
+# Export the OCI_* envelope first — startup fails fast on a missing variable rather
+# than inventing a sandbox default. The full list is in src/worker_eval/config.py,
+# and tests/conftest.py carries the exact set the ECS task definition passes.
+uv run python -m worker_eval
 ```
