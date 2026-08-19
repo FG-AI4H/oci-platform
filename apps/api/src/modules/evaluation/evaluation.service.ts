@@ -23,6 +23,7 @@ import type {
   SubmitContainerResponse,
   SubmitPredictionsRequest,
   SubmitPredictionsResponse,
+  TaskKindScores,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
@@ -47,7 +48,8 @@ import {
   validatePredictionsInterface,
   type InterfaceValidationOutcome,
 } from './submission-validation.js';
-import { scoreSubmission, ScoringError, type EvaluationScores } from './scoring.js';
+import { ScoringError } from './scoring.js';
+import { primaryMetricOf, scoreByKind } from './scoring-registry.js';
 
 /**
  * Refusal text for an anonymous SCORED submission (WP6).
@@ -125,9 +127,12 @@ export class EvaluationService {
         scores: parseScores(s.scores),
         createdAt: s.createdAt.toISOString(),
       }))
-      // Best-QWK first; submissions without scores (PENDING / FAILED) sink
-      // to the bottom.
-      .sort((a, b) => (b.scores?.qwk ?? -Infinity) - (a.scores?.qwk ?? -Infinity));
+      // Best-first on the scoring family's own primary metric — quadratic-
+      // weighted kappa for GRADING, macro F1 for CLASSIFICATION (ADR-0020).
+      // Every submission on one task shares that task's kind, so the ordering
+      // is well defined; ordering ACROSS tasks is not, which is why results are
+      // reported per task. Unscored rows sink rather than sorting as zero.
+      .sort((a, b) => primaryMetricOf(b.scores) - primaryMetricOf(a.scores));
 
     return {
       id: t.id,
@@ -187,13 +192,20 @@ export class EvaluationService {
       predictions[p.imageId] = p.grade;
     }
 
-    let scores: EvaluationScores;
+    let scores: TaskKindScores;
     try {
-      scores = scoreSubmission({
+      // Dispatch on the task's own kind rather than assuming ordinal grading.
+      // `scoreByKind` validates the payload against the kind's declared schema
+      // before scoring, so a shape error fails the submission instead of
+      // producing a partially-scored one.
+      scores = scoreByKind({
+        kind: ctx.taskKind,
         groundTruth: ctx.groundTruth,
         predictions,
-        numClasses: ctx.numClasses,
-        referableThreshold: ctx.referableThreshold,
+        config: {
+          numClasses: ctx.numClasses,
+          referableThreshold: ctx.referableThreshold,
+        },
       });
     } catch (err: unknown) {
       if (err instanceof ScoringError) {
@@ -539,29 +551,32 @@ function validationReport(
 }
 
 /**
- * Coerce a stored `scores` JSON blob to `EvaluationScores | null`. Rows are
- * written by this service (or by the outbox), so the shape is trusted; we still
- * guard against a null / non-object so a corrupt row can't crash the detail
- * render. Exported so the result outbox reuses this one coercion rather than
- * growing a second, slightly-different copy.
+ * Coerce a stored `scores` JSON blob to `TaskKindScores | null`.
+ *
+ * Two shapes exist in the column and both must read back cleanly:
+ *
+ *   - the ADR-0020 envelope `{ kind, metrics }`, written by this service and
+ *     the outbox from now on;
+ *   - the bare `GRADING` object written before ADR-0020 — no `kind` field at
+ *     all. Those rows are real published results, so they are wrapped rather
+ *     than discarded: a legacy row reads as `{ kind: 'GRADING', metrics }`.
+ *
+ * Validated with the Zod schema rather than hand-sniffed keys, so a third shape
+ * can never slip through as a half-populated object. A blob matching neither
+ * returns `null` — a corrupt row must not crash a task's detail render.
+ *
+ * Exported so the result outbox reuses this one coercion rather than growing a
+ * second, slightly-different copy.
  */
-export function parseScores(raw: unknown): EvaluationScores | null {
+export function parseScores(raw: unknown): TaskKindScores | null {
   if (raw === null || typeof raw !== 'object') return null;
-  const s = raw as Record<string, unknown>;
-  if (
-    typeof s.qwk === 'number' &&
-    typeof s.accuracy === 'number' &&
-    typeof s.referableSensitivity === 'number' &&
-    typeof s.referableSpecificity === 'number' &&
-    typeof s.coverage === 'number'
-  ) {
-    return {
-      qwk: s.qwk,
-      accuracy: s.accuracy,
-      referableSensitivity: s.referableSensitivity,
-      referableSpecificity: s.referableSpecificity,
-      coverage: s.coverage,
-    };
-  }
+
+  const envelope = TaskKindScoresSchema.safeParse(raw);
+  if (envelope.success) return envelope.data;
+
+  // Pre-ADR-0020 row: the grading metrics, unwrapped.
+  const legacy = GradingScoresSchema.safeParse(raw);
+  if (legacy.success) return { kind: 'GRADING', metrics: legacy.data };
+
   return null;
 }

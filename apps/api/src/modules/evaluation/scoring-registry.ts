@@ -70,6 +70,15 @@ export type KindScores =
 interface ScorerEntry {
   /** Strict shape gate for this kind's predictions payload. */
   readonly payloadSchema: z.ZodType<unknown>;
+  /**
+   * The single number a task of this kind is ordered by. Declared per kind
+   * because there is no metric common to all of them: ordinal agreement is
+   * meaningless for nominal categories, and accuracy is misleading on an
+   * imbalanced split. Ordering is only ever WITHIN a task, and a task has one
+   * kind, so a per-kind extractor is well defined — a cross-kind ranking is
+   * not, which is exactly why the challenge reports per task (ADR-0020).
+   */
+  readonly primaryMetric: (scores: KindScores) => number;
   /** Pure scorer. Receives an already shape-validated payload. */
   readonly score: (args: {
     groundTruth: Record<string, number>;
@@ -81,6 +90,9 @@ interface ScorerEntry {
 const REGISTRY: Readonly<Record<ScorableTaskKind, ScorerEntry>> = {
   GRADING: {
     payloadSchema: singleLabelPayloadSchema,
+    // Quadratic-weighted kappa: the ordinal agreement metric IDRiD grading is
+    // conventionally reported on.
+    primaryMetric: (s) => (s.kind === 'GRADING' ? s.metrics.qwk : Number.NEGATIVE_INFINITY),
     score: ({ groundTruth, predictions, config }) => ({
       kind: 'GRADING',
       // Delegates verbatim to the ADR-0017 implementation — same numbers.
@@ -94,6 +106,11 @@ const REGISTRY: Readonly<Record<ScorableTaskKind, ScorerEntry>> = {
   },
   CLASSIFICATION: {
     payloadSchema: singleLabelPayloadSchema,
+    // Macro F1 rather than accuracy: it averages per-class F1 over classes the
+    // split actually contains, so a model that ignores a minority class cannot
+    // hide behind a dominant one.
+    primaryMetric: (s) =>
+      s.kind === 'CLASSIFICATION' ? s.metrics.macroF1 : Number.NEGATIVE_INFINITY,
     score: ({ groundTruth, predictions, config }) => ({
       kind: 'CLASSIFICATION',
       metrics: scoreClassification({
@@ -165,4 +182,16 @@ export function scoreByKind(args: {
     predictions,
     config: args.config ?? {},
   });
+}
+
+/**
+ * The number a submission is ordered by, given its scores envelope. Callers
+ * sort descending. Returns -Infinity for an unscored submission, so PENDING and
+ * FAILED rows sink rather than sorting as zero — a real 0.0 score and "no score"
+ * are different facts and must not collide at the top of a task's results.
+ */
+export function primaryMetricOf(scores: KindScores | null): number {
+  if (scores === null) return Number.NEGATIVE_INFINITY;
+  if (!isScorableTaskKind(scores.kind)) return Number.NEGATIVE_INFINITY;
+  return REGISTRY[scores.kind].primaryMetric(scores);
 }

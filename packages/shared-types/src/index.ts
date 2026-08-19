@@ -3366,6 +3366,60 @@ export const EvaluationScoresSchema = z.object({
 });
 export type EvaluationScores = z.infer<typeof EvaluationScoresSchema>;
 
+/** Alias: `EvaluationScores` is the `GRADING` metric set specifically. */
+export const GradingScoresSchema = EvaluationScoresSchema;
+export type GradingScores = EvaluationScores;
+
+/** Per-class precision / recall / F1 and ground-truth support. */
+export const ClassMetricsSchema = z.object({
+  /** Class label (0..numClasses-1). */
+  label: z.number().int().nonnegative(),
+  precision: z.number(),
+  recall: z.number(),
+  f1: z.number(),
+  /** Matched items whose ground-truth label is this class. */
+  support: z.number().int().nonnegative(),
+});
+export type ClassMetrics = z.infer<typeof ClassMetricsSchema>;
+
+/**
+ * Metrics for a nominal multi-class task (#428, ADR-0020). Deliberately has no
+ * quadratic-weighted kappa: labels are categories, not points on a scale, so an
+ * ordinal agreement metric would reward a "near-miss" class that is simply
+ * wrong.
+ */
+export const ClassificationScoresSchema = z.object({
+  accuracy: z.number(),
+  /** Mean per-class recall over classes with support > 0. */
+  balancedAccuracy: z.number(),
+  /** Mean per-class F1 over classes with support > 0. */
+  macroF1: z.number(),
+  /** Pooled F1. Arithmetically equal to accuracy for single-label tasks. */
+  microF1: z.number(),
+  perClass: z.array(ClassMetricsSchema),
+  coverage: z.number(),
+});
+export type ClassificationScores = z.infer<typeof ClassificationScoresSchema>;
+
+/**
+ * A scored submission's metrics, tagged with the scoring family that produced
+ * them (ADR-0020).
+ *
+ * The envelope exists because the metric sets are not union-compatible and must
+ * not be flattened into one mostly-null object: a reader has to know which
+ * family a number came from before it means anything. Consumers discriminate on
+ * `kind` before reading `metrics`.
+ *
+ * Rows written before ADR-0020 stored the bare `GRADING` object with no `kind`.
+ * The API coerces those to `{ kind: 'GRADING', metrics }` on read, so the wire
+ * shape is uniform even though the stored history is not.
+ */
+export const TaskKindScoresSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('GRADING'), metrics: GradingScoresSchema }),
+  z.object({ kind: z.literal('CLASSIFICATION'), metrics: ClassificationScoresSchema }),
+]);
+export type TaskKindScores = z.infer<typeof TaskKindScoresSchema>;
+
 /** Summary row for `GET /v2/evaluation/tasks`. NEVER carries groundTruth. */
 export const EvaluationTaskSummarySchema = z.object({
   id: z.string().uuid(),
@@ -3383,7 +3437,7 @@ export const EvaluationSubmissionResultSchema = z.object({
   methodName: z.string(),
   status: SubmissionStatusSchema,
   /** `null` until SCORED (PENDING) or when FAILED. */
-  scores: EvaluationScoresSchema.nullable(),
+  scores: TaskKindScoresSchema.nullable(),
   createdAt: z.string(),
 });
 export type EvaluationSubmissionResult = z.infer<typeof EvaluationSubmissionResultSchema>;
@@ -3437,7 +3491,7 @@ export type SubmitPredictionsRequest = z.infer<typeof SubmitPredictionsRequestSc
 /** `POST .../submissions` response — the new submission id + its scores. */
 export const SubmitPredictionsResponseSchema = z.object({
   id: z.string().uuid(),
-  scores: EvaluationScoresSchema,
+  scores: TaskKindScoresSchema,
 });
 export type SubmitPredictionsResponse = z.infer<typeof SubmitPredictionsResponseSchema>;
 
