@@ -1,5 +1,6 @@
 /**
- * Task-kind scoring registry (WP10, issue #428) — pure, no NestJS / Prisma deps.
+ * Task-kind scoring registry (ADR-0020, WP10, issue #428) — pure, no NestJS /
+ * Prisma deps.
  *
  * ADR-0017 shipped one scoring family, `GRADING`, and hard-coded its payload
  * shape (`itemId -> integer label`) and its metric set into `scoreSubmission()`.

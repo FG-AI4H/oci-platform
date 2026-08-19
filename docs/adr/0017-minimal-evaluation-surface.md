@@ -104,3 +104,6 @@ Phase C-lite, tracked under [#46](https://github.com/FG-AI4H/oci-platform/issues
 - `apps/worker-eval/README.md` — sealed-run contract
 - [ADR-0014](./0014-evidence-audit-trail-and-regulator-export.md) — evidence / audit trail
 - [ADR-0016](./0016-catalog-annotation-linkage.md) — catalog linkage pattern
+- [ADR-0020](./0020-task-kind-scoring-registry.md) — supersedes the single-family scoring
+  contract fixed here: the predictions payload and the scores shape are now declared per task
+  kind. `GRADING` semantics and numbers are unchanged.
