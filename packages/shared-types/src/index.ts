@@ -3302,8 +3302,19 @@ export type DatasetConsentHistory = z.infer<typeof DatasetConsentHistorySchema>;
 export const EvaluationTaskSlugSchema = DatasetSlugSchema;
 export type EvaluationTaskSlug = z.infer<typeof EvaluationTaskSlugSchema>;
 
-/** Scoring family (DB-backed closed enum). ADR-0017 ships `GRADING` only. */
-export const EvaluationTaskKindDbSchema = z.enum(['GRADING']);
+/**
+ * Scoring family (DB-backed closed enum).
+ *
+ *   - `GRADING` — ordinal grades; distance between labels is meaningful, so
+ *     quadratic-weighted kappa is the headline metric (ADR-0017).
+ *   - `CLASSIFICATION` — nominal categories; every confusion is equally wrong,
+ *     so per-class precision/recall and balanced accuracy lead (#428, WP10).
+ *
+ * Extend additively only, with a matching Prisma migration. Adding a value
+ * here without a registered scorer is a runtime error, not a silent default:
+ * see `scoring-registry.ts` in the API's evaluation module.
+ */
+export const EvaluationTaskKindDbSchema = z.enum(['GRADING', 'CLASSIFICATION']);
 export type EvaluationTaskKindDb = z.infer<typeof EvaluationTaskKindDbSchema>;
 
 /** How a submission delivered predictions. `PREDICTIONS` = Mode 1 (shipped);
