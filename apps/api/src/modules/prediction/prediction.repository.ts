@@ -1,6 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { ModelCard, Prisma } from '@oci/database';
-import type { IntendedUseStatement, ModelCardResponse, ModelClass } from '@oci/shared-types';
+import type {
+  IntendedUseStatement,
+  ModelCardResponse,
+  ModelCardStatus,
+  ModelClass,
+  RegulatoryApproval,
+} from '@oci/shared-types';
 import { PrismaService } from '../../prisma.service.js';
 
 /** Map a DB row to the API response. Json columns are cast back to their
@@ -21,6 +27,15 @@ export function toModelCardResponse(row: ModelCard): ModelCardResponse {
     trainingDataJurisdictions: row.trainingDataJurisdictions,
     generativeAi: row.generativeAi,
     lmmSpecificLimitations: (row.lmmSpecificLimitations ?? null) as Record<string, unknown> | null,
+    status: row.status as ModelCardStatus,
+    modelDeveloper: row.modelDeveloper,
+    developerContact: row.developerContact,
+    clinicalSummary: row.clinicalSummary,
+    regulatoryApproval: (row.regulatoryApproval ?? null) as RegulatoryApproval | null,
+    knownBiasesOrEthicalConsiderations: row.knownBiasesOrEthicalConsiderations,
+    biasMitigationApproaches: row.biasMitigationApproaches,
+    ongoingMaintenance: row.ongoingMaintenance,
+    securityPosture: row.securityPosture,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -40,6 +55,14 @@ export interface CreateModelCardArgs {
   trainingDataJurisdictions: string[];
   generativeAi: boolean;
   lmmSpecificLimitations: Record<string, unknown> | null;
+  modelDeveloper: string;
+  developerContact: string;
+  clinicalSummary: string | null;
+  regulatoryApproval: RegulatoryApproval | null;
+  knownBiasesOrEthicalConsiderations: string | null;
+  biasMitigationApproaches: string | null;
+  ongoingMaintenance: string | null;
+  securityPosture: string | null;
 }
 
 @Injectable()
@@ -68,6 +91,17 @@ export class PredictionRepository {
           args.lmmSpecificLimitations === null
             ? undefined
             : (args.lmmSpecificLimitations as Prisma.InputJsonValue),
+        modelDeveloper: args.modelDeveloper,
+        developerContact: args.developerContact,
+        clinicalSummary: args.clinicalSummary,
+        regulatoryApproval:
+          args.regulatoryApproval === null
+            ? undefined
+            : (args.regulatoryApproval as unknown as Prisma.InputJsonValue),
+        knownBiasesOrEthicalConsiderations: args.knownBiasesOrEthicalConsiderations,
+        biasMitigationApproaches: args.biasMitigationApproaches,
+        ongoingMaintenance: args.ongoingMaintenance,
+        securityPosture: args.securityPosture,
       },
     });
   }
@@ -78,5 +112,12 @@ export class PredictionRepository {
 
   async findById(id: string): Promise<ModelCard | null> {
     return this.prisma.client.modelCard.findUnique({ where: { id } });
+  }
+
+  async updateStatus(id: string, status: ModelCardStatus): Promise<ModelCard> {
+    return this.prisma.client.modelCard.update({
+      where: { id },
+      data: { status },
+    });
   }
 }

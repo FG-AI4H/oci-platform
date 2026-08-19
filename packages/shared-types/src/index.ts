@@ -1,5 +1,9 @@
 import { z } from 'zod';
 import type { EmailDomainCategory } from './email-domain.js';
+import { RegulatoryPathwaySchema } from './regulatory-pathway.js';
+
+export { RegulatoryPathwaySchema } from './regulatory-pathway.js';
+export type { RegulatoryPathway } from './regulatory-pathway.js';
 
 export {
   classifyEmailDomain,
@@ -61,8 +65,22 @@ export {
 } from './intended-use.js';
 
 // Model Card — AI-submission carrier; the IUS attaches here (#260, ADR-0013/0015).
-export { CreateModelCardRequestSchema, ModelCardResponseSchema } from './model-card.js';
-export type { CreateModelCardRequest, ModelCardResponse } from './model-card.js';
+export {
+  CreateModelCardRequestSchema,
+  ModelCardResponseSchema,
+  ModelCardStatusSchema,
+  ChangeModelCardStatusRequestSchema,
+  RegulatoryApprovalSchema,
+  allowedTransitionsFrom,
+  canTransition,
+} from './model-card.js';
+export type {
+  CreateModelCardRequest,
+  ModelCardResponse,
+  ModelCardStatus,
+  ChangeModelCardStatusRequest,
+  RegulatoryApproval,
+} from './model-card.js';
 export type {
   RiskTier,
   MedicalPurpose,
@@ -865,26 +883,8 @@ export type AccessRequestAttestations = z.infer<typeof AccessRequestAttestations
 export const AccessRequestAudienceSchema = z.enum(['RESEARCHER', 'BUILDER']);
 export type AccessRequestAudience = z.infer<typeof AccessRequestAudienceSchema>;
 
-/**
- * Regulatory pathway the AI-builder is targeting (#120). Open list to
- * cover non-US/EU pathways (national health-tech regulators emerging
- * in LMIC) — the matcher doesn't gate on the value, the host reviewer
- * eyeballs it. Free-text-with-suggested-vocabulary in the form.
- */
-export const RegulatoryPathwaySchema = z.enum([
-  'FDA_510K',
-  'FDA_DE_NOVO',
-  'FDA_PMA',
-  'EU_MDR_CLASS_I',
-  'EU_MDR_CLASS_IIA',
-  'EU_MDR_CLASS_IIB',
-  'EU_MDR_CLASS_III',
-  'EU_IVDR',
-  'NATIONAL_LMIC',
-  'NONE_RESEARCH_ONLY',
-  'OTHER',
-]);
-export type RegulatoryPathway = z.infer<typeof RegulatoryPathwaySchema>;
+// RegulatoryPathwaySchema moved to ./regulatory-pathway.js (#432) — re-exported
+// from the import block at the top of this file so its public API is unchanged.
 
 /**
  * Post-market data-flow declaration (#120). What does the deployed
