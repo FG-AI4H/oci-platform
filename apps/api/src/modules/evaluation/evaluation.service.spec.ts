@@ -23,14 +23,23 @@ function containerBody(over: Partial<SubmitContainerRequest> = {}): SubmitContai
   return {
     methodName: 'acme-dr-grader',
     mode: 'CONTAINER',
+    intent: 'SCORED',
     imageRef: IMAGE_REF,
     imageDigest: DIGEST,
     ...over,
   };
 }
 
+/**
+ * WP6: a SCORED submission must be attributed to an identified participant —
+ * an anonymous quota is not a quota. These legacy tests assert scoring
+ * behaviour, so they submit as an identified participant.
+ */
+const PARTICIPANT = { sub: 'participant-sub' } as unknown as CognitoAccessTokenPayload;
+
 interface RepoMock {
   findScoringContext: ReturnType<typeof vi.fn>;
+  countScoredSubmissionsForParticipant: ReturnType<typeof vi.fn>;
   findTaskRefBySlug: ReturnType<typeof vi.fn>;
   createSubmission: ReturnType<typeof vi.fn>;
   createContainerSubmission: ReturnType<typeof vi.fn>;
@@ -51,6 +60,9 @@ let service: EvaluationService;
 beforeEach(() => {
   repo = {
     findScoringContext: vi.fn(),
+    // WP6: scored submissions are quota-counted per participant. Default to an
+    // unused quota so the pre-WP6 behavioural assertions below stay the subject.
+    countScoredSubmissionsForParticipant: vi.fn().mockResolvedValue(0),
     findTaskRefBySlug: vi.fn(),
     createSubmission: vi.fn(),
     createContainerSubmission: vi.fn(),
@@ -87,15 +99,20 @@ describe('EvaluationService.submitPredictions (Mode 1 — unchanged)', () => {
   });
 
   it('scores in-process against the hidden ground truth and persists SCORED', async () => {
-    const out = await service.submitPredictions('idrid-grading-demo', {
-      methodName: 'baseline',
-      predictions: [
-        { imageId: 'idrid_01', grade: 0 },
-        { imageId: 'idrid_02', grade: 1 },
-        { imageId: 'idrid_03', grade: 3 },
-        { imageId: 'idrid_04', grade: 4 },
-      ],
-    });
+    const out = await service.submitPredictions(
+      'idrid-grading-demo',
+      {
+        methodName: 'baseline',
+        intent: 'SCORED',
+        predictions: [
+          { imageId: 'idrid_01', grade: 0 },
+          { imageId: 'idrid_02', grade: 1 },
+          { imageId: 'idrid_03', grade: 3 },
+          { imageId: 'idrid_04', grade: 4 },
+        ],
+      },
+      PARTICIPANT,
+    );
 
     const expected = scoreSubmission({
       groundTruth: GROUND_TRUTH,
@@ -116,23 +133,33 @@ describe('EvaluationService.submitPredictions (Mode 1 — unchanged)', () => {
     repo.findScoringContext.mockResolvedValue(null);
 
     await expect(
-      service.submitPredictions('nope', {
-        methodName: 'baseline',
-        predictions: [{ imageId: 'idrid_01', grade: 0 }],
-      }),
+      service.submitPredictions(
+        'nope',
+        {
+          methodName: 'baseline',
+          intent: 'SCORED',
+          predictions: [{ imageId: 'idrid_01', grade: 0 }],
+        },
+        PARTICIPANT,
+      ),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(repo.createSubmission).not.toHaveBeenCalled();
   });
 
   it('persists FAILED + 400s on a duplicate imageId', async () => {
     await expect(
-      service.submitPredictions('idrid-grading-demo', {
-        methodName: 'baseline',
-        predictions: [
-          { imageId: 'idrid_01', grade: 0 },
-          { imageId: 'idrid_01', grade: 2 },
-        ],
-      }),
+      service.submitPredictions(
+        'idrid-grading-demo',
+        {
+          methodName: 'baseline',
+          intent: 'SCORED',
+          predictions: [
+            { imageId: 'idrid_01', grade: 0 },
+            { imageId: 'idrid_01', grade: 2 },
+          ],
+        },
+        PARTICIPANT,
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
 
     expect(repo.createSubmission).toHaveBeenCalledWith(
@@ -194,9 +221,9 @@ describe('EvaluationService.submitContainer (Mode 2 — dispatch)', () => {
   it('404s on an unknown task before touching the queue', async () => {
     repo.findTaskRefBySlug.mockResolvedValue(null);
 
-    await expect(service.submitContainer('nope', containerBody())).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(
+      service.submitContainer('nope', containerBody(), PARTICIPANT),
+    ).rejects.toBeInstanceOf(NotFoundException);
     expect(repo.createContainerSubmission).not.toHaveBeenCalled();
     expect(queue.publish).not.toHaveBeenCalled();
   });
@@ -205,7 +232,7 @@ describe('EvaluationService.submitContainer (Mode 2 — dispatch)', () => {
     queue.missingConfig.mockReturnValue(['OCI_EVAL_QUEUE_URL']);
 
     await expect(
-      service.submitContainer('idrid-grading-demo', containerBody()),
+      service.submitContainer('idrid-grading-demo', containerBody(), PARTICIPANT),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(repo.createContainerSubmission).not.toHaveBeenCalled();
     expect(queue.publish).not.toHaveBeenCalled();
@@ -215,7 +242,11 @@ describe('EvaluationService.submitContainer (Mode 2 — dispatch)', () => {
     const other = `sha256:${'b'.repeat(64)}`;
 
     await expect(
-      service.submitContainer('idrid-grading-demo', containerBody({ imageDigest: other })),
+      service.submitContainer(
+        'idrid-grading-demo',
+        containerBody({ imageDigest: other }),
+        PARTICIPANT,
+      ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repo.createContainerSubmission).not.toHaveBeenCalled();
     expect(queue.publish).not.toHaveBeenCalled();
@@ -225,7 +256,7 @@ describe('EvaluationService.submitContainer (Mode 2 — dispatch)', () => {
     queue.publish.mockRejectedValue(new Error('AWS.SimpleQueueService.NonExistentQueue'));
 
     await expect(
-      service.submitContainer('idrid-grading-demo', containerBody()),
+      service.submitContainer('idrid-grading-demo', containerBody(), PARTICIPANT),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
 
     expect(repo.applyResult).toHaveBeenCalledWith(

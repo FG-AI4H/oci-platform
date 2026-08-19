@@ -36,6 +36,7 @@ export const metadata = {
 
 const TASK_KIND_LABEL: Record<EvaluationTaskKindDb, string> = {
   GRADING: 'Grading',
+  CLASSIFICATION: 'Classification',
 };
 
 export default async function EvaluationTasksPage() {

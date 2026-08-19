@@ -1,9 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
-  HttpException,
   ForbiddenException,
-  HttpStatus,
   Inject,
   Injectable,
   Logger,
@@ -17,7 +15,6 @@ import type {
   EvaluationSubmissionResult,
   EvaluationTaskDetail,
   EvaluationTaskSummary,
-  ScoredSubmissionQuotaScope,
   SealedRunMessage,
   SubmissionMode,
   SubmissionStatus,
