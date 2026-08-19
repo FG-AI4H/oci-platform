@@ -83,6 +83,97 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
+// WP10 / ADR-0020: the service dispatches on the TASK's scoring family, so a
+// nominal task is scored with nominal metrics rather than ordinal-agreement
+// ones. Without this the whole registry is unreachable — a CLASSIFICATION task
+// would silently be scored as if its labels were a severity scale.
+// ---------------------------------------------------------------------------
+
+describe('EvaluationService.submitPredictions — CLASSIFICATION dispatch', () => {
+  // Three nominal classes, four items. Predictions get item 3 wrong.
+  const NOMINAL_GT = { s1: 0, s2: 1, s3: 2, s4: 1 };
+
+  beforeEach(() => {
+    repo.findScoringContext.mockResolvedValue({
+      id: TASK_ID,
+      taskKind: 'CLASSIFICATION' as const,
+      numClasses: 3,
+      referableThreshold: 2,
+      groundTruth: NOMINAL_GT,
+    });
+    repo.createSubmission.mockResolvedValue({ id: SUBMISSION_ID });
+  });
+
+  it('returns CLASSIFICATION metrics, not the ordinal set', async () => {
+    const out = await service.submitPredictions(
+      'nominal-task',
+      {
+        methodName: 'nominal-baseline',
+        intent: 'SCORED',
+        predictions: [
+          { imageId: 's1', grade: 0 },
+          { imageId: 's2', grade: 1 },
+          { imageId: 's3', grade: 0 },
+          { imageId: 's4', grade: 1 },
+        ],
+      },
+      PARTICIPANT,
+    );
+
+    expect(out.scores.kind).toBe('CLASSIFICATION');
+    if (out.scores.kind !== 'CLASSIFICATION') throw new Error('wrong kind');
+
+    // 3 of 4 correct; s3 (true 2) predicted 0.
+    expect(out.scores.metrics.accuracy).toBeCloseTo(0.75, 4);
+    expect(out.scores.metrics.perClass).toHaveLength(3);
+    // No ordinal agreement metric exists on this shape at all.
+    expect('qwk' in out.scores.metrics).toBe(false);
+    expect(repo.createSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'SCORED', error: null }),
+    );
+  });
+
+  it('persists the scores envelope, not bare metrics', async () => {
+    await service.submitPredictions(
+      'nominal-task',
+      {
+        methodName: 'nominal-baseline',
+        intent: 'SCORED',
+        predictions: [{ imageId: 's1', grade: 0 }],
+      },
+      PARTICIPANT,
+    );
+
+    const persisted = repo.createSubmission.mock.calls[0]?.[0] as { scores?: { kind?: string } };
+    // The kind must reach the database: a stored metric set that does not say
+    // which family produced it cannot be rendered or compared later.
+    expect(persisted.scores?.kind).toBe('CLASSIFICATION');
+  });
+
+  it('fails the submission when a label is outside the task class range', async () => {
+    // numClasses = 3, so grade 7 is not a class this task has.
+    const out = await service
+      .submitPredictions(
+        'nominal-task',
+        {
+          methodName: 'nominal-baseline',
+          intent: 'SCORED',
+          predictions: [{ imageId: 's1', grade: 7 }],
+        },
+        PARTICIPANT,
+      )
+      .catch((err: unknown) => err);
+
+    // Same contract as the grading path: a bad label is a FAILED submission
+    // plus a 4xx, never a partially-scored row.
+    expect(out).toBeInstanceOf(BadRequestException);
+    expect(repo.createSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'FAILED', scores: null }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Mode 1 regression. This path is live on dev; it must behave exactly as it
 // did before the CONTAINER branch was added.
 // ---------------------------------------------------------------------------
@@ -91,6 +182,7 @@ describe('EvaluationService.submitPredictions (Mode 1 — unchanged)', () => {
   beforeEach(() => {
     repo.findScoringContext.mockResolvedValue({
       id: TASK_ID,
+      taskKind: 'GRADING' as const,
       numClasses: 5,
       referableThreshold: 2,
       groundTruth: GROUND_TRUTH,
@@ -121,7 +213,10 @@ describe('EvaluationService.submitPredictions (Mode 1 — unchanged)', () => {
       referableThreshold: 2,
     });
 
-    expect(out).toEqual({ id: SUBMISSION_ID, scores: expected });
+    // The registry wraps the same GRADING numbers in the ADR-0020 envelope;
+    // `expected` is still computed by the ADR-0017 scorer directly, so this
+    // also asserts the delegation produces identical metrics.
+    expect(out).toEqual({ id: SUBMISSION_ID, scores: { kind: 'GRADING', metrics: expected } });
     expect(repo.createSubmission).toHaveBeenCalledWith(
       expect.objectContaining({ taskId: TASK_ID, status: 'SCORED', error: null }),
     );

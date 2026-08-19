@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@oci/database';
 import type {
-  EvaluationScores,
   EvaluationTaskKindDb,
+  TaskKindScores,
   SubmissionMode,
   SubmissionStatus,
 } from '@oci/shared-types';
@@ -29,7 +29,7 @@ export interface SubmissionRow {
   id: string;
   methodName: string;
   status: SubmissionStatus;
-  /** Raw JSON as stored; the service parses it into `EvaluationScores`. */
+  /** Raw JSON as stored; the service parses it into `TaskKindScores`. */
   scores: unknown;
   createdAt: Date;
 }
@@ -50,6 +50,8 @@ export interface EvaluationTaskWithSubmissionsRow {
 /** Server-side-only scoring context. Carries the HIDDEN ground truth. */
 export interface EvaluationTaskScoringRow {
   id: string;
+  /** Which scoring family to dispatch to (ADR-0020). */
+  taskKind: EvaluationTaskKindDb;
   numClasses: number;
   referableThreshold: number;
   groundTruth: Record<string, number>;
@@ -96,14 +98,14 @@ export interface SubmissionResultContextRow {
   resultFingerprint: string | null;
   /** Classified failure code of the already-applied result, if any. */
   failureCode: string | null;
-  /** Raw JSON as stored; the service parses it into `EvaluationScores`. */
+  /** Raw JSON as stored; the service parses it into `TaskKindScores`. */
   scores: unknown;
 }
 
 /** Values the outbox writes when it applies a result. */
 export interface SubmissionResultUpdate {
   status: SubmissionStatus;
-  scores: EvaluationScores | null;
+  scores: TaskKindScores | null;
   /** PARTICIPANT-FACING text only — never the worker's operator detail. */
   error: string | null;
   failureCode: string | null;
@@ -203,6 +205,7 @@ export class EvaluationRepository {
       where: { slug },
       select: {
         id: true,
+        taskKind: true,
         numClasses: true,
         referableThreshold: true,
         groundTruth: true,
@@ -211,6 +214,7 @@ export class EvaluationRepository {
     if (!t) return null;
     return {
       id: t.id,
+      taskKind: t.taskKind,
       numClasses: t.numClasses,
       referableThreshold: t.referableThreshold,
       groundTruth: t.groundTruth as unknown as Record<string, number>,
@@ -304,6 +308,7 @@ export class EvaluationRepository {
         task: {
           select: {
             id: true,
+            taskKind: true,
             numClasses: true,
             referableThreshold: true,
             groundTruth: true,
@@ -314,6 +319,7 @@ export class EvaluationRepository {
     if (!s) return null;
     return {
       id: s.task.id,
+      taskKind: s.task.taskKind,
       numClasses: s.task.numClasses,
       referableThreshold: s.task.referableThreshold,
       groundTruth: s.task.groundTruth as unknown as Record<string, number>,
@@ -376,7 +382,7 @@ export class EvaluationRepository {
     methodName: string;
     submittedBy: string | null;
     status: SubmissionStatus;
-    scores: EvaluationScores | null;
+    scores: TaskKindScores | null;
     error: string | null;
   }): Promise<{ id: string }> {
     return this.prisma.client.submission.create({

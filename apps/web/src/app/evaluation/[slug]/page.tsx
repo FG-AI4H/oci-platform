@@ -31,8 +31,9 @@ import { apiFetch } from '../../../lib/api';
  * server-side, so nothing here is gated and nothing here can leak the
  * reference labels.
  *
- * Submissions are rendered in the order the API returns them (best QWK
- * first; PENDING / FAILED sink to the bottom) — the ranking is the API's
+ * Submissions are rendered in the order the API returns them (best first on
+ * the task kind's own primary metric — QWK for grading, macro F1 for
+ * classification; PENDING / FAILED sink to the bottom) — the ranking is the API's
  * decision, not this page's. `scores` is null for anything that isn't
  * SCORED; those rows render dashes. The public DTO carries no `error`
  * field, so a FAILED row exposes nothing beyond its status.
@@ -226,11 +227,22 @@ export default async function EvaluationTaskDetailPage({
             <CardHeader>
               <CardTitle as="h2">Results</CardTitle>
               <CardDescription>
-                Ordered best first by <strong>QWK</strong> — quadratic-weighted kappa, the headline
-                metric: agreement with the reference grades on a −1 to 1 scale where 1 is perfect
-                and 0 is chance. The referable rates are measured against the grade ≥{' '}
-                {detail.referableThreshold.toLocaleString('en-GB')} cut-off. Coverage is the share
-                of the reference set a submission actually predicted.
+                {detail.taskKind === 'CLASSIFICATION' ? (
+                  <>
+                    Ordered best first by <strong>macro F1</strong> — the mean per-class F1 over the
+                    classes this evaluation set contains, so a model that ignores a rare class
+                    cannot hide behind a common one. Accuracy is shown alongside it because the two
+                    diverge exactly when the classes are imbalanced.
+                  </>
+                ) : (
+                  <>
+                    Ordered best first by <strong>QWK</strong> — quadratic-weighted kappa, the
+                    headline metric: agreement with the reference grades on a −1 to 1 scale where 1
+                    is perfect and 0 is chance. The referable rates are measured against the grade ≥{' '}
+                    {detail.referableThreshold.toLocaleString('en-GB')} cut-off.
+                  </>
+                )}{' '}
+                Coverage is the share of the reference set a submission actually predicted.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -240,10 +252,14 @@ export default async function EvaluationTaskDetailPage({
                   file is submitted.
                 </p>
               ) : (
-                <ol aria-label="Submissions, best QWK first" className="space-y-4">
+                <ol aria-label="Submissions, best first" className="space-y-4">
                   {ranked.map(({ submission, rank }) => (
                     <li key={submission.id}>
-                      <SubmissionRow submission={submission} rank={rank} />
+                      <SubmissionRow
+                        submission={submission}
+                        rank={rank}
+                        taskKind={detail.taskKind}
+                      />
                     </li>
                   ))}
                 </ol>
@@ -270,12 +286,67 @@ export default async function EvaluationTaskDetailPage({
   );
 }
 
+/** One metric cell's label and formatted value; `null` renders an em dash. */
+type MetricCell = { label: string; value: string | null };
+
+/**
+ * The metric columns for a submission, chosen by the scoring family that
+ * produced them (ADR-0020).
+ *
+ * There is deliberately no metric set common to every kind: quadratic-weighted
+ * kappa is meaningless for nominal categories, where predicting a neighbouring
+ * class is not "closer" to correct, and per-class F1 says nothing about an
+ * ordinal scale. So the columns change with the kind rather than showing blanks
+ * for metrics that do not exist.
+ *
+ * The first cell is the kind's primary metric — the one the API ordered by.
+ *
+ * An unscored submission (PENDING / FAILED) carries no scores at all, so its
+ * columns are taken from the TASK's kind rather than guessed: every submission
+ * on a task shares that task's kind, which keeps the row shape stable instead of
+ * reflowing the grid as results arrive.
+ */
+function metricCells(
+  taskKind: EvaluationTaskKindDb,
+  scores: EvaluationSubmissionResult['scores'],
+): MetricCell[] {
+  const kind = scores?.kind ?? taskKind;
+
+  if (kind === 'CLASSIFICATION') {
+    const m = scores?.kind === 'CLASSIFICATION' ? scores.metrics : null;
+    return [
+      { label: 'Macro F1', value: m ? RATE_FORMATTER.format(m.macroF1) : null },
+      { label: 'Balanced accuracy', value: m ? RATE_FORMATTER.format(m.balancedAccuracy) : null },
+      { label: 'Accuracy', value: m ? RATE_FORMATTER.format(m.accuracy) : null },
+      { label: 'Micro F1', value: m ? RATE_FORMATTER.format(m.microF1) : null },
+      { label: 'Coverage', value: m ? RATE_FORMATTER.format(m.coverage) : null },
+    ];
+  }
+
+  const m = scores?.kind === 'GRADING' ? scores.metrics : null;
+  return [
+    { label: 'QWK', value: m ? QWK_FORMATTER.format(m.qwk) : null },
+    { label: 'Accuracy', value: m ? RATE_FORMATTER.format(m.accuracy) : null },
+    {
+      label: 'Referable sensitivity',
+      value: m ? RATE_FORMATTER.format(m.referableSensitivity) : null,
+    },
+    {
+      label: 'Referable specificity',
+      value: m ? RATE_FORMATTER.format(m.referableSpecificity) : null,
+    },
+    { label: 'Coverage', value: m ? RATE_FORMATTER.format(m.coverage) : null },
+  ];
+}
+
 function SubmissionRow({
   submission,
   rank,
+  taskKind,
 }: {
   submission: EvaluationSubmissionResult;
   rank: number | null;
+  taskKind: EvaluationTaskKindDb;
 }) {
   const { scores } = submission;
   const note = STATUS_NOTE[submission.status];
@@ -303,22 +374,15 @@ function SubmissionRow({
       {note ? <p className="mt-2 text-sm text-[var(--color-muted-foreground)]">{note}</p> : null}
 
       <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-5">
-        <Metric
-          label="QWK"
-          value={scores ? QWK_FORMATTER.format(scores.qwk) : null}
-          headline
-          className="col-span-2 sm:col-span-1"
-        />
-        <Metric label="Accuracy" value={scores ? RATE_FORMATTER.format(scores.accuracy) : null} />
-        <Metric
-          label="Referable sensitivity"
-          value={scores ? RATE_FORMATTER.format(scores.referableSensitivity) : null}
-        />
-        <Metric
-          label="Referable specificity"
-          value={scores ? RATE_FORMATTER.format(scores.referableSpecificity) : null}
-        />
-        <Metric label="Coverage" value={scores ? RATE_FORMATTER.format(scores.coverage) : null} />
+        {metricCells(taskKind, scores).map((cell, i) => (
+          <Metric
+            key={cell.label}
+            label={cell.label}
+            value={cell.value}
+            headline={i === 0}
+            className={i === 0 ? 'col-span-2 sm:col-span-1' : undefined}
+          />
+        ))}
       </dl>
     </div>
   );
