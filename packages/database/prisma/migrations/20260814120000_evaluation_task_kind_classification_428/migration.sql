@@ -1,0 +1,26 @@
+-- Nominal multi-class scoring family — WP10 of the GI-AI4H benchmarking-challenge
+-- plan (issue #428, ADR-0017 "extend with an additive enum value + migration
+-- when a new scoring family lands").
+--
+-- WHY. The evaluation surface could express one ORDINAL grade per item and
+-- nothing else, so the only task a data host could contribute was an ordinal
+-- grading task. That caps who can be recruited: most datasets institutions
+-- offer are nominal classification, where predicting class 3 instead of class 4
+-- is not "closer" than predicting class 0, and quadratic-weighted kappa is
+-- therefore the wrong headline metric.
+--
+-- ADDITIVE ONLY. `ALTER TYPE ... ADD VALUE` is a catalog-only change on
+-- PostgreSQL 12+: no table rewrite, no scan, and existing rows are untouched.
+-- The new value is NOT referenced anywhere in this migration, which is what
+-- makes it safe inside Prisma's transaction (a value added in a transaction
+-- cannot be USED in that same transaction).
+--
+-- Nothing is altered or dropped: `GRADING` keeps its identity and its ordinal
+-- position, so every existing task and every published score is unaffected.
+-- The API-side scorer for GRADING delegates verbatim to the ADR-0017
+-- implementation, and its hand-computed unit tests pass unchanged.
+--
+-- IF NOT EXISTS makes the statement idempotent, so a re-run against an
+-- environment that already has the value is a no-op rather than an error.
+
+ALTER TYPE "evaluation"."EvaluationTaskKind" ADD VALUE IF NOT EXISTS 'CLASSIFICATION';

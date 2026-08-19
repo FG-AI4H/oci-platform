@@ -40,6 +40,7 @@ import { apiFetch } from '../../../lib/api';
 
 const TASK_KIND_LABEL: Record<EvaluationTaskKindDb, string> = {
   GRADING: 'Grading',
+  CLASSIFICATION: 'Classification',
 };
 
 const STATUS_TONE: Record<SubmissionStatus, 'success' | 'info' | 'danger'> = {

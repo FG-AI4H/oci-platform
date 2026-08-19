@@ -66,6 +66,21 @@ export interface EvaluationTaskRefRow {
 }
 
 /**
+ * A task's item-ID key set + its public metric config, with NO labels attached.
+ * Used by the VALIDATION path (WP6), which reports which submitted IDs a task
+ * does not recognise and must not be able to see a label — see the boundary note
+ * in `submission-validation.ts`.
+ */
+export interface EvaluationTaskItemIdsRow {
+  id: string;
+  slug: string;
+  numClasses: number;
+  /** The ground-truth map's KEYS only. The same set a run is given as
+   *  `/input/index.json`, so it is not secret. */
+  itemIds: string[];
+}
+
+/**
  * What the result outbox needs to decide accept / replay / reject for one
  * submission. No ground truth: the predictions branch loads the scoring context
  * separately, and only after the idempotency and route checks have passed.
@@ -214,6 +229,64 @@ export class EvaluationRepository {
     });
     if (!t) return null;
     return { id: t.id, slug: t.slug };
+  }
+
+  /**
+   * The task's item-ID key set (+ its public metric config) for the VALIDATION
+   * path. Never returns a label.
+   *
+   * `ground_truth` is a JSONB map and Prisma cannot project a JSON object's keys
+   * server-side, so the map is read and then narrowed to `Object.keys(...)`
+   * before this method returns. The labels therefore exist only inside this
+   * function's local scope, and `EvaluationTaskItemIdsRow` has no field that
+   * could carry them out — the same structural guarantee as `findTaskRefBySlug`
+   * not loading ground truth at all.
+   *
+   * (A raw `jsonb_object_keys` projection would avoid materialising the labels
+   * in the API process at all. That needs a `*.raw.ts` file per the repository
+   * convention and there is no DB to verify it against here; noted as a
+   * follow-up rather than guessed at.)
+   */
+  async findTaskItemIds(slug: string): Promise<EvaluationTaskItemIdsRow | null> {
+    const t = await this.prisma.client.evaluationTask.findUnique({
+      where: { slug },
+      select: { id: true, slug: true, numClasses: true, groundTruth: true },
+    });
+    if (!t) return null;
+    return {
+      id: t.id,
+      slug: t.slug,
+      numClasses: t.numClasses,
+      itemIds: Object.keys((t.groundTruth ?? {}) as Record<string, unknown>),
+    };
+  }
+
+  /**
+   * Count one participant's SCORED-intent submissions against one task, for the
+   * quota gate (WP6). `since` bounds it to the current calendar week; omitting
+   * it counts the task lifetime.
+   *
+   * Every status counts — PENDING, SCORED and FAILED alike. A scored submission
+   * consumes a host evaluation slot and an oracle query the moment it is
+   * accepted, whatever its outcome; and refunding FAILED rows would make cheap
+   * deliberate failures a way around the cap. Validation submissions are the
+   * free debugging path, and they write no row here at all.
+   *
+   * Backed by `@@index([taskId, submittedBy, createdAt])`, whose prefix serves
+   * the unbounded variant too.
+   */
+  async countScoredSubmissionsForParticipant(args: {
+    taskId: string;
+    submittedBy: string;
+    since?: Date;
+  }): Promise<number> {
+    return this.prisma.client.submission.count({
+      where: {
+        taskId: args.taskId,
+        submittedBy: args.submittedBy,
+        ...(args.since ? { createdAt: { gte: args.since } } : {}),
+      },
+    });
   }
 
   /**

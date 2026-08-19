@@ -3302,8 +3302,19 @@ export type DatasetConsentHistory = z.infer<typeof DatasetConsentHistorySchema>;
 export const EvaluationTaskSlugSchema = DatasetSlugSchema;
 export type EvaluationTaskSlug = z.infer<typeof EvaluationTaskSlugSchema>;
 
-/** Scoring family (DB-backed closed enum). ADR-0017 ships `GRADING` only. */
-export const EvaluationTaskKindDbSchema = z.enum(['GRADING']);
+/**
+ * Scoring family (DB-backed closed enum).
+ *
+ *   - `GRADING` — ordinal grades; distance between labels is meaningful, so
+ *     quadratic-weighted kappa is the headline metric (ADR-0017).
+ *   - `CLASSIFICATION` — nominal categories; every confusion is equally wrong,
+ *     so per-class precision/recall and balanced accuracy lead (#428, WP10).
+ *
+ * Extend additively only, with a matching Prisma migration. Adding a value
+ * here without a registered scorer is a runtime error, not a silent default:
+ * see `scoring-registry.ts` in the API's evaluation module.
+ */
+export const EvaluationTaskKindDbSchema = z.enum(['GRADING', 'CLASSIFICATION']);
 export type EvaluationTaskKindDb = z.infer<typeof EvaluationTaskKindDbSchema>;
 
 /** How a submission delivered predictions. `PREDICTIONS` = Mode 1 (shipped);
@@ -3315,6 +3326,27 @@ export type SubmissionMode = z.infer<typeof SubmissionModeSchema>;
  *  written; `FAILED` with a populated `error`. */
 export const SubmissionStatusSchema = z.enum(['PENDING', 'SCORED', 'FAILED']);
 export type SubmissionStatus = z.infer<typeof SubmissionStatusSchema>;
+
+/**
+ * What a submission is FOR (WP6). Orthogonal to `SubmissionMode`, which says
+ * only HOW predictions are delivered — either intent is expressible in either
+ * mode:
+ *
+ *   - `SCORED` — a competition entry. Scored against the task's hidden ground
+ *     truth, listed among the task's results, and counted against the
+ *     per-participant quota. Requires an identified participant.
+ *   - `VALIDATION` — an interface check. Unlimited, never scored, never listed
+ *     among a task's results, never counted against the quota, and open to
+ *     anonymous callers. It answers "would this submission have been parseable
+ *     / dispatchable at all" — the only question a participant can debug in a
+ *     model-to-data challenge where they never see the data.
+ *
+ * There is deliberately NO `Submission.intent` column: a validation submission
+ * writes no row at all, so there is nothing to mark and nothing to filter back
+ * out of a leaderboard. See `SubmissionValidationReportSchema`.
+ */
+export const SubmissionIntentSchema = z.enum(['SCORED', 'VALIDATION']);
+export type SubmissionIntent = z.infer<typeof SubmissionIntentSchema>;
 
 /**
  * Computed metrics for a scored submission (each rounded to 4 decimals).
@@ -3382,9 +3414,14 @@ export type EvaluationTaskDetail = z.infer<typeof EvaluationTaskDetailSchema>;
  * exact `0..(numClasses-1)` range is enforced task-aware in the scoring
  * service (which knows N) and a violation there persists a FAILED
  * submission + returns 4xx.
+ *
+ * `intent` defaults to `SCORED`, so a body written against the pre-WP6 shape
+ * means exactly what it meant before. `intent: 'VALIDATION'` runs the same
+ * checks and returns a `SubmissionValidationReport` instead of a score.
  */
 export const SubmitPredictionsRequestSchema = z.object({
   methodName: z.string().min(1).max(120),
+  intent: SubmissionIntentSchema.default('SCORED'),
   predictions: z
     .array(
       z.object({
@@ -3585,6 +3622,7 @@ export type SealedRunResult = z.infer<typeof SealedRunResultSchema>;
 export const SubmitContainerRequestSchema = z.object({
   methodName: z.string().min(1).max(120),
   mode: z.literal('CONTAINER'),
+  intent: SubmissionIntentSchema.default('SCORED'),
   imageRef: ImageRefSchema,
   imageDigest: ImageDigestSchema,
 });
@@ -3596,6 +3634,130 @@ export const SubmitContainerResponseSchema = z.object({
   status: SubmissionStatusSchema,
 });
 export type SubmitContainerResponse = z.infer<typeof SubmitContainerResponseSchema>;
+
+// ==== Validation submissions + scored-submission quota (WP6) ===============
+//
+// Two halves of the same participant-experience problem. A model-to-data
+// challenge hides the data, so a participant cannot debug a broken submission
+// by looking at it; and a scored submission against hidden ground truth is an
+// oracle query, so scored submissions have to be rationed. Unlimited unscored
+// validation is what makes a rationed scored path fair.
+//
+// GROUND TRUTH: a validation report is derived from the task's item-ID KEY SET
+// and never from a label. The reasoning for exactly where that line sits is in
+// `apps/api/src/modules/evaluation/submission-validation.ts`, next to the code
+// that has to honour it.
+// ===========================================================================
+
+/** Which interface check a `SubmissionValidationCheck` reports on. */
+export const SubmissionValidationCheckNameSchema = z.enum([
+  /** The wire shape parsed at all (implicitly true once the DTO accepted it). */
+  'PAYLOAD_SHAPE',
+  /** No item ID appears twice in the payload. */
+  'DUPLICATE_ITEM_IDS',
+  /** Every label is an integer inside the task's `[0, numClasses-1]`. */
+  'LABEL_RANGE',
+  /** Every submitted item ID is one the task contains. */
+  'ITEM_IDS_RECOGNISED',
+  /** `imageRef` is pinned to the submitted `imageDigest`. */
+  'IMAGE_DIGEST_PINNED',
+  /** Sealed execution is configured on this environment, so a run could be dispatched. */
+  'DISPATCH_AVAILABLE',
+]);
+export type SubmissionValidationCheckName = z.infer<typeof SubmissionValidationCheckNameSchema>;
+
+/** One check's outcome. `detail` and `itemIds` must be specific enough to fix. */
+export const SubmissionValidationCheckSchema = z.object({
+  name: SubmissionValidationCheckNameSchema,
+  ok: z.boolean(),
+  /**
+   * Participant-facing explanation. Derived from the submitted payload and the
+   * task's PUBLIC configuration only — never from a ground-truth label.
+   */
+  detail: z.string(),
+  /**
+   * The offending item IDs, truncated. Either the participant's own IDs or IDs
+   * absent from a key set the participant was already given, so naming them
+   * discloses nothing. Empty when the check passed or names no IDs.
+   */
+  itemIds: z.array(z.string()),
+  /** How many IDs the check found, when `itemIds` above was truncated. */
+  itemIdCount: z.number().int(),
+});
+export type SubmissionValidationCheck = z.infer<typeof SubmissionValidationCheckSchema>;
+
+/**
+ * Item-ID arithmetic for a predictions payload. Every field is a count of
+ * IDENTIFIERS, all four derivable by the participant from the `index.json`
+ * they were handed. No field is a function of a label — see the boundary note
+ * in `submission-validation.ts` for why that distinction is the whole control.
+ */
+export const SubmissionValidationItemIdSummarySchema = z.object({
+  /** Rows in the payload (duplicates included). */
+  submitted: z.number().int(),
+  /** Distinct submitted IDs the task contains. */
+  recognised: z.number().int(),
+  /** Distinct submitted IDs the task does not contain. */
+  unrecognised: z.number().int(),
+  /** IDs the task contains with no prediction — scored as reduced coverage. */
+  notPredicted: z.number().int(),
+});
+export type SubmissionValidationItemIdSummary = z.infer<
+  typeof SubmissionValidationItemIdSummarySchema
+>;
+
+/**
+ * Response to `POST .../submissions` with `intent: 'VALIDATION'`.
+ *
+ * Answered `200` whether or not the checks pass: the request itself was
+ * well-formed and the answer to "is my artefact usable" is the payload, not the
+ * status code. A `4xx` here would conflate "your validation request was bad"
+ * with "your submission would not have worked", which is the distinction the
+ * participant is asking about.
+ *
+ * `scores`, `submissionId` and `quotaConsumed` are pinned to constants rather
+ * than omitted so no client can mistake a validation response for a scored one,
+ * and so the three WP6 guarantees are legible in the response itself: nothing
+ * was scored, no `Submission` row exists, no quota was spent.
+ */
+export const SubmissionValidationReportSchema = z.object({
+  intent: z.literal('VALIDATION'),
+  mode: SubmissionModeSchema,
+  taskSlug: EvaluationTaskSlugSchema,
+  /** True iff every check passed. */
+  ok: z.boolean(),
+  /** Always `null` — a validation submission is never scored. */
+  scores: z.null(),
+  /** Always `null` — no `Submission` row is written for a validation submission. */
+  submissionId: z.null(),
+  /** Always `false` — validation never spends scored quota. */
+  quotaConsumed: z.literal(false),
+  checks: z.array(SubmissionValidationCheckSchema),
+  /** `null` for a CONTAINER validation, which has no predictions to count. */
+  itemIdSummary: SubmissionValidationItemIdSummarySchema.nullable(),
+});
+export type SubmissionValidationReport = z.infer<typeof SubmissionValidationReportSchema>;
+
+/** Which of the two scored-submission limits a quota rejection is about. */
+export const ScoredSubmissionQuotaScopeSchema = z.enum(['WEEK', 'TASK_TOTAL']);
+export type ScoredSubmissionQuotaScope = z.infer<typeof ScoredSubmissionQuotaScopeSchema>;
+
+/**
+ * Machine-readable companion to a `429` quota rejection, so a client can show a
+ * countdown without parsing prose.
+ *
+ * `resetsAt` is `null` for `TASK_TOTAL` and only for `TASK_TOTAL`: the per-task
+ * cap is a lifetime cap with no later instant at which it frees up. Reporting a
+ * fabricated reset for it would be the exact support email WP6 exists to avoid.
+ */
+export const ScoredSubmissionQuotaStateSchema = z.object({
+  scope: ScoredSubmissionQuotaScopeSchema,
+  limit: z.number().int(),
+  used: z.number().int(),
+  /** ISO-8601 instant, or `null` when the limit does not reset. */
+  resetsAt: z.string().nullable(),
+});
+export type ScoredSubmissionQuotaState = z.infer<typeof ScoredSubmissionQuotaStateSchema>;
 
 export const tokens = {
   /** Phase B.A.1 added: Campaign, AnnotationToolIntegration (stub registry). */

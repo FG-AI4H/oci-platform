@@ -1596,7 +1596,12 @@ enum ConsentStatus {
 /// Extend with an additive enum value + migration when a new scoring
 /// family lands.
 enum EvaluationTaskKind {
+  /// Ordinal grades (e.g. DR severity 0-4). Distance between labels is
+  /// meaningful, so quadratic-weighted kappa is the headline metric.
   GRADING
+  /// Nominal categories. Every confusion is equally wrong, so per-class
+  /// precision/recall and balanced accuracy are the headline metrics (#428).
+  CLASSIFICATION
 
   @@schema("evaluation")
 }
