@@ -1,6 +1,11 @@
 import { Body, Controller, Get, Inject, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CreateModelCardRequestSchema, type CreateModelCardRequest } from '@oci/shared-types';
+import {
+  ChangeModelCardStatusRequestSchema,
+  CreateModelCardRequestSchema,
+  type ChangeModelCardStatusRequest,
+  type CreateModelCardRequest,
+} from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
 import { PredictionService } from './prediction.service.js';
@@ -28,6 +33,19 @@ export class PredictionController {
     @CurrentUser() user: CognitoAccessTokenPayload,
   ) {
     return this.prediction.submit(body, user);
+  }
+
+  @Post(':slug/status')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Move a model card through its lifecycle (DRAFT → SUBMITTED → …)' })
+  @ApiOkResponse({ description: 'The updated model card.' })
+  @UseGuards(CognitoJwtGuard)
+  changeStatus(
+    @Param('slug') slug: string,
+    @Body(new ZodPipe(ChangeModelCardStatusRequestSchema)) body: ChangeModelCardStatusRequest,
+    @CurrentUser() user: CognitoAccessTokenPayload,
+  ) {
+    return this.prediction.changeStatus(slug, body, user);
   }
 
   @Get(':slug')

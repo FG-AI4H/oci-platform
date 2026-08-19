@@ -1756,9 +1756,43 @@ model ModelCard {
   generativeAi              Boolean  @default(false) @map("generative_ai")
   lmmSpecificLimitations    Json?    @map("lmm_specific_limitations")
 
+  /// Lifecycle (#432). Only a non-DRAFT card is eligible for the Model Facts
+  /// Label (#261) and the CHAI export (#433). Transitions are enforced in
+  /// PredictionService against the table in @oci/shared-types.
+  status ModelCardStatus @default(DRAFT)
+
+  /// Vendor accountable for the model — NOT `submitterUserId`, which is the
+  /// platform account that filed it (CHAI `BasicInfo`). Nullable so the column
+  /// is additive; the create request requires both.
+  modelDeveloper   String? @map("model_developer")
+  developerContact String? @map("developer_contact")
+
+  /// Clinician-facing summary, distinct from the technical architectureSummary.
+  clinicalSummary String? @map("clinical_summary")
+
+  /// RegulatoryApprovalSchema (@oci/shared-types): pathway + grant state +
+  /// jurisdictions (CE mark / 510(k) / …).
+  regulatoryApproval Json? @map("regulatory_approval")
+
+  knownBiasesOrEthicalConsiderations String? @map("known_biases_or_ethical_considerations")
+  biasMitigationApproaches           String? @map("bias_mitigation_approaches")
+  /// Post-market surveillance / monitoring commitments.
+  ongoingMaintenance                 String? @map("ongoing_maintenance")
+  securityPosture                    String? @map("security_posture")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("model_cards")
+  @@schema("prediction")
+}
+
+/// Model-card lifecycle (#432, ADR-0019 D3).
+enum ModelCardStatus {
+  DRAFT
+  SUBMITTED
+  PUBLISHED
+  WITHDRAWN
+
   @@schema("prediction")
 }
