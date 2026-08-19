@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import {
   SealedRunFailureCodeSchema,
-  type EvaluationScores,
+  type TaskKindScores,
   type SealedRunFailureCode,
   type SealedRunResult,
   type SubmissionStatus,
@@ -21,7 +21,8 @@ import {
   sealedRunResultFingerprint,
   SealedRunResultError,
 } from './sealed-run.js';
-import { ScoringError, scoreSubmission } from './scoring.js';
+import { ScoringError } from './scoring.js';
+import { scoreByKind } from './scoring-registry.js';
 
 /**
  * Response of `POST /v2/submissions/:id/result`.
@@ -36,8 +37,8 @@ import { ScoringError, scoreSubmission } from './scoring.js';
 export interface SealedRunResultResponse {
   id: string;
   status: SubmissionStatus;
-  /** Metrics as stored. Null unless the submission is SCORED. */
-  scores: EvaluationScores | null;
+  /** Metrics as stored, tagged with their scoring family. Null unless SCORED. */
+  scores: TaskKindScores | null;
   /** Present only when FAILED. `message` is derived from `code` ALONE. */
   failure: { code: SealedRunFailureCode; message: string } | null;
   /** True when this call re-delivered an already-applied result (200 no-op). */
@@ -125,9 +126,16 @@ export class SubmissionResultService {
     }
 
     if (outcome.kind === 'metrics') {
+      // The host scored against its own labels and sent metrics. The
+      // sealed-run contract types `metrics` as the GRADING set specifically
+      // (`SealedRunResultSchema`), so that is what this path can honestly tag
+      // them as. A CONTAINER task of any other kind must return `predictions`
+      // and let the API score them, where dispatch is by the task's real kind —
+      // until the worker contract carries a kind of its own, mislabelling
+      // host-supplied metrics would be worse than restricting the path.
       return this.applyOrResolveRace(submissionId, fingerprint, {
         status: 'SCORED',
-        scores: outcome.metrics,
+        scores: { kind: 'GRADING', metrics: outcome.metrics },
         error: null,
         failureCode: null,
         durationMs: body.durationMs,
@@ -141,13 +149,19 @@ export class SubmissionResultService {
       throw new NotFoundException(`submission "${submissionId}" not found`);
     }
 
-    let scores: EvaluationScores;
+    let scores: TaskKindScores;
     try {
-      scores = scoreSubmission({
+      // Dispatch on the task's own scoring family, exactly as the Mode 1 path
+      // does — a sealed run of a CLASSIFICATION task must not be scored with
+      // ordinal-agreement metrics.
+      scores = scoreByKind({
+        kind: ctx.taskKind,
         groundTruth: ctx.groundTruth,
         predictions: outcome.predictions,
-        numClasses: ctx.numClasses,
-        referableThreshold: ctx.referableThreshold,
+        config: {
+          numClasses: ctx.numClasses,
+          referableThreshold: ctx.referableThreshold,
+        },
       });
     } catch (err: unknown) {
       if (err instanceof ScoringError) {

@@ -1,4 +1,9 @@
 # Dependencies
+# Both forms on purpose: the trailing-slash pattern ignores the directory, but
+# NOT a symlink of the same name — a `ln -s` into a worktree therefore slipped
+# past `git add -A` and got committed as ten mode-120000 blobs. The bare pattern
+# catches that too.
+node_modules
 node_modules/
 .pnpm-store/
 

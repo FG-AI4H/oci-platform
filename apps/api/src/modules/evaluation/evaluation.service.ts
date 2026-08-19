@@ -10,6 +10,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@oci/database';
+import { GradingScoresSchema, TaskKindScoresSchema } from '@oci/shared-types';
 import type {
   CreateEvaluationTaskRequest,
   EvaluationSubmissionResult,

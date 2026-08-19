@@ -56,7 +56,13 @@ function makeRepo(row: Partial<SubmissionResultContextRow> = {}) {
   );
   const findScoringContextBySubmissionId = vi.fn(async (id: string) =>
     id === state.id
-      ? { id: TASK_ID, numClasses: 5, referableThreshold: 2, groundTruth: GROUND_TRUTH }
+      ? {
+          id: TASK_ID,
+          taskKind: 'GRADING' as const,
+          numClasses: 5,
+          referableThreshold: 2,
+          groundTruth: GROUND_TRUTH,
+        }
       : null,
   );
   const applyResult = vi.fn(async (id: string, data: SubmissionResultUpdate) => {
@@ -96,7 +102,8 @@ describe('SubmissionResultService — predictions branch', () => {
     });
 
     expect(out.status).toBe('SCORED');
-    expect(out.scores).toEqual(expected);
+    // Same numbers as the ADR-0017 scorer, wrapped in the ADR-0020 envelope.
+    expect(out.scores).toEqual({ kind: 'GRADING', metrics: expected });
     expect(out.failure).toBeNull();
     expect(out.replayed).toBe(false);
     expect(repo.state.status).toBe('SCORED');
@@ -134,11 +141,16 @@ describe('SubmissionResultService — metrics branch', () => {
     const out = await service.recordResult(SUBMISSION_ID, result({ metrics: HOST_METRICS }));
 
     expect(out.status).toBe('SCORED');
-    expect(out.scores).toEqual(HOST_METRICS);
+    // Host-supplied metrics are stored as-is, wrapped in the ADR-0020 envelope
+    // and tagged GRADING — the shape the sealed-run contract types `metrics` as.
+    expect(out.scores).toEqual({ kind: 'GRADING', metrics: HOST_METRICS });
     expect(repo.mock.findScoringContextBySubmissionId).not.toHaveBeenCalled();
     expect(repo.mock.applyResult).toHaveBeenCalledWith(
       SUBMISSION_ID,
-      expect.objectContaining({ status: 'SCORED', scores: HOST_METRICS }),
+      expect.objectContaining({
+        status: 'SCORED',
+        scores: { kind: 'GRADING', metrics: HOST_METRICS },
+      }),
     );
   });
 });
