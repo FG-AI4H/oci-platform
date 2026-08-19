@@ -1,11 +1,15 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  ForbiddenException,
+  HttpStatus,
   Inject,
   Injectable,
   Logger,
   NotFoundException,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@oci/database';
 import type {
@@ -13,8 +17,11 @@ import type {
   EvaluationSubmissionResult,
   EvaluationTaskDetail,
   EvaluationTaskSummary,
+  ScoredSubmissionQuotaScope,
   SealedRunMessage,
+  SubmissionMode,
   SubmissionStatus,
+  SubmissionValidationReport,
   SubmitContainerRequest,
   SubmitContainerResponse,
   SubmitPredictionsRequest,
@@ -29,7 +36,43 @@ import {
   participantFacingFailureMessage,
   SEALED_RUN_DEADLINE_SEC,
 } from './sealed-run.js';
+import {
+  nextQuotaWeekStart,
+  quotaState,
+  quotaWeekStart,
+  SCORED_SUBMISSIONS_PER_TASK,
+  SCORED_SUBMISSIONS_PER_WEEK,
+  totalQuotaExceededMessage,
+  weeklyQuotaExceededMessage,
+} from './submission-quota.js';
+import {
+  validateContainerInterface,
+  validatePredictionsInterface,
+  type InterfaceValidationOutcome,
+} from './submission-validation.js';
 import { scoreSubmission, ScoringError, type EvaluationScores } from './scoring.js';
+
+/**
+ * Refusal text for an anonymous SCORED submission (WP6).
+ *
+ * The submit endpoint is behind `OptionalCognitoJwtGuard` and
+ * `Submission.submittedBy` is nullable, so anonymous scored submissions were
+ * possible — which makes a PER-PARTICIPANT quota unenforceable: an anonymous
+ * caller has no participant to count against, and refusing to count them would
+ * make the cap trivially bypassable by dropping the token. Scored submissions
+ * therefore now require an identified participant. Validation submissions stay
+ * open to anonymous callers, so the open path a participant needs in order to
+ * get their plumbing right is still there.
+ *
+ * 401, not 403: the caller presented no credentials at all. A caller who
+ * presents a bad token still gets 401 from the guard itself.
+ */
+export const SCORED_SUBMISSION_REQUIRES_IDENTITY_MESSAGE =
+  'Scored submissions require an identified participant: send a bearer token for the participant ' +
+  'the submission belongs to. Anonymous scored submissions are refused because the per-task ' +
+  'submission quota (3 per calendar week, 10 per task in total) can only be enforced against an ' +
+  'identity. Validation submissions remain open to anonymous callers — resend the same body with ' +
+  '"intent": "VALIDATION" to check the interface contract without a score.';
 
 /**
  * Evaluation service (ADR-0017 / ADR-0018). Owns:
@@ -39,10 +82,18 @@ import { scoreSubmission, ScoringError, type EvaluationScores } from './scoring.
  *   - Mode 2: dispatch of a sealed-container submission — persist PENDING
  *     and enqueue, never score here. The result comes back through
  *     `SubmissionResultService` (the outbox);
+ *   - validation submissions (WP6): the same two shapes checked against the
+ *     interface contract and answered with a report instead of a score. They
+ *     write no row, enqueue nothing, and spend no quota;
+ *   - the scored-submission quota (WP6): 3 per participant per task per
+ *     calendar week, 10 per participant per task in total;
  *   - admin/host task creation (the only non-SQL way a task + hidden
  *     labels get created).
  *
- * The controller enforces role gating; this layer trusts that gate.
+ * The controller enforces role gating; this layer trusts that gate. It does NOT
+ * trust the controller for participant identity on a scored path — `requireParticipant`
+ * is what refuses an anonymous scored submission, because that refusal is what
+ * makes the quota enforceable.
  */
 @Injectable()
 export class EvaluationService {
@@ -100,16 +151,29 @@ export class EvaluationService {
    * the hidden ground truth, persist a SCORED submission + return its
    * scores. On a validation / scoring error, persist a FAILED submission
    * carrying the reason and surface a 400.
+   *
+   * WP6 added two gates in front of the unchanged scoring body: the submission
+   * must belong to an identified participant, and that participant must be
+   * inside their per-task quota. Both run BEFORE anything is persisted and
+   * before anything is scored, so a refused submission leaves no row and burns
+   * no slot.
    */
   async submitPredictions(
     slug: string,
     body: SubmitPredictionsRequest,
     user?: CognitoAccessTokenPayload,
   ): Promise<SubmitPredictionsResponse> {
+    // Cheapest gate first — no I/O at all on the anonymous rejection path.
+    const submittedBy = this.requireParticipant(user);
+
     const ctx = await this.repo.findScoringContext(slug);
     if (!ctx) throw new NotFoundException(`evaluation task "${slug}" not found`);
 
-    const submittedBy = user?.sub ? cognitoSubAsUuid(user.sub) : null;
+    // The hidden ground truth is loaded (by the call above) before the quota is
+    // checked, and is discarded unread if the quota refuses. That is safe — it
+    // never reaches a response, a log or the exception — and it keeps this path
+    // to one task read rather than two on the happy path.
+    await this.assertWithinScoredQuota(ctx.id, slug, submittedBy);
 
     // Build the imageId -> grade map, rejecting duplicate imageIds (the DTO
     // validates the array shape but not cross-row uniqueness).
@@ -160,6 +224,8 @@ export class EvaluationService {
    * hidden labels are never loaded into this request at all.
    *
    * Order of operations matters:
+   *   0. (WP6) refuse an anonymous caller, then refuse a caller over quota —
+   *      both before any row is written or any message published;
    *   1. resolve the task (404 if unknown);
    *   2. refuse loudly if dispatch is not configured — a 503 BEFORE any row is
    *      written, so an un-enqueueable submission never leaves a PENDING row
@@ -173,8 +239,12 @@ export class EvaluationService {
     body: SubmitContainerRequest,
     user?: CognitoAccessTokenPayload,
   ): Promise<SubmitContainerResponse> {
+    const submittedBy = this.requireParticipant(user);
+
     const task = await this.repo.findTaskRefBySlug(slug);
     if (!task) throw new NotFoundException(`evaluation task "${slug}" not found`);
+
+    await this.assertWithinScoredQuota(task.id, task.slug, submittedBy);
 
     const missing = this.queue.missingConfig();
     if (missing.length > 0) {
@@ -191,8 +261,6 @@ export class EvaluationService {
         'imageRef must be pinned to the submitted imageDigest — the two disagree',
       );
     }
-
-    const submittedBy = user?.sub ? cognitoSubAsUuid(user.sub) : null;
 
     const created = await this.repo.createContainerSubmission({
       taskId: task.id,
@@ -241,6 +309,67 @@ export class EvaluationService {
     }
 
     return { id: created.id, status: 'PENDING' };
+  }
+
+  /**
+   * Validation submit, PREDICTIONS (WP6). Checks the interface contract and
+   * returns a report; scores nothing, writes nothing, spends no quota.
+   *
+   * Note the signature: no `user`. The quota is keyed on a participant id, and
+   * this method is never given one, so it cannot consume quota — the guarantee
+   * is structural rather than a rule someone has to remember. For the same
+   * reason it reads `findTaskItemIds` and never `findScoringContext`: the hidden
+   * labels are not loaded into this request at all.
+   */
+  async validatePredictions(
+    slug: string,
+    body: SubmitPredictionsRequest,
+  ): Promise<SubmissionValidationReport> {
+    const task = await this.repo.findTaskItemIds(slug);
+    if (!task) throw new NotFoundException(`evaluation task "${slug}" not found`);
+
+    const outcome = validatePredictionsInterface({
+      predictions: body.predictions,
+      taskItemIds: task.itemIds,
+      numClasses: task.numClasses,
+    });
+    this.logValidation(task.slug, 'PREDICTIONS', body.methodName, outcome);
+    return validationReport(task.slug, 'PREDICTIONS', outcome);
+  }
+
+  /**
+   * Validation submit, CONTAINER (WP6). Checks that the image is digest-pinned
+   * and that a run could be dispatched at all — and then does NOT dispatch one.
+   * No queue message, no PENDING row, no image pull.
+   *
+   * A missing dispatch configuration is reported as a failed check rather than
+   * thrown as a 503: the participant asked "would this work", and "the platform
+   * cannot currently run anything" is a truthful answer to that question, not an
+   * error in their request. The operator-facing detail (which env vars are
+   * missing) goes to the log, mirroring `submitContainer`'s 503 path.
+   */
+  async validateContainer(
+    slug: string,
+    body: SubmitContainerRequest,
+  ): Promise<SubmissionValidationReport> {
+    const task = await this.repo.findTaskRefBySlug(slug);
+    if (!task) throw new NotFoundException(`evaluation task "${slug}" not found`);
+
+    const missing = this.queue.missingConfig();
+    if (missing.length > 0) {
+      this.logger.error(
+        `sealed-container validation reports dispatch unavailable — not configured (missing ${missing.join(', ')})`,
+      );
+    }
+
+    const outcome = validateContainerInterface({
+      imageRef: body.imageRef,
+      imageDigest: body.imageDigest,
+      digestPinned: imageRefMatchesDigest(body.imageRef, body.imageDigest),
+      dispatchAvailable: missing.length === 0,
+    });
+    this.logValidation(task.slug, 'CONTAINER', body.methodName, outcome);
+    return validationReport(task.slug, 'CONTAINER', outcome);
   }
 
   async createTask(body: CreateEvaluationTaskRequest): Promise<EvaluationTaskSummary> {
@@ -294,6 +423,122 @@ export class EvaluationService {
     });
     throw new BadRequestException({ message: reason, submissionId: created.id });
   }
+
+  /**
+   * Resolve the participant a SCORED submission is attributed to, refusing an
+   * anonymous one (WP6).
+   *
+   * The endpoint's guard is deliberately *optional* so validation submissions
+   * stay open — a participant debugging their interface should not need to
+   * authenticate. But a per-participant quota is only a quota if the
+   * participant is identified: with anonymous scoring, the 3-per-week and
+   * 10-per-task caps are bypassed by simply omitting the token, which is worse
+   * than having no cap because the limit then only binds honest entrants.
+   *
+   * So identity is required here and nowhere else, and the message says what
+   * the open alternative is rather than leaving the caller to guess.
+   */
+  /**
+   * Record that a validation ran, for operators only.
+   *
+   * Deliberately logs the *shape* of the outcome — pass/fail and the failing
+   * check codes — and never the payload or any item id. A validation report is
+   * derived from the ground-truth key set, and a log line is the easiest place
+   * for that to end up somewhere it should not be.
+   */
+  private logValidation(
+    taskSlug: string,
+    mode: SubmissionMode,
+    methodName: string,
+    outcome: InterfaceValidationOutcome,
+  ): void {
+    const failed = outcome.checks.filter((c) => !c.ok).map((c) => c.name);
+    this.logger.log(
+      `validation ${mode} task=${taskSlug} method=${methodName} ok=${outcome.ok}` +
+        (failed.length > 0 ? ` failed=[${failed.join(',')}]` : ''),
+    );
+  }
+
+  private requireParticipant(user?: CognitoAccessTokenPayload): string {
+    if (!user?.sub) {
+      throw new UnauthorizedException(
+        'a scored submission must be attributed to an identified participant — sign in and ' +
+          'retry. Validation submissions (intent: "VALIDATION") need no account and are ' +
+          'unlimited; use those to check your interface first.',
+      );
+    }
+    return cognitoSubAsUuid(user.sub);
+  }
+
+  /**
+   * Refuse a SCORED submission that would exceed either cap: the per-week
+   * allowance or the per-task lifetime allowance (WP6).
+   *
+   * The total is checked first. When a participant has exhausted the lifetime
+   * allowance the weekly reset instant is irrelevant and quoting it would be
+   * actively misleading — nothing becomes available next Monday.
+   *
+   * Both messages carry the limit, the usage and (for the weekly cap) a
+   * concrete reset instant, so a participant never has to email support to
+   * learn when they can submit again.
+   */
+  private async assertWithinScoredQuota(
+    taskId: string,
+    taskSlug: string,
+    submittedBy: string,
+  ): Promise<void> {
+    const totalUsed = await this.repo.countScoredSubmissionsForParticipant({
+      taskId,
+      submittedBy,
+    });
+    if (totalUsed >= SCORED_SUBMISSIONS_PER_TASK) {
+      throw new ForbiddenException({
+        message: totalQuotaExceededMessage(taskSlug),
+        quota: quotaState('TASK_TOTAL', totalUsed, null),
+      });
+    }
+
+    const now = new Date();
+    const weekStart = quotaWeekStart(now);
+    const weekUsed = await this.repo.countScoredSubmissionsForParticipant({
+      taskId,
+      submittedBy,
+      since: weekStart,
+    });
+    if (weekUsed >= SCORED_SUBMISSIONS_PER_WEEK) {
+      const resetsAt = nextQuotaWeekStart(now);
+      throw new ForbiddenException({
+        message: weeklyQuotaExceededMessage(taskSlug, resetsAt),
+        quota: quotaState('WEEK', weekUsed, resetsAt),
+      });
+    }
+  }
+}
+
+/**
+ * Wrap a validation outcome in the response DTO.
+ *
+ * The three constant fields are the point: `scores: null`, `submissionId: null`
+ * and `quotaConsumed: false` are literals in the schema, so the WP6 guarantees
+ * are legible in the payload a participant receives rather than being something
+ * they have to take on trust. They are not computed, so they cannot drift.
+ */
+function validationReport(
+  taskSlug: string,
+  mode: SubmissionMode,
+  outcome: InterfaceValidationOutcome,
+): SubmissionValidationReport {
+  return {
+    intent: 'VALIDATION',
+    mode,
+    taskSlug,
+    ok: outcome.ok,
+    scores: null,
+    submissionId: null,
+    quotaConsumed: false,
+    checks: outcome.checks,
+    itemIdSummary: outcome.itemIdSummary,
+  };
 }
 
 /**
