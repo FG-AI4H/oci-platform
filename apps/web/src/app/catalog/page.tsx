@@ -477,7 +477,11 @@ function FacetSection({
             <li key={opt.value}>
               <Link
                 href={toggleHref(opt.value)}
-                aria-pressed={isSelected}
+                // These are navigation links (SSR faceted search), so `aria-pressed`
+                // is invalid (it needs a button/checkbox role) — axe critical (#148).
+                // `aria-current` is valid on <a> and marks the active filter; the
+                // sr-only suffix makes the toggle affordance explicit for AT.
+                aria-current={isSelected ? 'true' : undefined}
                 className={
                   'flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
                   (isSelected
@@ -495,6 +499,9 @@ function FacetSection({
                   }
                 />
                 <span className="truncate">{opt.label}</span>
+                <span className="sr-only">
+                  {isSelected ? ' (selected — activate to remove filter)' : ' (activate to filter)'}
+                </span>
               </Link>
             </li>
           );
