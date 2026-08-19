@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import type { AuditEmitter } from '@oci/audit';
 import type { CreateModelCardRequest, IntendedUseStatement } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
@@ -29,6 +29,14 @@ function body(overrides: Partial<CreateModelCardRequest> = {}): CreateModelCardR
     trainingDataJurisdictions: ['CH', 'EU'],
     generativeAi: true,
     lmmSpecificLimitations: null,
+    modelDeveloper: 'Acme Health AI GmbH',
+    developerContact: 'regulatory@acme.example',
+    clinicalSummary: null,
+    regulatoryApproval: null,
+    knownBiasesOrEthicalConsiderations: null,
+    biasMitigationApproaches: null,
+    ongoingMaintenance: null,
+    securityPosture: null,
     ...overrides,
   } as CreateModelCardRequest;
 }
@@ -53,6 +61,15 @@ function dbRow(over: Record<string, unknown> = {}) {
     trainingDataJurisdictions: ['CH', 'EU'],
     generativeAi: true,
     lmmSpecificLimitations: null,
+    status: 'DRAFT',
+    modelDeveloper: 'Acme Health AI GmbH',
+    developerContact: 'regulatory@acme.example',
+    clinicalSummary: null,
+    regulatoryApproval: null,
+    knownBiasesOrEthicalConsiderations: null,
+    biasMitigationApproaches: null,
+    ongoingMaintenance: null,
+    securityPosture: null,
     createdAt: new Date('2026-07-26T00:00:00.000Z'),
     updatedAt: new Date('2026-07-26T00:00:00.000Z'),
     ...over,
@@ -63,6 +80,7 @@ interface RepoMock {
   create: ReturnType<typeof vi.fn>;
   findBySlug: ReturnType<typeof vi.fn>;
   findById: ReturnType<typeof vi.fn>;
+  updateStatus: ReturnType<typeof vi.fn>;
 }
 
 let repo: RepoMock;
@@ -71,7 +89,7 @@ let audit: { emit: ReturnType<typeof vi.fn>; emitSync: ReturnType<typeof vi.fn> 
 let service: PredictionService;
 
 beforeEach(() => {
-  repo = { create: vi.fn(), findBySlug: vi.fn(), findById: vi.fn() };
+  repo = { create: vi.fn(), findBySlug: vi.fn(), findById: vi.fn(), updateStatus: vi.fn() };
   intendedUse = { validate: vi.fn().mockReturnValue(IUS) };
   audit = { emit: vi.fn().mockResolvedValue(undefined), emitSync: vi.fn().mockResolvedValue({}) };
   service = new PredictionService(
@@ -118,5 +136,66 @@ describe('PredictionService.submit', () => {
       service.submit(body({ parentModelCardId: '22222222-2222-2222-2222-222222222222' }), actor()),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(repo.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('PredictionService.changeStatus', () => {
+  it('moves DRAFT → SUBMITTED and emits an audit event', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'DRAFT' }));
+    repo.updateStatus.mockResolvedValue(dbRow({ status: 'SUBMITTED' }));
+
+    const out = await service.changeStatus('acme-triage-v1', { status: 'SUBMITTED' }, actor());
+
+    expect(repo.updateStatus).toHaveBeenCalledWith(
+      '11111111-1111-1111-1111-111111111111',
+      'SUBMITTED',
+    );
+    expect(audit.emitSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        module: 'prediction',
+        action: 'modelcard.status.changed',
+        payload: expect.objectContaining({ from: 'DRAFT', to: 'SUBMITTED' }),
+      }),
+    );
+    expect(out.status).toBe('SUBMITTED');
+  });
+
+  it('400s on an illegal transition and names the allowed moves — no write, no audit', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'DRAFT' }));
+
+    await expect(
+      service.changeStatus('acme-triage-v1', { status: 'PUBLISHED' }, actor()),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.changeStatus('acme-triage-v1', { status: 'PUBLISHED' }, actor()),
+    ).rejects.toMatchObject({ message: expect.stringContaining('SUBMITTED') });
+    expect(repo.updateStatus).not.toHaveBeenCalled();
+    expect(audit.emitSync).not.toHaveBeenCalled();
+  });
+
+  it('409s when the card is already in the requested status', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
+
+    await expect(
+      service.changeStatus('acme-triage-v1', { status: 'PUBLISHED' }, actor()),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(repo.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('refuses to move out of the terminal WITHDRAWN status', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'WITHDRAWN' }));
+
+    await expect(
+      service.changeStatus('acme-triage-v1', { status: 'PUBLISHED' }, actor()),
+    ).rejects.toMatchObject({ message: expect.stringContaining('terminal') });
+    expect(repo.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('404s when the model card does not exist', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+
+    await expect(
+      service.changeStatus('nope', { status: 'SUBMITTED' }, actor()),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
