@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Inject, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   ChangeModelCardStatusRequestSchema,
@@ -46,6 +46,25 @@ export class PredictionController {
     @CurrentUser() user: CognitoAccessTokenPayload,
   ) {
     return this.prediction.changeStatus(slug, body, user);
+  }
+
+  @Get(':slug/model-facts')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'WHO Fig. 7 Model Facts Label for a model card (structured)' })
+  @ApiOkResponse({ description: 'The rendered label. 409 while the card is DRAFT.' })
+  @UseGuards(CognitoJwtGuard)
+  modelFacts(@Param('slug') slug: string) {
+    return this.prediction.modelFactsLabel(slug);
+  }
+
+  @Get(':slug/model-facts.md')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'WHO Fig. 7 Model Facts Label as Markdown' })
+  @ApiOkResponse({ description: 'Markdown rendering of the label.' })
+  @Header('Content-Type', 'text/markdown; charset=utf-8')
+  @UseGuards(CognitoJwtGuard)
+  modelFactsMarkdown(@Param('slug') slug: string) {
+    return this.prediction.modelFactsMarkdown(slug);
   }
 
   @Get(':slug')

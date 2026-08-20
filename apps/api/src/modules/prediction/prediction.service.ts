@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { AuditEmitter } from '@oci/audit';
+import type { ModelFactsLabel } from '@oci/shared-types';
 import {
   allowedTransitionsFrom,
   canTransition,
@@ -19,6 +20,8 @@ import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { IntendedUseService } from '../intended-use/intended-use.service.js';
 import { PredictionRepository, toModelCardResponse } from './prediction.repository.js';
+import { buildModelFactsLabel } from './renderers/model-facts-label.js';
+import { renderModelFactsMarkdown } from './renderers/render-model-facts-markdown.js';
 
 /**
  * Prediction service (#260, ADR-0013 amended + ADR-0015).
@@ -147,6 +150,38 @@ export class PredictionService {
 
     this.logger.log(`prediction.modelcard.status.changed slug=${slug} ${from}->${to}`);
     return toModelCardResponse(updated);
+  }
+
+  /**
+   * Render the WHO Fig. 7 Model Facts Label for a model card (#261).
+   *
+   * Gated on a non-DRAFT status: a draft submission has not been put forward as
+   * anything, and publishing a clinician-facing label for it would misrepresent
+   * it. That gate is exactly what the `status` field added in #432 exists for.
+   *
+   * Performance rows are empty for now — reading them requires a typed
+   * cross-module surface onto the evaluation module, which the module-boundary
+   * rule says must not be a direct repository reach. The label declares the
+   * absence in `gaps` rather than rendering a blank table as if it were a
+   * finding of no effect.
+   */
+  async modelFactsLabel(slug: string): Promise<ModelFactsLabel> {
+    const row = await this.repo.findBySlug(slug);
+    if (!row) throw new NotFoundException(`Model card '${slug}' not found`);
+    if (row.status === 'DRAFT') {
+      throw new ConflictException(
+        `Model card '${slug}' is DRAFT — a Model Facts Label is only rendered once it is submitted or published`,
+      );
+    }
+    return buildModelFactsLabel({
+      card: toModelCardResponse(row),
+      performance: [],
+      generatedAt: new Date(),
+    });
+  }
+
+  async modelFactsMarkdown(slug: string): Promise<string> {
+    return renderModelFactsMarkdown(await this.modelFactsLabel(slug));
   }
 
   async getBySlug(slug: string): Promise<ModelCardResponse> {

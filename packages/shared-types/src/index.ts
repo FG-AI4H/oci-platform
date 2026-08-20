@@ -81,6 +81,10 @@ export type {
   ChangeModelCardStatusRequest,
   RegulatoryApproval,
 } from './model-card.js';
+
+// Model Facts Label (#261) — a WHO Fig. 7 rendering of the canonical ModelCard.
+export { ModelFactsLabelSchema, ModelFactsPerformanceEntrySchema } from './model-facts-label.js';
+export type { ModelFactsLabel, ModelFactsPerformanceEntry } from './model-facts-label.js';
 export type {
   RiskTier,
   MedicalPurpose,

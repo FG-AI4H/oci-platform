@@ -199,3 +199,67 @@ describe('PredictionService.changeStatus', () => {
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
+
+describe('PredictionService.modelFactsLabel (#261)', () => {
+  it('renders the WHO Fig. 7 sections from the card + IUS', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
+
+    const label = await service.modelFactsLabel('acme-triage-v1');
+
+    expect(label.v).toBe(1);
+    expect(label.summary.developer).toBe('Acme Health AI GmbH');
+    expect(label.summary.status).toBe('PUBLISHED');
+    expect(label.mechanism.modelClass).toBe('lmm');
+    expect(label.warnings.riskTier).toBe('III');
+    expect(label.usesAndDirections.medicalPurpose).toBe('triage');
+    expect(label.generalisability.trainingDataJurisdictions).toEqual(['CH', 'EU']);
+  });
+
+  it('declares its gaps rather than silently omitting them', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
+
+    const label = await service.modelFactsLabel('acme-triage-v1');
+
+    // No evaluations linked, no subgroup report, no clinical summary on the fixture.
+    expect(label.validationAndPerformance.entries).toEqual([]);
+    expect(label.validationAndPerformance.subgroupAvailable).toBe(false);
+    expect(label.gaps.join(' ')).toContain('no evaluation results');
+    expect(label.gaps.join(' ')).toContain('Per-subgroup performance');
+    // A missing discontinue-use policy must not read as "safe to keep using".
+    expect(label.discontinueUse.statement).toContain('not evidence of continued validity');
+  });
+
+  it('refuses to render a label for a DRAFT card', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'DRAFT' }));
+
+    await expect(service.modelFactsLabel('acme-triage-v1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('404s for an unknown slug', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+
+    await expect(service.modelFactsLabel('nope')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('renders markdown with the WHO section headings', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
+
+    const md = await service.modelFactsMarkdown('acme-triage-v1');
+
+    for (const heading of [
+      '# Model Facts —',
+      '## Summary',
+      '## Mechanism',
+      '## Validation & performance',
+      '## Uses & directions',
+      '## Warnings',
+      '## Generalisability',
+      '## When to discontinue use',
+      '## Known gaps in this label',
+    ]) {
+      expect(md).toContain(heading);
+    }
+  });
+});
