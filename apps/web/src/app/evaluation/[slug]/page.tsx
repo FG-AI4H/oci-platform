@@ -239,9 +239,19 @@ export default async function EvaluationTaskDetailPage({
                 </p>
               ) : (
                 <>
+                  {/*
+                   * `tabIndex={0}` is load-bearing, not decoration: the list
+                   * scrolls once the item count outgrows `max-h-72` (which it
+                   * does at mobile widths even for the 30-item reference
+                   * slice), and a scrollable region that cannot be focused is
+                   * unreachable by keyboard — axe `scrollable-region-focusable`.
+                   * The label and focus ring come with it, so the region
+                   * announces what it is when it takes focus.
+                   */}
                   <ul
+                    tabIndex={0}
                     aria-label={`${detail.itemCount.toLocaleString('en-GB')} item identifiers for ${detail.slug}`}
-                    className="grid max-h-72 grid-cols-2 gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-4 font-mono text-xs text-[var(--color-foreground)] sm:grid-cols-3 lg:grid-cols-5"
+                    className="grid max-h-72 grid-cols-2 gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-4 font-mono text-xs text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] sm:grid-cols-3 lg:grid-cols-5"
                   >
                     {detail.itemIds.map((id) => (
                       <li key={id} className="truncate" title={id}>

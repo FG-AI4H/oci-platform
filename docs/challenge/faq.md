@@ -126,7 +126,7 @@ Participation is free of charge. The concept describes no prize pool.
 ## Which task types can the platform score today?
 
 Grading (ordinal) and classification (nominal) — one integer label per item, with the metric family
-selected by the task's kind. Segmentation, detection and span extraction are specified and land
+selected by the task's kind. Segmentation, detection and span extraction are in development, and land
 against a real task definition from a named host rather than speculatively.
 
 If you are a prospective data host whose task is a different shape — text spans, speech, generative
