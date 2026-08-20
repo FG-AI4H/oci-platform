@@ -2,7 +2,7 @@
 
 The live capability matrix. Updated on every shipped feature — docs deltas are part of definition-of-done.
 
-Last update: **2026-06-03** (roadmap reconcile — flip annotation rows shipped in the 2026-05-28→30 merges: tool-integration contract #315, persistence forms #317, consent #318, catalog↔annotation FK+pin #322, metadata-blinding engine #309).
+Last update: **2026-08-20** (roadmap reconcile — flip the Phase C evaluation rows: the model-to-data surface shipped across #389, #401, #437/#409, #428 and #447 while this page still read "not yet started"). Prior: 2026-06-03 (roadmap reconcile — flip annotation rows shipped in the 2026-05-28→30 merges: tool-integration contract #315, persistence forms #317, consent #318, catalog↔annotation FK+pin #322, metadata-blinding engine #309).
 
 ## At a glance
 
@@ -149,22 +149,22 @@ Last update: **2026-06-03** (roadmap reconcile — flip annotation rows shipped 
 
 ## Annotation, evaluation, reporting
 
-| Capability                                          | Status     | Shipped in                                                    |
-| --------------------------------------------------- | ---------- | ------------------------------------------------------------- |
-| Annotation tool (legacy Spring Boot) port to NestJS | 🚧 Phase B | [#45](https://github.com/FG-AI4H/oci-platform/issues/45) epic |
-| Evaluation surface: predictions scoring (Mode 1)     | ✅ Live    | [#389](https://github.com/FG-AI4H/oci-platform/pull/389) (ADR-0017)                                            |
-| Sealed container execution (Mode 2) + result outbox | ✅ Live    | [#401](https://github.com/FG-AI4H/oci-platform/issues/401) (WP1-WP3)                                          |
-| Validation submissions + scored-submission quotas   | ✅ Live    | [#409](https://github.com/FG-AI4H/oci-platform/issues/409) (WP6)                                              |
-| Task-kind scoring registry (grading, classification)| ✅ Live    | [#428](https://github.com/FG-AI4H/oci-platform/issues/428) (ADR-0020)                                         |
-| Published per-task item identifiers                 | ✅ Live    | [#441](https://github.com/FG-AI4H/oci-platform/issues/441)                                                    |
-| Challenge participant docs + conformance spec       | ✅ Live    | [#406](https://github.com/FG-AI4H/oci-platform/issues/406)                                                    |
-| EvalAI seam (remote-evaluation path)                | 🚧 Phase C | [#408](https://github.com/FG-AI4H/oci-platform/issues/408)                                                    |
-| EvaluationRoute model + review / retraction         | 🚧 Phase C | [#412](https://github.com/FG-AI4H/oci-platform/issues/412), [#411](https://github.com/FG-AI4H/oci-platform/issues/411) |
-| Subgroup-stratified reporting                       | 🚧 Phase C | [#410](https://github.com/FG-AI4H/oci-platform/issues/410)                                                    |
-| Encrypted computation adapter (Mode 3, Track B)     | 🚧 Phase C | [#413](https://github.com/FG-AI4H/oci-platform/issues/413)                                                    |
-| Evaluation engine (legacy Django) port to NestJS    | 🚧 Phase C | [#46](https://github.com/FG-AI4H/oci-platform/issues/46) epic — not started; distinct from the surface above  |
-| Regulator reporting portal                          | 🚧 Phase D | [#47](https://github.com/FG-AI4H/oci-platform/issues/47) epic |
-| DMXP v1.0 federated connectors                      | 🚧 Phase E | [#48](https://github.com/FG-AI4H/oci-platform/issues/48) epic |
+| Capability                                           | Status     | Shipped in                                                                                                             |
+| ---------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Annotation tool (legacy Spring Boot) port to NestJS  | 🚧 Phase B | [#45](https://github.com/FG-AI4H/oci-platform/issues/45) epic                                                          |
+| Evaluation surface: predictions scoring (Mode 1)     | ✅ Live    | [#389](https://github.com/FG-AI4H/oci-platform/pull/389) (ADR-0017)                                                    |
+| Sealed container execution (Mode 2) + result outbox  | ✅ Live    | [#401](https://github.com/FG-AI4H/oci-platform/issues/401) (WP1-WP3)                                                   |
+| Validation submissions + scored-submission quotas    | ✅ Live    | [#409](https://github.com/FG-AI4H/oci-platform/issues/409) (WP6)                                                       |
+| Task-kind scoring registry (grading, classification) | ✅ Live    | [#428](https://github.com/FG-AI4H/oci-platform/issues/428) (ADR-0020)                                                  |
+| Published per-task item identifiers                  | ✅ Live    | [#441](https://github.com/FG-AI4H/oci-platform/issues/441)                                                             |
+| Challenge participant docs + conformance spec        | ✅ Live    | [#406](https://github.com/FG-AI4H/oci-platform/issues/406)                                                             |
+| EvalAI seam (remote-evaluation path)                 | 🚧 Phase C | [#408](https://github.com/FG-AI4H/oci-platform/issues/408)                                                             |
+| EvaluationRoute model + review / retraction          | 🚧 Phase C | [#412](https://github.com/FG-AI4H/oci-platform/issues/412), [#411](https://github.com/FG-AI4H/oci-platform/issues/411) |
+| Subgroup-stratified reporting                        | 🚧 Phase C | [#410](https://github.com/FG-AI4H/oci-platform/issues/410)                                                             |
+| Encrypted computation adapter (Mode 3, Track B)      | 🚧 Phase C | [#413](https://github.com/FG-AI4H/oci-platform/issues/413)                                                             |
+| Evaluation engine (legacy Django) port to NestJS     | 🚧 Phase C | [#46](https://github.com/FG-AI4H/oci-platform/issues/46) epic — not started; distinct from the surface above           |
+| Regulator reporting portal                           | 🚧 Phase D | [#47](https://github.com/FG-AI4H/oci-platform/issues/47) epic                                                          |
+| DMXP v1.0 federated connectors                       | 🚧 Phase E | [#48](https://github.com/FG-AI4H/oci-platform/issues/48) epic                                                          |
 
 ## Security & operations
 
