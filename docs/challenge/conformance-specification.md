@@ -3,8 +3,7 @@
 GI-AI4H Benchmarking Challenge · WG-Data · version of 20 August 2026
 
 **This is the published, participant-facing specification** referenced from the
-challenge page. Issue #406. It replaces the 30 July internal draft, which mixed
-participant guidance with acceptance criteria.
+challenge page.
 
 Phase 1 of the challenge calls for **privacy-preserving evaluation solutions**.
 Before a health AI model can be evaluated without exposing the data or the model,
