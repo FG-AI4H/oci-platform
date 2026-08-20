@@ -145,6 +145,12 @@ export class EvaluationService {
       referableThreshold: t.referableThreshold,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
+      // #441 — the item-ID key set, so a Mode 1 participant can key a
+      // predictions file without inferring the convention from the dataset
+      // manifest. The repository has already reduced the ground truth to its
+      // keys; there is no label in `t` to leak here.
+      itemIds: t.itemIds,
+      itemCount: t.itemIds.length,
       submissions,
     };
   }

@@ -205,12 +205,58 @@ export default async function EvaluationTaskDetailPage({
                     anything below that counts as non-referable.
                   </span>
                 </DefinitionItem>
+                <DefinitionItem term="Items">
+                  <span className="tabular-nums">{detail.itemCount.toLocaleString('en-GB')}</span>{' '}
+                  <span className="text-[var(--color-muted-foreground)]">
+                    — listed in full below; predictions are keyed on these identifiers.
+                  </span>
+                </DefinitionItem>
                 <DefinitionItem term="Created">
                   <time dateTime={detail.createdAt}>
                     {DATE_FORMATTER.format(new Date(detail.createdAt))}
                   </time>
                 </DefinitionItem>
               </DefinitionList>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle as="h2">Item identifiers</CardTitle>
+              <CardDescription>
+                Every item this task scores against. A predictions file is a map keyed on these
+                identifiers, and a sealed container receives the same set at run time as{' '}
+                <code className="font-mono text-xs">index.json</code> on its{' '}
+                <code className="font-mono text-xs">/input</code> mount. They are identifiers only —
+                the reference labels behind them are held by the platform and are not part of any
+                response.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {detail.itemCount === 0 ? (
+                <p className="rounded-lg border border-dashed border-[var(--color-border-strong)] bg-[var(--color-subtle)] p-8 text-center text-sm text-[var(--color-muted-foreground)]">
+                  This task has no items yet.
+                </p>
+              ) : (
+                <>
+                  <ul
+                    aria-label={`${detail.itemCount.toLocaleString('en-GB')} item identifiers for ${detail.slug}`}
+                    className="grid max-h-72 grid-cols-2 gap-x-4 gap-y-1 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-4 font-mono text-xs text-[var(--color-foreground)] sm:grid-cols-3 lg:grid-cols-5"
+                  >
+                    {detail.itemIds.map((id) => (
+                      <li key={id} className="truncate" title={id}>
+                        {id}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-sm text-[var(--color-muted-foreground)]">
+                    Read this list rather than generating it — the identifiers are not guaranteed to
+                    be contiguous or densely numbered. Items you omit are permitted and reported as
+                    reduced coverage; identifiers this task does not recognise are a validation
+                    failure, so a mismatched naming convention fails loudly instead of scoring zero.
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 

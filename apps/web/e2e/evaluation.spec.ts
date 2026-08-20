@@ -59,6 +59,20 @@ test.describe('evaluation surface (ADR-0017)', () => {
     await expect(page.getByText('Referable threshold', { exact: true })).toBeVisible();
     await expect(page.getByText('referable means grade ≥', { exact: false })).toBeVisible();
 
+    // #441 — the item-ID key set is published on the task page. This is the
+    // half of that issue a participant actually hits: the identifiers were
+    // reachable only by reading the dataset manifest and stripping the file
+    // extension, so a guessed convention scored as coverage 0. Assert both the
+    // list and the two rules that make it usable.
+    await expect(page.getByRole('heading', { level: 2, name: 'Item identifiers' })).toBeVisible();
+    const itemIds = page.getByRole('list', { name: /item identifiers for /i });
+    await expect(itemIds).toBeVisible();
+    expect(await itemIds.getByRole('listitem').count()).toBeGreaterThan(0);
+    await expect(page.getByText('reduced coverage', { exact: false })).toBeVisible();
+    await expect(
+      page.getByText('Read this list rather than generating it', { exact: false }),
+    ).toBeVisible();
+
     // The per-task / not-cross-task-comparable note is a product
     // commitment (ADR-0017), so assert it is actually on the page.
     await expect(
