@@ -15,6 +15,7 @@ This documentation is organised by **audience**. Pick the entry point that match
 | ⚙️ **Operator / SRE**                  | Deployment, runbooks, security baseline                                                                                      | [For operators](./for-operators/README.md)     |
 | 🏛️ **Member-state / Regulator / DPO**  | Sovereignty, compliance, DUO/DUA framework, audit                                                                            | [For governance](./for-governance/README.md)   |
 | 🎯 **ITU/WHO/WIPO management**         | Strategic overview, mandate alignment, adoption                                                                              | [For strategy](./for-strategy/README.md)       |
+| 🏁 **Challenge participant**           | GI-AI4H Benchmarking Challenge: deadlines, eligibility, submission limits, conformance specification                         | [Challenge](./challenge/README.md)             |
 
 > **Two audiences consume the data, not one.** Researchers and AI solution developers use the same catalogue and the same access-governance machinery, but the request form, the Data Use Agreement template, and the routing rules differ. If you're not sure which audience you fit, read the [access-governance overview](./overview/access-governance.md) — it has both flows side-by-side.
 

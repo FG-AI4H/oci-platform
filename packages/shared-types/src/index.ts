@@ -3445,6 +3445,18 @@ export type EvaluationSubmissionResult = z.infer<typeof EvaluationSubmissionResu
 /**
  * Detail for `GET /v2/evaluation/tasks/:slug` — task meta + its submissions'
  * results, ordered best-QWK first. NEVER carries groundTruth.
+ *
+ * `itemIds` publishes the task's item-ID KEY SET (#441). That is the same set a
+ * sealed run already receives as `/input/index.json`, so it discloses nothing a
+ * participant was not going to be given — but a Mode 1 participant had no way
+ * to reach it, and had to infer the ID convention from the dataset manifest.
+ * Getting that wrong scores as coverage 0, which reads as a bad model rather
+ * than bad plumbing.
+ *
+ * The keys are NOT the labels. The boundary is the same one drawn in the API's
+ * `submission-validation.ts`: the key set is public, anything derived from a
+ * label is not, and the row type the service receives has no field for a label
+ * at all.
  */
 export const EvaluationTaskDetailSchema = z.object({
   id: z.string().uuid(),
@@ -3456,6 +3468,15 @@ export const EvaluationTaskDetailSchema = z.object({
   referableThreshold: z.number().int(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /**
+   * Every item identifier this task scores against, sorted. Predictions are
+   * keyed on these. Missing items are permitted and reported as reduced
+   * coverage; unknown identifiers are a validation failure. The set is not
+   * necessarily contiguous or densely numbered — read it, do not generate it.
+   */
+  itemIds: z.array(z.string()),
+  /** `itemIds.length`, denormalised so a client can show it without the array. */
+  itemCount: z.number().int(),
   submissions: z.array(EvaluationSubmissionResultSchema),
 });
 export type EvaluationTaskDetail = z.infer<typeof EvaluationTaskDetailSchema>;

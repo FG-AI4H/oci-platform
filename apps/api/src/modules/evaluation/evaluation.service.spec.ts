@@ -3,7 +3,11 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { SealedRunMessageSchema, type SubmitContainerRequest } from '@oci/shared-types';
+import {
+  EvaluationTaskDetailSchema,
+  SealedRunMessageSchema,
+  type SubmitContainerRequest,
+} from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EvalQueueProvider } from './eval-queue.js';
@@ -41,6 +45,7 @@ interface RepoMock {
   findScoringContext: ReturnType<typeof vi.fn>;
   countScoredSubmissionsForParticipant: ReturnType<typeof vi.fn>;
   findTaskRefBySlug: ReturnType<typeof vi.fn>;
+  findBySlugWithSubmissions: ReturnType<typeof vi.fn>;
   createSubmission: ReturnType<typeof vi.fn>;
   createContainerSubmission: ReturnType<typeof vi.fn>;
   applyResult: ReturnType<typeof vi.fn>;
@@ -64,6 +69,7 @@ beforeEach(() => {
     // unused quota so the pre-WP6 behavioural assertions below stay the subject.
     countScoredSubmissionsForParticipant: vi.fn().mockResolvedValue(0),
     findTaskRefBySlug: vi.fn(),
+    findBySlugWithSubmissions: vi.fn(),
     createSubmission: vi.fn(),
     createContainerSubmission: vi.fn(),
     applyResult: vi.fn().mockResolvedValue(1),
@@ -358,5 +364,81 @@ describe('EvaluationService.submitContainer (Mode 2 — dispatch)', () => {
       SUBMISSION_ID,
       expect.objectContaining({ status: 'FAILED', failureCode: 'INTERNAL_ERROR' }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #441: the task's item-ID key set is part of the public detail response.
+//
+// A Mode 1 participant keys `predictions.json` on these identifiers. Before
+// this they were reachable only by reading the dataset's Croissant manifest and
+// stripping the file extension, which nothing documented — so a guessed
+// convention scored as coverage 0 and read as a bad model rather than as bad
+// plumbing. The key set is not secret: every sealed run is handed the same set
+// as `/input/index.json`.
+//
+// What must stay true is the other half of that boundary — the response carries
+// keys and never a label.
+// ---------------------------------------------------------------------------
+describe('getTaskDetail — item IDs', () => {
+  /** Deliberately unsorted, and non-contiguous like the real IDRiD slice. */
+  const STORED_KEYS = ['IDRiD_101', 'IDRiD_001', 'IDRiD_018', 'IDRiD_003'];
+
+  function detailRow(over: Record<string, unknown> = {}) {
+    return {
+      id: TASK_ID,
+      slug: 'idrid-dr-grading',
+      name: 'IDRiD — diabetic retinopathy severity grading (demo)',
+      datasetSlug: 'idrid-grading-demo',
+      taskKind: 'GRADING',
+      numClasses: 5,
+      referableThreshold: 2,
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+      itemIds: [...STORED_KEYS].sort(),
+      submissions: [],
+      ...over,
+    };
+  }
+
+  it('returns every item ID, sorted, with a matching count', async () => {
+    repo.findBySlugWithSubmissions.mockResolvedValue(detailRow());
+
+    const detail = await service.getTaskDetail('idrid-dr-grading');
+
+    expect(detail.itemIds).toEqual(['IDRiD_001', 'IDRiD_003', 'IDRiD_018', 'IDRiD_101']);
+    expect(detail.itemCount).toBe(4);
+  });
+
+  it('reports itemCount 0 for a task with no items rather than omitting it', async () => {
+    repo.findBySlugWithSubmissions.mockResolvedValue(detailRow({ itemIds: [] }));
+
+    const detail = await service.getTaskDetail('empty-task');
+
+    expect(detail.itemIds).toEqual([]);
+    expect(detail.itemCount).toBe(0);
+  });
+
+  it('carries the keys and NO label — the response validates and contains no grade', async () => {
+    repo.findBySlugWithSubmissions.mockResolvedValue(detailRow());
+
+    const detail = await service.getTaskDetail('idrid-dr-grading');
+    const parsed = EvaluationTaskDetailSchema.safeParse(detail);
+    expect(parsed.success).toBe(true);
+
+    // The structural guarantee: the row the service is handed has no field a
+    // label could arrive in, so there is nothing to filter out here. Assert the
+    // observable consequence — a `{id: grade}` map would serialise the grades
+    // alongside the ids, and an array of ids cannot.
+    expect(Array.isArray(detail.itemIds)).toBe(true);
+    expect(detail.itemIds.every((id) => typeof id === 'string')).toBe(true);
+    expect(detail).not.toHaveProperty('groundTruth');
+    expect(Object.keys(detail)).not.toContain('groundTruth');
+  });
+
+  it('404s on an unknown task', async () => {
+    repo.findBySlugWithSubmissions.mockResolvedValue(null);
+
+    await expect(service.getTaskDetail('nope')).rejects.toBeInstanceOf(NotFoundException);
   });
 });

@@ -44,6 +44,14 @@ export interface EvaluationTaskWithSubmissionsRow {
   referableThreshold: number;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * The ground-truth map's KEYS only, sorted (#441). Note what this interface
+   * still does not have: a field for a label. The projection happens inside
+   * `findBySlugWithSubmissions`, so the labels never reach the service even
+   * though the read path now touches the column — same structural control as
+   * `EvaluationTaskItemIdsRow`.
+   */
+  itemIds: string[];
   submissions: SubmissionRow[];
 }
 
@@ -149,6 +157,14 @@ export class EvaluationRepository {
    * Task detail + its submissions (id, methodName, status, scores,
    * createdAt). No ground truth. Ordering is left to the service (best-QWK
    * first requires reading into the JSON `scores`).
+   *
+   * `groundTruth` IS selected here, and is reduced to its key set before this
+   * method returns (#441) — the same move `findTaskItemIds` makes for the
+   * validation path. Selecting the column to take `Object.keys` of it reads the
+   * whole JSONB; at task sizes the challenge actually runs (tens to low
+   * thousands of items) that is cheaper than a second round trip, and pushing
+   * the projection into SQL via `jsonb_object_keys` would need a raw query,
+   * which CLAUDE.md confines to `*.raw.ts`.
    */
   async findBySlugWithSubmissions(slug: string): Promise<EvaluationTaskWithSubmissionsRow | null> {
     const t = await this.prisma.client.evaluationTask.findUnique({
@@ -163,6 +179,7 @@ export class EvaluationRepository {
         referableThreshold: true,
         createdAt: true,
         updatedAt: true,
+        groundTruth: true,
         submissions: {
           orderBy: { createdAt: 'desc' },
           select: {
@@ -186,6 +203,10 @@ export class EvaluationRepository {
       referableThreshold: t.referableThreshold,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
+      // Sorted so the response is deterministic across reads: JSONB does not
+      // preserve insertion order, and a key set that reshuffles between calls
+      // is a poor thing to diff a predictions file against.
+      itemIds: Object.keys((t.groundTruth ?? {}) as Record<string, unknown>).sort(),
       submissions: t.submissions.map((s) => ({
         id: s.id,
         methodName: s.methodName,
