@@ -20,7 +20,7 @@ A federated, standards-aligned platform with three layers:
 
 1. **Catalogue** — datasets described in MLCommons Croissant 1.1 metadata, indexed by Google Dataset Search and peer Croissant catalogues, surfaced through one search interface.
 2. **Access governance** — GA4GH Data Use Ontology (DUO) terms expressed on each dataset, structured intended-use declarations from requesters, machine-checkable matching, with a path to formal Data Use Agreements.
-3. **Evaluation traceability** _(Phase C, in flight)_ — versioned dataset hashes that benchmarking results can cite, so model claims are verifiable years later.
+3. **Evaluation without disclosure** _(Phase C, live in dev)_ — models evaluated against a host's data without the data reaching the developer or the model reaching the host: predictions scored against server-held labels, or a sealed container run host-side returning only metrics. Every result is traceable to the dataset version and the route that produced it. This is the surface behind the [GI-AI4H Benchmarking Challenge](../challenge/README.md).
 
 All three layers are **federated**. Member-state platforms, regional health authorities, hospital networks, and academic data hubs run their own OCI instances and link them together — metadata flows globally, bytes stay sovereign.
 
@@ -59,7 +59,9 @@ Full live capability matrix at [overview/feature-status.md](../overview/feature-
 | Data Use Agreement (DUA) generation + e-sign + DAC routing | PR J.2 (next)                                                     |
 | CLI tool for TB-scale uploads                              | [#88](https://github.com/FG-AI4H/oci-platform/issues/88)          |
 | External S3 mount for petabyte datasets                    | [#89](https://github.com/FG-AI4H/oci-platform/issues/89)          |
-| Evaluation surface (Phase C — port from legacy Django)     | Epic [#46](https://github.com/FG-AI4H/oci-platform/issues/46)     |
+| EvalAI seam — challenge submissions into the OCI queue     | [#408](https://github.com/FG-AI4H/oci-platform/issues/408)        |
+| Route model: threat model, disclosure profile, review gate | [#412](https://github.com/FG-AI4H/oci-platform/issues/412)        |
+| Legacy Django evaluation port (distinct from the surface)  | Epic [#46](https://github.com/FG-AI4H/oci-platform/issues/46)     |
 | Regulator audit-trail export endpoint                      | Phase D, [#47](https://github.com/FG-AI4H/oci-platform/issues/47) |
 | Annotation reactivation (Phase B)                          | Epic [#45](https://github.com/FG-AI4H/oci-platform/issues/45)     |
 | Email notifications on access decisions                    | [#93](https://github.com/FG-AI4H/oci-platform/issues/93)          |

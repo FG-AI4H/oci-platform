@@ -183,6 +183,13 @@ and `APPROVED` before any result it produces is published. Results produced by a
 version later `REJECTED` or `WITHDRAWN` are retracted, with the review outcome
 published alongside.
 
+**Where this stands today (20 August 2026).** Review and the route lifecycle above
+are the process every solution is held to, and they govern the first published
+results in January 2027. The lifecycle is not yet enforced by the platform in
+code: no result has been published, and none will be until it is. Said plainly
+because a specification that quietly describes a control it does not yet have is
+the thing this challenge exists to argue against.
+
 ## 7 How results are reported
 
 A model's score is always published together with the route and route version
