@@ -67,3 +67,10 @@ CLAUDE.md
 docs/briefings
 docs/research
 docs/planning
+
+# Python (apps/worker-eval — the only Python component, hard rule 9)
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/

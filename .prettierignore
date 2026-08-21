@@ -17,5 +17,13 @@ coverage/
 *.pdf
 *.pptx
 
+# Python virtualenv + caches. Running the worker-eval suite locally
+# materialises thousands of vendored JSON/YAML files under .venv/; without this
+# `pnpm format:check` reports ~525 style failures that have nothing to do with
+# the repo — the kind of false red that teaches people to ignore the gate.
+.venv/
+.pytest_cache/
+__pycache__/
+
 # Tool config files (no parser)
 .trivyignore
