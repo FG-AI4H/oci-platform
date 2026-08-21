@@ -183,6 +183,15 @@ and `APPROVED` before any result it produces is published. Results produced by a
 version later `REJECTED` or `WITHDRAWN` are retracted, with the review outcome
 published alongside.
 
+**A failed review is published.** Where adversarial testing demonstrates a disclosure the route
+claims to prevent, that route version is rejected and **published as failed, with the reason** — the
+verdict, the class of finding, and enough reasoning to make the verdict checkable. Reproducible
+detail is withheld: exploit code, parameter values, and any data recovered during testing are never
+published, because nothing published should be usable against a host's live deployment. Where a fix
+is possible, the remediation status is published alongside the finding. Accepting this is a condition
+of entry, and it applies to the reference implementation on exactly the same terms as to every other
+route ([ADR-0021](../adr/0021-failed-review-is-published-with-its-reason.md)).
+
 **Where this stands today (20 August 2026).** Review and the route lifecycle above
 are the process every solution is held to, and they govern the first published
 results in January 2027. The lifecycle is not yet enforced by the platform in
