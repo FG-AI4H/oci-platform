@@ -110,6 +110,21 @@ never held by the platform.
 The guarantee runs both ways: the data host does not obtain your model, and you do not obtain the
 host's data.
 
+## What happens if my solution is found to disclose?
+
+**It is published as failed, with the reason** — and accepting that is a condition of entry rather
+than a term you discover after a finding. What is published is the verdict, the class of finding, the
+reasoning that makes the verdict checkable, and the remediation status where a fix is possible. What
+is never published is reproducible detail: exploit code, parameter values, or any data recovered
+during testing. Nothing published should be usable against a host's live deployment.
+
+The reference implementation is held to this on the same terms, so the organizers can be published as
+failed too. That symmetry is what makes the term fair rather than simply imposed.
+
+The alternative — a private notification and a quiet withdrawal — produces a benchmark in which every
+published result is a success, which tells a reader nothing. See
+[ADR-0021](../adr/0021-failed-review-is-published-with-its-reason.md).
+
 ## Will there be a leaderboard?
 
 No cross-task ranking, and no threshold for what counts as a sufficient model. Each task answers a

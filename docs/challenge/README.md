@@ -36,6 +36,15 @@ Phase 1's primary call is for **solutions, not models**. That is the most common
 Participation is free of charge. Organizations may act in more than one role, but may not submit
 models to tasks they contribute.
 
+## Conditions of entry
+
+Every solution is reviewed and adversarially tested, and **a solution demonstrated to disclose
+information is published as failed, with the reason** — the verdict, the class of finding, and enough
+reasoning to make the verdict checkable. Reproducible detail is withheld: nothing published should be
+usable against a host's live deployment. Entering the challenge accepts this, and the reference
+implementation is held to it on identical terms
+([ADR-0021](../adr/0021-failed-review-is-published-with-its-reason.md)).
+
 ## Links
 
 - Challenge page: [competition.aiforgood.itu.int — challenge 493](https://competition.aiforgood.itu.int/web/challenges/challenge-page/493/overview)
