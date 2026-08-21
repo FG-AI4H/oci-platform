@@ -2,6 +2,9 @@ import { Logger, Module } from '@nestjs/common';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import { AuthModule } from '../../auth/auth.module.js';
 import { PrismaService } from '../../prisma.service.js';
+import { RouteRegistryController } from './route-registry.controller.js';
+import { RouteRegistryRepository } from './route-registry.repository.js';
+import { RouteRegistryService } from './route-registry.service.js';
 import { RolesGuard } from '../../auth/roles.guard.js';
 import { SubmissionBodyPipe } from './dto/submission-body.pipe.js';
 import { EvalQueueProvider } from './eval-queue.js';
@@ -22,8 +25,10 @@ const DEFAULT_EVAL_WORKER_SCOPE = 'oci-eval/submit-result';
 
 @Module({
   imports: [AuthModule],
-  controllers: [EvaluationController, SubmissionResultController],
+  controllers: [RouteRegistryController, EvaluationController, SubmissionResultController],
   providers: [
+    RouteRegistryService,
+    RouteRegistryRepository,
     PrismaService,
     EvaluationService,
     EvaluationRepository,

@@ -6,6 +6,7 @@ import type {
   SubmissionMode,
   SubmissionStatus,
 } from '@oci/shared-types';
+import type { RouteReviewStatus } from '@oci/shared-types';
 import { PrismaService } from '../../prisma.service.js';
 
 /**
@@ -32,6 +33,18 @@ export interface SubmissionRow {
   /** Raw JSON as stored; the service parses it into `TaskKindScores`. */
   scores: unknown;
   createdAt: Date;
+  /** Set when the producing route version was later REJECTED/WITHDRAWN (WP9). */
+  retractedAt: Date | null;
+  /**
+   * The route version that produced this score (WP5). Null for rows scored
+   * before the registry existed — those are labelled LEGACY at the read
+   * boundary, never backfilled.
+   */
+  routeVersionRef: {
+    version: string;
+    reviewStatus: RouteReviewStatus;
+    route: { slug: string };
+  } | null;
 }
 
 export interface EvaluationTaskWithSubmissionsRow {
@@ -188,6 +201,17 @@ export class EvaluationRepository {
             status: true,
             scores: true,
             createdAt: true,
+            retractedAt: true,
+            // Narrow on purpose: the route's slug/version/status is all the
+            // read boundary needs. Declarations are fetched via the registry
+            // endpoints, not smuggled through every submission row.
+            routeVersionRef: {
+              select: {
+                version: true,
+                reviewStatus: true,
+                route: { select: { slug: true } },
+              },
+            },
           },
         },
       },
@@ -213,6 +237,8 @@ export class EvaluationRepository {
         status: s.status,
         scores: s.scores,
         createdAt: s.createdAt,
+        retractedAt: s.retractedAt,
+        routeVersionRef: s.routeVersionRef,
       })),
     };
   }

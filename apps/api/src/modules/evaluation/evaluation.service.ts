@@ -28,6 +28,7 @@ import type {
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
+import { attributionFor } from './route-registry.js';
 import { EvalQueueProvider } from './eval-queue.js';
 import { EvaluationRepository } from './evaluation.repository.js';
 import {
@@ -126,6 +127,10 @@ export class EvaluationService {
         methodName: s.methodName,
         status: s.status,
         scores: parseScores(s.scores),
+        // Invariant 3 (WP5): a score never leaves the API without its route.
+        // Rows scored before the registry existed are labelled LEGACY rather
+        // than backfilled or hidden — see attributionFor.
+        attribution: attributionFor(s),
         createdAt: s.createdAt.toISOString(),
       }))
       // Best-first on the scoring family's own primary metric — quadratic-

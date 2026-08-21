@@ -1614,6 +1614,10 @@ enum EvaluationTaskKind {
 enum SubmissionMode {
   PREDICTIONS
   CONTAINER
+  /// Track B (WP8) — evaluation computed on ciphertext. Additive value added
+  /// with WP5 so the route registry can express the mode before the adapter
+  /// exists; no execution path accepts it yet.
+  ENCRYPTED
 
   @@schema("evaluation")
 }
@@ -1700,6 +1704,18 @@ model Submission {
   /// result whose `routeVersion` disagrees with a NON-null value here.
   routeId           String?   @map("route_id") @db.Uuid
   routeVersion      String?   @map("route_version")
+  /// FK → evaluation.route_versions.id — the resolved version that produced
+  /// this score (WP5). Distinct from `routeVersion` above on purpose: that is
+  /// the version string the WORKER reported, and the outbox refuses a result
+  /// whose reported string disagrees with the pinned one. Collapsing them
+  /// would delete the disagreement this check exists to detect.
+  /// Nullable only for rows that predate the registry (ADR-0018).
+  routeVersionId    String?       @map("route_version_id") @db.Uuid
+  routeVersionRef   RouteVersion? @relation(fields: [routeVersionId], references: [id])
+  /// Stamped when the producing route version is later REJECTED or WITHDRAWN
+  /// (WP9). The row is retained with its review notes — ADR-0014 requires a
+  /// withdrawn result to stay explicable.
+  retractedAt       DateTime?     @map("retracted_at")
   /// Wall-clock duration of the sealed run in ms, as reported by the worker.
   durationMs        Int?      @map("duration_ms")
   /// Classified failure code — a member of `SealedRunFailureCodeSchema`
@@ -1795,4 +1811,81 @@ enum ModelCardStatus {
   WITHDRAWN
 
   @@schema("prediction")
+}
+
+/// A privacy-preserving evaluation solution (WP5, #412, ADR-0018). Either the
+/// OCI reference implementation or a third-party competitive entry: routes are
+/// competitive entries, so "register a solution" lands here.
+model EvaluationRoute {
+  id           String         @id @default(uuid()) @db.Uuid
+  slug         String         @unique
+  name         String
+  /// Execution family this route implements.
+  mode         SubmissionMode
+  /// Organisation that contributed it. Null for the OCI reference implementation.
+  providerName String?        @map("provider_name")
+  /// True for the OCI reference implementation — the baseline others are
+  /// measured against. At most one route per mode may set this (invariant 5,
+  /// enforced in the service and by the partial unique index in the migration).
+  isReference  Boolean        @default(false) @map("is_reference")
+
+  versions RouteVersion[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("evaluation_routes")
+  @@schema("evaluation")
+}
+
+/// An immutable, reviewable version of a route. Declarations are frozen per
+/// version so a review outcome applies to exactly what was reviewed — changing
+/// a declaration means a new version, never an edit (invariant 4).
+model RouteVersion {
+  id      String @id @default(uuid()) @db.Uuid
+  routeId String @map("route_id") @db.Uuid
+  /// Semantic version, unique within the route.
+  version String
+
+  /// The adversary this version claims to defend against, and what it
+  /// explicitly does not. Validated against ThreatModelSchema on write.
+  threatModel         Json @map("threat_model")
+  /// What each party observes, the trust anchor, key governance,
+  /// reproducibility. Validated against DisclosureProfileSchema on write.
+  disclosureProfile   Json @map("disclosure_profile")
+  /// Permitted operations, precision, runtime/compute caps, fidelity gap.
+  /// Validated against OperationalEnvelopeSchema on write.
+  operationalEnvelope Json @map("operational_envelope")
+
+  reviewStatus RouteReviewStatus @default(DECLARED) @map("review_status")
+  /// Set when reviewStatus becomes APPROVED, REJECTED or WITHDRAWN.
+  reviewedAt   DateTime?         @map("reviewed_at")
+  /// Reviewer-facing outcome text. Whether it is rendered publicly is a
+  /// PUBLICATION rule decided at the read boundary, not by what is stored —
+  /// a rule enforced only by omission cannot be revised without losing the
+  /// record it was applied to.
+  reviewNotes  String?           @map("review_notes")
+
+  route       EvaluationRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([routeId, version])
+  @@index([reviewStatus])
+  @@map("route_versions")
+  @@schema("evaluation")
+}
+
+/// Review lifecycle of a route version, as published in the conformance
+/// specification §6. Only APPROVED may produce a published result; REJECTED
+/// and WITHDRAWN retract results already produced (WP9).
+enum RouteReviewStatus {
+  DECLARED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WITHDRAWN
+
+  @@schema("evaluation")
 }

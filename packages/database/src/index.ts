@@ -127,4 +127,7 @@ export type {
   ConsentStatus,
   ModelCard,
   ModelCardStatus,
+  EvaluationRoute,
+  RouteVersion,
+  RouteReviewStatus,
 } from './generated/client/index.js';
