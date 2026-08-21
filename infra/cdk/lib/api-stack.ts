@@ -172,6 +172,20 @@ export class ApiStack extends cdk.Stack {
             `/oci/${props.cfg.envName}/cognito/web-client-id`,
           ),
           COGNITO_REGION: this.region,
+          // Machine-to-machine app clients for the evaluation backend (#462).
+          // The two guards that read these fail CLOSED when unset — which is
+          // what they did in every environment until identity-stack started
+          // provisioning the clients. identity deploys before api in the
+          // workflow's STACKS order, so the parameters exist by the time this
+          // task definition resolves them.
+          COGNITO_EVAL_WORKER_CLIENT_ID: ssm.StringParameter.valueForStringParameter(
+            this,
+            `/oci/${props.cfg.envName}/cognito/eval-worker-client-id`,
+          ),
+          COGNITO_EVAL_SEAM_CLIENT_ID: ssm.StringParameter.valueForStringParameter(
+            this,
+            `/oci/${props.cfg.envName}/cognito/eval-seam-client-id`,
+          ),
           // PR I (#87): the storage module reads this to know which
           // bucket to multipart-upload + presign against. Region
           // already injected above.
