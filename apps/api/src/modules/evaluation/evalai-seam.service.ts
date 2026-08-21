@@ -55,7 +55,7 @@ export class EvalAiSeamService {
         routeSlug: null,
         routeVersion: null,
         published: false,
-        validationOk: report.ok,
+        validation: report,
       };
     }
 
@@ -88,7 +88,7 @@ export class EvalAiSeamService {
       // seeded DECLARED because nothing self-approves, so early results are
       // provisional — real, stored, and excluded from published reporting.
       published: ref?.reviewStatus === 'APPROVED',
-      validationOk: null,
+      validation: null,
     };
   }
 }

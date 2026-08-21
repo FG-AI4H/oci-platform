@@ -13,6 +13,36 @@ const BODY = {
   phaseCodename: 'test',
 };
 
+// A shape-faithful report. The point of the assertions below is that the seam
+// passes the CHECK DETAIL through, not merely the boolean verdict — an entrant
+// told only "invalid" has nothing to act on.
+const VALIDATION_REPORT = {
+  intent: 'VALIDATION' as const,
+  mode: 'PREDICTIONS' as const,
+  taskSlug: 'idrid-dr-grading',
+  ok: false,
+  scores: null,
+  submissionId: null,
+  quotaConsumed: false as const,
+  checks: [
+    {
+      name: 'ITEM_IDS_RECOGNISED' as const,
+      ok: false,
+      detail: '1 submitted item ID is not part of this task',
+      itemIds: ['IDRiD_999'],
+      itemIdCount: 1,
+    },
+    {
+      name: 'LABEL_RANGE' as const,
+      ok: true,
+      detail: 'every label is within [0, 4]',
+      itemIds: [],
+      itemIdCount: 0,
+    },
+  ],
+  itemIdSummary: { submitted: 30, recognised: 29, unrecognised: 1, notPredicted: 1 },
+};
+
 let evaluation: {
   submitPredictions: ReturnType<typeof vi.fn>;
   validatePredictions: ReturnType<typeof vi.fn>;
@@ -23,7 +53,7 @@ let svc: EvalAiSeamService;
 beforeEach(() => {
   evaluation = {
     submitPredictions: vi.fn().mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' }),
-    validatePredictions: vi.fn().mockResolvedValue({ ok: true }),
+    validatePredictions: vi.fn().mockResolvedValue(VALIDATION_REPORT),
   };
   repo = {
     findReferenceRouteVersionForMode: vi.fn().mockResolvedValue({
@@ -65,8 +95,13 @@ describe('VALIDATION (dev) — nothing is created, nothing is spent', () => {
       routeSlug: null,
       routeVersion: null,
       published: false,
-      validationOk: true,
+      validation: VALIDATION_REPORT,
     });
+    // Specifically: the reason it failed survives the hop. A bare boolean here
+    // would leave the entrant with no way to fix their submission.
+    expect(out.validation?.checks).toEqual(VALIDATION_REPORT.checks);
+    expect(out.validation?.checks.find((c) => !c.ok)?.itemIds).toEqual(['IDRiD_999']);
+    expect(out.validation?.itemIdSummary?.unrecognised).toBe(1);
     // The scoring path is never touched, so ground truth is never loaded.
     expect(evaluation.submitPredictions).not.toHaveBeenCalled();
     expect(evaluation.validatePredictions).toHaveBeenCalledOnce();
@@ -102,7 +137,7 @@ describe('SCORED (test) — the quota binds the TEAM, not the calling worker', (
       routeSlug: 'oci-predictions-scoring',
       routeVersion: '1.0.0',
       published: false,
-      validationOk: null,
+      validation: null,
     });
   });
 
