@@ -1,6 +1,6 @@
 # ADR-0017: Minimal evaluation surface (Phase C-lite)
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-29
 - **Deciders:** Marc Lecoultre
 - **Tags:** `area:evaluation` | `area:platform` | `phase:C` | `package:EP`

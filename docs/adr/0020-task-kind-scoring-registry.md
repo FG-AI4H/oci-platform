@@ -1,6 +1,6 @@
 # ADR-0020: Scoring is dispatched per evaluation task kind, not hard-coded
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-08-19
 - **Deciders:** Marc Lecoultre
 - **Tags:** `area:evaluation` | `area:platform` | `phase:C` | `package:EP`
