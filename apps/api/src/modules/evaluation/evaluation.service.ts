@@ -176,9 +176,17 @@ export class EvaluationService {
     slug: string,
     body: SubmitPredictionsRequest,
     user?: CognitoAccessTokenPayload,
+    /**
+     * EvalAI seam provenance (WP4). When present the participant is already
+     * resolved from the entrant identity the seam sent, so `requireParticipant`
+     * is bypassed — NOT because the seam is unauthenticated, but because its
+     * caller is a machine and the participant it acts for is an EvalAI team,
+     * not a Cognito user. The quota still binds that team.
+     */
+    seam?: { submittedBy: string; externalSubmissionId: string; externalChallengeId: string },
   ): Promise<SubmitPredictionsResponse> {
     // Cheapest gate first — no I/O at all on the anonymous rejection path.
-    const submittedBy = this.requireParticipant(user);
+    const submittedBy = seam ? seam.submittedBy : this.requireParticipant(user);
 
     const ctx = await this.repo.findScoringContext(slug);
     if (!ctx) throw new NotFoundException(`evaluation task "${slug}" not found`);
@@ -226,6 +234,16 @@ export class EvaluationService {
       throw err;
     }
 
+    // Attribute the reference route (WP5 invariant 1). A row created after the
+    // registry exists is not "legacy" — it just needs attributing, and leaving
+    // it null would make a fresh result read as pre-registry at the boundary.
+    const ref = await this.repo.findReferenceRouteVersionForMode('PREDICTIONS');
+    if (!ref) {
+      this.logger.error(
+        'no reference PREDICTIONS route is seeded — scoring without attribution would ' +
+          'make a fresh result indistinguishable from a pre-registry one',
+      );
+    }
     const created = await this.repo.createSubmission({
       taskId: ctx.id,
       methodName: body.methodName,
@@ -233,6 +251,11 @@ export class EvaluationService {
       status: 'SCORED',
       scores,
       error: null,
+      routeId: ref?.routeId ?? null,
+      routeVersion: ref?.version ?? null,
+      routeVersionId: ref?.versionId ?? null,
+      externalSubmissionId: seam?.externalSubmissionId ?? null,
+      externalChallengeId: seam?.externalChallengeId ?? null,
     });
     return { id: created.id, scores };
   }

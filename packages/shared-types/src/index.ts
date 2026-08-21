@@ -117,6 +117,15 @@ export type {
   ScoreAttribution,
 } from './evaluation-route.js';
 
+// EvalAI seam intake (WP4, #408).
+export {
+  SeamPredictionSchema,
+  SeamIntakeRequestSchema,
+  SeamIntakeResponseSchema,
+  intentForPhase,
+} from './evalai-seam.js';
+export type { SeamIntakeRequest, SeamIntakeResponse } from './evalai-seam.js';
+
 // Model Facts Label (#261) — a WHO Fig. 7 rendering of the canonical ModelCard.
 export { ModelFactsLabelSchema, ModelFactsPerformanceEntrySchema } from './model-facts-label.js';
 export type { ModelFactsLabel, ModelFactsPerformanceEntry } from './model-facts-label.js';
