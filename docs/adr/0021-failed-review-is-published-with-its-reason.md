@@ -18,8 +18,8 @@ That leaves an unanswered question: when adversarial testing succeeds, what beco
 The two documents disagreed. The published
 [conformance specification](../challenge/conformance-specification.md) §6 stated that results from a
 `REJECTED` or `WITHDRAWN` version are retracted "with the review outcome published alongside". The
-implementation spec for the route model recorded the same question as *"a governance decision, still
-open — build the mechanism so either policy can be applied; do not hardcode one."* So the
+implementation spec for the route model recorded the same question as _"a governance decision, still
+open — build the mechanism so either policy can be applied; do not hardcode one."_ So the
 participant-facing document had resolved, in public, a question the project considered open, with no
 recorded decision behind it.
 
@@ -95,8 +95,13 @@ with their review notes, never deleted.
 - **ITU and WHO have not been told.** The clause is live on an ITU-branded surface and commits the
   organizers. The decision is the Deciders' to make; informing the secretariat is a separate action
   and is not satisfied by this ADR.
-- **The acceptance mechanism does not exist yet.** A condition of entry that a participant never
-  agreed to is not a condition. Registration has to capture it before entries arrive.
+- **No separate acceptance step.** A signed or click-through consent was considered and rejected as
+  disproportionate: this is a term a participant in a privacy-preserving-evaluation challenge can
+  reasonably be expected to accept, and a consent gate would add friction during the recruitment
+  window for no added protection. **Stating it in the challenge description is what makes it a
+  condition of entry**, so it belongs in the description, the specification and the FAQ — all three
+  are now carrying it. The challenge page's own overview text is an ITU platform action and is the
+  one surface still to be updated.
 
 ## References
 
