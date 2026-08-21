@@ -40,8 +40,8 @@ import {
   nextQuotaWeekStart,
   quotaState,
   quotaWeekStart,
-  SCORED_SUBMISSIONS_PER_TASK,
-  SCORED_SUBMISSIONS_PER_WEEK,
+  resolveScoredQuotaLimits,
+  type ScoredQuotaLimits,
   totalQuotaExceededMessage,
   weeklyQuotaExceededMessage,
 } from './submission-quota.js';
@@ -71,9 +71,13 @@ import { primaryMetricOf, scoreByKind } from './scoring-registry.js';
 export const SCORED_SUBMISSION_REQUIRES_IDENTITY_MESSAGE =
   'Scored submissions require an identified participant: send a bearer token for the participant ' +
   'the submission belongs to. Anonymous scored submissions are refused because the per-task ' +
-  'submission quota (3 per calendar week, 10 per task in total) can only be enforced against an ' +
-  'identity. Validation submissions remain open to anonymous callers — resend the same body with ' +
-  '"intent": "VALIDATION" to check the interface contract without a score.';
+  'submission quota can only be enforced against an identity. Validation submissions remain open ' +
+  'to anonymous callers — resend the same body with "intent": "VALIDATION" to check the interface ' +
+  'contract without a score.';
+// Deliberately does not quote the limits. They are per-environment now, and a
+// refusal that states a number the environment does not enforce is worse than
+// one that states none — the caller who hits the actual cap is told the real
+// figure by the message that refuses them.
 
 /**
  * Evaluation service (ADR-0017 / ADR-0018). Owns:
@@ -98,12 +102,31 @@ export const SCORED_SUBMISSION_REQUIRES_IDENTITY_MESSAGE =
  */
 @Injectable()
 export class EvaluationService {
+  /**
+   * Caps in force for this environment, resolved ONCE. Re-reading the
+   * environment per request would let the limit a check enforced differ from
+   * the limit its refusal message quotes.
+   */
+  private readonly quotaLimits: ScoredQuotaLimits;
+
   private readonly logger = new Logger(EvaluationService.name);
 
   constructor(
     @Inject(EvaluationRepository) private readonly repo: EvaluationRepository,
     @Inject(EvalQueueProvider) private readonly queue: EvalQueueProvider,
-  ) {}
+  ) {
+    const { limits, warnings } = resolveScoredQuotaLimits(process.env);
+    this.quotaLimits = limits;
+    // Log the caps in force at startup unconditionally. An operator debugging a
+    // quota refusal should not have to infer the configured limit from a task
+    // definition, and a misconfiguration that fell back to a default is only
+    // discoverable if the fallback announces itself.
+    for (const w of warnings) this.logger.warn(`scored quota config: ${w}`);
+    this.logger.log(
+      `scored-submission quota in force: ${limits.perWeek}/participant/task/week, ` +
+        `${limits.perTask}/participant/task total`,
+    );
+  }
 
   async listTasks(): Promise<EvaluationTaskSummary[]> {
     const rows = await this.repo.listTasks();
@@ -512,10 +535,10 @@ export class EvaluationService {
       taskId,
       submittedBy,
     });
-    if (totalUsed >= SCORED_SUBMISSIONS_PER_TASK) {
+    if (totalUsed >= this.quotaLimits.perTask) {
       throw new ForbiddenException({
-        message: totalQuotaExceededMessage(taskSlug),
-        quota: quotaState('TASK_TOTAL', totalUsed, null),
+        message: totalQuotaExceededMessage(taskSlug, this.quotaLimits.perTask),
+        quota: quotaState('TASK_TOTAL', totalUsed, null, this.quotaLimits),
       });
     }
 
@@ -526,11 +549,11 @@ export class EvaluationService {
       submittedBy,
       since: weekStart,
     });
-    if (weekUsed >= SCORED_SUBMISSIONS_PER_WEEK) {
+    if (weekUsed >= this.quotaLimits.perWeek) {
       const resetsAt = nextQuotaWeekStart(now);
       throw new ForbiddenException({
-        message: weeklyQuotaExceededMessage(taskSlug, resetsAt),
-        quota: quotaState('WEEK', weekUsed, resetsAt),
+        message: weeklyQuotaExceededMessage(taskSlug, resetsAt, this.quotaLimits.perWeek),
+        quota: quotaState('WEEK', weekUsed, resetsAt, this.quotaLimits),
       });
     }
   }
