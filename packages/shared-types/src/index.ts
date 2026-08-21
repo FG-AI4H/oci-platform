@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { EmailDomainCategory } from './email-domain.js';
+import { ScoreAttributionSchema } from './evaluation-route.js';
 import { RegulatoryPathwaySchema } from './regulatory-pathway.js';
 
 export { RegulatoryPathwaySchema } from './regulatory-pathway.js';
@@ -81,6 +82,40 @@ export type {
   ChangeModelCardStatusRequest,
   RegulatoryApproval,
 } from './model-card.js';
+
+// EvaluationRoute — privacy-preserving evaluation solutions (WP5, #412, ADR-0018).
+export {
+  RoutePartySchema,
+  ThreatModelSchema,
+  DisclosureProfileSchema,
+  OperationalEnvelopeSchema,
+  RouteReviewStatusSchema,
+  PUBLISHABLE_REVIEW_STATUSES,
+  RETRACTING_REVIEW_STATUSES,
+  allowedReviewTransitionsFrom,
+  canReviewTransition,
+  declarationsAreFrozen,
+  CreateEvaluationRouteRequestSchema,
+  CreateRouteVersionRequestSchema,
+  ReviewRouteVersionRequestSchema,
+  RouteVersionResponseSchema,
+  EvaluationRouteResponseSchema,
+  ScoreAttributionSchema,
+  LEGACY_ATTRIBUTION_NOTE,
+} from './evaluation-route.js';
+export type {
+  RouteParty,
+  ThreatModel,
+  DisclosureProfile,
+  OperationalEnvelope,
+  RouteReviewStatus,
+  CreateEvaluationRouteRequest,
+  CreateRouteVersionRequest,
+  ReviewRouteVersionRequest,
+  RouteVersionResponse,
+  EvaluationRouteResponse,
+  ScoreAttribution,
+} from './evaluation-route.js';
 
 // Model Facts Label (#261) — a WHO Fig. 7 rendering of the canonical ModelCard.
 export { ModelFactsLabelSchema, ModelFactsPerformanceEntrySchema } from './model-facts-label.js';
@@ -3323,7 +3358,7 @@ export type EvaluationTaskKindDb = z.infer<typeof EvaluationTaskKindDbSchema>;
 
 /** How a submission delivered predictions. `PREDICTIONS` = Mode 1 (shipped);
  *  `CONTAINER` = Mode 2 (reserved, no execution path yet). */
-export const SubmissionModeSchema = z.enum(['PREDICTIONS', 'CONTAINER']);
+export const SubmissionModeSchema = z.enum(['PREDICTIONS', 'CONTAINER', 'ENCRYPTED']);
 export type SubmissionMode = z.infer<typeof SubmissionModeSchema>;
 
 /** Submission lifecycle. `PENDING` on insert; `SCORED` once scores are
@@ -3436,14 +3471,32 @@ export const EvaluationTaskSummarySchema = z.object({
 export type EvaluationTaskSummary = z.infer<typeof EvaluationTaskSummarySchema>;
 
 /** One submission's public result. NEVER carries predictions or GT. */
-export const EvaluationSubmissionResultSchema = z.object({
-  id: z.string().uuid(),
-  methodName: z.string(),
-  status: SubmissionStatusSchema,
-  /** `null` until SCORED (PENDING) or when FAILED. */
-  scores: TaskKindScoresSchema.nullable(),
-  createdAt: z.string(),
-});
+export const EvaluationSubmissionResultSchema = z
+  .object({
+    id: z.string().uuid(),
+    methodName: z.string(),
+    status: SubmissionStatusSchema,
+    /** `null` until SCORED (PENDING) or when FAILED. */
+    scores: TaskKindScoresSchema.nullable(),
+    /**
+     * The route that produced the score (WP5 invariant 3). Null only when
+     * `scores` is null — a score without its route is not a meaningful result,
+     * and the refinement below makes that unrepresentable rather than merely
+     * discouraged.
+     */
+    attribution: ScoreAttributionSchema.nullable(),
+    createdAt: z.string(),
+  })
+  .strict()
+  .superRefine((r, ctx) => {
+    if (r.scores !== null && r.attribution === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['attribution'],
+        message: 'a score cannot be returned without its route attribution (WP5 invariant 3)',
+      });
+    }
+  });
 export type EvaluationSubmissionResult = z.infer<typeof EvaluationSubmissionResultSchema>;
 
 /**
