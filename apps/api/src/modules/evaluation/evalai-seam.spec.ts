@@ -1,3 +1,4 @@
+import { Prisma } from '@oci/database';
 import { BadRequestException } from '@nestjs/common';
 import { intentForPhase } from '@oci/shared-types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -47,7 +48,10 @@ let evaluation: {
   submitPredictions: ReturnType<typeof vi.fn>;
   validatePredictions: ReturnType<typeof vi.fn>;
 };
-let repo: { findReferenceRouteVersionForMode: ReturnType<typeof vi.fn> };
+let repo: {
+  findByExternalRef: ReturnType<typeof vi.fn>;
+  findReferenceRouteVersionForMode: ReturnType<typeof vi.fn>;
+};
 let svc: EvalAiSeamService;
 
 beforeEach(() => {
@@ -56,6 +60,8 @@ beforeEach(() => {
     validatePredictions: vi.fn().mockResolvedValue(VALIDATION_REPORT),
   };
   repo = {
+    // No prior submission for this pk unless a test says otherwise.
+    findByExternalRef: vi.fn().mockResolvedValue(null),
     findReferenceRouteVersionForMode: vi.fn().mockResolvedValue({
       routeId: 'r1',
       routeSlug: 'oci-predictions-scoring',
@@ -156,5 +162,85 @@ describe('SCORED (test) — the quota binds the TEAM, not the calling worker', (
   it('never returns a score — the write-back is the only delivery path', async () => {
     const out = await svc.intake(BODY);
     expect(Object.keys(out)).not.toContain('scores');
+  });
+});
+
+describe('idempotency — a retried POST must not spend a second scored slot', () => {
+  const EXISTING = {
+    id: '22222222-2222-4222-8222-222222222222',
+    routeSlug: 'oci-predictions-scoring',
+    routeVersion: '1.0.0',
+    reviewStatus: 'DECLARED',
+  };
+
+  it('returns the existing submission and creates nothing', async () => {
+    repo.findByExternalRef.mockResolvedValue(EXISTING);
+
+    const out = await svc.intake(BODY);
+
+    expect(out).toEqual({
+      intent: 'SCORED',
+      ociSubmissionId: EXISTING.id,
+      routeSlug: 'oci-predictions-scoring',
+      routeVersion: '1.0.0',
+      published: false,
+      validation: null,
+    });
+    // The whole point: no second row, so no second slot out of ten.
+    expect(evaluation.submitPredictions).not.toHaveBeenCalled();
+  });
+
+  it('keys the replay on challenge AND submission id, not the id alone', async () => {
+    await svc.intake(BODY);
+    expect(repo.findByExternalRef).toHaveBeenCalledWith({
+      externalChallengeId: '493',
+      externalSubmissionId: '9001',
+    });
+  });
+
+  it('answers a replay with the STORED route, not a freshly resolved one', async () => {
+    // The reference route has since moved on; a replay must still report the
+    // route that actually scored the entry.
+    repo.findByExternalRef.mockResolvedValue({ ...EXISTING, routeVersion: '0.9.0' });
+    repo.findReferenceRouteVersionForMode.mockResolvedValue({
+      routeId: 'r2',
+      routeSlug: 'some-newer-route',
+      versionId: 'v2',
+      version: '2.0.0',
+      reviewStatus: 'APPROVED',
+    });
+
+    const out = await svc.intake(BODY);
+
+    expect(out.routeVersion).toBe('0.9.0');
+    expect(out.routeSlug).toBe('oci-predictions-scoring');
+    expect(out.published).toBe(false);
+  });
+
+  it('collapses a concurrent duplicate onto the race winner instead of 500ing', async () => {
+    // Both callers pass the read; the unique index rejects the loser's insert.
+    const p2002 = Object.assign(
+      new Prisma.PrismaClientKnownRequestError('unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+      { code: 'P2002' },
+    );
+    evaluation.submitPredictions.mockRejectedValueOnce(p2002);
+    repo.findByExternalRef.mockResolvedValueOnce(null).mockResolvedValueOnce(EXISTING);
+
+    const out = await svc.intake(BODY);
+
+    expect(out.ociSubmissionId).toBe(EXISTING.id);
+  });
+
+  it('rethrows a non-P2002 failure rather than masking it as a replay', async () => {
+    evaluation.submitPredictions.mockRejectedValueOnce(new Error('db is on fire'));
+    await expect(svc.intake(BODY)).rejects.toThrow('db is on fire');
+  });
+
+  it('does not look for a replay on the VALIDATION path, which creates nothing', async () => {
+    await svc.intake({ ...BODY, phaseCodename: 'dev' });
+    expect(repo.findByExternalRef).not.toHaveBeenCalled();
   });
 });
