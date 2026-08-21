@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SubmissionValidationReportSchema } from './submission-validation.js';
 
 /**
  * EvalAI seam intake (WP4, #408, evalai-integration §3/§4).
@@ -84,8 +85,25 @@ export const SeamIntakeResponseSchema = z
      * false for VALIDATION, which produces no result at all.
      */
     published: z.boolean(),
-    /** VALIDATION only: did the submission satisfy the interface contract? */
-    validationOk: z.boolean().nullable(),
+    /**
+     * VALIDATION only; null for SCORED. The FULL report, not just a verdict.
+     *
+     * A bare boolean would tell an entrant their submission is invalid without
+     * telling them why — the direct participant path returns `checks` and
+     * `itemIdSummary` precisely so they can fix it, and a submission arriving
+     * through the seam deserves the same answer. The forwarder reads `ok` for
+     * pass/fail and has the check detail to put on the external submission.
+     *
+     * Carrying the whole report also keeps ONE source of truth for the verdict:
+     * a sibling `validationOk` field could disagree with `validation.ok`.
+     *
+     * Safe to forward verbatim: every field of the report is derived from the
+     * submitted payload and the task's PUBLIC configuration — the counts are
+     * item-ID arithmetic and the named IDs are either the entrant's own or IDs
+     * absent from a key set they were already given. No field is a function of
+     * a label, so this crosses the seam without disclosing ground truth.
+     */
+    validation: SubmissionValidationReportSchema.nullable(),
   })
   .strict();
 export type SeamIntakeResponse = z.infer<typeof SeamIntakeResponseSchema>;

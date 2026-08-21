@@ -431,9 +431,7 @@ export class EvaluationRepository {
    * attributing. Returns null only if the seed is missing, which is a
    * deployment fault rather than a normal state.
    */
-  async findReferenceRouteVersionForMode(
-    mode: 'PREDICTIONS' | 'CONTAINER' | 'ENCRYPTED',
-  ): Promise<{
+  async findReferenceRouteVersionForMode(mode: 'PREDICTIONS' | 'CONTAINER' | 'ENCRYPTED'): Promise<{
     routeId: string;
     routeSlug: string;
     versionId: string;
