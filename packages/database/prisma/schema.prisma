@@ -1757,6 +1757,11 @@ model Submission {
   task EvaluationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
+  /// One EvalAI submission pk = one OCI submission. Makes seam intake
+  /// idempotent, so a forwarder retrying a timed-out POST cannot spend a
+  /// second scored slot for the same entry. NULLs are distinct in Postgres, so
+  /// directly-submitted rows (both columns null) are unconstrained.
+  @@unique([externalChallengeId, externalSubmissionId], map: "submissions_external_ref_key")
   @@map("submissions")
   @@schema("evaluation")
 }
