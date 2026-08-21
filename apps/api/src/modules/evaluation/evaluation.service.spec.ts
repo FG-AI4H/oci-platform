@@ -43,6 +43,7 @@ const PARTICIPANT = { sub: 'participant-sub' } as unknown as CognitoAccessTokenP
 
 interface RepoMock {
   findScoringContext: ReturnType<typeof vi.fn>;
+  findReferenceRouteVersionForMode: ReturnType<typeof vi.fn>;
   countScoredSubmissionsForParticipant: ReturnType<typeof vi.fn>;
   findTaskRefBySlug: ReturnType<typeof vi.fn>;
   findBySlugWithSubmissions: ReturnType<typeof vi.fn>;
@@ -65,6 +66,15 @@ let service: EvaluationService;
 beforeEach(() => {
   repo = {
     findScoringContext: vi.fn(),
+    // WP5 invariant 1: every new scored row is attributed to the reference
+    // route. DECLARED, matching the seed — nothing self-approves.
+    findReferenceRouteVersionForMode: vi.fn().mockResolvedValue({
+      routeId: 'ref-route',
+      routeSlug: 'oci-predictions-scoring',
+      versionId: 'ref-version',
+      version: '1.0.0',
+      reviewStatus: 'DECLARED',
+    }),
     // WP6: scored submissions are quota-counted per participant. Default to an
     // unused quota so the pre-WP6 behavioural assertions below stay the subject.
     countScoredSubmissionsForParticipant: vi.fn().mockResolvedValue(0),
