@@ -73,8 +73,15 @@ organizers before the 8 September registration deadline.
 
 ## Where do I find the reference task's item identifiers?
 
-On the task page, and in `GET /v2/evaluation/tasks/{slug}`, which returns the full `itemIds` set and
-an `itemCount`. A predictions file is a map keyed on those identifiers.
+The reference task is `idrid-dr-grading`. Its identifiers are published in two places, and both are
+open — no account and no authentication:
+
+- the task page, <https://dev.oci.ai4h.net/evaluation/idrid-dr-grading>, which lists them; and
+- `GET https://dev.oci.ai4h.net/v2/evaluation/tasks/idrid-dr-grading`, which returns the full
+  `itemIds` set and an `itemCount` alongside the task's configuration.
+
+A predictions file is a map keyed on those identifiers. That host is the development environment,
+which is where the reference task runs today; when it moves, this answer moves with it.
 
 Read the set rather than generating it: identifiers are not guaranteed to be contiguous or densely
 numbered. A sealed container does not need the list in advance — it receives the same set at run time
