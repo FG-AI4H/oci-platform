@@ -65,6 +65,15 @@ async function pickDataset(page: Page, query: string) {
   await expect(page.getByRole('button', { name: /change dataset/i })).toBeVisible();
 }
 
+test.describe('annotation campaigns — anonymous visitor (#488)', () => {
+  test('signed-out visit redirects to sign-in with a callback, not a raw 401', async ({ page }) => {
+    await page.goto('/annotation/campaigns');
+    await expect(page).toHaveURL(/\/signin\?callbackUrl=(%2F|\/)annotation(%2F|\/)campaigns$/);
+    await expect(page.getByText(/missing bearer token/i)).toHaveCount(0);
+    await expect(page.getByText(/401 Unauthorized/i)).toHaveCount(0);
+  });
+});
+
 test.describe('annotation campaign — header + form', () => {
   test('primary nav no longer carries "New dataset" or "New campaign"', async ({ page }) => {
     await signInAs(page, 'cm', 'campaign-manager');
