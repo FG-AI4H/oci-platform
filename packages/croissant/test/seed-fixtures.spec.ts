@@ -12,14 +12,39 @@ import { extractDuoTerms, validate } from '../src/index.js';
  * fixtures honest as the validator + BIOCroissant draft evolve — a
  * breaking BIOCroissant change should fail this test before the change
  * merges, not silently corrupt the seeded catalog.
+ *
+ * For every bundled fixture the compact payload embedded in
+ * `packages/database/seed/demo.sql` must be `JSON.stringify` of the
+ * fixture's `manifest.json`, byte for byte — the repo is the authority
+ * for those manifests and the seed refreshes an already-deployed row
+ * whenever the payload differs.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixturesDir = path.resolve(here, '../../../apps/api/scripts/fixtures');
 const seedFixturesDir = path.resolve(here, '../../database/seed/fixtures');
+const demoSql = readFileSync(path.resolve(seedFixturesDir, '..', 'demo.sql'), 'utf8');
 
 function loadJson(file: string): Record<string, unknown> {
   return JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+}
+
+function loadSeedFixture(slug: string): Record<string, unknown> {
+  return loadJson(path.join(seedFixturesDir, slug, 'manifest.json'));
+}
+
+/** The dollar-quoted payload line demo.sql embeds for a fixture manifest. */
+function sqlPayload(manifest: Record<string, unknown>): string {
+  return `$manifest$${JSON.stringify(manifest)}$manifest$::jsonb;`;
+}
+
+function expectValidCroissant11(manifest: Record<string, unknown>): void {
+  const r = validate(manifest);
+  expect(r.issues, JSON.stringify(r.issues, null, 2)).toEqual([]);
+  expect(r.ok).toBe(true);
+  expect(r.conformance).toBe('croissant-1.1');
+  expect(r.hasRai).toBe(true);
+  expect(r.hasBioCroissant).toBe(true);
 }
 
 describe('seed fixtures', () => {
@@ -36,16 +61,10 @@ describe('seed fixtures', () => {
 });
 
 describe('demo-seed fixture: idrid-grading-demo', () => {
-  const manifestPath = path.join(seedFixturesDir, 'idrid-grading-demo', 'manifest.json');
-  const manifest = loadJson(manifestPath);
+  const manifest = loadSeedFixture('idrid-grading-demo');
 
   it('validates with zero issues (PROV-O + ODRL + DUO block included)', () => {
-    const r = validate(manifest);
-    expect(r.issues, JSON.stringify(r.issues, null, 2)).toEqual([]);
-    expect(r.ok).toBe(true);
-    expect(r.conformance).toBe('croissant-1.1');
-    expect(r.hasRai).toBe(true);
-    expect(r.hasBioCroissant).toBe(true);
+    expectValidCroissant11(manifest);
   });
 
   it('declares the prov / odrl namespaces it uses', () => {
@@ -82,15 +101,13 @@ describe('demo-seed fixture: idrid-grading-demo', () => {
   });
 
   it('the seed SQL payloads carry the same manifest as manifest.json', () => {
-    const compact = JSON.stringify(manifest);
     const generated = readFileSync(
       path.join(seedFixturesDir, 'idrid-grading-demo', 'seed.generated.sql'),
       'utf8',
     );
-    const demo = readFileSync(path.resolve(seedFixturesDir, '..', 'demo.sql'), 'utf8');
-    const payload = `$manifest$${compact}$manifest$::jsonb;`;
+    const payload = sqlPayload(manifest);
     expect(generated).toContain(payload);
-    expect(demo).toContain(payload);
+    expect(demoSql).toContain(payload);
   });
 
   it('reports a prov:Activity missing @type under a croissant11.* code', () => {
@@ -125,5 +142,72 @@ describe('demo-seed fixture: oci-demo-chest-xr', () => {
       JSON.stringify(r.issues, null, 2),
     ).toEqual([]);
     expect(r.conformance).toBe('croissant-1.1');
+  });
+});
+
+describe('demo-seed fixture: rsna-pneumonia-2018 (#491)', () => {
+  const manifest = loadSeedFixture('rsna-pneumonia-2018');
+
+  it('validates with zero issues', () => {
+    expectValidCroissant11(manifest);
+  });
+
+  it('describes the upstream dataset without hosting any bytes', () => {
+    expect(manifest['distribution']).toBeUndefined();
+    expect(manifest['url']).toBe(
+      'https://www.rsna.org/rsnai/ai-image-challenge/rsna-pneumonia-detection-challenge-2018',
+    );
+    expect(manifest['license']).toBe(
+      'https://www.kaggle.com/competitions/rsna-pneumonia-detection-challenge/rules',
+    );
+  });
+
+  it('carries one record set with the challenge label columns', () => {
+    const recordSets = manifest['recordSet'] as Array<Record<string, unknown>>;
+    expect(recordSets).toHaveLength(1);
+    const fields = recordSets[0]?.['field'] as Array<Record<string, unknown>>;
+    expect(fields.map((f) => f['name'])).toEqual([
+      'patientId',
+      'x',
+      'y',
+      'width',
+      'height',
+      'target',
+    ]);
+  });
+
+  it('carries the namespaced health terms and a non-commercial DUO term', () => {
+    const disease = manifest['bio:diseaseCondition'] as Array<Record<string, unknown>>;
+    expect(disease[0]?.['termCode']).toBe('CA40');
+    expect(manifest['bio:anonymizationLevel']).toBe('DEIDENTIFIED');
+    expect(extractDuoTerms(manifest)).toEqual(['DUO_0000046']);
+  });
+
+  it('the seed SQL payload carries the same manifest as manifest.json', () => {
+    expect(demoSql).toContain(sqlPayload(manifest));
+  });
+});
+
+describe('demo-seed fixture: demo-clinical-notes-2024 (#491)', () => {
+  const manifest = loadSeedFixture('demo-clinical-notes-2024');
+
+  it('validates with zero issues', () => {
+    expectValidCroissant11(manifest);
+  });
+
+  it('is a text-only placeholder with one record set and no files', () => {
+    expect(manifest['distribution']).toBeUndefined();
+    const modality = manifest['bio:dataModality'] as Array<Record<string, unknown>>;
+    expect(modality[0]?.['name']).toBe('Text');
+    const recordSets = manifest['recordSet'] as Array<Record<string, unknown>>;
+    expect(recordSets).toHaveLength(1);
+    const fields = recordSets[0]?.['field'] as Array<Record<string, unknown>>;
+    expect(fields.map((f) => f['name'])).toEqual(['noteId', 'text', 'label']);
+    expect(manifest['bio:anonymizationLevel']).toBe('ANONYMIZED');
+    expect(extractDuoTerms(manifest)).toEqual(['DUO_0000004']);
+  });
+
+  it('the seed SQL payload carries the same manifest as manifest.json', () => {
+    expect(demoSql).toContain(sqlPayload(manifest));
   });
 });

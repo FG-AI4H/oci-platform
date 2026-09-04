@@ -1,0 +1,134 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "sc": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "dct": "http://purl.org/dc/terms/",
+    "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
+  },
+  "@type": "sc:Dataset",
+  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
+  "name": "RSNA Pneumonia Detection Challenge 2018",
+  "description": "Catalogue record for the RSNA Pneumonia Detection Challenge (2018): about 30,000 de-identified frontal chest radiographs drawn from the NIH ChestX-ray14 collection, annotated by radiologists with bounding boxes around lung opacities suggestive of pneumonia. OCI does not host the images or labels; this record describes the upstream dataset and its labelling protocol so it can be cited, matched to an intended use and attached to annotation campaigns. Obtain the data from the Kaggle competition page under the challenge rules.",
+  "url": "https://www.rsna.org/rsnai/ai-image-challenge/rsna-pneumonia-detection-challenge-2018",
+  "sameAs": [
+    "https://www.kaggle.com/competitions/rsna-pneumonia-detection-challenge",
+    "https://doi.org/10.1148/ryai.2019180041"
+  ],
+  "license": "https://www.kaggle.com/competitions/rsna-pneumonia-detection-challenge/rules",
+  "version": "1.0.0",
+  "datePublished": "2018-08-27",
+  "creator": [
+    { "@type": "sc:Organization", "name": "Radiological Society of North America (RSNA)" },
+    { "@type": "sc:Organization", "name": "Society of Thoracic Radiology (STR)" },
+    { "@type": "sc:Organization", "name": "MD.ai" }
+  ],
+  "publisher": {
+    "@type": "sc:Organization",
+    "name": "Radiological Society of North America (RSNA)",
+    "url": "https://www.rsna.org/"
+  },
+  "keywords": [
+    "chest x-ray",
+    "pneumonia",
+    "lung opacity",
+    "object detection",
+    "bounding box",
+    "radiology",
+    "challenge"
+  ],
+  "citeAs": "@article{shih2019rsna, title={Augmenting the National Institutes of Health Chest Radiograph Dataset with Expert Annotations of Possible Pneumonia}, author={Shih, George and Wu, Carol C. and Halabi, Safwan S. and Kohli, Marc D. and Prevedello, Luciano M. and Cook, Tessa S. and Sharma, Arjun and Amorosa, Judith K. and Arteaga, Veronica and Galperin-Aizenberg, Maya and Gill, Ritu R. and Godoy, Myrna C. B. and Hobbs, Stephen and Jeudy, Jean and Laroia, Archana and Shah, Palmi N. and Vummidi, Dharshan and Yaddanapudi, Kavitha and Stein, Anouk}, journal={Radiology: Artificial Intelligence}, volume={1}, number={1}, pages={e180041}, year={2019}, doi={10.1148/ryai.2019180041}}",
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "stage-2-train-labels",
+      "name": "stage_2_train_labels",
+      "description": "One row per bounding box from the challenge's stage_2_train_labels.csv. Radiographs with no opacity have a single row with empty box columns and target = 0; radiographs with several opacities have one row per box.",
+      "key": "stage-2-train-labels/patientId",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "stage-2-train-labels/patientId",
+          "name": "patientId",
+          "description": "Challenge-assigned identifier of the radiograph (matches the DICOM file name).",
+          "dataType": "sc:Text"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "stage-2-train-labels/x",
+          "name": "x",
+          "description": "Left edge of the bounding box, in pixels of the 1024 x 1024 image. Empty when target = 0.",
+          "dataType": "sc:Float"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "stage-2-train-labels/y",
+          "name": "y",
+          "description": "Top edge of the bounding box, in pixels. Empty when target = 0.",
+          "dataType": "sc:Float"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "stage-2-train-labels/width",
+          "name": "width",
+          "description": "Width of the bounding box, in pixels. Empty when target = 0.",
+          "dataType": "sc:Float"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "stage-2-train-labels/height",
+          "name": "height",
+          "description": "Height of the bounding box, in pixels. Empty when target = 0.",
+          "dataType": "sc:Float"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "stage-2-train-labels/target",
+          "name": "target",
+          "description": "1 when the row is a lung opacity suggestive of pneumonia, 0 otherwise (source column header: Target).",
+          "dataType": ["sc:Integer", "cr:Label"]
+        }
+      ]
+    }
+  ],
+  "bio:imagingModality": [{ "@type": "sc:DefinedTerm", "name": "Chest X-ray" }],
+  "bio:bodyRegion": [{ "@type": "sc:DefinedTerm", "name": "Chest" }],
+  "bio:diseaseCondition": [
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Pneumonia",
+      "termCode": "CA40",
+      "inDefinedTermSet": "https://icd.who.int/browse/2025-01/mms/en"
+    }
+  ],
+  "bio:anonymizationLevel": "DEIDENTIFIED",
+  "rai:dataCollection": "Frontal chest radiographs selected from the NIH Clinical Center ChestX-ray14 public release (Wang et al., 2017), redistributed by RSNA as de-identified DICOM files with challenge-assigned patient identifiers.",
+  "rai:dataAnnotationProtocol": "Volunteer radiologists from the Society of Thoracic Radiology and RSNA reviewed each radiograph on the MD.ai annotation platform and drew bounding boxes around lung opacities suggestive of pneumonia. Radiographs without such an opacity were labelled target = 0; the companion stage_2_detailed_class_info.csv further splits them into Normal and No Lung Opacity / Not Normal. Test-set radiographs were read by several radiologists and adjudicated before release.",
+  "rai:dataAnnotationPlatform": "MD.ai",
+  "rai:personalSensitiveInformation": "De-identified radiographs; the NIH release removed direct identifiers and RSNA replaced patient identifiers with challenge-assigned UUIDs. No images or labels are hosted by OCI.",
+  "rai:dataUseCases": "Training and benchmarking pneumonia-detection and lung-opacity localisation models under the challenge's non-commercial research terms.",
+  "prov:wasDerivedFrom": {
+    "@type": "prov:Entity",
+    "@id": "https://doi.org/10.1109/CVPR.2017.369",
+    "name": "NIH ChestX-ray14 (ChestX-ray8), Wang et al., 2017"
+  },
+  "prov:wasAttributedTo": [
+    { "@type": "prov:Organization", "name": "Radiological Society of North America (RSNA)" },
+    { "@type": "prov:Organization", "name": "Society of Thoracic Radiology (STR)" },
+    {
+      "@type": "prov:Organization",
+      "name": "U.S. National Institutes of Health Clinical Center (source radiographs)"
+    }
+  ],
+  "cr:consentCode": [
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000046",
+      "termCode": "DUO_0000046",
+      "name": "non-commercial use only",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    }
+  ]
+}
