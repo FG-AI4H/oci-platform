@@ -15,10 +15,11 @@ Documents here are **discussion contributions** — not formal deliverables. The
 
 ## Contents
 
-| Date       | Title                                                                                                                                                                  | Track                                                            |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| 2026-05-09 | [BuilderStatus — Proposed Visa Type extension to GA4GH Passport for AI builder accreditation](<./GI-AI4H-WGD-OCI-001 — BuilderStatus Visa proposal — 2026-05-09.docx>) | OCI access governance → GA4GH WG-Data DURI                       |
-| 2026-05-29 | [Dataset-level DUO/ODRL + data-protection attachment in BIOCroissant](<./GI-AI4H-WGD-OCI-002 — Dataset-level DUO-ODRL attachment in BIOCroissant — 2026-05-29.docx>)   | Croissant/BIOCroissant alignment → MLCommons core team + WG-Data |
+| Date       | Title                                                                                                                                                                       | Track                                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 2026-05-09 | [BuilderStatus — Proposed Visa Type extension to GA4GH Passport for AI builder accreditation](<./GI-AI4H-WGD-OCI-001 — BuilderStatus Visa proposal — 2026-05-09.docx>)      | OCI access governance → GA4GH WG-Data DURI                       |
+| 2026-05-29 | [Dataset-level DUO/ODRL + data-protection attachment in BIOCroissant](<./GI-AI4H-WGD-OCI-002 — Dataset-level DUO-ODRL attachment in BIOCroissant — 2026-05-29.docx>)        | Croissant/BIOCroissant alignment → MLCommons core team + WG-Data |
+| 2026-06-17 | [Dataset-level provenance attachment in BIOCroissant (provenance profile)](<./GI-AI4H-WGD-OCI-003 — Dataset-level provenance attachment in BIOCroissant — 2026-06-17.docx>) | BIOCroissant provenance profile → MLCommons core team + WG-Data  |
 
 ## How a contribution lands here
 
