@@ -53,9 +53,15 @@ const License = z.union([
   z.object({ '@type': z.string().optional(), name: z.string().optional() }).passthrough(),
 ]);
 
+// The spec defines FileObject / FileSet in the `cr:` namespace; manifests in
+// the wild also spell them `sc:` (older examples) or bare (via @vocab).
 const FileObject = z
   .object({
-    '@type': z.union([z.literal('sc:FileObject'), z.literal('FileObject')]),
+    '@type': z.union([
+      z.literal('cr:FileObject'),
+      z.literal('sc:FileObject'),
+      z.literal('FileObject'),
+    ]),
     '@id': NonEmptyString,
     name: NonEmptyString,
     contentUrl: Url.optional(),
@@ -69,7 +75,7 @@ const FileObject = z
 
 const FileSet = z
   .object({
-    '@type': z.union([z.literal('sc:FileSet'), z.literal('FileSet')]),
+    '@type': z.union([z.literal('cr:FileSet'), z.literal('sc:FileSet'), z.literal('FileSet')]),
     '@id': NonEmptyString,
     containedIn: z.union([Reference, z.array(Reference)]).optional(),
     includes: z.union([NonEmptyString, z.array(NonEmptyString)]).optional(),

@@ -81,3 +81,16 @@ describe('validate', () => {
     expect(r.ok, JSON.stringify(r.issues, null, 2)).toBe(true);
   });
 });
+
+describe('distribution @type spellings', () => {
+  it('accepts cr:FileObject (the spec namespace) as well as sc:FileObject', () => {
+    const m = fixture('valid-croissant-1.0.json') as {
+      distribution: Array<Record<string, unknown>>;
+    };
+    for (const d of m.distribution) {
+      if (d['@type'] === 'sc:FileObject') d['@type'] = 'cr:FileObject';
+    }
+    const r = validate(m);
+    expect(r.ok, JSON.stringify(r.issues, null, 2)).toBe(true);
+  });
+});
