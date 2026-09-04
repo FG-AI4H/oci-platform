@@ -56,9 +56,10 @@ January 2027. Not presenting at Hangzhou costs you nothing in the challenge itse
 
 ## What is the Hangzhou session, and what do I need to send?
 
-Seventy-five minutes on Friday 18 September 2026, inside the WG-Data report at the third GI-AI4H
-meeting. **Ten minutes per team** — eight to present and two for questions — **up to four teams**.
-Slots are limited and are allocated on 9 September, the day after registration closes.
+Seventy-five minutes on the **afternoon of Friday 18 September 2026** — a session of its own at the
+third GI-AI4H meeting, on the meeting's last day. **Ten minutes per team**: eight to present and two
+for questions, **up to four teams**. Slots are limited and are allocated on 9 September, the day
+after registration closes. The meeting programme carries the exact clock time.
 
 Slides are due **Friday 11 September 2026, 23:59 UTC** — eight content slides maximum, PDF or
 PowerPoint, 16:9, in English, to `marc.lecoultre@itu.int`. The session is public and may be recorded,
