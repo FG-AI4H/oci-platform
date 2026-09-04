@@ -21,9 +21,16 @@ import type {
   EvaluationSubmissionResult,
   EvaluationTaskDetail,
   EvaluationTaskKindDb,
+  ScoreAttribution,
   SubmissionStatus,
 } from '@oci/shared-types';
 import { apiFetch } from '../../../lib/api';
+import {
+  describeAttribution,
+  isPublishedResult,
+  rankSubmissions,
+  ReviewStatusBadge,
+} from '../../../components/evaluation/review-status-badge';
 
 /**
  * Evaluation task detail (ADR-0017, Phase C-lite). Anonymous —
@@ -33,10 +40,17 @@ import { apiFetch } from '../../../lib/api';
  *
  * Submissions are rendered in the order the API returns them (best first on
  * the task kind's own primary metric — QWK for grading, macro F1 for
- * classification; PENDING / FAILED sink to the bottom) — the ranking is the API's
- * decision, not this page's. `scores` is null for anything that isn't
+ * classification; PENDING / FAILED sink to the bottom) — the ordering is the
+ * API's decision, not this page's. `scores` is null for anything that isn't
  * SCORED; those rows render dashes. The public DTO carries no `error`
  * field, so a FAILED row exposes nothing beyond its status.
+ *
+ * Every scored row also carries its `attribution` (#486, WP5 invariant 3):
+ * the route version that produced the score and where that version stands in
+ * review, or a LEGACY marker for scores that predate the route registry. The
+ * page shows it next to the method name and hands out rank numbers only to
+ * published results — a provisional, legacy or retracted score keeps its
+ * metrics but is not "#1" of anything.
  */
 
 const TASK_KIND_LABEL: Record<EvaluationTaskKindDb, string> = {
@@ -120,14 +134,12 @@ export default async function EvaluationTaskDetailPage({
 
   const topGrade = detail.numClasses - 1;
   const scoredCount = detail.submissions.filter((s) => s.scores !== null).length;
+  const publishedCount = detail.submissions.filter((s) => isPublishedResult(s.attribution)).length;
 
-  // Rank only the scored submissions — numbering a PENDING row "4th"
-  // would imply it placed, which it hasn't.
-  let nextRank = 0;
-  const ranked = detail.submissions.map((s) => ({
-    submission: s,
-    rank: s.scores !== null ? (nextRank += 1) : null,
-  }));
+  // Rank only the published results — numbering a PENDING row "4th" would
+  // imply it placed, and numbering a provisional or legacy row would imply
+  // the platform stands behind that placing. Neither is true.
+  const ranked = rankSubmissions(detail.submissions);
 
   return (
     <>
@@ -298,7 +310,8 @@ export default async function EvaluationTaskDetailPage({
                     {detail.referableThreshold.toLocaleString('en-GB')} cut-off.
                   </>
                 )}{' '}
-                Coverage is the share of the reference set a submission actually predicted.
+                Coverage is the share of the reference set a submission actually predicted. Results
+                are provisional until the evaluation method that produced them is approved.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -327,7 +340,8 @@ export default async function EvaluationTaskDetailPage({
 
           <p className="text-center text-xs text-[var(--color-muted-foreground)]">
             {scoredCount.toLocaleString('en-GB')} of{' '}
-            {detail.submissions.length.toLocaleString('en-GB')} submissions scored.{' '}
+            {detail.submissions.length.toLocaleString('en-GB')} submissions scored ·{' '}
+            {publishedCount.toLocaleString('en-GB')} published.{' '}
             <Link
               href="/evaluation"
               className="underline underline-offset-2 hover:text-[var(--color-foreground)]"
@@ -404,18 +418,27 @@ function SubmissionRow({
   rank: number | null;
   taskKind: EvaluationTaskKindDb;
 }) {
-  const { scores } = submission;
+  const { scores, attribution } = submission;
   const note = STATUS_NOTE[submission.status];
+  // The one-sentence explanation is shown in full only where the reader
+  // needs it to interpret the metrics: a published result speaks for itself,
+  // a provisional, legacy or retracted one does not.
+  const attributionNote = attribution ? attributionNoteFor(attribution) : null;
 
   return (
     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-4 sm:p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-        <h3 className="flex min-w-0 items-baseline gap-2 text-base font-semibold">
-          {rank !== null ? (
-            <span className="tabular-nums text-[var(--color-muted-foreground)]">#{rank}</span>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0 flex-1">
+          <h3 className="flex min-w-0 items-baseline gap-2 text-base font-semibold">
+            {rank !== null ? (
+              <span className="tabular-nums text-[var(--color-muted-foreground)]">#{rank}</span>
+            ) : null}
+            <span className="min-w-0 break-words">{submission.methodName}</span>
+          </h3>
+          {attribution ? (
+            <AttributionLine attribution={attribution} describe={attributionNote === null} />
           ) : null}
-          <span className="min-w-0 break-words">{submission.methodName}</span>
-        </h3>
+        </div>
         <div className="flex items-center gap-3">
           <Badge tone={STATUS_TONE[submission.status]}>{submission.status.toLowerCase()}</Badge>
           <time
@@ -428,6 +451,9 @@ function SubmissionRow({
       </div>
 
       {note ? <p className="mt-2 text-sm text-[var(--color-muted-foreground)]">{note}</p> : null}
+      {attributionNote ? (
+        <p className="mt-2 text-sm text-[var(--color-muted-foreground)]">{attributionNote}</p>
+      ) : null}
 
       <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-5">
         {metricCells(taskKind, scores).map((cell, i) => (
@@ -441,6 +467,55 @@ function SubmissionRow({
         ))}
       </dl>
     </div>
+  );
+}
+
+/**
+ * Which results get their review-status sentence spelled out under the row.
+ * "published" needs no caveat; the other four change how the metrics should
+ * be read, so the reader gets the sentence without hovering the badge.
+ */
+function attributionNoteFor(attribution: ScoreAttribution): string | null {
+  const { label, description } = describeAttribution(attribution);
+  return label === 'published' ? null : description;
+}
+
+/**
+ * The route version that produced a score, plus its review-status badge. Sits
+ * under the method name and wraps as a unit at narrow widths, so at 375px the
+ * slug, version and badge stack beneath the heading instead of overflowing.
+ * The route page (`/evaluation/routes/:slug`) is linked directly; a LEGACY
+ * score has no route to link to, so it shows the badge alone.
+ */
+function AttributionLine({
+  attribution,
+  describe,
+}: {
+  attribution: ScoreAttribution;
+  /** False when the row prints the description itself, so it is not read twice. */
+  describe: boolean;
+}) {
+  if (attribution.kind === 'LEGACY') {
+    return (
+      <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+        <span className="sr-only">Evaluation method: </span>
+        <ReviewStatusBadge attribution={attribution} describe={describe} />
+      </p>
+    );
+  }
+
+  return (
+    <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+      <span className="sr-only">Evaluation method: </span>
+      <Link
+        href={`/evaluation/routes/${encodeURIComponent(attribution.routeSlug)}`}
+        className="min-w-0 break-words rounded font-mono text-xs text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+      >
+        {attribution.routeSlug}
+        <span className="text-[var(--color-muted-foreground)]">@{attribution.routeVersion}</span>
+      </Link>
+      <ReviewStatusBadge attribution={attribution} describe={describe} />
+    </p>
   );
 }
 
