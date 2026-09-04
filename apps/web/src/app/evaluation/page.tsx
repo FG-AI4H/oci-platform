@@ -12,6 +12,7 @@ import {
   ChartIcon,
   Container,
   Section,
+  ShieldIcon,
 } from '@oci/ui';
 import type { EvaluationTaskKindDb, EvaluationTaskSummary } from '@oci/shared-types';
 import { apiFetch } from '../../lib/api';
@@ -96,8 +97,48 @@ export default async function EvaluationTasksPage() {
             ))}
           </ul>
         )}
+
+        <EvaluationMethodsLink />
       </Section>
     </Container>
+  );
+}
+
+/**
+ * Pointer to the evaluation-method registry (#487). Sits below the tasks
+ * because a reader arrives here for tasks; the methods explain the review
+ * status shown next to each result on a task page.
+ */
+function EvaluationMethodsLink() {
+  return (
+    <aside
+      aria-labelledby="evaluation-methods-heading"
+      className="mt-10 flex flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-subtle)] p-5 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        <span
+          className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-card)] text-[var(--color-muted-foreground)] shadow-[var(--shadow-xs)]"
+          aria-hidden="true"
+        >
+          <ShieldIcon size={18} />
+        </span>
+        <div className="min-w-0">
+          <h2 id="evaluation-methods-heading" className="text-base font-semibold">
+            Evaluation methods
+          </h2>
+          <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">
+            Every result names the method and version that produced it. Each method declares what it
+            defends against, who observes what, and the limits a submission runs within.
+          </p>
+        </div>
+      </div>
+      <Link
+        href="/evaluation/routes"
+        className="shrink-0 rounded font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+      >
+        Browse evaluation methods
+      </Link>
+    </aside>
   );
 }
 
