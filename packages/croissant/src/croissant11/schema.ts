@@ -20,7 +20,20 @@ import { z } from 'zod';
 const Url = z.string().min(1);
 
 // PROV-O — machine-actionable provenance (W3C PROV ontology subset).
-const ProvAgent = z
+//
+// An upstream Entity a dataset `wasDerivedFrom` / an Activity `used`. A
+// bare IRI string is accepted wherever an Entity may appear.
+const ProvEntity = z
+  .object({
+    '@type': z.union([z.literal('prov:Entity'), z.literal('Entity')]).optional(),
+    '@id': z.string().optional(),
+    name: z.string().optional(),
+  })
+  .passthrough();
+
+const ProvEntityRef = z.union([z.string(), ProvEntity]);
+
+const ProvAgentBase = z
   .object({
     '@type': z
       .union([
@@ -39,12 +52,22 @@ const ProvAgent = z
   })
   .passthrough();
 
+// One level of delegation (`prov:actedOnBehalfOf`) — a SoftwareAgent
+// acting for an Organization is the common dataset-level case.
+const ProvAgent = ProvAgentBase.extend({
+  actedOnBehalfOf: z
+    .union([z.string(), ProvAgentBase, z.array(z.union([z.string(), ProvAgentBase]))])
+    .optional(),
+});
+
 const ProvActivity = z
   .object({
     '@type': z.union([z.literal('prov:Activity'), z.literal('Activity')]),
     '@id': z.string().optional(),
+    name: z.string().optional(),
     startedAtTime: z.string().optional(),
     endedAtTime: z.string().optional(),
+    used: z.union([ProvEntityRef, z.array(ProvEntityRef)]).optional(),
     wasAssociatedWith: z
       .union([z.string(), ProvAgent, z.array(z.union([z.string(), ProvAgent]))])
       .optional(),
@@ -60,13 +83,18 @@ const OdrlConstraint = z
   })
   .passthrough();
 
-const OdrlPermission = z
+const OdrlDuty = z
   .object({
     action: z.union([z.string(), z.array(z.string())]).optional(),
     target: z.string().optional(),
     constraint: z.union([OdrlConstraint, z.array(OdrlConstraint)]).optional(),
   })
   .passthrough();
+
+const OdrlPermission = OdrlDuty.extend({
+  // A duty attached to the permission (`odrl:attribute` for CC BY).
+  duty: z.union([OdrlDuty, z.array(OdrlDuty)]).optional(),
+});
 
 const OdrlOffer = z
   .object({
@@ -95,7 +123,7 @@ const DefinedTerm = z
 export const Croissant11DeltasSchema = z
   .object({
     // Provenance
-    wasDerivedFrom: z.union([z.string(), z.array(z.string())]).optional(),
+    wasDerivedFrom: z.union([ProvEntityRef, z.array(ProvEntityRef)]).optional(),
     wasGeneratedBy: z
       .union([z.string(), ProvActivity, z.array(z.union([z.string(), ProvActivity]))])
       .optional(),

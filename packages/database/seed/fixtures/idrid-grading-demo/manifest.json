@@ -5,6 +5,7 @@
     "cr": "http://mlcommons.org/croissant/",
     "rai": "http://mlcommons.org/croissant/RAI/",
     "prov": "http://www.w3.org/ns/prov#",
+    "odrl": "http://www.w3.org/ns/odrl/2/",
     "dct": "http://purl.org/dc/terms/",
     "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
   },
@@ -360,5 +361,60 @@
     }
   ],
   "rai:dataAnnotationProtocol": "Two ophthalmologists (>25 yrs) graded independently; a third adjudicated disagreements (from source IDRiD).",
-  "bio:anonymizationLevel": "ANONYMIZED"
+  "bio:anonymizationLevel": "ANONYMIZED",
+  "prov:wasDerivedFrom": {
+    "@type": "prov:Entity",
+    "@id": "https://doi.org/10.3390/data3030025",
+    "name": "IDRiD — Indian Diabetic Retinopathy Image Dataset, B. Disease Grading (testing set)"
+  },
+  "prov:wasGeneratedBy": {
+    "@type": "prov:Activity",
+    "@id": "#activity-oci-demo-slice-v1",
+    "name": "Class-stratified 30-image slice of the IDRiD disease-grading testing set, downsampled to 512 px",
+    "prov:startedAtTime": "2026-07-30T00:00:00Z",
+    "prov:endedAtTime": "2026-07-30T00:00:00Z",
+    "prov:used": "https://doi.org/10.3390/data3030025",
+    "prov:wasAssociatedWith": {
+      "@type": "prov:SoftwareAgent",
+      "name": "oci-platform idrid-grading-demo generate.mjs",
+      "prov:actedOnBehalfOf": {
+        "@type": "prov:Organization",
+        "name": "OCI Platform (GI-AI4H)"
+      }
+    }
+  },
+  "prov:wasAttributedTo": [
+    {
+      "@type": "prov:Organization",
+      "name": "IDRiD consortium (Porwal et al., 2018) — source images captured at an eye clinic in Nanded, Maharashtra, India"
+    },
+    {
+      "@type": "prov:Organization",
+      "name": "OCI Platform (GI-AI4H) — re-publisher of the demo slice"
+    }
+  ],
+  "odrl:hasOffer": {
+    "@type": "odrl:Offer",
+    "@id": "#offer-cc-by-4.0",
+    "odrl:permission": [
+      {
+        "odrl:action": ["odrl:use", "odrl:distribute", "odrl:derive"],
+        "odrl:target": "idrid-grading-demo",
+        "odrl:duty": [
+          {
+            "odrl:action": "odrl:attribute"
+          }
+        ]
+      }
+    ]
+  },
+  "cr:consentCode": [
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000004",
+      "termCode": "DUO_0000004",
+      "name": "no restriction",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    }
+  ]
 }

@@ -32,14 +32,7 @@
 
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import {
-  mkdtempSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-  rmSync,
-} from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,6 +44,10 @@ const MAX_DIM = Number(process.env.IDRID_MAX_DIM ?? 512);
 const ZENODO_URL =
   'https://zenodo.org/api/records/17219542/files/B.%20Disease%20Grading.zip/content';
 const HOST_ID = '00000000-0000-4000-8000-000000000099'; // dev-stub host, per demo.sql
+const UPSTREAM_DOI = 'https://doi.org/10.3390/data3030025'; // Porwal et al., 2018, Data 3(3):25
+// PROV-O activity timestamps for the slice. Bump when regenerating the slice
+// with different parameters; keep as-is for a byte-identical regeneration.
+const SLICE_GENERATED_AT = '2026-07-30T00:00:00Z';
 const UUID_NS = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'; // RFC-4122 URL namespace
 
 // ----- deterministic UUIDv5 (sha1) so re-runs are idempotent -----------------
@@ -84,13 +81,30 @@ const lblDir = join(work, 'lbl');
 mkdirSync(imgDir, { recursive: true });
 mkdirSync(lblDir, { recursive: true });
 // -j junks internal paths; quote the glob-y entry names.
-sh('unzip', ['-j', '-o', zipPath, 'B. Disease Grading/1. Original Images/b. Testing Set/*', '-d', imgDir]);
-sh('unzip', ['-j', '-o', zipPath, 'B. Disease Grading/2. Groundtruths/*Testing Labels.csv', '-d', lblDir]);
+sh('unzip', [
+  '-j',
+  '-o',
+  zipPath,
+  'B. Disease Grading/1. Original Images/b. Testing Set/*',
+  '-d',
+  imgDir,
+]);
+sh('unzip', [
+  '-j',
+  '-o',
+  zipPath,
+  'B. Disease Grading/2. Groundtruths/*Testing Labels.csv',
+  '-d',
+  lblDir,
+]);
 
 // ----- 3. parse labels -------------------------------------------------------
 const csvName = readdirSync(lblDir).find((f) => f.toLowerCase().endsWith('.csv'));
 const rows = readFileSync(join(lblDir, csvName), 'utf8').split(/\r?\n/).filter(Boolean);
-const header = rows.shift().split(',').map((s) => s.trim().toLowerCase());
+const header = rows
+  .shift()
+  .split(',')
+  .map((s) => s.trim().toLowerCase());
 const iName = header.findIndex((h) => h.includes('image'));
 const iDr = header.findIndex((h) => h.includes('retinopathy'));
 const iDme = header.findIndex((h) => h.includes('macular'));
@@ -171,6 +185,7 @@ const manifest = {
     cr: 'http://mlcommons.org/croissant/',
     rai: 'http://mlcommons.org/croissant/RAI/',
     prov: 'http://www.w3.org/ns/prov#',
+    odrl: 'http://www.w3.org/ns/odrl/2/',
     dct: 'http://purl.org/dc/terms/',
     bio: 'https://oci.ai4h.net/biocroissant/v0.1#',
   },
@@ -184,7 +199,7 @@ const manifest = {
     'held by the evaluation service and are never published as a distribution. ' +
     'Derived from IDRiD (CC BY 4.0); see citeAs.',
   url: 'https://idrid.grand-challenge.org/',
-  sameAs: 'https://doi.org/10.3390/data3030025',
+  sameAs: UPSTREAM_DOI,
   license: 'https://creativecommons.org/licenses/by/4.0/',
   version: '1.0.0',
   datePublished: '2018-04-24',
@@ -194,7 +209,13 @@ const manifest = {
     { '@type': 'sc:Person', name: 'Fabrice Meriaudeau' },
   ],
   publisher: { '@type': 'sc:Organization', name: 'OCI Platform (GI-AI4H) — demo slice of IDRiD' },
-  keywords: ['diabetic retinopathy', 'fundus photography', 'disease grading', 'ophthalmology', 'demo'],
+  keywords: [
+    'diabetic retinopathy',
+    'fundus photography',
+    'disease grading',
+    'ophthalmology',
+    'demo',
+  ],
   citeAs:
     '@article{porwal2018idrid, title={Indian Diabetic Retinopathy Image Dataset (IDRiD)...}, ' +
     'author={Porwal, Prasanna and others}, journal={Data}, volume={3}, number={3}, pages={25}, year={2018}, publisher={MDPI}}',
@@ -217,16 +238,78 @@ const manifest = {
             'ICDR scale: 0 No DR; 1 Mild NPDR; 2 Moderate NPDR; 3 Severe NPDR; 4 Proliferative DR. Referable = grade >= 2.',
           dataType: ['sc:Integer', 'cr:Label'],
         },
-        { '@type': 'cr:Field', '@id': 'labels/dme_risk', name: 'dme_risk', dataType: ['sc:Integer', 'cr:Label'] },
+        {
+          '@type': 'cr:Field',
+          '@id': 'labels/dme_risk',
+          name: 'dme_risk',
+          dataType: ['sc:Integer', 'cr:Label'],
+        },
       ],
     },
   ],
   'bio:imagingModality': { '@type': 'sc:DefinedTerm', name: 'Colour fundus photography' },
   'bio:bodyRegion': { '@type': 'sc:DefinedTerm', name: 'Retina' },
-  'bio:diseaseCondition': [{ '@type': 'sc:DefinedTerm', name: 'Diabetic retinopathy', termCode: '9B71.0' }],
+  'bio:diseaseCondition': [
+    { '@type': 'sc:DefinedTerm', name: 'Diabetic retinopathy', termCode: '9B71.0' },
+  ],
   'rai:dataAnnotationProtocol':
     'Two ophthalmologists (>25 yrs) graded independently; a third adjudicated disagreements (from source IDRiD).',
   'bio:anonymizationLevel': 'ANONYMIZED',
+  // ----- dataset-level provenance (PROV-O), usage policy (ODRL), consent (DUO) --
+  // Prefixed keys on purpose (like the bio: keys above): the manifest UI groups
+  // properties by namespace; the validator strips prefixes itself.
+  'prov:wasDerivedFrom': {
+    '@type': 'prov:Entity',
+    '@id': UPSTREAM_DOI,
+    name: 'IDRiD — Indian Diabetic Retinopathy Image Dataset, B. Disease Grading (testing set)',
+  },
+  'prov:wasGeneratedBy': {
+    '@type': 'prov:Activity',
+    '@id': '#activity-oci-demo-slice-v1',
+    name: `Class-stratified ${distributions.length}-image slice of the IDRiD disease-grading testing set, downsampled to ${MAX_DIM} px`,
+    'prov:startedAtTime': SLICE_GENERATED_AT,
+    'prov:endedAtTime': SLICE_GENERATED_AT,
+    'prov:used': UPSTREAM_DOI,
+    'prov:wasAssociatedWith': {
+      '@type': 'prov:SoftwareAgent',
+      name: `oci-platform ${SLUG} generate.mjs`,
+      'prov:actedOnBehalfOf': { '@type': 'prov:Organization', name: 'OCI Platform (GI-AI4H)' },
+    },
+  },
+  'prov:wasAttributedTo': [
+    {
+      '@type': 'prov:Organization',
+      // The IDRiD paper + idrid.grand-challenge.org name only "an eye clinic in
+      // Nanded, Maharashtra, India" as the acquisition site — no institution.
+      name: 'IDRiD consortium (Porwal et al., 2018) — source images captured at an eye clinic in Nanded, Maharashtra, India',
+    },
+    {
+      '@type': 'prov:Organization',
+      name: 'OCI Platform (GI-AI4H) — re-publisher of the demo slice',
+    },
+  ],
+  // CC BY 4.0 as an ODRL offer: use / distribute / derive, with an attribution duty.
+  'odrl:hasOffer': {
+    '@type': 'odrl:Offer',
+    '@id': '#offer-cc-by-4.0',
+    'odrl:permission': [
+      {
+        'odrl:action': ['odrl:use', 'odrl:distribute', 'odrl:derive'],
+        'odrl:target': SLUG,
+        'odrl:duty': [{ 'odrl:action': 'odrl:attribute' }],
+      },
+    ],
+  },
+  // DUO_0000004 (no restriction) is the truthful code for a CC BY public dataset.
+  'cr:consentCode': [
+    {
+      '@type': 'sc:DefinedTerm',
+      '@id': 'http://purl.obolibrary.org/obo/DUO_0000004',
+      termCode: 'DUO_0000004',
+      name: 'no restriction',
+      inDefinedTermSet: 'http://purl.obolibrary.org/obo/duo.owl',
+    },
+  ],
 };
 writeFileSync(join(HERE, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 
@@ -235,6 +318,10 @@ writeFileSync(join(HERE, 'test-labels.hidden.csv'), hiddenLabelLines.join('\n') 
 
 // ----- 8. seed.generated.sql (demo.sql section) ------------------------------
 const q = (s) => (s == null ? 'NULL' : `'${String(s).replace(/'/g, "''")}'`);
+// Denormalised DUO cache column (catalog.datasets.duo_terms) — mirrors what the
+// API's publish path extracts from consentCode.
+const duoTerms = (manifest['cr:consentCode'] ?? []).map((t) => t.termCode);
+const duoTermsSql = `ARRAY[${duoTerms.map(q).join(', ')}]::text[]`;
 const distValues = distributions
   .map((d) => {
     const key = `${SLUG}/${d['@id']}/${d.name}`;
@@ -250,6 +337,10 @@ const sql = `-- GENERATED by fixtures/idrid-grading-demo/generate.mjs — do not
 -- Append/merge this block into packages/database/seed/demo.sql (Section: datasets with real bytes).
 -- Mirrors the oci-demo-chest-xr pattern: bytes uploaded by upload-fixtures.mjs to
 -- <slug>/<distribution-@id>/<filename>; rows below reference the same keys.
+-- The repo is the authority for this fixture's manifest: the dataset + version
+-- rows refresh on conflict when the manifest content differs (so an edited
+-- manifest.json reaches an already-seeded environment on the next deploy);
+-- distributions stay DO NOTHING.
 
 DO $idrid_demo$
 DECLARE
@@ -260,18 +351,27 @@ DECLARE
 BEGIN
   INSERT INTO "catalog"."datasets" (
     id, slug, name, description, host_id, visibility, status,
-    access_tier, commercial_use_terms, conformance_version, croissant, updated_at
+    access_tier, commercial_use_terms, conformance_version, croissant, duo_terms, updated_at
   ) VALUES (
     ds_id, '${SLUG}', ${q(manifest.name)},
     'Downsampled ${distributions.length}-image slice of the IDRiD DR-grading testing set, hosted in OCI storage for the Phase C evaluation demo. Ground truth held by the evaluation service.',
-    '${HOST_ID}', 'PUBLIC', 'PUBLISHED', 'OPEN', 'OK', '1.1', payload, CURRENT_TIMESTAMP
-  ) ON CONFLICT (slug) DO NOTHING;
+    '${HOST_ID}', 'PUBLIC', 'PUBLISHED', 'OPEN', 'OK', '1.1', payload,
+    ${duoTermsSql}, CURRENT_TIMESTAMP
+  ) ON CONFLICT (slug) DO UPDATE SET
+    croissant = EXCLUDED.croissant,
+    description = EXCLUDED.description,
+    conformance_version = EXCLUDED.conformance_version,
+    duo_terms = EXCLUDED.duo_terms,
+    updated_at = CURRENT_TIMESTAMP
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
 
   INSERT INTO "catalog"."dataset_versions" (
     id, dataset_id, version, croissant, published_by_id, published_at
   ) VALUES (
     ver_id, ds_id, '1.0.0', payload, '${HOST_ID}', CURRENT_TIMESTAMP
-  ) ON CONFLICT (dataset_id, version) DO NOTHING;
+  ) ON CONFLICT (dataset_id, version) DO UPDATE SET
+    croissant = EXCLUDED.croissant
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
 
   INSERT INTO "catalog"."distributions" (
     id, dataset_version_id, croissant_id, content_url, content_type,
@@ -287,10 +387,14 @@ writeFileSync(join(HERE, 'seed.generated.sql'), sql);
 // ----- done ------------------------------------------------------------------
 rmSync(work, { recursive: true, force: true });
 console.log('\nGenerated:');
-console.log(`  ${distributions.length} images + manifest.json + test-labels.hidden.csv + seed.generated.sql`);
+console.log(
+  `  ${distributions.length} images + manifest.json + test-labels.hidden.csv + seed.generated.sql`,
+);
 console.log('\nNext:');
 console.log('  1. Review manifest.json and seed.generated.sql');
 console.log('  2. Merge seed.generated.sql into packages/database/seed/demo.sql');
 console.log('  3. Upload bytes + seed dev (needs AWS profile ai4h):');
-console.log('     OCI_DATASETS_BUCKET=oci-datasets-dev SEED_FIXTURES_DIR=packages/database/seed/fixtures \\');
+console.log(
+  '     OCI_DATASETS_BUCKET=oci-datasets-dev SEED_FIXTURES_DIR=packages/database/seed/fixtures \\',
+);
 console.log('       node apps/migrate/upload-fixtures.mjs');

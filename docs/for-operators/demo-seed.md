@@ -14,7 +14,7 @@ In addition to seeding row data, the migrate task **also uploads bundled binary 
 
 ## Rules for editing the seed
 
-1. **Idempotent**. Every INSERT uses `ON CONFLICT (slug) DO NOTHING`. Re-runs are no-ops.
+1. **Idempotent**. Every INSERT uses `ON CONFLICT (...) DO NOTHING`, with one exception: the `catalog.datasets` and `catalog.dataset_versions` rows of a **bundled fixture manifest** (rule 6 — today `oci-demo-chest-xr` and `idrid-grading-demo`) use `ON CONFLICT ... DO UPDATE SET croissant = EXCLUDED.croissant, ... WHERE <table>.croissant IS DISTINCT FROM EXCLUDED.croissant`, because the repo is the authority for those manifests and an edited `manifest.json` must reach an already-seeded environment. Distribution rows, placeholder datasets and everything else stay `DO NOTHING`; evaluation ground truth is never refreshed by this file. The re-run test is unchanged: a second run of the same file changes zero rows.
 2. **Slug-keyed**. Never reference UUIDs literally; let the row's existing id flow through slug lookups.
 3. **Order matters on first apply**. Reference data (datasets, tool integrations) goes before the entities that depend on it (campaigns, etc.).
 4. **No real PHI**. The seed lands on every non-prod operator's local box. Placeholder names + empty manifests only.
