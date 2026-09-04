@@ -6,6 +6,10 @@
  *   - croissant11/   1.1 deltas (Feb 2026): PROV-O, DUO, ODRL, vocab framework.
  *   - rai/           Croissant Responsible AI extension (20 properties).
  *   - biocroissant/  OCI Platform v0.1 health extension (DRAFT — see ADR-0002).
+ *   - provenance/    `bio-prov` v0.1 health-dataset provenance profile,
+ *                    obligations by access tier (ADR-0022,
+ *                    docs/standards/bio-prov-v0.1.md). Opt-in via
+ *                    `bio:provenanceProfile`; permissive until flipped.
  *   - validator/     normalize + dispatch + JSON-Pointer error reporting.
  *
  * Single entry point:
@@ -31,6 +35,7 @@ export type {
   ValidationResult,
   ValidationIssue,
   ValidationLevel,
+  ValidateOptions,
   Conformance,
 } from './validator/index.js';
 
@@ -42,6 +47,46 @@ export {
   BIOCROISSANT_PROPERTIES,
   type BioCroissant,
 } from './biocroissant/schema.js';
+
+export {
+  ProvenanceProfileSchema,
+  ProvenanceProfileMarker,
+  WriteBackDistributionSchema,
+  SourceSiteSchema,
+  DeviceClassSchema,
+  DeidentificationSchema,
+  LabelProtocolSchema,
+  IntegritySchema,
+  ReceiptSchema,
+  PROVENANCE_PROFILE_VERSION,
+  PROVENANCE_PROFILE_PROPERTY,
+  ANNOTATION_CAMPAIGN_ACTIVITY_KIND,
+  type ProvenanceProfile,
+  type SourceSite,
+  type Deidentification,
+  type LabelProtocol,
+  type Integrity,
+  type Receipt,
+} from './provenance/schema.js';
+export {
+  PROVENANCE_REQUIREMENTS,
+  obligationFor,
+  evaluateRequirements,
+  type ProvenanceRequirement,
+  type RequirementId,
+  type RequirementEvaluation,
+  type RequirementProblem,
+  type RequirementStatus,
+  type Obligation,
+} from './provenance/requirements.js';
+export {
+  validateProvenance,
+  validateProvenanceDetailed,
+  type ProvenanceValidationOptions,
+  type ProvenanceValidation,
+  type ProvenanceRequirementReport,
+} from './provenance/index.js';
+export { extractProvenance, type ProvenanceSummary } from './provenance/extract.js';
 
 export { NS, CONFORMS_TO } from './namespaces/index.js';
 
