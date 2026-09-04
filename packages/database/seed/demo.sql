@@ -5,9 +5,9 @@
 -- deploy (apps/migrate runs it after `prisma migrate deploy` when
 -- `OCI_ENV != 'prod'`). Re-runs are safe — every INSERT uses ON
 -- CONFLICT DO NOTHING, except the dataset + version rows of bundled
--- fixture manifests (Sections 3-4), which refresh on conflict when the
--- manifest content differs. A second run of the same file changes zero
--- rows.
+-- fixture manifests (Sections 1b, 3 and 4), which refresh on conflict
+-- when the manifest content differs. A second run of the same file
+-- changes zero rows.
 --
 -- New demo entities go here. Conventions:
 --
@@ -33,33 +33,21 @@
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- Section 1 — Datasets.
+-- Section 1 — Placeholder datasets (no manifest).
 --
--- Real Croissant manifests are loaded via the existing
--- `scripts/seed-catalog.ts` flow (operator-driven, HTTP-layer). The
--- rows here are minimal placeholders so the catalog list page on dev
--- always has something visible without depending on the operator.
+-- Minimal rows so the catalogue on dev always has a RESTRICTED and a
+-- PRIVATE dataset to exercise visibility filtering without depending
+-- on an operator. They carry no Croissant manifest; real manifests
+-- load via the operator-driven `scripts/seed-catalog.ts` flow.
 --
--- `rsna-pneumonia-2018` is the anchor dataset the demo campaigns
--- below attach to. Marked PUBLIC so unauthenticated callers can see
--- it; admins on dev still publish the real RSNA manifest via the
--- operator-driven flow when they want the full payload.
+-- The two datasets that used to sit here as hollow placeholders
+-- (`rsna-pneumonia-2018`, `demo-clinical-notes-2024`) now carry a
+-- bundled manifest — see Section 1b (#491).
 -- ----------------------------------------------------------------------------
 
 INSERT INTO "catalog"."datasets"
     (id, slug, name, description, host_id, visibility, status, access_tier, commercial_use_terms, modalities, updated_at)
 VALUES
-    (gen_random_uuid(),
-     'rsna-pneumonia-2018',
-     'RSNA Pneumonia Detection 2018 — OCI Mirror',
-     'Demo placeholder for the RSNA Pneumonia Detection 2018 chest-XR dataset. Real manifest loads via scripts/seed-catalog.ts.',
-     '00000000-0000-4000-8000-000000000099',
-     'PUBLIC',
-     'PUBLISHED',
-     'OPEN',
-     'OK',
-     ARRAY['X-ray'],
-     CURRENT_TIMESTAMP),
     (gen_random_uuid(),
      'isic-2019-melanoma',
      'ISIC 2019 Skin Lesion Classification — OCI Restricted Mirror',
@@ -81,22 +69,6 @@ VALUES
      'CONTROLLED',
      'CASE_BY_CASE',
      ARRAY['MRI'],
-     CURRENT_TIMESTAMP),
-    -- Text-only dataset (#247). The campaign-create form must disable
-    -- the spatial task-kind radios (DETECTION / SEGMENTATION /
-    -- LOCALIZATION) when this dataset is picked; CLASSIFICATION and
-    -- MULTI_MODAL stay enabled. E2E coverage in
-    -- apps/web/e2e/annotation-campaign.spec.ts.
-    (gen_random_uuid(),
-     'demo-clinical-notes-2024',
-     'Demo Clinical Notes 2024 — Text-Only Modality',
-     'Demo placeholder for a text-only clinical-notes dataset. Used to exercise the campaign-create modality → task-kind constraint (#247).',
-     '00000000-0000-4000-8000-000000000099',
-     'PUBLIC',
-     'PUBLISHED',
-     'OPEN',
-     'OK',
-     ARRAY['Text'],
      CURRENT_TIMESTAMP)
 ON CONFLICT (slug) DO NOTHING;
 
@@ -112,6 +84,114 @@ WHERE slug = 'isic-2019-melanoma' AND cardinality("modalities") = 0;
 UPDATE "catalog"."datasets"
 SET "modalities" = ARRAY['MRI']
 WHERE slug = 'uhz-cardiac-mri-2024' AND cardinality("modalities") = 0;
+
+-- ----------------------------------------------------------------------------
+-- Section 1b — Bundled manifests WITHOUT hosted bytes (#491).
+--
+-- Two datasets whose manifest ships in the repo under
+-- seed/fixtures/<slug>/manifest.json but which declare no
+-- distribution[]: the fixture uploader skips them ("manifest has no
+-- distribution[]") and no distribution rows are written.
+--
+--   - rsna-pneumonia-2018 describes the upstream RSNA Pneumonia
+--     Detection Challenge dataset (record set, labelling protocol,
+--     BIOCroissant terms, non-commercial challenge rules). OCI does not
+--     host the images. It is the anchor dataset of the Section 2 demo
+--     campaigns, so it must land before them.
+--   - demo-clinical-notes-2024 is a synthetic text-only placeholder
+--     with zero records; it exists for the campaign-create modality →
+--     task-kind constraint (#247), see
+--     apps/web/e2e/annotation-campaign.spec.ts.
+--
+-- Both rows already exist on dev as hollow placeholders with generated
+-- ids, so the dataset id is resolved by slug after the upsert instead
+-- of being pinned. Same refresh rule as Section 3: dataset + version
+-- rows update on conflict when the manifest content differs; the
+-- guarded columns (name, description, terms) ride along with it.
+--
+-- The compact payloads are JSON.stringify(manifest.json);
+-- packages/croissant/test/seed-fixtures.spec.ts pins them equal.
+-- ----------------------------------------------------------------------------
+
+DO $rsna_demo$
+DECLARE
+  ds_id   uuid;
+  payload jsonb := $manifest${"@context":{"@vocab":"https://schema.org/","sc":"https://schema.org/","cr":"http://mlcommons.org/croissant/","rai":"http://mlcommons.org/croissant/RAI/","prov":"http://www.w3.org/ns/prov#","dct":"http://purl.org/dc/terms/","bio":"https://oci.ai4h.net/biocroissant/v0.1#"},"@type":"sc:Dataset","dct:conformsTo":"http://mlcommons.org/croissant/1.1","name":"RSNA Pneumonia Detection Challenge 2018","description":"Catalogue record for the RSNA Pneumonia Detection Challenge (2018): about 30,000 de-identified frontal chest radiographs drawn from the NIH ChestX-ray14 collection, annotated by radiologists with bounding boxes around lung opacities suggestive of pneumonia. OCI does not host the images or labels; this record describes the upstream dataset and its labelling protocol so it can be cited, matched to an intended use and attached to annotation campaigns. Obtain the data from the Kaggle competition page under the challenge rules.","url":"https://www.rsna.org/rsnai/ai-image-challenge/rsna-pneumonia-detection-challenge-2018","sameAs":["https://www.kaggle.com/competitions/rsna-pneumonia-detection-challenge","https://doi.org/10.1148/ryai.2019180041"],"license":"https://www.kaggle.com/competitions/rsna-pneumonia-detection-challenge/rules","version":"1.0.0","datePublished":"2018-08-27","creator":[{"@type":"sc:Organization","name":"Radiological Society of North America (RSNA)"},{"@type":"sc:Organization","name":"Society of Thoracic Radiology (STR)"},{"@type":"sc:Organization","name":"MD.ai"}],"publisher":{"@type":"sc:Organization","name":"Radiological Society of North America (RSNA)","url":"https://www.rsna.org/"},"keywords":["chest x-ray","pneumonia","lung opacity","object detection","bounding box","radiology","challenge"],"citeAs":"@article{shih2019rsna, title={Augmenting the National Institutes of Health Chest Radiograph Dataset with Expert Annotations of Possible Pneumonia}, author={Shih, George and Wu, Carol C. and Halabi, Safwan S. and Kohli, Marc D. and Prevedello, Luciano M. and Cook, Tessa S. and Sharma, Arjun and Amorosa, Judith K. and Arteaga, Veronica and Galperin-Aizenberg, Maya and Gill, Ritu R. and Godoy, Myrna C. B. and Hobbs, Stephen and Jeudy, Jean and Laroia, Archana and Shah, Palmi N. and Vummidi, Dharshan and Yaddanapudi, Kavitha and Stein, Anouk}, journal={Radiology: Artificial Intelligence}, volume={1}, number={1}, pages={e180041}, year={2019}, doi={10.1148/ryai.2019180041}}","recordSet":[{"@type":"cr:RecordSet","@id":"stage-2-train-labels","name":"stage_2_train_labels","description":"One row per bounding box from the challenge's stage_2_train_labels.csv. Radiographs with no opacity have a single row with empty box columns and target = 0; radiographs with several opacities have one row per box.","key":"stage-2-train-labels/patientId","field":[{"@type":"cr:Field","@id":"stage-2-train-labels/patientId","name":"patientId","description":"Challenge-assigned identifier of the radiograph (matches the DICOM file name).","dataType":"sc:Text"},{"@type":"cr:Field","@id":"stage-2-train-labels/x","name":"x","description":"Left edge of the bounding box, in pixels of the 1024 x 1024 image. Empty when target = 0.","dataType":"sc:Float"},{"@type":"cr:Field","@id":"stage-2-train-labels/y","name":"y","description":"Top edge of the bounding box, in pixels. Empty when target = 0.","dataType":"sc:Float"},{"@type":"cr:Field","@id":"stage-2-train-labels/width","name":"width","description":"Width of the bounding box, in pixels. Empty when target = 0.","dataType":"sc:Float"},{"@type":"cr:Field","@id":"stage-2-train-labels/height","name":"height","description":"Height of the bounding box, in pixels. Empty when target = 0.","dataType":"sc:Float"},{"@type":"cr:Field","@id":"stage-2-train-labels/target","name":"target","description":"1 when the row is a lung opacity suggestive of pneumonia, 0 otherwise (source column header: Target).","dataType":["sc:Integer","cr:Label"]}]}],"bio:imagingModality":[{"@type":"sc:DefinedTerm","name":"Chest X-ray"}],"bio:bodyRegion":[{"@type":"sc:DefinedTerm","name":"Chest"}],"bio:diseaseCondition":[{"@type":"sc:DefinedTerm","name":"Pneumonia","termCode":"CA40","inDefinedTermSet":"https://icd.who.int/browse/2025-01/mms/en"}],"bio:anonymizationLevel":"DEIDENTIFIED","rai:dataCollection":"Frontal chest radiographs selected from the NIH Clinical Center ChestX-ray14 public release (Wang et al., 2017), redistributed by RSNA as de-identified DICOM files with challenge-assigned patient identifiers.","rai:dataAnnotationProtocol":"Volunteer radiologists from the Society of Thoracic Radiology and RSNA reviewed each radiograph on the MD.ai annotation platform and drew bounding boxes around lung opacities suggestive of pneumonia. Radiographs without such an opacity were labelled target = 0; the companion stage_2_detailed_class_info.csv further splits them into Normal and No Lung Opacity / Not Normal. Test-set radiographs were read by several radiologists and adjudicated before release.","rai:dataAnnotationPlatform":"MD.ai","rai:personalSensitiveInformation":"De-identified radiographs; the NIH release removed direct identifiers and RSNA replaced patient identifiers with challenge-assigned UUIDs. No images or labels are hosted by OCI.","rai:dataUseCases":"Training and benchmarking pneumonia-detection and lung-opacity localisation models under the challenge's non-commercial research terms.","prov:wasDerivedFrom":{"@type":"prov:Entity","@id":"https://doi.org/10.1109/CVPR.2017.369","name":"NIH ChestX-ray14 (ChestX-ray8), Wang et al., 2017"},"prov:wasAttributedTo":[{"@type":"prov:Organization","name":"Radiological Society of North America (RSNA)"},{"@type":"prov:Organization","name":"Society of Thoracic Radiology (STR)"},{"@type":"prov:Organization","name":"U.S. National Institutes of Health Clinical Center (source radiographs)"}],"cr:consentCode":[{"@type":"sc:DefinedTerm","@id":"http://purl.obolibrary.org/obo/DUO_0000046","termCode":"DUO_0000046","name":"non-commercial use only","inDefinedTermSet":"http://purl.obolibrary.org/obo/duo.owl"}]}$manifest$::jsonb;
+BEGIN
+  INSERT INTO "catalog"."datasets" (
+    id, slug, name, description, host_id, visibility, status,
+    access_tier, commercial_use_terms, modalities,
+    conformance_version, croissant, duo_terms, updated_at
+  ) VALUES (
+    gen_random_uuid(), 'rsna-pneumonia-2018',
+    'RSNA Pneumonia Detection Challenge 2018',
+    'Catalogue record for the RSNA Pneumonia Detection Challenge (2018): about 30,000 de-identified frontal chest radiographs with radiologist-drawn boxes around lung opacities suggestive of pneumonia. The images are not hosted by OCI; obtain them from Kaggle under the challenge rules (non-commercial research).',
+    '00000000-0000-4000-8000-000000000099', 'PUBLIC', 'PUBLISHED',
+    'OPEN', 'NON_COMMERCIAL_ONLY', ARRAY['X-ray'],
+    '1.1', payload, ARRAY['DUO_0000046']::text[], CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (slug) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    croissant = EXCLUDED.croissant,
+    conformance_version = EXCLUDED.conformance_version,
+    commercial_use_terms = EXCLUDED.commercial_use_terms,
+    duo_terms = EXCLUDED.duo_terms,
+    updated_at = CURRENT_TIMESTAMP
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
+
+  SELECT id INTO STRICT ds_id FROM "catalog"."datasets" WHERE slug = 'rsna-pneumonia-2018';
+
+  INSERT INTO "catalog"."dataset_versions" (
+    id, dataset_id, version, croissant, published_by_id, published_at
+  ) VALUES (
+    '00000000-0000-4000-8000-000000491a01', ds_id, '1.0.0', payload,
+    '00000000-0000-4000-8000-000000000099', CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (dataset_id, version) DO UPDATE SET
+    croissant = EXCLUDED.croissant
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
+END
+$rsna_demo$;
+
+DO $notes_demo$
+DECLARE
+  ds_id   uuid;
+  payload jsonb := $manifest${"@context":{"@vocab":"https://schema.org/","sc":"https://schema.org/","cr":"http://mlcommons.org/croissant/","rai":"http://mlcommons.org/croissant/RAI/","prov":"http://www.w3.org/ns/prov#","dct":"http://purl.org/dc/terms/","bio":"https://oci.ai4h.net/biocroissant/v0.1#"},"@type":"sc:Dataset","dct:conformsTo":"http://mlcommons.org/croissant/1.1","name":"Demo Clinical Notes 2024 — Text-Only Modality","description":"Synthetic placeholder for a text-only clinical-notes dataset. It contains no records and no files: it exists so the campaign-create form can exercise the modality → task-kind constraint for a text dataset (spatial task kinds disabled, classification and multi-modal allowed). The record set below documents the shape such a dataset would have.","url":"https://oci.ai4h.net/catalog/demo-clinical-notes-2024","license":"https://creativecommons.org/publicdomain/zero/1.0/","version":"1.0.0","datePublished":"2026-09-04","creator":[{"@type":"sc:Organization","name":"OCI Platform (ITU/WHO/WIPO GI-AI4H)"}],"publisher":{"@type":"sc:Organization","name":"OCI Platform","url":"https://oci.ai4h.net/"},"keywords":["synthetic","clinical notes","text","demo","placeholder"],"recordSet":[{"@type":"cr:RecordSet","@id":"notes","name":"notes","description":"One row per de-identified clinical note. Empty in this placeholder: zero records are published.","key":"notes/noteId","field":[{"@type":"cr:Field","@id":"notes/noteId","name":"noteId","description":"Stable identifier of the note.","dataType":"sc:Text"},{"@type":"cr:Field","@id":"notes/text","name":"text","description":"Free-text body of the note.","dataType":"sc:Text"},{"@type":"cr:Field","@id":"notes/label","name":"label","description":"Whole-note classification label (the target of a CLASSIFICATION campaign).","dataType":["sc:Text","cr:Label"]}]}],"bio:dataModality":[{"@type":"sc:DefinedTerm","name":"Text"}],"bio:anonymizationLevel":"ANONYMIZED","bio:synthetic":true,"bio:intendedUse":"platform smoke testing of the text-modality campaign constraint","rai:dataCollection":"None. Synthetic placeholder seeded by packages/database/seed/demo.sql; no notes were collected.","rai:personalSensitiveInformation":"None. The dataset holds zero records.","cr:consentCode":[{"@type":"sc:DefinedTerm","@id":"http://purl.obolibrary.org/obo/DUO_0000004","termCode":"DUO_0000004","name":"no restriction","inDefinedTermSet":"http://purl.obolibrary.org/obo/duo.owl"}]}$manifest$::jsonb;
+BEGIN
+  INSERT INTO "catalog"."datasets" (
+    id, slug, name, description, host_id, visibility, status,
+    access_tier, commercial_use_terms, modalities,
+    conformance_version, croissant, duo_terms, updated_at
+  ) VALUES (
+    gen_random_uuid(), 'demo-clinical-notes-2024',
+    'Demo Clinical Notes 2024 — Text-Only Modality',
+    'Synthetic text-only placeholder with zero records. Exists to exercise the campaign-create modality → task-kind constraint (#247); the manifest documents the shape such a dataset would have.',
+    '00000000-0000-4000-8000-000000000099', 'PUBLIC', 'PUBLISHED',
+    'OPEN', 'OK', ARRAY['Text'],
+    '1.1', payload, ARRAY['DUO_0000004']::text[], CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (slug) DO UPDATE SET
+    description = EXCLUDED.description,
+    croissant = EXCLUDED.croissant,
+    conformance_version = EXCLUDED.conformance_version,
+    duo_terms = EXCLUDED.duo_terms,
+    updated_at = CURRENT_TIMESTAMP
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
+
+  SELECT id INTO STRICT ds_id FROM "catalog"."datasets" WHERE slug = 'demo-clinical-notes-2024';
+
+  INSERT INTO "catalog"."dataset_versions" (
+    id, dataset_id, version, croissant, published_by_id, published_at
+  ) VALUES (
+    '00000000-0000-4000-8000-000000491b01', ds_id, '1.0.0', payload,
+    '00000000-0000-4000-8000-000000000099', CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (dataset_id, version) DO UPDATE SET
+    croissant = EXCLUDED.croissant
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
+END
+$notes_demo$;
 
 -- ----------------------------------------------------------------------------
 -- Section 2 — Annotation campaigns.
@@ -227,6 +307,15 @@ ON CONFLICT (campaign_id, sample_ref) DO NOTHING;
 -- so an edited manifest.json reaches an already-seeded environment on
 -- the next deploy. Distributions stay `DO NOTHING`.
 --
+-- Access governance demo (#492): the dataset is RESTRICTED at the
+-- REGISTERED identity tier, non-commercial only, with DUO terms
+-- DUO_0000007 (disease specific research) + DUO_0000046 (non-commercial
+-- use only) mirrored from the manifest's cr:consentCode. Visibility is
+-- what gates the bytes and surfaces the "Request access" CTA; the tier
+-- and the terms are what the matcher scores a request against. The
+-- images stay synthetic — the terms exist so the request → verdict →
+-- host-inbox walk can be shown on dev without touching the database.
+--
 -- The `s3_bucket` column is parameterised via a Postgres GUC the
 -- entrypoint sets before invoking this file:
 --     SET app.datasets_bucket = '<bucket-name>';
@@ -239,66 +328,38 @@ DECLARE
   ds_id     uuid := '00000000-0000-4000-8000-deadbeef0d00';
   ver_id    uuid := '00000000-0000-4000-8000-deadbeef0d01';
   bucket    text := COALESCE(current_setting('app.datasets_bucket', true), 'oci-datasets-local');
-  payload   jsonb := $manifest$
-{
-  "@context": {
-    "@vocab": "https://schema.org/",
-    "sc": "https://schema.org/",
-    "cr": "http://mlcommons.org/croissant/",
-    "rai": "http://mlcommons.org/croissant/RAI/",
-    "prov": "http://www.w3.org/ns/prov#",
-    "dct": "http://purl.org/dc/terms/",
-    "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
-  },
-  "@type": "sc:Dataset",
-  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
-  "name": "OCI Demo: Synthetic Chest XR",
-  "description": "OCI-curated demo dataset comprising five 256x256 grayscale chest-XR-style synthetic images. Generated procedurally for platform smoke testing - NOT diagnostic content and NOT representative of real patient data.",
-  "url": "https://oci.ai4h.net/catalog/oci-demo-chest-xr",
-  "creator": [{ "@type": "sc:Organization", "name": "OCI Platform (ITU/WHO/WIPO GI-AI4H)" }],
-  "publisher": { "@type": "sc:Organization", "name": "OCI Platform", "url": "https://oci.ai4h.net/" },
-  "datePublished": "2026-05-16",
-  "version": "1.0.0",
-  "license": "https://creativecommons.org/licenses/by/4.0/",
-  "keywords": ["synthetic", "chest x-ray", "demo", "smoke test"],
-  "bio:modality": [{ "@id": "bio:modality/X-ray", "name": "X-ray" }],
-  "bio:bodyRegion": [{ "@id": "bio:bodyRegion/Chest", "name": "Chest" }],
-  "bio:synthetic": true,
-  "bio:intendedUse": "platform smoke testing",
-  "rai:personalSensitiveInformation": "None. All images are synthetic.",
-  "distribution": [
-    { "@id": "00000000-0000-4000-8000-deadbeef0001", "@type": "cr:FileObject", "name": "sample-001.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0001/download", "contentSize": "43281 B", "sha256": "6b7f2715baa0e978bf87622767891df18b05e93d57331b10da758b89d816b538" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0002", "@type": "cr:FileObject", "name": "sample-002.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0002/download", "contentSize": "43352 B", "sha256": "f60d9f613946419a4ed038f678e2765443237475ca8155c94cab2b58a244c1da" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0003", "@type": "cr:FileObject", "name": "sample-003.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0003/download", "contentSize": "43358 B", "sha256": "917b7533b46b029f6620cf5d4d44f1940fac4c8710e9ce4ad865964b9712a19c" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0004", "@type": "cr:FileObject", "name": "sample-004.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0004/download", "contentSize": "43432 B", "sha256": "a6e7c135b89cded45a7c98c063c52a0f537958d47e6705d88d889900fcfe441c" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0005", "@type": "cr:FileObject", "name": "sample-005.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0005/download", "contentSize": "43436 B", "sha256": "6a92c82cea79a878adb82c6af46b88235a9cb21509a9ae0892b7b92629d0fa7b" }
-  ]
-}
-$manifest$::jsonb;
+  payload   jsonb := $manifest${"@context":{"@vocab":"https://schema.org/","sc":"https://schema.org/","cr":"http://mlcommons.org/croissant/","rai":"http://mlcommons.org/croissant/RAI/","prov":"http://www.w3.org/ns/prov#","dct":"http://purl.org/dc/terms/","bio":"https://oci.ai4h.net/biocroissant/v0.1#"},"@type":"sc:Dataset","dct:conformsTo":"http://mlcommons.org/croissant/1.1","name":"OCI Demo: Synthetic Chest XR","description":"OCI-curated demo dataset comprising five 256×256 grayscale chest-XR-style synthetic images. Generated procedurally for platform smoke testing (S3 hosting, presigned download, manifest viewer, annotation campaign attachment) — NOT diagnostic content and NOT representative of real patient data. License: CC-BY-4.0. Refresh the underlying bytes by re-running packages/database/seed/fixtures/oci-demo-chest-xr/generate.mjs.","url":"https://oci.ai4h.net/catalog/oci-demo-chest-xr","creator":[{"@type":"sc:Organization","name":"OCI Platform (ITU/WHO/WIPO GI-AI4H)"}],"publisher":{"@type":"sc:Organization","name":"OCI Platform","url":"https://oci.ai4h.net/"},"datePublished":"2026-05-16","version":"1.0.0","license":"https://creativecommons.org/licenses/by/4.0/","keywords":["synthetic","chest x-ray","demo","smoke test"],"bio:imagingModality":[{"@type":"sc:DefinedTerm","name":"X-ray"}],"bio:bodyRegion":[{"@type":"sc:DefinedTerm","name":"Chest"}],"bio:synthetic":true,"bio:intendedUse":"platform smoke testing","rai:dataCollection":"Programmatic generation. See packages/database/seed/fixtures/oci-demo-chest-xr/generate.mjs in the OCI Platform repo.","rai:dataAnnotationProtocol":"None — no annotations are attached to this dataset. It exists to exercise the catalog + storage paths.","rai:dataAnnotationAnalysis":"Not applicable.","rai:personalSensitiveInformation":"None. All images are synthetic.","bio:consentNotes":"Demo governance terms. The images are synthetic, so no real consent exists; the DUO terms below (DS: disease specific research, qualified as pneumonia and other lung opacities, ICD-11 CA40; NCU: non-commercial use only) are declared so the tiered access model, the DUO matcher and the host inbox can be demonstrated on dev. Access tier: REGISTERED.","cr:consentCode":[{"@type":"sc:DefinedTerm","@id":"http://purl.obolibrary.org/obo/DUO_0000007","termCode":"DUO_0000007","name":"disease specific research","inDefinedTermSet":"http://purl.obolibrary.org/obo/duo.owl"},{"@type":"sc:DefinedTerm","@id":"http://purl.obolibrary.org/obo/DUO_0000046","termCode":"DUO_0000046","name":"non-commercial use only","inDefinedTermSet":"http://purl.obolibrary.org/obo/duo.owl"}],"distribution":[{"@id":"00000000-0000-4000-8000-deadbeef0001","@type":"cr:FileObject","name":"sample-001.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0001/download","contentSize":"43281 B","sha256":"6b7f2715baa0e978bf87622767891df18b05e93d57331b10da758b89d816b538"},{"@id":"00000000-0000-4000-8000-deadbeef0002","@type":"cr:FileObject","name":"sample-002.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0002/download","contentSize":"43352 B","sha256":"f60d9f613946419a4ed038f678e2765443237475ca8155c94cab2b58a244c1da"},{"@id":"00000000-0000-4000-8000-deadbeef0003","@type":"cr:FileObject","name":"sample-003.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0003/download","contentSize":"43358 B","sha256":"917b7533b46b029f6620cf5d4d44f1940fac4c8710e9ce4ad865964b9712a19c"},{"@id":"00000000-0000-4000-8000-deadbeef0004","@type":"cr:FileObject","name":"sample-004.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0004/download","contentSize":"43432 B","sha256":"a6e7c135b89cded45a7c98c063c52a0f537958d47e6705d88d889900fcfe441c"},{"@id":"00000000-0000-4000-8000-deadbeef0005","@type":"cr:FileObject","name":"sample-005.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0005/download","contentSize":"43436 B","sha256":"6a92c82cea79a878adb82c6af46b88235a9cb21509a9ae0892b7b92629d0fa7b"}]}$manifest$::jsonb;
 BEGIN
   -- Dataset row.
   INSERT INTO "catalog"."datasets" (
     id, slug, name, description, host_id, visibility, status,
-    access_tier, commercial_use_terms,
-    conformance_version, croissant, updated_at
+    access_tier, commercial_use_terms, modalities,
+    conformance_version, croissant, duo_terms, updated_at
   ) VALUES (
     ds_id,
     'oci-demo-chest-xr',
     'OCI Demo: Synthetic Chest XR',
-    'OCI-curated demo dataset. Five synthetic 256x256 grayscale chest-XR-style images generated procedurally for platform smoke testing. NOT diagnostic content.',
+    'OCI-curated demo dataset. Five synthetic 256x256 grayscale chest-XR-style images generated procedurally for platform smoke testing. NOT diagnostic content. Gated (RESTRICTED, REGISTERED tier, non-commercial DUO terms) so the access-request flow can be demonstrated.',
     '00000000-0000-4000-8000-000000000099',
-    'PUBLIC',
+    'RESTRICTED',
     'PUBLISHED',
-    'OPEN',
-    'OK',
+    'REGISTERED',
+    'NON_COMMERCIAL_ONLY',
+    ARRAY['X-ray'],
     '1.1',
     payload,
+    ARRAY['DUO_0000007', 'DUO_0000046']::text[],
     CURRENT_TIMESTAMP
   )
   ON CONFLICT (slug) DO UPDATE SET
     croissant = EXCLUDED.croissant,
     description = EXCLUDED.description,
     conformance_version = EXCLUDED.conformance_version,
+    visibility = EXCLUDED.visibility,
+    access_tier = EXCLUDED.access_tier,
+    commercial_use_terms = EXCLUDED.commercial_use_terms,
+    duo_terms = EXCLUDED.duo_terms,
+    modalities = EXCLUDED.modalities,
     updated_at = CURRENT_TIMESTAMP
   WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
 
