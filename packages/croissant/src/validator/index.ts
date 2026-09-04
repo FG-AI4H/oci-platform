@@ -1,9 +1,12 @@
 import { z } from 'zod';
+import type { AccessTier } from '@oci/shared-types';
 import { CONFORMS_TO } from '../namespaces/index.js';
 import { Croissant10Schema, type Croissant10 } from '../croissant10/schema.js';
 import { Croissant11DeltasSchema } from '../croissant11/schema.js';
 import { RaiExtensionSchema, RAI_PROPERTIES } from '../rai/schema.js';
 import { BioCroissantSchema, BIOCROISSANT_PROPERTIES } from '../biocroissant/schema.js';
+import { PROVENANCE_PROFILE_PROPERTY } from '../provenance/schema.js';
+import { validateProvenance } from '../provenance/index.js';
 import { normalize } from './normalize.js';
 
 export type ValidationLevel = 'error' | 'warning';
@@ -19,6 +22,8 @@ export interface ValidationIssue {
    *   `croissant11.invalid.<field>`
    *   `rai.invalid.<field>`
    *   `biocroissant.invalid.<field>`
+   *   `provenance.missing.<id>` / `provenance.invalid.<id>[.<field>]` /
+   *   `provenance.mismatch.<id>.<field>`
    *   `validator.unsupported.conformance`
    */
   code: string;
@@ -32,20 +37,37 @@ export interface ValidationResult {
   conformance: Conformance;
   hasRai: boolean;
   hasBioCroissant: boolean;
+  /** `bio:provenanceProfile` present — the `bio-prov` layer ran (ADR-0022). */
+  hasProvenanceProfile: boolean;
   issues: ValidationIssue[];
   /** The normalised manifest if base parsing succeeded. */
   data?: Croissant10;
+}
+
+export interface ValidateOptions {
+  /**
+   * The dataset's catalogue access tier (ADR-0003). Drives the
+   * `bio-prov` obligations (spec section 3). Defaults to `OPEN`.
+   */
+  accessTier?: AccessTier;
+  /**
+   * Apply the `bio-prov` obligation table as written (MUST → error,
+   * SHOULD → warning). Defaults to `false`: the layer ships permissive,
+   * one level down, until the seed and the wizard author a conformant
+   * block (#495).
+   */
+  strictProvenance?: boolean;
 }
 
 /**
  * Validate a Croissant manifest in any prefix flavour.
  *
  * Layered: detects `dct:conformsTo` to pick base schema (1.0 or 1.1+),
- * then runs RAI and BIOCroissant deltas as optional layers. Issues from
- * each layer are tagged with stable codes so callers (UI, audit log,
- * CI gating) can treat them differently.
+ * then runs RAI, BIOCroissant and `bio-prov` provenance deltas as
+ * optional layers. Issues from each layer are tagged with stable codes so
+ * callers (UI, audit log, CI gating) can treat them differently.
  */
-export function validate(input: unknown): ValidationResult {
+export function validate(input: unknown, options: ValidateOptions = {}): ValidationResult {
   const issues: ValidationIssue[] = [];
 
   if (input == null || typeof input !== 'object' || Array.isArray(input)) {
@@ -54,6 +76,7 @@ export function validate(input: unknown): ValidationResult {
       conformance: 'unknown',
       hasRai: false,
       hasBioCroissant: false,
+      hasProvenanceProfile: false,
       issues: [
         {
           path: '',
@@ -105,6 +128,17 @@ export function validate(input: unknown): ValidationResult {
     if (!bioResult.success) issues.push(...zodIssues(bioResult.error, 'biocroissant'));
   }
 
+  // bio-prov — only when the manifest opts in with the profile marker.
+  const hasProvenanceProfile = PROVENANCE_PROFILE_PROPERTY in normalized;
+  if (hasProvenanceProfile) {
+    issues.push(
+      ...validateProvenance(normalized, {
+        accessTier: options.accessTier ?? 'OPEN',
+        strict: options.strictProvenance ?? false,
+      }),
+    );
+  }
+
   const ok = issues.every((i) => i.level !== 'error');
 
   return {
@@ -112,6 +146,7 @@ export function validate(input: unknown): ValidationResult {
     conformance,
     hasRai,
     hasBioCroissant,
+    hasProvenanceProfile,
     issues,
     data: baseResult.success ? baseResult.data : undefined,
   };
