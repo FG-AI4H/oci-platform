@@ -10,11 +10,15 @@
   },
   "@type": "sc:Dataset",
   "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
-
   "name": "OCI Demo: Synthetic Chest XR",
   "description": "OCI-curated demo dataset comprising five 256×256 grayscale chest-XR-style synthetic images. Generated procedurally for platform smoke testing (S3 hosting, presigned download, manifest viewer, annotation campaign attachment) — NOT diagnostic content and NOT representative of real patient data. License: CC-BY-4.0. Refresh the underlying bytes by re-running packages/database/seed/fixtures/oci-demo-chest-xr/generate.mjs.",
   "url": "https://oci.ai4h.net/catalog/oci-demo-chest-xr",
-  "creator": [{ "@type": "sc:Organization", "name": "OCI Platform (ITU/WHO/WIPO GI-AI4H)" }],
+  "creator": [
+    {
+      "@type": "sc:Organization",
+      "name": "OCI Platform (ITU/WHO/WIPO GI-AI4H)"
+    }
+  ],
   "publisher": {
     "@type": "sc:Organization",
     "name": "OCI Platform",
@@ -22,20 +26,43 @@
   },
   "datePublished": "2026-05-16",
   "version": "1.0.0",
-
   "license": "https://creativecommons.org/licenses/by/4.0/",
   "keywords": ["synthetic", "chest x-ray", "demo", "smoke test"],
-
-  "bio:modality": [{ "@id": "bio:modality/X-ray", "name": "X-ray" }],
-  "bio:bodyRegion": [{ "@id": "bio:bodyRegion/Chest", "name": "Chest" }],
+  "bio:imagingModality": [
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "X-ray"
+    }
+  ],
+  "bio:bodyRegion": [
+    {
+      "@type": "sc:DefinedTerm",
+      "name": "Chest"
+    }
+  ],
   "bio:synthetic": true,
   "bio:intendedUse": "platform smoke testing",
-
   "rai:dataCollection": "Programmatic generation. See packages/database/seed/fixtures/oci-demo-chest-xr/generate.mjs in the OCI Platform repo.",
   "rai:dataAnnotationProtocol": "None — no annotations are attached to this dataset. It exists to exercise the catalog + storage paths.",
   "rai:dataAnnotationAnalysis": "Not applicable.",
   "rai:personalSensitiveInformation": "None. All images are synthetic.",
-
+  "bio:consentNotes": "Demo governance terms. The images are synthetic, so no real consent exists; the DUO terms below (DS: disease specific research, qualified as pneumonia and other lung opacities, ICD-11 CA40; NCU: non-commercial use only) are declared so the tiered access model, the DUO matcher and the host inbox can be demonstrated on dev. Access tier: REGISTERED.",
+  "cr:consentCode": [
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000007",
+      "termCode": "DUO_0000007",
+      "name": "disease specific research",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    },
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000046",
+      "termCode": "DUO_0000046",
+      "name": "non-commercial use only",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    }
+  ],
   "distribution": [
     {
       "@id": "00000000-0000-4000-8000-deadbeef0001",

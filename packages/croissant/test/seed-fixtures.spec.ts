@@ -133,15 +133,25 @@ describe('demo-seed fixture: idrid-grading-demo', () => {
   });
 });
 
-describe('demo-seed fixture: oci-demo-chest-xr', () => {
-  it('validates as Croissant 1.1', () => {
-    const m = loadJson(path.join(seedFixturesDir, 'oci-demo-chest-xr', 'manifest.json'));
-    const r = validate(m);
-    expect(
-      r.issues.filter((i) => i.level === 'error'),
-      JSON.stringify(r.issues, null, 2),
-    ).toEqual([]);
-    expect(r.conformance).toBe('croissant-1.1');
+describe('demo-seed fixture: oci-demo-chest-xr (#492)', () => {
+  const manifest = loadSeedFixture('oci-demo-chest-xr');
+
+  it('validates with zero issues', () => {
+    expectValidCroissant11(manifest);
+  });
+
+  it('declares the DUO terms the seed denormalises into duo_terms (DS + NCU)', () => {
+    expect(extractDuoTerms(manifest)).toEqual(['DUO_0000007', 'DUO_0000046']);
+  });
+
+  it('still lists the five hosted PNGs', () => {
+    const distribution = manifest['distribution'] as Array<Record<string, unknown>>;
+    expect(distribution).toHaveLength(5);
+    for (const d of distribution) expect(d['encodingFormat']).toBe('image/png');
+  });
+
+  it('the seed SQL payload carries the same manifest as manifest.json', () => {
+    expect(demoSql).toContain(sqlPayload(manifest));
   });
 });
 

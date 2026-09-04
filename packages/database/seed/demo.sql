@@ -307,6 +307,15 @@ ON CONFLICT (campaign_id, sample_ref) DO NOTHING;
 -- so an edited manifest.json reaches an already-seeded environment on
 -- the next deploy. Distributions stay `DO NOTHING`.
 --
+-- Access governance demo (#492): the dataset is RESTRICTED at the
+-- REGISTERED identity tier, non-commercial only, with DUO terms
+-- DUO_0000007 (disease specific research) + DUO_0000046 (non-commercial
+-- use only) mirrored from the manifest's cr:consentCode. Visibility is
+-- what gates the bytes and surfaces the "Request access" CTA; the tier
+-- and the terms are what the matcher scores a request against. The
+-- images stay synthetic — the terms exist so the request → verdict →
+-- host-inbox walk can be shown on dev without touching the database.
+--
 -- The `s3_bucket` column is parameterised via a Postgres GUC the
 -- entrypoint sets before invoking this file:
 --     SET app.datasets_bucket = '<bucket-name>';
@@ -319,66 +328,38 @@ DECLARE
   ds_id     uuid := '00000000-0000-4000-8000-deadbeef0d00';
   ver_id    uuid := '00000000-0000-4000-8000-deadbeef0d01';
   bucket    text := COALESCE(current_setting('app.datasets_bucket', true), 'oci-datasets-local');
-  payload   jsonb := $manifest$
-{
-  "@context": {
-    "@vocab": "https://schema.org/",
-    "sc": "https://schema.org/",
-    "cr": "http://mlcommons.org/croissant/",
-    "rai": "http://mlcommons.org/croissant/RAI/",
-    "prov": "http://www.w3.org/ns/prov#",
-    "dct": "http://purl.org/dc/terms/",
-    "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
-  },
-  "@type": "sc:Dataset",
-  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
-  "name": "OCI Demo: Synthetic Chest XR",
-  "description": "OCI-curated demo dataset comprising five 256x256 grayscale chest-XR-style synthetic images. Generated procedurally for platform smoke testing - NOT diagnostic content and NOT representative of real patient data.",
-  "url": "https://oci.ai4h.net/catalog/oci-demo-chest-xr",
-  "creator": [{ "@type": "sc:Organization", "name": "OCI Platform (ITU/WHO/WIPO GI-AI4H)" }],
-  "publisher": { "@type": "sc:Organization", "name": "OCI Platform", "url": "https://oci.ai4h.net/" },
-  "datePublished": "2026-05-16",
-  "version": "1.0.0",
-  "license": "https://creativecommons.org/licenses/by/4.0/",
-  "keywords": ["synthetic", "chest x-ray", "demo", "smoke test"],
-  "bio:modality": [{ "@id": "bio:modality/X-ray", "name": "X-ray" }],
-  "bio:bodyRegion": [{ "@id": "bio:bodyRegion/Chest", "name": "Chest" }],
-  "bio:synthetic": true,
-  "bio:intendedUse": "platform smoke testing",
-  "rai:personalSensitiveInformation": "None. All images are synthetic.",
-  "distribution": [
-    { "@id": "00000000-0000-4000-8000-deadbeef0001", "@type": "cr:FileObject", "name": "sample-001.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0001/download", "contentSize": "43281 B", "sha256": "6b7f2715baa0e978bf87622767891df18b05e93d57331b10da758b89d816b538" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0002", "@type": "cr:FileObject", "name": "sample-002.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0002/download", "contentSize": "43352 B", "sha256": "f60d9f613946419a4ed038f678e2765443237475ca8155c94cab2b58a244c1da" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0003", "@type": "cr:FileObject", "name": "sample-003.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0003/download", "contentSize": "43358 B", "sha256": "917b7533b46b029f6620cf5d4d44f1940fac4c8710e9ce4ad865964b9712a19c" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0004", "@type": "cr:FileObject", "name": "sample-004.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0004/download", "contentSize": "43432 B", "sha256": "a6e7c135b89cded45a7c98c063c52a0f537958d47e6705d88d889900fcfe441c" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0005", "@type": "cr:FileObject", "name": "sample-005.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0005/download", "contentSize": "43436 B", "sha256": "6a92c82cea79a878adb82c6af46b88235a9cb21509a9ae0892b7b92629d0fa7b" }
-  ]
-}
-$manifest$::jsonb;
+  payload   jsonb := $manifest${"@context":{"@vocab":"https://schema.org/","sc":"https://schema.org/","cr":"http://mlcommons.org/croissant/","rai":"http://mlcommons.org/croissant/RAI/","prov":"http://www.w3.org/ns/prov#","dct":"http://purl.org/dc/terms/","bio":"https://oci.ai4h.net/biocroissant/v0.1#"},"@type":"sc:Dataset","dct:conformsTo":"http://mlcommons.org/croissant/1.1","name":"OCI Demo: Synthetic Chest XR","description":"OCI-curated demo dataset comprising five 256×256 grayscale chest-XR-style synthetic images. Generated procedurally for platform smoke testing (S3 hosting, presigned download, manifest viewer, annotation campaign attachment) — NOT diagnostic content and NOT representative of real patient data. License: CC-BY-4.0. Refresh the underlying bytes by re-running packages/database/seed/fixtures/oci-demo-chest-xr/generate.mjs.","url":"https://oci.ai4h.net/catalog/oci-demo-chest-xr","creator":[{"@type":"sc:Organization","name":"OCI Platform (ITU/WHO/WIPO GI-AI4H)"}],"publisher":{"@type":"sc:Organization","name":"OCI Platform","url":"https://oci.ai4h.net/"},"datePublished":"2026-05-16","version":"1.0.0","license":"https://creativecommons.org/licenses/by/4.0/","keywords":["synthetic","chest x-ray","demo","smoke test"],"bio:imagingModality":[{"@type":"sc:DefinedTerm","name":"X-ray"}],"bio:bodyRegion":[{"@type":"sc:DefinedTerm","name":"Chest"}],"bio:synthetic":true,"bio:intendedUse":"platform smoke testing","rai:dataCollection":"Programmatic generation. See packages/database/seed/fixtures/oci-demo-chest-xr/generate.mjs in the OCI Platform repo.","rai:dataAnnotationProtocol":"None — no annotations are attached to this dataset. It exists to exercise the catalog + storage paths.","rai:dataAnnotationAnalysis":"Not applicable.","rai:personalSensitiveInformation":"None. All images are synthetic.","bio:consentNotes":"Demo governance terms. The images are synthetic, so no real consent exists; the DUO terms below (DS: disease specific research, qualified as pneumonia and other lung opacities, ICD-11 CA40; NCU: non-commercial use only) are declared so the tiered access model, the DUO matcher and the host inbox can be demonstrated on dev. Access tier: REGISTERED.","cr:consentCode":[{"@type":"sc:DefinedTerm","@id":"http://purl.obolibrary.org/obo/DUO_0000007","termCode":"DUO_0000007","name":"disease specific research","inDefinedTermSet":"http://purl.obolibrary.org/obo/duo.owl"},{"@type":"sc:DefinedTerm","@id":"http://purl.obolibrary.org/obo/DUO_0000046","termCode":"DUO_0000046","name":"non-commercial use only","inDefinedTermSet":"http://purl.obolibrary.org/obo/duo.owl"}],"distribution":[{"@id":"00000000-0000-4000-8000-deadbeef0001","@type":"cr:FileObject","name":"sample-001.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0001/download","contentSize":"43281 B","sha256":"6b7f2715baa0e978bf87622767891df18b05e93d57331b10da758b89d816b538"},{"@id":"00000000-0000-4000-8000-deadbeef0002","@type":"cr:FileObject","name":"sample-002.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0002/download","contentSize":"43352 B","sha256":"f60d9f613946419a4ed038f678e2765443237475ca8155c94cab2b58a244c1da"},{"@id":"00000000-0000-4000-8000-deadbeef0003","@type":"cr:FileObject","name":"sample-003.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0003/download","contentSize":"43358 B","sha256":"917b7533b46b029f6620cf5d4d44f1940fac4c8710e9ce4ad865964b9712a19c"},{"@id":"00000000-0000-4000-8000-deadbeef0004","@type":"cr:FileObject","name":"sample-004.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0004/download","contentSize":"43432 B","sha256":"a6e7c135b89cded45a7c98c063c52a0f537958d47e6705d88d889900fcfe441c"},{"@id":"00000000-0000-4000-8000-deadbeef0005","@type":"cr:FileObject","name":"sample-005.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0005/download","contentSize":"43436 B","sha256":"6a92c82cea79a878adb82c6af46b88235a9cb21509a9ae0892b7b92629d0fa7b"}]}$manifest$::jsonb;
 BEGIN
   -- Dataset row.
   INSERT INTO "catalog"."datasets" (
     id, slug, name, description, host_id, visibility, status,
-    access_tier, commercial_use_terms,
-    conformance_version, croissant, updated_at
+    access_tier, commercial_use_terms, modalities,
+    conformance_version, croissant, duo_terms, updated_at
   ) VALUES (
     ds_id,
     'oci-demo-chest-xr',
     'OCI Demo: Synthetic Chest XR',
-    'OCI-curated demo dataset. Five synthetic 256x256 grayscale chest-XR-style images generated procedurally for platform smoke testing. NOT diagnostic content.',
+    'OCI-curated demo dataset. Five synthetic 256x256 grayscale chest-XR-style images generated procedurally for platform smoke testing. NOT diagnostic content. Gated (RESTRICTED, REGISTERED tier, non-commercial DUO terms) so the access-request flow can be demonstrated.',
     '00000000-0000-4000-8000-000000000099',
-    'PUBLIC',
+    'RESTRICTED',
     'PUBLISHED',
-    'OPEN',
-    'OK',
+    'REGISTERED',
+    'NON_COMMERCIAL_ONLY',
+    ARRAY['X-ray'],
     '1.1',
     payload,
+    ARRAY['DUO_0000007', 'DUO_0000046']::text[],
     CURRENT_TIMESTAMP
   )
   ON CONFLICT (slug) DO UPDATE SET
     croissant = EXCLUDED.croissant,
     description = EXCLUDED.description,
     conformance_version = EXCLUDED.conformance_version,
+    visibility = EXCLUDED.visibility,
+    access_tier = EXCLUDED.access_tier,
+    commercial_use_terms = EXCLUDED.commercial_use_terms,
+    duo_terms = EXCLUDED.duo_terms,
+    modalities = EXCLUDED.modalities,
     updated_at = CURRENT_TIMESTAMP
   WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
 
