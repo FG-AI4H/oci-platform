@@ -61,6 +61,11 @@ third GI-AI4H meeting, on the meeting's last day. **Ten minutes per team**: eigh
 for questions, **up to four teams**. Slots are limited and are allocated on 9 September, the day
 after registration closes. The meeting programme carries the exact clock time.
 
+The same session also carries short use-case presentations from **data hosts**, the institutions
+contributing the clinical evaluation tasks. A data host's slot is arranged directly rather than
+through the 8 September solution registration, so write to `marc.lecoultre@itu.int` if you are
+contributing a task and want to present it.
+
 Slides are due **Friday 11 September 2026, 23:59 UTC** — eight content slides maximum, PDF or
 PowerPoint, 16:9, in English, to `marc.lecoultre@itu.int`. The session is public and may be recorded,
 so nothing confidential, embargoed or patient-level.
