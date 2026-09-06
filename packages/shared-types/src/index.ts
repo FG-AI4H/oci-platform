@@ -511,6 +511,23 @@ export type ListDatasetsSort = z.infer<typeof ListDatasetsSortSchema>;
  *     prefer cursor-based pagination at scale. Both are accepted;
  *     `cursor` wins when both are present.
  */
+/**
+ * Anonymisation level of a dataset — the four-level HIPAA-aligned scale
+ * BIOCroissant v0.1 uses for `bio:anonymizationLevel` (IDENTIFIED →
+ * LIMITED → DEIDENTIFIED → ANONYMIZED). Shared by the catalogue list
+ * filter, the publish wizard and the API so no surface can offer a value
+ * a valid manifest cannot carry (#509; the old three-value set had
+ * `PSEUDONYMIZED`, which the validator rejects — `DEIDENTIFIED` is the
+ * BIOCroissant spelling for pseudonymised data).
+ */
+export const AnonymizationLevelSchema = z.enum([
+  'IDENTIFIED',
+  'LIMITED',
+  'DEIDENTIFIED',
+  'ANONYMIZED',
+]);
+export type AnonymizationLevel = z.infer<typeof AnonymizationLevelSchema>;
+
 export const ListDatasetsQuerySchema = z.object({
   q: z.string().min(1).max(200).optional(),
   visibility: DatasetVisibilitySchema.optional(),
@@ -527,7 +544,7 @@ export const ListDatasetsQuerySchema = z.object({
   /**
    * Anonymisation level filter. `any` (default) drops the filter.
    */
-  anonymizationLevel: z.enum(['ANONYMIZED', 'PSEUDONYMIZED', 'IDENTIFIED']).optional(),
+  anonymizationLevel: AnonymizationLevelSchema.optional(),
   /**
    * License filter — substring match against `manifest.license`. The
    * web UI surfaces a small known-set picker; the API stays open
@@ -643,12 +660,7 @@ export type ManifestWizardCreator = z.infer<typeof ManifestWizardCreatorSchema>;
  * (#496). The previous three-value set carried `PSEUDONYMIZED`, which
  * the validator rejects; `DEIDENTIFIED` is the BIOCroissant spelling.
  */
-export const ManifestWizardAnonymizationLevelSchema = z.enum([
-  'IDENTIFIED',
-  'LIMITED',
-  'DEIDENTIFIED',
-  'ANONYMIZED',
-]);
+export const ManifestWizardAnonymizationLevelSchema = AnonymizationLevelSchema;
 export type ManifestWizardAnonymizationLevel = z.infer<
   typeof ManifestWizardAnonymizationLevelSchema
 >;
