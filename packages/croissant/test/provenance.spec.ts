@@ -18,7 +18,7 @@ import { normalize } from '../src/validator/normalize.js';
  * `bio-prov` v0.1 provenance layer (#495, ADR-0022,
  * docs/standards/bio-prov-v0.1.md). Cases:
  *
- *   (a) the seeded IDRiD fixture WITH the marker added in-test;
+ *   (a) the seeded IDRiD fixture, which carries the marker (#504);
  *   (b) a synthetic SENSITIVE manifest missing H5;
  *   (c) an H4 resultingLevel / anonymizationLevel mismatch;
  *   (d) a prov:Activity whose endedAtTime precedes startedAtTime;
@@ -43,9 +43,16 @@ function fixture(name: string): Json {
   return loadJson(path.join(here, 'fixtures', name));
 }
 
-function idridWithMarker(): Json {
-  const m = loadJson(path.join(seedFixturesDir, 'idrid-grading-demo', 'manifest.json'));
-  m['bio:provenanceProfile'] = 'bio-prov/0.1';
+/** The seeded IDRiD slice, as shipped: it carries `bio:provenanceProfile`. */
+function idrid(): Json {
+  return loadJson(path.join(seedFixturesDir, 'idrid-grading-demo', 'manifest.json'));
+}
+
+/** The seeded slice without its H2 / H6 properties (both SHOULD at OPEN, MUST above). */
+function idridWithoutH2H6(): Json {
+  const m = idrid();
+  delete m['rai:dataCollectionTimeframe'];
+  delete m['bio:labelProtocol'];
   return m;
 }
 
@@ -181,23 +188,27 @@ describe('bio-prov obligation table (spec section 3)', () => {
   });
 });
 
-describe('(a) seeded IDRiD fixture with the marker added in-test', () => {
-  it('validates with zero errors at OPEN in strict mode', () => {
-    const r = validate(idridWithMarker(), { accessTier: 'OPEN', strictProvenance: true });
+describe('(a) seeded IDRiD fixture (carries the marker, spec section 10.1)', () => {
+  it('ships with the bio-prov/0.1 marker, a collection timeframe and a label protocol', () => {
+    const m = idrid();
+    expect(m['bio:provenanceProfile']).toBe('bio-prov/0.1');
+    expect(typeof m['rai:dataCollectionTimeframe']).toBe('string');
+    expect((m['bio:labelProtocol'] as Json)['version']).toBe('IDRiD 2018 disease-grading protocol');
+  });
+
+  it('validates with zero issues (errors and warnings) at OPEN in strict mode', () => {
+    const r = validate(idrid(), { accessTier: 'OPEN', strictProvenance: true });
     expect(r.hasProvenanceProfile).toBe(true);
-    expect(
-      r.issues.filter((i) => i.level === 'error'),
-      JSON.stringify(r.issues, null, 2),
-    ).toEqual([]);
+    expect(r.issues, JSON.stringify(r.issues, null, 2)).toEqual([]);
     expect(r.ok).toBe(true);
   });
 
-  it('at OPEN strict, reports only the SHOULDs the fixture does not yet fill (H2, H6) as warnings', () => {
-    const r = validate(idridWithMarker(), { accessTier: 'OPEN', strictProvenance: true });
+  it('at OPEN strict, H2 and H6 are the SHOULDs that surface as warnings when removed', () => {
+    const r = validate(idridWithoutH2H6(), { accessTier: 'OPEN', strictProvenance: true });
     const prov = provenanceIssues(r.issues);
-    // The fixture has no rai:dataCollectionTimeframe and no bio:labelProtocol.
     expect(codes(prov)).toEqual(['provenance.missing.H2', 'provenance.missing.H6']);
     for (const issue of prov) expect(issue.level).toBe('warning');
+    expect(r.ok).toBe(true);
     // H1 / H3 / H4 / H5 are MAY at OPEN: never reported as missing.
     // H4 stays MAY because the level is ANONYMIZED (footnote 2).
     for (const id of ['H1', 'H3', 'H4', 'H5']) {
@@ -208,16 +219,26 @@ describe('(a) seeded IDRiD fixture with the marker added in-test', () => {
     }
   });
 
-  it('at REGISTERED strict, H1 / H3 / H4 / H5 surface as SHOULD-level warnings and H2 / H6 as errors', () => {
-    const r = validate(idridWithMarker(), { accessTier: 'REGISTERED', strictProvenance: true });
+  it('at REGISTERED strict, H1 / H3 / H4 / H5 surface as SHOULD-level warnings; H2 / H6 are met', () => {
+    const r = validate(idrid(), { accessTier: 'REGISTERED', strictProvenance: true });
     const prov = provenanceIssues(r.issues);
-    const byCode = new Map(prov.map((i) => [i.code, i.level]));
-    expect(byCode.get('provenance.missing.H1')).toBe('warning');
-    expect(byCode.get('provenance.missing.H3')).toBe('warning');
-    expect(byCode.get('provenance.missing.H4')).toBe('warning');
-    expect(byCode.get('provenance.missing.H5')).toBe('warning');
+    expect(codes(prov)).toEqual([
+      'provenance.missing.H1',
+      'provenance.missing.H3',
+      'provenance.missing.H4',
+      'provenance.missing.H5',
+    ]);
+    for (const issue of prov) expect(issue.level).toBe('warning');
+    expect(r.ok).toBe(true);
+    // Without H2 / H6 the same tier turns them into errors (MUST at REGISTERED).
+    const stripped = validate(idridWithoutH2H6(), {
+      accessTier: 'REGISTERED',
+      strictProvenance: true,
+    });
+    const byCode = new Map(provenanceIssues(stripped.issues).map((i) => [i.code, i.level]));
     expect(byCode.get('provenance.missing.H2')).toBe('error');
     expect(byCode.get('provenance.missing.H6')).toBe('error');
+    expect(stripped.ok).toBe(false);
     // P1–P4 are met by the fixture (derived slice with a dated activity).
     for (const id of ['P1', 'P2', 'P3', 'P4']) {
       expect(
@@ -228,16 +249,18 @@ describe('(a) seeded IDRiD fixture with the marker added in-test', () => {
   });
 
   it('the default is strict at OPEN: identical to an explicit { OPEN, strict }', () => {
-    const byDefault = validate(idridWithMarker());
-    const explicit = validate(idridWithMarker(), { accessTier: 'OPEN', strictProvenance: true });
-    expect(byDefault.hasProvenanceProfile).toBe(true);
-    expect(byDefault.issues).toEqual(explicit.issues);
-    expect(byDefault.ok).toBe(explicit.ok);
+    for (const load of [idrid, idridWithoutH2H6]) {
+      const byDefault = validate(load());
+      const explicit = validate(load(), { accessTier: 'OPEN', strictProvenance: true });
+      expect(byDefault.hasProvenanceProfile).toBe(true);
+      expect(byDefault.issues).toEqual(explicit.issues);
+      expect(byDefault.ok).toBe(explicit.ok);
+    }
   });
 
   it('permissive mode (strictProvenance: false) reports a MUST one level down, as a warning', () => {
     // At REGISTERED, H2 and H6 are MUSTs: errors strict, warnings permissive.
-    const permissive = validate(idridWithMarker(), {
+    const permissive = validate(idridWithoutH2H6(), {
       accessTier: 'REGISTERED',
       strictProvenance: false,
     });
@@ -248,7 +271,7 @@ describe('(a) seeded IDRiD fixture with the marker added in-test', () => {
   });
 
   it('the per-requirement report marks P3 applicable (derived) and A1–A3 not applicable', () => {
-    const normalized = normalize(idridWithMarker()) as Json;
+    const normalized = normalize(idrid()) as Json;
     const detailed = validateProvenanceDetailed(normalized, { accessTier: 'OPEN', strict: true });
     const status = new Map(detailed.report.map((e) => [e.id, e.status]));
     expect(status.get('P1')).toBe('satisfied');
@@ -261,7 +284,7 @@ describe('(a) seeded IDRiD fixture with the marker added in-test', () => {
   });
 
   it('parses against ProvenanceProfileSchema once normalized', () => {
-    const r = ProvenanceProfileSchema.safeParse(normalize(idridWithMarker()));
+    const r = ProvenanceProfileSchema.safeParse(normalize(idrid()));
     expect(r.success, JSON.stringify(r.error?.issues, null, 2)).toBe(true);
   });
 });
@@ -551,8 +574,8 @@ describe('other health qualifiers', () => {
 });
 
 describe('(f) extractProvenance', () => {
-  it('reads the IDRiD fixture: DOI in derivedFrom, the attributed organizations, the slice timeframe', () => {
-    const summary = extractProvenance(idridWithMarker());
+  it('reads the IDRiD fixture: DOI in derivedFrom, the attributed organizations, the slice timeframe, the protocol', () => {
+    const summary = extractProvenance(idrid());
     expect(summary.derivedFrom).toEqual(['https://doi.org/10.3390/data3030025']);
     expect(summary.sourceOrganizations).toEqual([
       'IDRiD consortium (Porwal et al., 2018) — source images captured at an eye clinic in Nanded, Maharashtra, India',
@@ -562,12 +585,12 @@ describe('(f) extractProvenance', () => {
       start: '2026-07-30T00:00:00Z',
       end: '2026-07-30T00:00:00Z',
     });
-    // Not in the fixture yet (#490 owns enriching it).
+    expect(summary.labelProtocolVersion).toBe('IDRiD 2018 disease-grading protocol');
+    // MAY at OPEN and not declared by the slice.
     expect(summary.sites).toEqual([]);
     expect(summary.deviceClasses).toEqual([]);
     expect(summary.deidentification).toBeNull();
     expect(summary.ethicsApproval).toBeNull();
-    expect(summary.labelProtocolVersion).toBeNull();
     expect(summary.writeBacks).toEqual([]);
   });
 
@@ -611,10 +634,6 @@ describe('(f) extractProvenance', () => {
 
 describe('(g) manifests without the marker', () => {
   const cases: Array<[string, () => Json]> = [
-    [
-      'seeded idrid-grading-demo',
-      () => loadJson(path.join(seedFixturesDir, 'idrid-grading-demo', 'manifest.json')),
-    ],
     [
       'seeded oci-demo-chest-xr',
       () => loadJson(path.join(seedFixturesDir, 'oci-demo-chest-xr', 'manifest.json')),
