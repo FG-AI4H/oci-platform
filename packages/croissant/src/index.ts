@@ -31,6 +31,7 @@
  */
 
 export { validate } from './validator/index.js';
+export { normalize } from './validator/normalize.js';
 export type {
   ValidationResult,
   ValidationIssue,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { AccessTier } from '@oci/shared-types';
 import { ManifestWizard } from './manifest-wizard';
 import { PublishVersionForm } from './publish-version-form';
 
@@ -14,11 +15,12 @@ interface Props {
   slug: string;
   suggestedVersion: string;
   visibility: 'PUBLIC' | 'RESTRICTED' | 'PRIVATE';
+  accessTier: AccessTier;
 }
 
 type Mode = 'wizard' | 'paste';
 
-export function PublishMode({ slug, suggestedVersion, visibility }: Props) {
+export function PublishMode({ slug, suggestedVersion, visibility, accessTier }: Props) {
   const [mode, setMode] = useState<Mode>('wizard');
 
   return (
@@ -59,7 +61,12 @@ export function PublishMode({ slug, suggestedVersion, visibility }: Props) {
       </div>
 
       {mode === 'wizard' ? (
-        <ManifestWizard slug={slug} suggestedVersion={suggestedVersion} visibility={visibility} />
+        <ManifestWizard
+          slug={slug}
+          suggestedVersion={suggestedVersion}
+          visibility={visibility}
+          accessTier={accessTier}
+        />
       ) : (
         <PublishVersionForm slug={slug} suggestedVersion={suggestedVersion} />
       )}

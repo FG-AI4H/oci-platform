@@ -45,6 +45,7 @@ import { ImagePreviewButton } from './image-preview';
 import { JsonTree } from './json-tree';
 import { ManifestFullView } from './manifest-full-view';
 import { ManifestTabs } from './manifest-tabs';
+import { ProvenanceCard } from './provenance-card';
 
 const visibilityTone: Record<DatasetVisibility, 'success' | 'info' | 'warning'> = {
   PUBLIC: 'success',
@@ -300,133 +301,140 @@ export default async function DatasetDetailPage({
             <CardContent>
               <ManifestTabs
                 summary={
-                  <DefinitionList>
-                    {conformsTo ? (
-                      <DefinitionItem term="Conforms to" mono>
-                        {conformsTo}
-                      </DefinitionItem>
-                    ) : null}
-                    {license ? (
-                      <DefinitionItem term="License">
-                        <span className="font-mono">{stringifyLicense(license)}</span>
-                      </DefinitionItem>
-                    ) : null}
-                    {homepage ? (
-                      <DefinitionItem term="Homepage">
-                        <a
-                          className="inline-flex items-center gap-1 text-[var(--color-primary)] underline underline-offset-2 break-all hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
-                          href={String(homepage)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <span>{String(homepage)}</span>
-                          <ExternalLinkIcon size={14} />
-                        </a>
-                      </DefinitionItem>
-                    ) : null}
-                    {keywords && keywords.length > 0 ? (
-                      <DefinitionItem term="Keywords">
-                        <span className="flex flex-wrap gap-1.5">
-                          {keywords.map((k) => (
-                            <Badge key={k} tone="neutral">
-                              {k}
-                            </Badge>
-                          ))}
-                        </span>
-                      </DefinitionItem>
-                    ) : null}
-                    {modalityNames.length > 0 ? (
-                      <DefinitionItem term="Modality">
-                        <span className="flex flex-wrap gap-1.5">
-                          {modalityNames.map((n) => (
-                            <Badge key={n} tone="info">
-                              {n}
-                            </Badge>
-                          ))}
-                        </span>
-                      </DefinitionItem>
-                    ) : null}
-                    {bodyRegionNames.length > 0 ? (
-                      <DefinitionItem term="Body region">
-                        <span className="flex flex-wrap gap-1.5">
-                          {bodyRegionNames.map((n) => (
-                            <Badge key={n} tone="info">
-                              {n}
-                            </Badge>
-                          ))}
-                        </span>
-                      </DefinitionItem>
-                    ) : null}
-                    {diseaseNames.length > 0 ? (
-                      <DefinitionItem term="Conditions">
-                        <span className="flex flex-wrap gap-1.5">
-                          {diseaseNames.map((n) => (
-                            <Badge key={n} tone="warning">
-                              {n}
-                            </Badge>
-                          ))}
-                        </span>
-                      </DefinitionItem>
-                    ) : null}
-                    {anonymization ? (
-                      <DefinitionItem term="Anonymization">
-                        <Badge tone={anonymization === 'IDENTIFIED' ? 'danger' : 'success'}>
-                          {anonymization}
-                        </Badge>
-                      </DefinitionItem>
-                    ) : null}
-                    {/* Commercial-use disclosure (#119). Show the band
+                  <div className="space-y-6">
+                    <DefinitionList>
+                      {conformsTo ? (
+                        <DefinitionItem term="Conforms to" mono>
+                          {conformsTo}
+                        </DefinitionItem>
+                      ) : null}
+                      {license ? (
+                        <DefinitionItem term="License">
+                          <span className="font-mono">{stringifyLicense(license)}</span>
+                        </DefinitionItem>
+                      ) : null}
+                      {homepage ? (
+                        <DefinitionItem term="Homepage">
+                          <a
+                            className="inline-flex items-center gap-1 text-[var(--color-primary)] underline underline-offset-2 break-all hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
+                            href={String(homepage)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <span>{String(homepage)}</span>
+                            <ExternalLinkIcon size={14} />
+                          </a>
+                        </DefinitionItem>
+                      ) : null}
+                      {keywords && keywords.length > 0 ? (
+                        <DefinitionItem term="Keywords">
+                          <span className="flex flex-wrap gap-1.5">
+                            {keywords.map((k) => (
+                              <Badge key={k} tone="neutral">
+                                {k}
+                              </Badge>
+                            ))}
+                          </span>
+                        </DefinitionItem>
+                      ) : null}
+                      {modalityNames.length > 0 ? (
+                        <DefinitionItem term="Modality">
+                          <span className="flex flex-wrap gap-1.5">
+                            {modalityNames.map((n) => (
+                              <Badge key={n} tone="info">
+                                {n}
+                              </Badge>
+                            ))}
+                          </span>
+                        </DefinitionItem>
+                      ) : null}
+                      {bodyRegionNames.length > 0 ? (
+                        <DefinitionItem term="Body region">
+                          <span className="flex flex-wrap gap-1.5">
+                            {bodyRegionNames.map((n) => (
+                              <Badge key={n} tone="info">
+                                {n}
+                              </Badge>
+                            ))}
+                          </span>
+                        </DefinitionItem>
+                      ) : null}
+                      {diseaseNames.length > 0 ? (
+                        <DefinitionItem term="Conditions">
+                          <span className="flex flex-wrap gap-1.5">
+                            {diseaseNames.map((n) => (
+                              <Badge key={n} tone="warning">
+                                {n}
+                              </Badge>
+                            ))}
+                          </span>
+                        </DefinitionItem>
+                      ) : null}
+                      {anonymization ? (
+                        <DefinitionItem term="Anonymization">
+                          <Badge tone={anonymization === 'IDENTIFIED' ? 'danger' : 'success'}>
+                            {anonymization}
+                          </Badge>
+                        </DefinitionItem>
+                      ) : null}
+                      {/* Commercial-use disclosure (#119). Show the band
                         + any host-specified clauses verbatim so AI
                         builders can scan terms before investing in a
                         deployment. The badge in the header gives the
                         at-a-glance band; this shows the rationale. */}
-                    <DefinitionItem term="Commercial use">
-                      <div className="space-y-1 text-sm">
-                        <p className="font-medium">{commercialLabel[detail.commercialUseTerms]}</p>
-                        {detail.commercialClauses ? (
-                          <p className="whitespace-pre-wrap text-[var(--color-muted-foreground)]">
-                            {detail.commercialClauses}
+                      <DefinitionItem term="Commercial use">
+                        <div className="space-y-1 text-sm">
+                          <p className="font-medium">
+                            {commercialLabel[detail.commercialUseTerms]}
                           </p>
-                        ) : null}
-                      </div>
-                    </DefinitionItem>
-                    {detail.duoTerms.length > 0 ? (
-                      <DefinitionItem term="Permitted use (DUO)">
-                        <ul className="space-y-1.5 text-sm">
-                          {detail.duoTerms.map((id) => {
-                            const t = lookupDuoTerm(id);
-                            if (!t) {
+                          {detail.commercialClauses ? (
+                            <p className="whitespace-pre-wrap text-[var(--color-muted-foreground)]">
+                              {detail.commercialClauses}
+                            </p>
+                          ) : null}
+                        </div>
+                      </DefinitionItem>
+                      {detail.duoTerms.length > 0 ? (
+                        <DefinitionItem term="Permitted use (DUO)">
+                          <ul className="space-y-1.5 text-sm">
+                            {detail.duoTerms.map((id) => {
+                              const t = lookupDuoTerm(id);
+                              if (!t) {
+                                return (
+                                  <li key={id} className="font-mono text-xs">
+                                    {id}
+                                  </li>
+                                );
+                              }
                               return (
-                                <li key={id} className="font-mono text-xs">
-                                  {id}
+                                <li key={id} className="flex items-start gap-2">
+                                  <Badge tone="info" className="font-mono">
+                                    {t.code}
+                                  </Badge>
+                                  <span>
+                                    <span className="font-medium">{t.label}.</span>{' '}
+                                    <span className="text-[var(--color-muted-foreground)]">
+                                      {t.summary}
+                                    </span>
+                                  </span>
                                 </li>
                               );
-                            }
-                            return (
-                              <li key={id} className="flex items-start gap-2">
-                                <Badge tone="info" className="font-mono">
-                                  {t.code}
-                                </Badge>
-                                <span>
-                                  <span className="font-medium">{t.label}.</span>{' '}
-                                  <span className="text-[var(--color-muted-foreground)]">
-                                    {t.summary}
-                                  </span>
-                                </span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </DefinitionItem>
-                    ) : null}
-                    {citeAs ? (
-                      <DefinitionItem term="Cite as">
-                        <pre className="whitespace-pre-wrap break-words text-xs font-mono leading-relaxed text-[var(--color-foreground)]/85">
-                          {String(citeAs)}
-                        </pre>
-                      </DefinitionItem>
-                    ) : null}
-                  </DefinitionList>
+                            })}
+                          </ul>
+                        </DefinitionItem>
+                      ) : null}
+                      {citeAs ? (
+                        <DefinitionItem term="Cite as">
+                          <pre className="whitespace-pre-wrap break-words text-xs font-mono leading-relaxed text-[var(--color-foreground)]/85">
+                            {String(citeAs)}
+                          </pre>
+                        </DefinitionItem>
+                      ) : null}
+                    </DefinitionList>
+                    {/* bio-prov provenance (#496): rendered only when the
+                      manifest carries something the profile recognises. */}
+                    <ProvenanceCard manifest={detail.croissant} />
+                  </div>
                 }
                 full={<ManifestFullView manifest={detail.croissant} />}
                 raw={<JsonTree value={detail.croissant} />}

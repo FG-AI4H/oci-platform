@@ -79,9 +79,16 @@ Paste it into the **Croissant manifest** textarea on the publish page. The "Vali
 2. **Croissant 1.1 deltas** (PROV-O, ODRL, DUO consent codes, vocabulary framework).
 3. **RAI extension** (Responsible AI properties — bias, sensitivity, etc.).
 4. **BioCroissant draft** (imaging modality, body region, anonymisation level).
-5. **OCI publish-time checks** (e.g. for non-PUBLIC datasets, at least one `consentCode`).
+5. **`bio-prov` provenance profile**, when the manifest opts in with `bio:provenanceProfile` (see [Provenance](#provenance) below).
+6. **OCI publish-time checks** (e.g. for non-PUBLIC datasets, at least one `consentCode`).
 
 Errors come back as a structured panel with JSON-pointer paths into the offending fields. Fix and resubmit.
+
+## Provenance
+
+The wizard has a **Provenance** step, after the biomedical context, that asks four questions about the data: where it came from (source organisation, contributing sites with countries, the upstream dataset if this one is a slice or re-annotation), what was done to it (the dated collection or derivation activity and who ran it, the collection timeframe in words, the acquisition device class or equipment, the de-identification pass that produced the anonymisation level you declared), under what authority (the ethics approval, with a note on whether it covers evaluation of third-party AI models), and how the ground truth was produced (protocol version, label scale, graders per item, adjudication, inter-rater agreement). The step writes these as W3C PROV-O and `bio:` properties into the manifest, so a reader gets one document, not a manifest plus a data-sheet PDF. If you already have a manifest, the same properties can be pasted by hand; the `bio:provenanceProfile: "bio-prov/0.1"` marker is what switches the checks on.
+
+Which items are required depends on the dataset's **access tier** (OPEN, REGISTERED, CONTROLLED, SENSITIVE), not on its visibility. Each block on the step carries a Required, Recommended or Optional marker for your tier, and the step checks the draft as you type: a missing required block shows up in place as, for example, `H5 · Ethics approval (IRB, institutional review board) is required for a SENSITIVE dataset`. The identifiers (`P1`–`P4`, `H1`–`H6`) are the profile's own, so a reviewer can look them up. The publish endpoint runs the same check; while the profile is in its first release it reports missing items as warnings rather than refusing the manifest, so you can publish and complete the provenance in the next version. The obligation table, the exact shapes, and the reasoning are in the profile document, [`bio-prov` v0.1](../standards/bio-prov-v0.1.md).
 
 ## What the platform does on publish
 
