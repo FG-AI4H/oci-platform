@@ -203,11 +203,15 @@ export function buildProvenance(
   // H1 — sites. A site with no name is a blank row and is dropped.
   const sites = p.sites
     .filter((s) => !blank(s.name))
-    .map((s) => ({ name: text(s.name), ...(blank(s.country) ? {} : { country: text(s.country) }) }));
+    .map((s) => ({
+      name: text(s.name),
+      ...(blank(s.country) ? {} : { country: text(s.country) }),
+    }));
   if (sites.length > 0) out['bio:sourceSite'] = sites;
 
   // H2 — the human timeframe.
-  if (!blank(p.collectionTimeframe)) out['rai:dataCollectionTimeframe'] = text(p.collectionTimeframe);
+  if (!blank(p.collectionTimeframe))
+    out['rai:dataCollectionTimeframe'] = text(p.collectionTimeframe);
 
   // H3 — device class and/or equipment.
   if (!blank(p.deviceClass)) {
@@ -256,8 +260,12 @@ export function buildProvenance(
   if (lp.gradersPerItem !== undefined) protocol.gradersPerItem = lp.gradersPerItem;
   if (!blank(lp.interRaterAgreement.metric) || lp.interRaterAgreement.value !== undefined) {
     protocol.interRaterAgreement = {
-      ...(blank(lp.interRaterAgreement.metric) ? {} : { metric: text(lp.interRaterAgreement.metric) }),
-      ...(lp.interRaterAgreement.value === undefined ? {} : { value: lp.interRaterAgreement.value }),
+      ...(blank(lp.interRaterAgreement.metric)
+        ? {}
+        : { metric: text(lp.interRaterAgreement.metric) }),
+      ...(lp.interRaterAgreement.value === undefined
+        ? {}
+        : { value: lp.interRaterAgreement.value }),
     };
   }
   if (lp.perRaterLabelsRetained !== undefined) {

@@ -239,7 +239,10 @@ describe('manifestWizardInputToCroissant — bio-prov provenance (#496)', () => 
       '@type': 'sc:DefinedTerm',
       name: 'OP (ophthalmic photography)',
     });
-    expect(out['bio:dataAcquisitionEquipment']).toEqual({ manufacturer: 'Topcon', model: 'TRC-NW8' });
+    expect(out['bio:dataAcquisitionEquipment']).toEqual({
+      manufacturer: 'Topcon',
+      model: 'TRC-NW8',
+    });
     expect(out['bio:deidentification']).toEqual({
       '@type': 'prov:Activity',
       method: 'SAFE_HARBOR',
@@ -290,14 +293,23 @@ describe('manifestWizardInputToCroissant — bio-prov provenance (#496)', () => 
 
   it('a missing ethics block at SENSITIVE yields provenance.missing.H5 as an error', () => {
     const provenance = fullProvenance();
-    provenance.ethics = { approvingBody: '', approvalNumber: '', approvalDate: '', approvalScope: '' };
+    provenance.ethics = {
+      approvingBody: '',
+      approvalNumber: '',
+      approvalDate: '',
+      approvalScope: '',
+    };
     const out = manifestWizardInputToCroissant(
       baseInput({ anonymizationLevel: 'DEIDENTIFIED', provenance }),
     );
     const result = validate(out, { accessTier: 'SENSITIVE', strictProvenance: true });
     expect(result.ok).toBe(false);
     expect(result.issues).toEqual([
-      expect.objectContaining({ code: 'provenance.missing.H5', level: 'error', path: '/irbApproval' }),
+      expect.objectContaining({
+        code: 'provenance.missing.H5',
+        level: 'error',
+        path: '/irbApproval',
+      }),
     ]);
   });
 
