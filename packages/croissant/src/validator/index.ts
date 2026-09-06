@@ -51,10 +51,12 @@ export interface ValidateOptions {
    */
   accessTier?: AccessTier;
   /**
-   * Apply the `bio-prov` obligation table as written (MUST → error,
-   * SHOULD → warning). Defaults to `false`: the layer ships permissive,
-   * one level down, until the seed and the wizard author a conformant
-   * block (#495).
+   * Apply the `bio-prov` obligation table as written (spec section 3):
+   * MUST → error, SHOULD → warning, MAY never reported; a present but
+   * malformed value is an error at every tier. Defaults to `true`
+   * (#504). Pass `false` for the permissive reading, one level down:
+   * MUST → warning, SHOULD omitted, malformed → warning. Only consulted
+   * when the manifest carries `bio:provenanceProfile`.
    */
   strictProvenance?: boolean;
 }
@@ -66,6 +68,13 @@ export interface ValidateOptions {
  * then runs RAI, BIOCroissant and `bio-prov` provenance deltas as
  * optional layers. Issues from each layer are tagged with stable codes so
  * callers (UI, audit log, CI gating) can treat them differently.
+ *
+ * The `bio-prov` layer runs only when the manifest opts in with
+ * `bio:provenanceProfile`, at the obligations of `options.accessTier`
+ * (`OPEN` when none is given) and strict by default. Callers that
+ * validate for publish must pass the dataset's catalogue tier: the
+ * obligations differ per tier, and a manifest that is conformant at
+ * `OPEN` can be rejected at `SENSITIVE`.
  */
 export function validate(input: unknown, options: ValidateOptions = {}): ValidationResult {
   const issues: ValidationIssue[] = [];
@@ -134,7 +143,7 @@ export function validate(input: unknown, options: ValidateOptions = {}): Validat
     issues.push(
       ...validateProvenance(normalized, {
         accessTier: options.accessTier ?? 'OPEN',
-        strict: options.strictProvenance ?? false,
+        strict: options.strictProvenance ?? true,
       }),
     );
   }

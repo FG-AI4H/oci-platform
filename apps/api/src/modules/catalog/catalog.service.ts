@@ -240,8 +240,15 @@ export class CatalogService {
       throw new ForbiddenException('only the dataset host or an admin can publish a version');
     }
 
-    // Validate the manifest BEFORE writing.
-    const result = validateCroissant(req.croissant);
+    // Validate the manifest BEFORE writing. The `bio-prov` layer (run
+    // only when the manifest opts in with `bio:provenanceProfile`)
+    // applies the obligations of the dataset's catalogue access tier,
+    // strict (spec section 3, #504): a manifest conformant at OPEN can
+    // legitimately be refused on a SENSITIVE dataset.
+    const result = validateCroissant(req.croissant, {
+      accessTier: target.accessTier,
+      strictProvenance: true,
+    });
     if (!result.ok) {
       throw new BadRequestException({
         message: 'Croissant manifest validation failed',

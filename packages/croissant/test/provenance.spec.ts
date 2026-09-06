@@ -26,8 +26,8 @@ import { normalize } from '../src/validator/normalize.js';
  *   (f) extractProvenance on the IDRiD fixture;
  *   (g) manifests without the marker are untouched.
  *
- * The seed fixture itself is not modified here: another change owns the
- * marker on the seeded manifest (#490).
+ * Strict is the default since #504; the permissive reading is exercised
+ * with an explicit `strictProvenance: false`.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -227,16 +227,20 @@ describe('(a) seeded IDRiD fixture with the marker added in-test', () => {
     }
   });
 
-  it('the default (permissive, OPEN) reports nothing for the fixture', () => {
-    const r = validate(idridWithMarker());
-    expect(r.hasProvenanceProfile).toBe(true);
-    expect(provenanceIssues(r.issues)).toEqual([]);
-    expect(r.ok).toBe(true);
+  it('the default is strict at OPEN: identical to an explicit { OPEN, strict }', () => {
+    const byDefault = validate(idridWithMarker());
+    const explicit = validate(idridWithMarker(), { accessTier: 'OPEN', strictProvenance: true });
+    expect(byDefault.hasProvenanceProfile).toBe(true);
+    expect(byDefault.issues).toEqual(explicit.issues);
+    expect(byDefault.ok).toBe(explicit.ok);
   });
 
-  it('permissive mode reports a MUST one level down, as a warning', () => {
+  it('permissive mode (strictProvenance: false) reports a MUST one level down, as a warning', () => {
     // At REGISTERED, H2 and H6 are MUSTs: errors strict, warnings permissive.
-    const permissive = validate(idridWithMarker(), { accessTier: 'REGISTERED' });
+    const permissive = validate(idridWithMarker(), {
+      accessTier: 'REGISTERED',
+      strictProvenance: false,
+    });
     const prov = provenanceIssues(permissive.issues);
     expect(codes(prov)).toEqual(['provenance.missing.H2', 'provenance.missing.H6']);
     for (const issue of prov) expect(issue.level).toBe('warning');
@@ -281,10 +285,20 @@ describe('(b) synthetic SENSITIVE manifest', () => {
     expect(r.ok).toBe(false);
   });
 
-  it('missing H5 is a warning at SENSITIVE in permissive mode (the default)', () => {
+  it('missing H5 is an error at SENSITIVE by default (strict is the default)', () => {
     const m = sensitiveManifest();
     delete m['bio:irbApproval'];
     const r = validate(m, { accessTier: 'SENSITIVE' });
+    const h5 = r.issues.filter((i) => i.code === 'provenance.missing.H5');
+    expect(h5).toHaveLength(1);
+    expect(h5[0]?.level).toBe('error');
+    expect(r.ok).toBe(false);
+  });
+
+  it('missing H5 is a warning at SENSITIVE with strictProvenance: false', () => {
+    const m = sensitiveManifest();
+    delete m['bio:irbApproval'];
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: false });
     const h5 = r.issues.filter((i) => i.code === 'provenance.missing.H5');
     expect(h5).toHaveLength(1);
     expect(h5[0]?.level).toBe('warning');
@@ -298,13 +312,18 @@ describe('(b) synthetic SENSITIVE manifest', () => {
     expect(r.issues.some((i) => i.code === 'provenance.missing.H5')).toBe(false);
   });
 
-  it('a wrong profile version is reported as malformed', () => {
+  it('a wrong profile version is reported as malformed: an error by default, a warning permissive', () => {
     const m = sensitiveManifest();
     m['bio:provenanceProfile'] = 'bio-prov/0.9';
-    const r = validate(m, { accessTier: 'OPEN', strictProvenance: true });
+    const r = validate(m, { accessTier: 'OPEN' });
     const marker = r.issues.find((i) => i.code === 'provenance.invalid.provenanceProfile');
     expect(marker?.level).toBe('error');
     expect(marker?.path).toBe('/provenanceProfile');
+    expect(r.ok).toBe(false);
+    const permissive = validate(m, { accessTier: 'OPEN', strictProvenance: false });
+    expect(
+      permissive.issues.find((i) => i.code === 'provenance.invalid.provenanceProfile')?.level,
+    ).toBe('warning');
   });
 });
 
@@ -327,7 +346,7 @@ describe('(c) H4 cross-checks', () => {
     expect(
       strictOpen.issues.find((i) => i.code === 'provenance.mismatch.H4.anonymizationLevel')?.level,
     ).toBe('error');
-    const permissive = validate(m, { accessTier: 'OPEN' });
+    const permissive = validate(m, { accessTier: 'OPEN', strictProvenance: false });
     expect(
       permissive.issues.find((i) => i.code === 'provenance.mismatch.H4.anonymizationLevel')?.level,
     ).toBe('warning');
@@ -418,7 +437,7 @@ describe('(e) annotation-campaign write-back distributions', () => {
       expect(a2[0]?.path).toBe(`/distribution/${index}/integrity`);
     }
     // Permissive: one level down.
-    const permissive = validate(m, { accessTier: 'SENSITIVE' });
+    const permissive = validate(m, { accessTier: 'SENSITIVE', strictProvenance: false });
     expect(permissive.issues.find((i) => i.code === 'provenance.missing.A2')?.level).toBe(
       'warning',
     );
@@ -600,19 +619,32 @@ describe('(g) manifests without the marker', () => {
       'seeded oci-demo-chest-xr',
       () => loadJson(path.join(seedFixturesDir, 'oci-demo-chest-xr', 'manifest.json')),
     ],
+    [
+      'seeded rsna-pneumonia-2018',
+      () => loadJson(path.join(seedFixturesDir, 'rsna-pneumonia-2018', 'manifest.json')),
+    ],
+    [
+      'seeded demo-clinical-notes-2024',
+      () => loadJson(path.join(seedFixturesDir, 'demo-clinical-notes-2024', 'manifest.json')),
+    ],
     ['valid-biocroissant-1.1', () => fixture('valid-biocroissant-1.1.json')],
     ['valid-croissant-1.0', () => fixture('valid-croissant-1.0.json')],
   ];
 
   for (const [name, load] of cases) {
-    it(`${name}: hasProvenanceProfile is false and no provenance.* issue is emitted`, () => {
+    it(`${name}: hasProvenanceProfile is false and no provenance.* issue is emitted at any tier`, () => {
       for (const options of [
         undefined,
+        { accessTier: 'OPEN' as const },
+        { accessTier: 'SENSITIVE' as const },
         { accessTier: 'SENSITIVE' as const, strictProvenance: true },
+        { accessTier: 'SENSITIVE' as const, strictProvenance: false },
       ]) {
         const r = validate(load(), options);
-        expect(r.hasProvenanceProfile).toBe(false);
-        expect(provenanceIssues(r.issues)).toEqual([]);
+        expect(r.hasProvenanceProfile, JSON.stringify(options)).toBe(false);
+        expect(provenanceIssues(r.issues), JSON.stringify(options)).toEqual([]);
+        // The other layers are unaffected by the strict flip: zero issues, still ok.
+        expect(r.ok, JSON.stringify(options)).toBe(true);
       }
     });
   }

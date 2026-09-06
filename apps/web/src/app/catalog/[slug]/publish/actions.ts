@@ -207,9 +207,9 @@ const PreflightSchema = z.object({
  * wizard's draft manifest, with the table applied **as written** (MUST →
  * error, SHOULD → warning), and return the `provenance.*` issues shaped
  * for inline display. This is advisory: the publish endpoint runs the
- * same validator in its own (permissive, #504) mode and is what blocks —
- * the wizard only follows that verdict, exactly as it does for the
- * other layers.
+ * same validator, strict and with the dataset row's tier (#504), and is
+ * what blocks — the wizard only follows that verdict, exactly as it does
+ * for the other layers.
  */
 export async function preflightProvenanceAction(
   manifestJson: string,

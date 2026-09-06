@@ -19,20 +19,20 @@ import {
  *   `provenance.invalid.provenanceProfile`  the marker is not `bio-prov/0.1`
  *
  * Levels follow the enforcement rule of spec section 3 for the tier the
- * caller passes (`OPEN` when none is given). The layer ships **permissive**
- * (`strict: false`, the default): every obligation is reported one level
- * down, so a MUST that is not met is a `warning` and a SHOULD is not
- * reported at all — `ValidationLevel` has only `error` and `warning`. A
- * later change flips `strict` on and applies the table as written: MUST →
- * `error`, SHOULD → `warning`, MAY → never reported. A property that is
- * present but malformed is an `error` at every tier in strict mode and a
- * `warning` in permissive mode.
+ * caller passes (`OPEN` when none is given). The layer is **strict** by
+ * default (`strict: true`, since #504) and applies the table as written:
+ * MUST → `error`, SHOULD → `warning`, MAY → never reported; a property
+ * that is present but malformed is an `error` at every tier. The
+ * permissive reading stays available behind `strict: false`: every
+ * obligation is reported one level down, so a MUST that is not met is a
+ * `warning`, a SHOULD is not reported at all (`ValidationLevel` has only
+ * `error` and `warning`), and a malformed property is a `warning`.
  */
 
 export interface ProvenanceValidationOptions {
   /** The dataset's catalogue access tier (ADR-0003). Defaults to `OPEN`. */
   accessTier?: AccessTier;
-  /** Apply the obligation table as written. Defaults to `false` (permissive). */
+  /** Apply the obligation table as written. Defaults to `true`; `false` is permissive. */
   strict?: boolean;
 }
 
@@ -76,7 +76,7 @@ export function validateProvenanceDetailed(
   options: ProvenanceValidationOptions = {},
 ): ProvenanceValidation {
   const accessTier: AccessTier = options.accessTier ?? 'OPEN';
-  const strict = options.strict ?? false;
+  const strict = options.strict ?? true;
   const issues: ValidationIssue[] = [];
   const report: ProvenanceRequirementReport[] = [];
 

@@ -120,7 +120,7 @@ export class CatalogController {
   @ApiOperation({
     summary: 'Publish a Croissant manifest as a new dataset version (host-only)',
     description:
-      'Validates the manifest against Croissant 1.1 + RAI + BIOCroissant v0.1, mirrors distributions to the database, and bumps the dataset to PUBLISHED.',
+      "Validates the manifest against Croissant 1.1 + RAI + BIOCroissant v0.1 (plus the bio-prov v0.1 obligations of the dataset's access tier when the manifest carries bio:provenanceProfile), mirrors distributions to the database, and bumps the dataset to PUBLISHED.",
   })
   @UseGuards(CognitoJwtGuard, RolesGuard)
   @Roles('host', 'admin')
