@@ -844,7 +844,11 @@ function ReviewStep({
       </dl>
       <details className="rounded-md border border-[var(--color-border)] p-3">
         <summary className="cursor-pointer text-sm font-medium">Show generated JSON-LD</summary>
-        <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-[var(--color-subtle)] p-3 font-mono text-xs">
+        <pre
+          tabIndex={0}
+          aria-label="Generated JSON-LD"
+          className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-[var(--color-subtle)] p-3 font-mono text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+        >
           {JSON.stringify(manifest, null, 2)}
         </pre>
       </details>
@@ -894,7 +898,13 @@ function PreviewPane({ manifest }: { manifest: Record<string, unknown> }) {
             Croissant 1.1
           </Badge>
         </header>
-        <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap break-all p-3 font-mono text-xs leading-relaxed">
+        {/* tabIndex: the region scrolls, so it must be reachable from the
+            keyboard (axe scrollable-region-focusable). */}
+        <pre
+          tabIndex={0}
+          aria-label="Generated JSON-LD"
+          className="max-h-[28rem] overflow-auto whitespace-pre-wrap break-all p-3 font-mono text-xs leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+        >
           {JSON.stringify(manifest, null, 2)}
         </pre>
       </div>
