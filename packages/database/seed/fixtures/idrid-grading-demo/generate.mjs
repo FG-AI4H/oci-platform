@@ -255,6 +255,22 @@ const manifest = {
   'rai:dataAnnotationProtocol':
     'Two ophthalmologists (>25 yrs) graded independently; a third adjudicated disagreements (from source IDRiD).',
   'bio:anonymizationLevel': 'ANONYMIZED',
+  // ----- bio-prov v0.1 (docs/standards/bio-prov-v0.1.md, ADR-0022) ----------
+  // The marker opts the manifest into the provenance layer. With H2 (timeframe)
+  // and H6 (label protocol) filled, the slice is conformant at OPEN in strict
+  // mode: P1–P4 come from the PROV-O block below; H1, H3, H4, H5 are MAY at OPEN.
+  // No inter-rater agreement value: the IDRiD paper does not publish one.
+  'bio:provenanceProfile': 'bio-prov/0.1',
+  'rai:dataCollectionTimeframe':
+    'IDRiD source collection published 2018; OCI demo slice prepared 30 July 2026',
+  'bio:labelProtocol': {
+    version: 'IDRiD 2018 disease-grading protocol',
+    labelScale: 'ICDR 0–4; referable ≥ 2',
+    gradersPerItem: 2,
+    graderQualification: 'ophthalmologist, >25 years experience',
+    adjudication: 'third grader adjudicated disagreements',
+    perRaterLabelsRetained: false,
+  },
   // ----- dataset-level provenance (PROV-O), usage policy (ODRL), consent (DUO) --
   // Prefixed keys on purpose (like the bio: keys above): the manifest UI groups
   // properties by namespace; the validator strips prefixes itself.

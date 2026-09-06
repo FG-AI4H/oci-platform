@@ -9,7 +9,7 @@
  *   - provenance/    `bio-prov` v0.1 health-dataset provenance profile,
  *                    obligations by access tier (ADR-0022,
  *                    docs/standards/bio-prov-v0.1.md). Opt-in via
- *                    `bio:provenanceProfile`; permissive until flipped.
+ *                    `bio:provenanceProfile`; strict by default (#504).
  *   - validator/     normalize + dispatch + JSON-Pointer error reporting.
  *
  * Single entry point:
