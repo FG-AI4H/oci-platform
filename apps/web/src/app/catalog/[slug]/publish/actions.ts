@@ -3,9 +3,20 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { DatasetSlugSchema, PublishDatasetVersionRequestSchema } from '@oci/shared-types';
+import {
+  AccessTierSchema,
+  DatasetSlugSchema,
+  PublishDatasetVersionRequestSchema,
+  type AccessTier,
+} from '@oci/shared-types';
+import { validate } from '@oci/croissant';
 import { auth } from '../../../../auth';
 import { isHost } from '../../../../lib/groups';
+import {
+  describeProvenanceIssue,
+  isProvenanceCode,
+  type ProvenanceIssue,
+} from './provenance-issues';
 
 export interface ManifestIssue {
   /**
@@ -16,6 +27,12 @@ export interface ManifestIssue {
   path?: string;
   message: string;
   severity?: string;
+  /**
+   * Stable validator code (`provenance.missing.H5`, `oci.j1.duo…`) when
+   * the API included one. The wizard uses it to render `provenance.*`
+   * issues in their requirement-id form.
+   */
+  code?: string;
 }
 
 export interface PublishVersionValues {
@@ -162,6 +179,78 @@ export async function publishVersionAction(
   // redirect lands on a stale render and misleads "did it work?".
   revalidatePath(`/catalog/${parsed.data.slug}`);
   redirect(`/catalog/${parsed.data.slug}`);
+}
+
+// ---- Provenance pre-flight (bio-prov v0.1, #496) --------------------------
+
+export type ProvenancePreflightState =
+  | { status: 'idle' }
+  | { status: 'error'; message: string }
+  | {
+      status: 'checked';
+      accessTier: AccessTier;
+      /** `provenance.*` issues, strict obligation table applied (spec section 3). */
+      issues: ProvenanceIssue[];
+      /** Issues from the other layers, verbatim — the API will refuse these. */
+      otherErrors: ManifestIssue[];
+    };
+
+const PreflightSchema = z.object({
+  // Generous cap: the wizard's manifests are a few kilobytes; a paste-form
+  // manifest never reaches this action.
+  manifest: z.string().min(2).max(1_000_000),
+  accessTier: AccessTierSchema,
+});
+
+/**
+ * Run the `bio-prov` obligations of the dataset's access tier over the
+ * wizard's draft manifest, with the table applied **as written** (MUST →
+ * error, SHOULD → warning), and return the `provenance.*` issues shaped
+ * for inline display. This is advisory: the publish endpoint runs the
+ * same validator in its own (permissive, #504) mode and is what blocks —
+ * the wizard only follows that verdict, exactly as it does for the
+ * other layers.
+ */
+export async function preflightProvenanceAction(
+  manifestJson: string,
+  accessTier: string,
+): Promise<ProvenancePreflightState> {
+  const session = await auth();
+  if (!session?.accessToken || !isHost(session)) {
+    return { status: 'error', message: 'Only hosts can publish dataset versions.' };
+  }
+  const parsed = PreflightSchema.safeParse({ manifest: manifestJson, accessTier });
+  if (!parsed.success) {
+    return { status: 'error', message: 'Could not check provenance: invalid request.' };
+  }
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(parsed.data.manifest);
+  } catch {
+    return { status: 'error', message: 'Could not check provenance: manifest is not valid JSON.' };
+  }
+
+  const tier = parsed.data.accessTier;
+  const result = validate(manifest, { accessTier: tier, strictProvenance: true });
+
+  const issues: ProvenanceIssue[] = [];
+  const otherErrors: ManifestIssue[] = [];
+  for (const issue of result.issues) {
+    if (!isProvenanceCode(issue.code)) {
+      if (issue.level === 'error') {
+        otherErrors.push({
+          path: issue.path,
+          message: issue.message,
+          severity: issue.level,
+          code: issue.code,
+        });
+      }
+      continue;
+    }
+    issues.push(describeProvenanceIssue(issue, tier));
+  }
+
+  return { status: 'checked', accessTier: tier, issues, otherErrors };
 }
 
 /**

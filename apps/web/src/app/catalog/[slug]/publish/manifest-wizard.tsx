@@ -13,18 +13,27 @@ import {
 } from '@oci/ui';
 import {
   ManifestWizardInputSchema,
+  emptyManifestWizardProvenance,
+  type AccessTier,
   type ManifestWizardInput,
   type ManifestWizardCreator,
   type ManifestWizardDistribution,
   type DuoTermId,
 } from '@oci/shared-types';
 import { manifestWizardInputToCroissant, DUO_REGISTRY, lookupDuoTerm } from '@oci/croissant';
-import { publishVersionAction, type PublishVersionState } from './actions';
+import {
+  publishVersionAction,
+  type ManifestIssue,
+  type ProvenancePreflightState,
+  type PublishVersionState,
+} from './actions';
+import { describeProvenanceIssue, isProvenanceCode } from './provenance-issues';
+import { ProvenanceStep, summarisePreflight, useProvenancePreflight } from './provenance-step';
 
 /**
  * Croissant manifest wizard (PR K, #90).
  *
- * 5 input steps + a review step that submits to the same server
+ * 6 input steps + a review step that submits to the same server
  * action as the paste form. The state is one `ManifestWizardInput`
  * shaped object; per-step validation runs `ManifestWizardInputSchema`
  * with `.partial()`-style narrowing, surfacing only the issues for
@@ -46,12 +55,19 @@ interface Props {
    * fail-closed at publish if no consentCode is declared (J.1).
    */
   visibility: 'PUBLIC' | 'RESTRICTED' | 'PRIVATE';
+  /**
+   * The dataset's access tier (ADR-0003). Drives the Required /
+   * Recommended / Optional markers of the Provenance step and the
+   * pre-flight check against the bio-prov obligation table (#496).
+   */
+  accessTier: AccessTier;
 }
 
 type StepId =
   | 'identification'
   | 'creators'
   | 'biomedical'
+  | 'provenance'
   | 'data-use'
   | 'distributions'
   | 'review';
@@ -67,6 +83,11 @@ const STEPS: Array<{ id: StepId; label: string; subtitle: string }> = [
     id: 'biomedical',
     label: 'Biomedical context',
     subtitle: 'Modality, body region, condition, anonymisation (BioCroissant)',
+  },
+  {
+    id: 'provenance',
+    label: 'Provenance',
+    subtitle: 'Origin, processing, ethics approval, labelling protocol (bio-prov)',
   },
   { id: 'data-use', label: 'Data use', subtitle: 'GA4GH DUO consent codes' },
   { id: 'distributions', label: 'Distributions', subtitle: 'Files and download URLs' },
@@ -90,6 +111,7 @@ function defaultInput(suggestedVersion: string): ManifestWizardInput {
     bodyRegion: [],
     diseaseCondition: [],
     anonymizationLevel: undefined,
+    provenance: emptyManifestWizardProvenance(),
     duoTerms: [],
     distributions: [],
     notes: undefined,
@@ -113,6 +135,7 @@ const STEP_FIELDS: Record<StepId, Array<keyof ManifestWizardInput>> = {
   ],
   creators: ['creators'],
   biomedical: ['imagingModality', 'bodyRegion', 'diseaseCondition', 'anonymizationLevel'],
+  provenance: ['provenance'],
   'data-use': ['duoTerms'],
   distributions: ['distributions'],
   review: [],
@@ -144,7 +167,7 @@ function validateStep(input: ManifestWizardInput, step: StepId): StepIssues {
   return { byField, unscoped };
 }
 
-export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
+export function ManifestWizard({ slug, suggestedVersion, visibility, accessTier }: Props) {
   const [input, setInput] = useState<ManifestWizardInput>(() => defaultInput(suggestedVersion));
   const [stepId, setStepId] = useState<StepId>('identification');
   const [submitState, setSubmitState] = useState<PublishVersionState>({ status: 'idle' });
@@ -155,6 +178,15 @@ export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
 
   // Live JSON-LD preview. Recomputed on every input change — cheap.
   const generatedManifest = useMemo(() => manifestWizardInputToCroissant(input), [input]);
+  const manifestJson = useMemo(() => JSON.stringify(generatedManifest), [generatedManifest]);
+
+  // bio-prov pre-flight (#496): runs while the host is on the Provenance
+  // or Review step, debounced; the verdict is advisory (see the step).
+  const preflight = useProvenancePreflight(
+    manifestJson,
+    accessTier,
+    stepId === 'provenance' || stepId === 'review',
+  );
 
   function patch<K extends keyof ManifestWizardInput>(field: K, value: ManifestWizardInput[K]) {
     setInput((prev) => ({ ...prev, [field]: value }));
@@ -185,7 +217,7 @@ export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
     data.set('slug', slug);
     data.set('version', input.version);
     if (input.notes) data.set('notes', input.notes);
-    data.set('manifest', JSON.stringify(generatedManifest));
+    data.set('manifest', manifestJson);
     const res = await publishVersionAction({ status: 'idle' }, data);
     setSubmitState(res);
     setSubmitting(false);
@@ -207,8 +239,7 @@ export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
               <ul className="ms-4 list-disc space-y-1 text-xs">
                 {submitState.issues.map((issue, i) => (
                   <li key={i}>
-                    {issue.path ? <span className="font-mono">{issue.path}: </span> : null}
-                    {issue.message}
+                    <SubmitIssue issue={issue} accessTier={accessTier} />
                   </li>
                 ))}
               </ul>
@@ -231,13 +262,31 @@ export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
         {stepId === 'biomedical' ? (
           <BiomedicalStep input={input} issues={issues} patch={patch} />
         ) : null}
+        {stepId === 'provenance' ? (
+          <ProvenanceStep
+            provenance={input.provenance ?? emptyManifestWizardProvenance()}
+            anonymizationLevel={input.anonymizationLevel}
+            accessTier={accessTier}
+            manifest={generatedManifest}
+            byField={issues.byField}
+            preflight={preflight}
+            onChange={(next) => patch('provenance', next)}
+          />
+        ) : null}
         {stepId === 'data-use' ? (
           <DataUseStep input={input} issues={issues} patch={patch} visibility={visibility} />
         ) : null}
         {stepId === 'distributions' ? (
           <DistributionsStep input={input} issues={issues} patch={patch} />
         ) : null}
-        {stepId === 'review' ? <ReviewStep input={input} manifest={generatedManifest} /> : null}
+        {stepId === 'review' ? (
+          <ReviewStep
+            input={input}
+            manifest={generatedManifest}
+            accessTier={accessTier}
+            preflight={preflight}
+          />
+        ) : null}
 
         <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-4">
           <Button
@@ -506,7 +555,7 @@ function BiomedicalStep({ input, issues, patch }: StepProps) {
       <Field
         label="Anonymisation level"
         htmlFor="wiz-anon"
-        hint="How identifiable individuals in this dataset are."
+        hint="How identifiable individuals in this dataset are. The Provenance step asks what was done to reach this level."
       >
         <select
           id="wiz-anon"
@@ -521,7 +570,8 @@ function BiomedicalStep({ input, issues, patch }: StepProps) {
         >
           <option value="">— not declared —</option>
           <option value="ANONYMIZED">ANONYMIZED — not re-identifiable</option>
-          <option value="PSEUDONYMIZED">PSEUDONYMIZED — re-identifiable via key</option>
+          <option value="DEIDENTIFIED">DEIDENTIFIED — direct identifiers removed</option>
+          <option value="LIMITED">LIMITED — limited data set (dates, locations kept)</option>
           <option value="IDENTIFIED">IDENTIFIED — direct identifiers present</option>
         </select>
       </Field>
@@ -731,10 +781,15 @@ function DistributionsStep({ input, issues, patch }: StepProps) {
 function ReviewStep({
   input,
   manifest,
+  accessTier,
+  preflight,
 }: {
   input: ManifestWizardInput;
   manifest: Record<string, unknown>;
+  accessTier: AccessTier;
+  preflight: ProvenancePreflightState;
 }) {
+  const { errors, warnings } = summarisePreflight(preflight);
   return (
     <div className="space-y-4">
       <Alert>
@@ -773,14 +828,63 @@ function ReviewStep({
         </dd>
         <dt className="text-[var(--color-muted-foreground)]">Distributions</dt>
         <dd>{input.distributions.length}</dd>
+        <dt className="text-[var(--color-muted-foreground)]">Provenance</dt>
+        <dd>
+          {preflight.status !== 'checked' ? (
+            <span className="text-[var(--color-muted-foreground)]">checking…</span>
+          ) : errors === 0 && warnings === 0 ? (
+            <Badge tone="success">complete for {accessTier}</Badge>
+          ) : (
+            <span className="flex flex-wrap gap-1">
+              {errors > 0 ? <Badge tone="danger">{errors} required missing</Badge> : null}
+              {warnings > 0 ? <Badge tone="warning">{warnings} recommended missing</Badge> : null}
+            </span>
+          )}
+        </dd>
       </dl>
       <details className="rounded-md border border-[var(--color-border)] p-3">
         <summary className="cursor-pointer text-sm font-medium">Show generated JSON-LD</summary>
-        <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-[var(--color-subtle)] p-3 font-mono text-xs">
+        <pre
+          tabIndex={0}
+          aria-label="Generated JSON-LD"
+          className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-[var(--color-subtle)] p-3 font-mono text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+        >
           {JSON.stringify(manifest, null, 2)}
         </pre>
       </details>
     </div>
+  );
+}
+
+/**
+ * One issue from the publish endpoint's 400. `provenance.*` codes get the
+ * requirement-id headline the Provenance step uses ("H5 · Ethics approval
+ * (IRB, institutional review board) is required for a SENSITIVE dataset");
+ * everything else is the path + message, as before.
+ */
+function SubmitIssue({ issue, accessTier }: { issue: ManifestIssue; accessTier: AccessTier }) {
+  if (isProvenanceCode(issue.code)) {
+    const shaped = describeProvenanceIssue(
+      {
+        code: issue.code,
+        path: issue.path,
+        message: issue.message,
+        level: issue.severity === 'warning' ? 'warning' : 'error',
+      },
+      accessTier,
+    );
+    return (
+      <>
+        <span className="font-medium">{shaped.headline}</span>
+        <span className="block text-[var(--color-muted-foreground)]">{shaped.detail}</span>
+      </>
+    );
+  }
+  return (
+    <>
+      {issue.path ? <span className="font-mono">{issue.path}: </span> : null}
+      {issue.message}
+    </>
   );
 }
 
@@ -794,7 +898,13 @@ function PreviewPane({ manifest }: { manifest: Record<string, unknown> }) {
             Croissant 1.1
           </Badge>
         </header>
-        <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap break-all p-3 font-mono text-xs leading-relaxed">
+        {/* tabIndex: the region scrolls, so it must be reachable from the
+            keyboard (axe scrollable-region-focusable). */}
+        <pre
+          tabIndex={0}
+          aria-label="Generated JSON-LD"
+          className="max-h-[28rem] overflow-auto whitespace-pre-wrap break-all p-3 font-mono text-xs leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+        >
           {JSON.stringify(manifest, null, 2)}
         </pre>
       </div>

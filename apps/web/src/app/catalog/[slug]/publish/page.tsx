@@ -83,7 +83,8 @@ export default async function PublishVersionPage({ params }: PageProps) {
           </h1>
           <p className="max-w-prose text-[var(--color-muted-foreground)]">
             Paste or upload a Croissant&nbsp;1.1 manifest. We&apos;ll validate it against Croissant
-            + RAI + BIOCroissant before mirroring its distributions to the catalog.
+            + RAI + BIOCroissant + the bio-prov provenance profile before mirroring its
+            distributions to the catalog.
           </p>
         </header>
 
@@ -102,6 +103,7 @@ export default async function PublishVersionPage({ params }: PageProps) {
                   slug={detail.slug}
                   suggestedVersion={nextVersion}
                   visibility={detail.visibility}
+                  accessTier={detail.accessTier}
                 />
               </CardContent>
             </Card>
@@ -150,6 +152,10 @@ export default async function PublishVersionPage({ params }: PageProps) {
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[var(--color-muted-foreground)]">Visibility</span>
                 <Badge tone="neutral">{detail.visibility}</Badge>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[var(--color-muted-foreground)]">Access tier</span>
+                <Badge tone="neutral">{detail.accessTier}</Badge>
               </div>
               {detail.latestVersion ? (
                 <div className="flex items-center justify-between gap-2">

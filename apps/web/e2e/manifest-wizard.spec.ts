@@ -6,7 +6,7 @@ import { test, expect, type Page } from '@playwright/test';
  * What this exercises end-to-end:
  *   1. Host signs in, creates a RESTRICTED dataset.
  *   2. Lands on /catalog/<slug>/publish with the wizard active.
- *   3. Walks the 5 input steps, filling structured fields (no JSON-LD).
+ *   3. Walks the 6 input steps, filling structured fields (no JSON-LD).
  *   4. Reviews the generated manifest, publishes.
  *   5. Lands on the detail page with the dataset as PUBLISHED + DUO
  *      terms surfaced (which proves the manifest the wizard generated
@@ -68,14 +68,24 @@ test.describe('manifest wizard', () => {
     // ---------- Step 3: Biomedical context (skip — all optional) --------
     // Add at least one item to confirm BioCroissant fields round-trip.
     await page.getByLabel('Imaging modality').fill('X-ray');
+    await page.getByRole('button', { name: /^Next:.*Provenance/ }).click();
+
+    // ---------- Step 4: Provenance (bio-prov, #496) ---------------------
+    // The dataset is OPEN (the draft form's default tier), so every block
+    // is Recommended or Optional and the step can be passed through. Fill
+    // the source organisation so a PROV-O block round-trips to the page.
+    await expect(
+      page.getByRole('heading', { name: 'Where did the data come from?' }),
+    ).toBeVisible();
+    await page.getByLabel('Organisation name').fill('Wizard Test Hospital');
     await page.getByRole('button', { name: /^Next:.*Data use/ }).click();
 
-    // ---------- Step 4: Data use (DUO) ----------------------------------
+    // ---------- Step 5: Data use (DUO) ----------------------------------
     // RESTRICTED dataset — required at least one term. Pick GRU.
     await page.getByLabel(/General research use/i).check();
     await page.getByRole('button', { name: /^Next:.*Distributions/ }).click();
 
-    // ---------- Step 5: Distributions (skip — empty distributions OK) ---
+    // ---------- Step 6: Distributions (skip — empty distributions OK) ---
     await page.getByRole('button', { name: /^Next:.*Review/ }).click();
 
     // ---------- Review: generated JSON-LD visible -----------------------
@@ -96,6 +106,9 @@ test.describe('manifest wizard', () => {
     // the wizard's output passed validation + adoption.
     await expect(page.getByText('General research use', { exact: false })).toBeVisible();
     await expect(page.getByText('X-ray').first()).toBeVisible();
+    // …and the provenance card, from the PROV-O block the step wrote.
+    await expect(page.getByRole('heading', { name: 'Provenance' })).toBeVisible();
+    await expect(page.getByText('Wizard Test Hospital')).toBeVisible();
   });
 
   test('host: paste-form escape hatch is still reachable', async ({ page }) => {
