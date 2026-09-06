@@ -8,6 +8,7 @@ import type {
   DatasetSlug,
   DatasetVisibility,
   DatasetStatus,
+  AnonymizationLevel,
 } from '@oci/shared-types';
 import { PrismaService } from '../../prisma.service.js';
 import { deriveDistributionFilename } from './distribution-filename.js';
@@ -112,7 +113,7 @@ export class CatalogRepository {
     modality?: string[];
     bodyRegion?: string[];
     condition?: string[];
-    anonymizationLevel?: 'ANONYMIZED' | 'PSEUDONYMIZED' | 'IDENTIFIED';
+    anonymizationLevel?: AnonymizationLevel;
     license?: string[];
     duoTerms?: string[];
     /** Commercial-use facet (#119). Single-value enum. */

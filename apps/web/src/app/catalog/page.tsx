@@ -27,6 +27,11 @@ import { DUO_REGISTRY, lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../auth';
 import { isHost } from '../../lib/groups';
 import { apiFetch } from '../../lib/api';
+import {
+  ANONYMIZATION_OPTIONS,
+  anonymizationLabel,
+  normaliseAnonymizationLevel,
+} from '../../lib/catalog-filters';
 
 /**
  * Catalog list (PR L.1, #91 — major rewrite from PR C/D's "search +
@@ -105,11 +110,7 @@ const LICENSE_OPTIONS = [
   { label: 'MIT', value: 'MIT' },
   { label: 'Apache 2.0', value: 'Apache' },
 ];
-const ANON_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: 'ANONYMIZED', label: 'Anonymised' },
-  { value: 'PSEUDONYMIZED', label: 'Pseudonymised' },
-  { value: 'IDENTIFIED', label: 'Identified' },
-];
+const ANON_OPTIONS = ANONYMIZATION_OPTIONS;
 
 function normaliseSource(value: string | undefined): DatasetSource {
   return value === 'federated' || value === 'all' ? value : 'local';
@@ -172,7 +173,7 @@ function parseFilters(params: SearchParams): FilterState {
     modality: toArray(params.modality),
     bodyRegion: toArray(params.bodyRegion),
     condition: toArray(params.condition),
-    anonymizationLevel: params.anonymizationLevel ?? null,
+    anonymizationLevel: normaliseAnonymizationLevel(params.anonymizationLevel),
     license: toArray(params.license),
     duoTerms: toArray(params.duoTerms),
     commercialUseTerms: normaliseCommercial(params.commercialUseTerms),
@@ -525,7 +526,7 @@ function AppliedFilters({ filters }: { filters: FilterState }) {
   }
   if (filters.anonymizationLevel) {
     chips.push({
-      label: `Anonymisation: ${filters.anonymizationLevel.toLowerCase()}`,
+      label: `Anonymisation: ${anonymizationLabel(filters.anonymizationLevel)}`,
       href: buildUrl(filters, { anonymizationLevel: null, page: 1 }),
     });
   }
