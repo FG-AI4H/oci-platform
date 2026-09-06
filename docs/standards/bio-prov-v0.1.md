@@ -2,7 +2,7 @@
 
 - **Status:** draft for review (WG-Data, MLCommons Croissant core team). Decision record:
   [ADR-0022](../adr/0022-health-dataset-provenance-is-a-separate-biocroissant-profile.md).
-- **Date:** 2026-09-04
+- **Date:** 2026-09-04 (0.1.1 errata: 2026-09-06)
 - **Applies to:** Croissant 1.1 manifests that opt in with `bio:provenanceProfile`
   (section 2). Validated by the `provenance` layer of `@oci/croissant` (#495).
 - **Tracking:** #494. Background: `GI-AI4H-WGD-OCI-003` in
@@ -58,7 +58,7 @@ in section 5.5.
 
 - Prefix form: manifests use `prov:`, `rai:`, `bio:` prefixes with the `@context` in section 10; the
   validator normalizes prefixes away, so obligations below are written on the **normalized** name and
-  the JSON Pointer uses the prefixed key as it appears in the manifest.
+  the JSON Pointer of an issue is on the normalized manifest as well (section 8).
 
 ## 3. Obligation by access tier
 
@@ -89,9 +89,13 @@ public dataset that still carries identifiers must say what was done about them.
 
 **Enforcement rule.** A MUST that is not met is an `error` at that tier; a SHOULD not met is a
 `warning`; a MAY is never reported as missing. A property that is present but malformed is an
-`error` at every tier. The layer is landed permissive (all obligations one level down) in its first
-release and tightened to this table in a second, so that publishing on dev does not break before the
-seed and the wizard can author a conformant block (#495, #490, #496).
+`error` at every tier. This is the **strict** reading and it is the validator's default
+(`validate(manifest, { accessTier })`, #504). A **permissive** reading remains available to callers
+(`strictProvenance: false`) and reports everything one level down: a MUST not met is a `warning`, a
+SHOULD not met is not reported, and a property that is present but malformed is a `warning` at every
+tier. The layer was landed permissive by default in its first release (#495) so that publishing on
+dev did not break before the seed and the wizard could author a conformant block (#490, #496); strict
+has been the default since 0.1.1.
 
 ## 4. Required PROV-O structure
 
@@ -294,10 +298,14 @@ acceptable where a RecordSet is not itself an enumerable set of records.
 - Layer name `provenance`; issue codes `provenance.<kind>.<requirement>`, e.g.
   `provenance.missing.P1`, `provenance.invalid.H4.resultingLevel`,
   `provenance.mismatch.H4.anonymizationLevel`, `provenance.missing.A2`.
-- `path` is an RFC 6901 JSON Pointer to the offending or missing location in the **manifest as
-  submitted** (prefixed keys), e.g. `/prov:wasGeneratedBy/0/prov:startedAtTime`.
+- `path` is an RFC 6901 JSON Pointer to the offending or missing location in the **normalized**
+  manifest (prefixes stripped, the form the other four layers of `@oci/croissant` report on), e.g.
+  `/wasGeneratedBy/0/startedAtTime`. _Erratum, 2026-09-06: 0.1 said the pointer used the prefixed
+  key as submitted; the validator never did, and the layers are consistent on the normalized form._
 - `level` follows section 3 for the dataset's tier; the tier is passed to the validator by the
   caller (`validate(manifest, { accessTier })`); with no tier given, the layer reports at `OPEN`.
+  Strict is the default; `strictProvenance: false` selects the permissive reading of section 3. The
+  OCI publish endpoint passes the dataset row's tier and validates strict.
 - The layer never fails a manifest for **extra** properties; passthrough is preserved.
 - `extractProvenance(manifest)` returns the flat summary the UI and API render: source
   organizations, sites, timeframe, device classes, de-identification method and level, ethics
@@ -402,5 +410,8 @@ Marked so that the 9 September session reacts to a proposal rather than an open 
 
 ## 12. Change log
 
+- **0.1.1 (2026-09-06)** — errata §3/§8; strict enforcement default (#504). §8: issue pointers are on
+  the normalized manifest, consistent with the other layers. §3: the permissive reading is defined
+  (malformed → warning) and strict is the validator's default.
 - **0.1 (2026-09-04)** — first draft for the MLCommons provenance-and-governance session and WG-Data
   review. Implements ADR-0022.
