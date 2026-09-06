@@ -637,18 +637,143 @@ export const ManifestWizardCreatorSchema = z.object({
 export type ManifestWizardCreator = z.infer<typeof ManifestWizardCreatorSchema>;
 
 /**
- * Anonymisation level (BioCroissant). Mirrors the small canonical set
- * the validator recognises today; the wizard is intentionally narrower
- * than what a hand-written manifest can carry.
+ * Anonymisation level (BioCroissant). The four-level HIPAA-aligned scale
+ * the validator's `bio:anonymizationLevel` accepts — the same set the
+ * `bio-prov` de-identification activity's `resultingLevel` must equal
+ * (#496). The previous three-value set carried `PSEUDONYMIZED`, which
+ * the validator rejects; `DEIDENTIFIED` is the BIOCroissant spelling.
  */
 export const ManifestWizardAnonymizationLevelSchema = z.enum([
-  'ANONYMIZED',
-  'PSEUDONYMIZED',
   'IDENTIFIED',
+  'LIMITED',
+  'DEIDENTIFIED',
+  'ANONYMIZED',
 ]);
 export type ManifestWizardAnonymizationLevel = z.infer<
   typeof ManifestWizardAnonymizationLevelSchema
 >;
+
+// ---- Provenance step (bio-prov v0.1, #496) ---------------------------------
+//
+// Dataset-level answers to the first four questions of the profile
+// (`docs/standards/bio-prov-v0.1.md`, section 1): where the data came
+// from, what was done to it, under what authority, how the ground truth
+// was produced. This schema checks *shape* only (lengths, date and
+// country formats, integer counts). Which blocks a dataset MUST fill
+// depends on its access tier and is decided by the `provenance`
+// validator layer of `@oci/croissant`, not here — so every field
+// accepts the empty string and the builder omits what is blank.
+
+const isoDateOrBlank = (v: string): boolean => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v);
+const countryOrBlank = (v: string): boolean => v === '' || /^[A-Z]{2}$/.test(v);
+
+/** A calendar date (`YYYY-MM-DD`) or blank. */
+const WizardDateSchema = z.string().max(10).refine(isoDateOrBlank, 'expected ISO date YYYY-MM-DD');
+
+/** H4 — the pass that produced the declared anonymisation level. */
+export const ManifestWizardDeidentificationMethodSchema = z.enum([
+  'SAFE_HARBOR',
+  'EXPERT_DETERMINATION',
+  'PSEUDONYMISATION',
+  'SYNTHETIC',
+  'NONE',
+]);
+export type ManifestWizardDeidentificationMethod = z.infer<
+  typeof ManifestWizardDeidentificationMethodSchema
+>;
+
+/** H1 — one contributing site. `country` is ISO 3166-1 alpha-2. */
+export const ManifestWizardSourceSiteSchema = z.object({
+  name: z.string().max(200),
+  country: z.string().max(2).refine(countryOrBlank, 'expected an ISO 3166-1 alpha-2 country code'),
+});
+export type ManifestWizardSourceSite = z.infer<typeof ManifestWizardSourceSiteSchema>;
+
+export const ManifestWizardProvenanceSchema = z.object({
+  /** P1 — `prov:wasAttributedTo` a `prov:Organization`. `id` is a ROR / GRID / institution URL. */
+  sourceOrganization: z.object({
+    name: z.string().max(200),
+    id: z.string().max(2000),
+  }),
+  /**
+   * P2 / P4 — the dated collection (or derivation) activity and the agent
+   * that ran it. A blank `agentName` falls back to the source organisation.
+   */
+  collection: z.object({
+    name: z.string().max(500),
+    startedAt: WizardDateSchema,
+    endedAt: WizardDateSchema,
+    agentName: z.string().max(200),
+    /** When true the agent is emitted as a `prov:SoftwareAgent` acting on behalf of the source organisation. */
+    agentIsSoftware: z.boolean(),
+  }),
+  /** P3 — IRI (a DOI is preferred) of the upstream dataset, when this one is derived. */
+  derivedFrom: z.string().max(2000),
+  /** H1 */
+  sites: z.array(ManifestWizardSourceSiteSchema).max(50),
+  /** H2 — `rai:dataCollectionTimeframe`, the human account of when data was collected. */
+  collectionTimeframe: z.string().max(500),
+  /** H3 — a device class term (DICOM modality, GMDN) and/or the acquisition equipment. */
+  deviceClass: z.string().max(200),
+  equipment: z.object({
+    manufacturer: z.string().max(200),
+    model: z.string().max(200),
+    softwareVersion: z.string().max(100),
+  }),
+  /** H4 — `resultingLevel` is kept equal to `anonymizationLevel` by the builder. */
+  deidentification: z.object({
+    method: z.union([ManifestWizardDeidentificationMethodSchema, z.literal('')]),
+    endedAt: WizardDateSchema,
+    /** `tool@version` of the de-identification software, when one ran. */
+    toolName: z.string().max(200),
+  }),
+  /** H5 — `bio:irbApproval`. */
+  ethics: z.object({
+    approvingBody: z.string().max(300),
+    approvalNumber: z.string().max(200),
+    approvalDate: WizardDateSchema,
+    /** Whether the approval covers evaluation of third-party AI models (spec H5). */
+    approvalScope: z.string().max(2000),
+  }),
+  /** H6 — `bio:labelProtocol`. */
+  labelProtocol: z.object({
+    version: z.string().max(200),
+    labelScale: z.string().max(500),
+    gradersPerItem: z.number().int().min(1).max(1000).optional(),
+    graderQualification: z.string().max(500),
+    adjudication: z.string().max(500),
+    interRaterAgreement: z.object({
+      metric: z.string().max(100),
+      value: z.number().optional(),
+    }),
+    perRaterLabelsRetained: z.boolean().optional(),
+  }),
+});
+export type ManifestWizardProvenance = z.infer<typeof ManifestWizardProvenanceSchema>;
+
+/** The provenance step's initial state: every field blank. */
+export function emptyManifestWizardProvenance(): ManifestWizardProvenance {
+  return {
+    sourceOrganization: { name: '', id: '' },
+    collection: { name: '', startedAt: '', endedAt: '', agentName: '', agentIsSoftware: false },
+    derivedFrom: '',
+    sites: [],
+    collectionTimeframe: '',
+    deviceClass: '',
+    equipment: { manufacturer: '', model: '', softwareVersion: '' },
+    deidentification: { method: '', endedAt: '', toolName: '' },
+    ethics: { approvingBody: '', approvalNumber: '', approvalDate: '', approvalScope: '' },
+    labelProtocol: {
+      version: '',
+      labelScale: '',
+      gradersPerItem: undefined,
+      graderQualification: '',
+      adjudication: '',
+      interRaterAgreement: { metric: '', value: undefined },
+      perRaterLabelsRetained: undefined,
+    },
+  };
+}
 
 /**
  * One distribution (a file) in the wizard's flat shape. The Croissant
@@ -708,12 +833,18 @@ export const ManifestWizardInputSchema = z.object({
   diseaseCondition: z.array(z.string().min(1).max(200)).max(20).default([]),
   anonymizationLevel: ManifestWizardAnonymizationLevelSchema.optional(),
 
-  // Step 4 — Data use (DUO) — required for non-PUBLIC datasets per
+  // Step 4 — Provenance (bio-prov v0.1, #496). Present whenever the host
+  // went through the guided flow; the builder then emits the profile
+  // marker and whichever blocks were filled. Absent for callers that
+  // predate the step.
+  provenance: ManifestWizardProvenanceSchema.optional(),
+
+  // Step 5 — Data use (DUO) — required for non-PUBLIC datasets per
   // publish-time fail-closed (J.1 decision #2). The wizard nudges the
   // host to pick at least one for every visibility level except PUBLIC.
   duoTerms: z.array(DuoTermIdSchema).max(20).default([]),
 
-  // Step 5 — Distributions
+  // Step 6 — Distributions
   distributions: z.array(ManifestWizardDistributionSchema).max(100).default([]),
 
   // Notes — pass-through to the publish action's `notes` field; not

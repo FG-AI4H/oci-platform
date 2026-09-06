@@ -3,7 +3,13 @@
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { DatasetSlugSchema, PublishDatasetVersionRequestSchema } from '@oci/shared-types';
+import {
+  AccessTierSchema,
+  DatasetSlugSchema,
+  PublishDatasetVersionRequestSchema,
+  type AccessTier,
+} from '@oci/shared-types';
+import { PROVENANCE_REQUIREMENTS, validate, type RequirementId } from '@oci/croissant';
 import { auth } from '../../../../auth';
 import { isHost } from '../../../../lib/groups';
 
@@ -162,6 +168,132 @@ export async function publishVersionAction(
   // redirect lands on a stale render and misleads "did it work?".
   revalidatePath(`/catalog/${parsed.data.slug}`);
   redirect(`/catalog/${parsed.data.slug}`);
+}
+
+// ---- Provenance pre-flight (bio-prov v0.1, #496) --------------------------
+
+/** One `provenance.*` issue, ready to render inline on the wizard. */
+export interface ProvenanceIssue {
+  /** `P1`…`H6`, or `A1`…`A3`; null for the profile-marker check. */
+  requirementId: RequirementId | null;
+  /** Stable validator code, e.g. `provenance.missing.H5`. */
+  code: string;
+  /** RFC 6901 pointer into the normalised manifest. */
+  path: string;
+  level: 'error' | 'warning';
+  /** "H5 · Ethics approval (IRB) is required for a SENSITIVE dataset". */
+  headline: string;
+  /** The validator's own message, for the detail line. */
+  detail: string;
+}
+
+export type ProvenancePreflightState =
+  | { status: 'idle' }
+  | { status: 'error'; message: string }
+  | {
+      status: 'checked';
+      accessTier: AccessTier;
+      /** `provenance.*` issues, strict obligation table applied (spec section 3). */
+      issues: ProvenanceIssue[];
+      /** Issues from the other layers, verbatim — the API will refuse these. */
+      otherErrors: ManifestIssue[];
+    };
+
+/** Plain-language names for the requirement ids, expanding acronyms once. */
+const REQUIREMENT_LABEL: Readonly<Record<RequirementId, string>> = {
+  P1: 'Source organisation',
+  P2: 'Dated collection or derivation activity',
+  P3: 'Upstream dataset this one was derived from',
+  P4: 'Agent that ran the collection',
+  H1: 'Source sites with countries',
+  H2: 'Collection timeframe',
+  H3: 'Acquisition device or scanner class',
+  H4: 'De-identification activity',
+  H5: 'Ethics approval (IRB, institutional review board)',
+  H6: 'Label-production protocol',
+  A1: 'Annotation write-back as a derived entity',
+  A2: 'Annotation write-back hash-chain root',
+  A3: 'Annotation write-back receipt references',
+};
+
+const REQUIREMENT_IDS = new Set<string>(PROVENANCE_REQUIREMENTS.map((r) => r.id));
+
+function requirementIdOf(code: string): RequirementId | null {
+  // `provenance.<kind>.<id>[.<field>]`
+  const id = code.split('.')[2] ?? '';
+  return REQUIREMENT_IDS.has(id) ? (id as RequirementId) : null;
+}
+
+const PreflightSchema = z.object({
+  // Generous cap: the wizard's manifests are a few kilobytes; a paste-form
+  // manifest never reaches this action.
+  manifest: z.string().min(2).max(1_000_000),
+  accessTier: AccessTierSchema,
+});
+
+/**
+ * Run the `bio-prov` obligations of the dataset's access tier over the
+ * wizard's draft manifest, with the table applied **as written** (MUST →
+ * error, SHOULD → warning), and return the `provenance.*` issues shaped
+ * for inline display. This is advisory: the publish endpoint runs the
+ * same validator in its own (permissive, #504) mode and is what blocks —
+ * the wizard only follows that verdict, exactly as it does for the
+ * other layers.
+ */
+export async function preflightProvenanceAction(
+  manifestJson: string,
+  accessTier: string,
+): Promise<ProvenancePreflightState> {
+  const session = await auth();
+  if (!session?.accessToken || !isHost(session)) {
+    return { status: 'error', message: 'Only hosts can publish dataset versions.' };
+  }
+  const parsed = PreflightSchema.safeParse({ manifest: manifestJson, accessTier });
+  if (!parsed.success) {
+    return { status: 'error', message: 'Could not check provenance: invalid request.' };
+  }
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(parsed.data.manifest);
+  } catch {
+    return { status: 'error', message: 'Could not check provenance: manifest is not valid JSON.' };
+  }
+
+  const tier = parsed.data.accessTier;
+  const result = validate(manifest, { accessTier: tier, strictProvenance: true });
+
+  const issues: ProvenanceIssue[] = [];
+  const otherErrors: ManifestIssue[] = [];
+  for (const issue of result.issues) {
+    if (!issue.code.startsWith('provenance.')) {
+      if (issue.level === 'error') {
+        otherErrors.push({ path: issue.path, message: issue.message, severity: issue.level });
+      }
+      continue;
+    }
+    const id = requirementIdOf(issue.code);
+    const label = id ? REQUIREMENT_LABEL[id] : 'Provenance profile marker';
+    const kind = issue.code.split('.')[1];
+    let headline: string;
+    if (kind === 'missing') {
+      const obligation = issue.level === 'error' ? 'required' : 'recommended';
+      headline = `${id ?? ''} · ${label} is ${obligation} for a ${tier} dataset`.trimStart();
+    } else if (kind === 'mismatch') {
+      headline = `${id ?? ''} · ${label} disagrees with another field`.trimStart();
+    } else {
+      headline = `${id ?? ''} · ${label} is present but incomplete or malformed`.trimStart();
+    }
+    issues.push({
+      requirementId: id,
+      code: issue.code,
+      path: issue.path,
+      level: issue.level,
+      headline,
+      detail: issue.message,
+    });
+  }
+
+  return { status: 'checked', accessTier: tier, issues, otherErrors };
 }
 
 /**
