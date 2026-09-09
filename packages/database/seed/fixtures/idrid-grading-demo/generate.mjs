@@ -45,6 +45,10 @@ const ZENODO_URL =
   'https://zenodo.org/api/records/17219542/files/B.%20Disease%20Grading.zip/content';
 const HOST_ID = '00000000-0000-4000-8000-000000000099'; // dev-stub host, per demo.sql
 const UPSTREAM_DOI = 'https://doi.org/10.3390/data3030025'; // Porwal et al., 2018, Data 3(3):25
+// bio-prov v0.2 conformance target + DPV AI activity types (docs/standards/bio-prov-v0.2.md).
+const BIO_PROV_TARGET = 'https://oci.ai4h.net/biocroissant/bio-prov/0.2';
+const DPV_AI_DATA_COLLECTION = 'https://w3id.org/dpv/ai#DataCollection';
+const DPV_AI_DATA_LABELLING = 'https://w3id.org/dpv/ai#DataLabelling';
 // PROV-O activity timestamps for the slice. Bump when regenerating the slice
 // with different parameters; keep as-is for a byte-identical regeneration.
 const SLICE_GENERATED_AT = '2026-07-30T00:00:00Z';
@@ -190,7 +194,9 @@ const manifest = {
     bio: 'https://oci.ai4h.net/biocroissant/v0.1#',
   },
   '@type': 'sc:Dataset',
-  'dct:conformsTo': 'http://mlcommons.org/croissant/1.1',
+  // Croissant 1.1 plus the bio-prov v0.2 profile target: the array form is
+  // what opts the manifest into the provenance layer (spec section 2).
+  'dct:conformsTo': ['http://mlcommons.org/croissant/1.1', BIO_PROV_TARGET],
   name: 'IDRiD — DR Grading (OCI demo slice)',
   description:
     `A ${distributions.length}-image, downsampled (${MAX_DIM}px) class-stratified slice of the ` +
@@ -255,12 +261,12 @@ const manifest = {
   'rai:dataAnnotationProtocol':
     'Two ophthalmologists (>25 yrs) graded independently; a third adjudicated disagreements (from source IDRiD).',
   'bio:anonymizationLevel': 'ANONYMIZED',
-  // ----- bio-prov v0.1 (docs/standards/bio-prov-v0.1.md, ADR-0022) ----------
-  // The marker opts the manifest into the provenance layer. With H2 (timeframe)
-  // and H6 (label protocol) filled, the slice is conformant at OPEN in strict
+  // ----- bio-prov v0.2 (docs/standards/bio-prov-v0.2.md, ADR-0022) ----------
+  // The conformance target above opts the manifest into the provenance layer.
+  // With H2 (a dated collection activity), H6 (label protocol) and H6b (the
+  // labelling activity below) filled, the slice is conformant at OPEN in strict
   // mode: P1–P4 come from the PROV-O block below; H1, H3, H4, H5 are MAY at OPEN.
   // No inter-rater agreement value: the IDRiD paper does not publish one.
-  'bio:provenanceProfile': 'bio-prov/0.1',
   'rai:dataCollectionTimeframe':
     'IDRiD source collection published 2018; OCI demo slice prepared 30 July 2026',
   'bio:labelProtocol': {
@@ -279,19 +285,46 @@ const manifest = {
     '@id': UPSTREAM_DOI,
     name: 'IDRiD — Indian Diabetic Retinopathy Image Dataset, B. Disease Grading (testing set)',
   },
-  'prov:wasGeneratedBy': {
-    '@type': 'prov:Activity',
-    '@id': '#activity-oci-demo-slice-v1',
-    name: `Class-stratified ${distributions.length}-image slice of the IDRiD disease-grading testing set, downsampled to ${MAX_DIM} px`,
-    'prov:startedAtTime': SLICE_GENERATED_AT,
-    'prov:endedAtTime': SLICE_GENERATED_AT,
-    'prov:used': UPSTREAM_DOI,
-    'prov:wasAssociatedWith': {
-      '@type': 'prov:SoftwareAgent',
-      name: `oci-platform ${SLUG} generate.mjs`,
-      'prov:actedOnBehalfOf': { '@type': 'prov:Organization', name: 'OCI Platform (GI-AI4H)' },
+  // Two activities: the slice derivation (dpv:DataCollection, dated — H2) and
+  // the grading that produced the ground truth (dpv:DataLabelling — H6b). The
+  // labelling activity carries no time: the IDRiD paper does not date the
+  // grading, and inventing one would be worse than omitting it.
+  'prov:wasGeneratedBy': [
+    {
+      '@type': ['prov:Activity', DPV_AI_DATA_COLLECTION],
+      '@id': '#activity-oci-demo-slice-v1',
+      name: `Class-stratified ${distributions.length}-image slice of the IDRiD disease-grading testing set, downsampled to ${MAX_DIM} px`,
+      'prov:startedAtTime': SLICE_GENERATED_AT,
+      'prov:endedAtTime': SLICE_GENERATED_AT,
+      'prov:used': UPSTREAM_DOI,
+      'prov:wasAssociatedWith': {
+        '@type': 'prov:SoftwareAgent',
+        name: `oci-platform ${SLUG} generate.mjs`,
+        'prov:actedOnBehalfOf': { '@type': 'prov:Organization', name: 'OCI Platform (GI-AI4H)' },
+      },
     },
-  },
+    {
+      '@type': ['prov:Activity', DPV_AI_DATA_LABELLING],
+      '@id': '#activity-idrid-disease-grading',
+      name: 'Independent disease grading of the source IDRiD images, with adjudication',
+      // The guideline as an entity, not a sentence (H6b). Same protocol as
+      // bio:labelProtocol.version above; the prose stays in
+      // rai:dataAnnotationProtocol.
+      'prov:used': {
+        '@type': 'prov:Entity',
+        '@id': '#guideline-idrid-2018-disease-grading',
+        name: 'IDRiD 2018 disease-grading protocol',
+        version: '2018',
+      },
+      // Roles, never identities: two ophthalmologists graded independently and
+      // a third adjudicated, so the roles present are annotator and
+      // adjudicator. Counts stay in bio:labelProtocol.
+      'prov:wasAssociatedWith': [
+        { '@type': 'prov:Person', 'prov:hadRole': 'Annotator' },
+        { '@type': 'prov:Person', 'prov:hadRole': 'Adjudicator' },
+      ],
+    },
+  ],
   'prov:wasAttributedTo': [
     {
       '@type': 'prov:Organization',

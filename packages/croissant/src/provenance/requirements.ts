@@ -621,9 +621,17 @@ const H2: ProvenanceRequirement = {
         ),
       ];
     }
+    // When the collection activity *is* the P2 generating activity — the
+    // common single-activity case — P2 already reports a malformed time at
+    // that pointer, so H2 checks presence only and does not repeat it.
+    const generating = findGeneratingActivity(manifest);
+    const timeProblems =
+      generating !== null && generating.path === activity.path
+        ? []
+        : activityTimeProblems(activity);
     return [
       fromProblems('H2', activity.path, 'collection activity dated', [
-        ...activityTimeProblems(activity),
+        ...timeProblems,
         ...textProblems,
       ]),
     ];

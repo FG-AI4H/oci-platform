@@ -10,7 +10,10 @@
     "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
   },
   "@type": "sc:Dataset",
-  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
+  "dct:conformsTo": [
+    "http://mlcommons.org/croissant/1.1",
+    "https://oci.ai4h.net/biocroissant/bio-prov/0.2"
+  ],
   "name": "IDRiD — DR Grading (OCI demo slice)",
   "description": "A 30-image, downsampled (512px) class-stratified slice of the IDRiD \"Disease Grading\" testing set, hosted in OCI storage to demonstrate the catalogue → gated download → evaluation flow end to end. Ground-truth grades are held by the evaluation service and are never published as a distribution. Derived from IDRiD (CC BY 4.0); see citeAs.",
   "url": "https://idrid.grand-challenge.org/",
@@ -334,13 +337,19 @@
           "@id": "labels/dr_grade",
           "name": "dr_grade",
           "description": "ICDR scale: 0 No DR; 1 Mild NPDR; 2 Moderate NPDR; 3 Severe NPDR; 4 Proliferative DR. Referable = grade >= 2.",
-          "dataType": ["sc:Integer", "cr:Label"]
+          "dataType": [
+            "sc:Integer",
+            "cr:Label"
+          ]
         },
         {
           "@type": "cr:Field",
           "@id": "labels/dme_risk",
           "name": "dme_risk",
-          "dataType": ["sc:Integer", "cr:Label"]
+          "dataType": [
+            "sc:Integer",
+            "cr:Label"
+          ]
         }
       ]
     }
@@ -362,7 +371,6 @@
   ],
   "rai:dataAnnotationProtocol": "Two ophthalmologists (>25 yrs) graded independently; a third adjudicated disagreements (from source IDRiD).",
   "bio:anonymizationLevel": "ANONYMIZED",
-  "bio:provenanceProfile": "bio-prov/0.1",
   "rai:dataCollectionTimeframe": "IDRiD source collection published 2018; OCI demo slice prepared 30 July 2026",
   "bio:labelProtocol": {
     "version": "IDRiD 2018 disease-grading protocol",
@@ -377,22 +385,51 @@
     "@id": "https://doi.org/10.3390/data3030025",
     "name": "IDRiD — Indian Diabetic Retinopathy Image Dataset, B. Disease Grading (testing set)"
   },
-  "prov:wasGeneratedBy": {
-    "@type": "prov:Activity",
-    "@id": "#activity-oci-demo-slice-v1",
-    "name": "Class-stratified 30-image slice of the IDRiD disease-grading testing set, downsampled to 512 px",
-    "prov:startedAtTime": "2026-07-30T00:00:00Z",
-    "prov:endedAtTime": "2026-07-30T00:00:00Z",
-    "prov:used": "https://doi.org/10.3390/data3030025",
-    "prov:wasAssociatedWith": {
-      "@type": "prov:SoftwareAgent",
-      "name": "oci-platform idrid-grading-demo generate.mjs",
-      "prov:actedOnBehalfOf": {
-        "@type": "prov:Organization",
-        "name": "OCI Platform (GI-AI4H)"
+  "prov:wasGeneratedBy": [
+    {
+      "@type": [
+        "prov:Activity",
+        "https://w3id.org/dpv/ai#DataCollection"
+      ],
+      "@id": "#activity-oci-demo-slice-v1",
+      "name": "Class-stratified 30-image slice of the IDRiD disease-grading testing set, downsampled to 512 px",
+      "prov:startedAtTime": "2026-07-30T00:00:00Z",
+      "prov:endedAtTime": "2026-07-30T00:00:00Z",
+      "prov:used": "https://doi.org/10.3390/data3030025",
+      "prov:wasAssociatedWith": {
+        "@type": "prov:SoftwareAgent",
+        "name": "oci-platform idrid-grading-demo generate.mjs",
+        "prov:actedOnBehalfOf": {
+          "@type": "prov:Organization",
+          "name": "OCI Platform (GI-AI4H)"
+        }
       }
+    },
+    {
+      "@type": [
+        "prov:Activity",
+        "https://w3id.org/dpv/ai#DataLabelling"
+      ],
+      "@id": "#activity-idrid-disease-grading",
+      "name": "Independent disease grading of the source IDRiD images, with adjudication",
+      "prov:used": {
+        "@type": "prov:Entity",
+        "@id": "#guideline-idrid-2018-disease-grading",
+        "name": "IDRiD 2018 disease-grading protocol",
+        "version": "2018"
+      },
+      "prov:wasAssociatedWith": [
+        {
+          "@type": "prov:Person",
+          "prov:hadRole": "Annotator"
+        },
+        {
+          "@type": "prov:Person",
+          "prov:hadRole": "Adjudicator"
+        }
+      ]
     }
-  },
+  ],
   "prov:wasAttributedTo": [
     {
       "@type": "prov:Organization",
@@ -408,7 +445,11 @@
     "@id": "#offer-cc-by-4.0",
     "odrl:permission": [
       {
-        "odrl:action": ["odrl:use", "odrl:distribute", "odrl:derive"],
+        "odrl:action": [
+          "odrl:use",
+          "odrl:distribute",
+          "odrl:derive"
+        ],
         "odrl:target": "idrid-grading-demo",
         "odrl:duty": [
           {

@@ -213,6 +213,11 @@ The collection activity — the activity typed `https://w3id.org/dpv/ai#DataColl
 activity carries that type, the P2 generating activity — MUST carry a time in one of the two forms of
 section 4 (`prov:atTime`, or both bounds). That is the machine-readable answer to "collected when".
 
+When the collection activity is also the P2 generating activity — one activity, the common case —
+the two requirements overlap: P2 reports a malformed or absent time as an `invalid` problem at every
+tier, and H2 reports the absence at its own tier obligation. A malformed value is reported once, by
+P2.
+
 `rai:dataCollectionTimeframe` (free text, RAI) is **optional** at every tier: the Croissant
 Responsible AI specification's attribute table no longer carries it. When present it MUST be a
 non-empty string, it stays the human account, and `extractProvenance` surfaces it.
