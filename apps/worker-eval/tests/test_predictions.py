@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -141,3 +142,80 @@ def test_input_dir_resolution_stays_under_the_root(tmp_path: Path) -> None:
     assert resolve_input_dir(tmp_path, "idrid-grading") == (tmp_path / "idrid-grading").resolve()
     with pytest.raises(InputError):
         resolve_input_dir(tmp_path, "../etc")
+
+
+# ---------------------------------------------------------------------------
+# /output is participant-controlled, so every check happens on one descriptor
+# rather than on the name. All four reported by team NOFOM (#514).
+# ---------------------------------------------------------------------------
+
+
+def _output(tmp_path: Path) -> Path:
+    out = tmp_path / "output"
+    out.mkdir()
+    return out
+
+
+def test_a_symlinked_predictions_file_is_refused(tmp_path: Path) -> None:
+    """The container could point predictions.json at a host file and have the
+    worker read it. O_NOFOLLOW makes that ELOOP rather than a read."""
+    secret = tmp_path / "host-secret.json"
+    secret.write_text('{"predictions": {"a": 1}}', encoding="utf-8")
+    out = _output(tmp_path)
+    (out / "predictions.json").symlink_to(secret)
+    with pytest.raises(PredictionsError) as excinfo:
+        read_predictions(out, INDEX, 1024)
+    assert excinfo.value.code is Code.MALFORMED_OUTPUT
+
+
+def test_a_hardlinked_predictions_file_is_refused(tmp_path: Path) -> None:
+    """A hardlink survives O_NOFOLLOW, so the link count is checked too."""
+    out = _output(tmp_path)
+    real = out / "predictions.json"
+    real.write_text('{"predictions": {"a": 1}}', encoding="utf-8")
+    (tmp_path / "second-name.json").hardlink_to(real)
+    with pytest.raises(PredictionsError) as excinfo:
+        read_predictions(out, INDEX, 1024)
+    assert excinfo.value.code is Code.MALFORMED_OUTPUT
+
+
+def test_a_fifo_in_place_of_predictions_is_refused(tmp_path: Path) -> None:
+    """Not a regular file. O_NONBLOCK is what stops this hanging the worker."""
+    out = _output(tmp_path)
+    os.mkfifo(out / "predictions.json")
+    with pytest.raises(PredictionsError) as excinfo:
+        read_predictions(out, INDEX, 1024)
+    assert excinfo.value.code is Code.MALFORMED_OUTPUT
+
+
+def test_the_read_is_capped_even_if_the_size_check_understated_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The size check and the read used to be separate lookups, so a container
+    could pass the check and then grow the file. Simulated by having fstat
+    understate a file that is really over the cap: the read must still refuse."""
+    out = _output(tmp_path)
+    (out / "predictions.json").write_bytes(b'{"predictions": {"a": 1}}' + b" " * 4096)
+    real_fstat = os.fstat
+
+    class _Understated:
+        def __init__(self, info: os.stat_result) -> None:
+            self._info = info
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._info, name)
+
+        @property
+        def st_size(self) -> int:
+            return 8
+
+    monkeypatch.setattr(os, "fstat", lambda fd: _Understated(real_fstat(fd)))
+    with pytest.raises(PredictionsError) as excinfo:
+        read_predictions(out, INDEX, 64)
+    assert excinfo.value.code is Code.OUTPUT_TOO_LARGE
+
+
+def test_a_missing_predictions_file_is_still_no_output(tmp_path: Path) -> None:
+    with pytest.raises(PredictionsError) as excinfo:
+        read_predictions(_output(tmp_path), INDEX, 1024)
+    assert excinfo.value.code is Code.NO_OUTPUT

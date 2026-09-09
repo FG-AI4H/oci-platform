@@ -307,7 +307,23 @@ def pull_by_digest(client: Any, message: SealedRunMessage) -> Any:
     if image is None:
         raise SandboxError(Code.IMAGE_PULL_FAILED, operator_detail_pull_failed(message.imageDigest))
     verify_pulled_digest(image, message.imageDigest)
+    reject_image_declared_volumes(client, message, image)
     return image
+
+
+def reject_image_declared_volumes(client: Any, message: Any, image: Any) -> None:
+    """An image that declares its own VOLUMEs gets anonymous docker volumes
+    mounted at those paths, which displaces the read-only root and the
+    size-capped tmpfs at /output. The declared output cap then stops applying to
+    a path the participant chose. Reported by team NOFOM (#514)."""
+    declared = ((getattr(image, "attrs", None) or {}).get("Config") or {}).get("Volumes")
+    if not declared:
+        return
+    prune_image(client, message.imageRef, image)
+    raise SandboxError(
+        Code.STARTUP_FAILED,
+        f"image declares {len(declared)} volume(s); image-declared volumes are unsupported",
+    )
 
 
 def verify_pulled_digest(image: Any, expected_digest: str) -> None:
@@ -355,6 +371,11 @@ def execute(
     try:
         container = client.containers.run(message.imageRef, **kwargs)
     except Exception as err:
+        # The prune in the run loop's `finally` is only reached once the
+        # container exists, so an image that pulls but fails to start was being
+        # left in the host image cache. Reported by team NOFOM (#514).
+        if sandbox.prune_image_after_run:
+            prune_image(client, message.imageRef, image)
         raise SandboxError(
             Code.STARTUP_FAILED, operator_detail_startup_failed(type(err).__name__)
         ) from err
