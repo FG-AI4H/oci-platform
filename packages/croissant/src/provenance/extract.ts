@@ -1,6 +1,6 @@
 import { normalize } from '../validator/normalize.js';
 import {
-  findGeneratingActivity,
+  findCollectionActivity,
   findWriteBackDistributions,
   type NormalizedManifest,
 } from './requirements.js';
@@ -20,8 +20,13 @@ export interface ProvenanceSummary {
   sourceOrganizations: string[];
   /** `bio:sourceSite` entries with a name; `country` is `''` when absent. */
   sites: Array<{ name: string; country: string }>;
-  /** `startedAtTime` / `endedAtTime` of the generating activity. */
+  /**
+   * The collection activity's time: `startedAtTime` / `endedAtTime`, or
+   * both set to `prov:atTime` when the activity gives an instant.
+   */
   timeframe: { start: string; end: string } | null;
+  /** `rai:dataCollectionTimeframe` free text when the manifest carries it. */
+  collectionTimeframeText: string | null;
   /** `bio:deviceClass` labels, then `manufacturer [model]` of acquisition equipment. */
   deviceClasses: string[];
   deidentification: { method: string; resultingLevel: string } | null;
@@ -57,6 +62,7 @@ export function extractProvenance(manifest: unknown): ProvenanceSummary {
     sourceOrganizations: [],
     sites: [],
     timeframe: null,
+    collectionTimeframeText: null,
     deviceClasses: [],
     deidentification: null,
     ethicsApproval: null,
@@ -81,11 +87,15 @@ export function extractProvenance(manifest: unknown): ProvenanceSummary {
     return name ? [{ name, country: str(s['country']) ?? '' }] : [];
   });
 
-  // P2 — timeframe
-  const activity = findGeneratingActivity(m);
+  // H2 — the collection activity's time (an instant or the two bounds)
+  // plus the RAI free text when present.
+  const activity = findCollectionActivity(m);
+  const at = activity ? str(activity.value['atTime']) : null;
   const start = activity ? str(activity.value['startedAtTime']) : null;
   const end = activity ? str(activity.value['endedAtTime']) : null;
-  const timeframe = start !== null && end !== null ? { start, end } : null;
+  const timeframe =
+    at !== null ? { start: at, end: at } : start !== null && end !== null ? { start, end } : null;
+  const collectionTimeframeText = str(m['dataCollectionTimeframe']);
 
   // H3 — device classes
   const deviceClasses = dedupe([
@@ -144,6 +154,7 @@ export function extractProvenance(manifest: unknown): ProvenanceSummary {
     sourceOrganizations,
     sites,
     timeframe,
+    collectionTimeframeText,
     deviceClasses,
     deidentification,
     ethicsApproval,

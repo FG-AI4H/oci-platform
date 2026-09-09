@@ -11,7 +11,7 @@
  * to express every Croissant 1.1 capability. Hosts who need
  * RecordSets, Fields with detailed type definitions, ODRL Offers,
  * RecordSet-level provenance, etc. use the paste-form escape hatch.
- * Dataset-level provenance (`bio-prov` v0.1: PROV-O attribution,
+ * Dataset-level provenance (`bio-prov` v0.2: PROV-O attribution,
  * generating activity, derivation, plus the health qualifiers) is
  * authorable through the wizard's Provenance step since #496 — see
  * `buildProvenance`. The generated manifest is always a valid
@@ -21,7 +21,11 @@
 
 import type { ManifestWizardInput, ManifestWizardProvenance } from '@oci/shared-types';
 import { NS } from '../namespaces/index.js';
-import { PROVENANCE_PROFILE_VERSION } from '../provenance/schema.js';
+import {
+  DPV_AI_DATA_COLLECTION,
+  DPV_AI_DATA_LABELLING,
+  PROVENANCE_CONFORMANCE_TARGET,
+} from '../provenance/schema.js';
 
 const STANDARD_CONTEXT: Record<string, string> = {
   '@language': 'en',
@@ -94,11 +98,13 @@ export function manifestWizardInputToCroissant(
     }));
   }
 
-  // Provenance (bio-prov v0.1, #496) — the profile marker plus whichever
-  // blocks the host filled. Emitted whenever the step was visited, even
-  // with nothing filled: the marker is what makes the validator report
-  // the tier's obligations, which is the feedback the host needs.
+  // Provenance (bio-prov v0.2, #496, #519) — whichever blocks the host
+  // filled, plus the profile's conformance target next to the Croissant
+  // one. Emitted whenever the step was visited, even with nothing filled:
+  // the target is what makes the validator report the tier's obligations,
+  // which is the feedback the host needs.
   if (input.provenance) {
+    out['dct:conformsTo'] = [input.conformsTo, PROVENANCE_CONFORMANCE_TARGET];
     Object.assign(out, buildProvenance(input.provenance, input.anonymizationLevel));
   }
 
@@ -155,7 +161,7 @@ export function buildProvenance(
   p: ManifestWizardProvenance,
   anonymizationLevel: ManifestWizardInput['anonymizationLevel'],
 ): Record<string, unknown> {
-  const out: Record<string, unknown> = { 'bio:provenanceProfile': PROVENANCE_PROFILE_VERSION };
+  const out: Record<string, unknown> = {};
 
   // P1 — source organisation.
   const orgName = text(p.sourceOrganization.name);
@@ -176,10 +182,11 @@ export function buildProvenance(
   // P2 / P4 — the generating activity and its agent. A blank agent falls
   // back to the source organisation (the spec's own example); a software
   // agent acts on behalf of it.
+  const activities: Array<Record<string, unknown>> = [];
   const c = p.collection;
   if (!blank(c.name) || !blank(c.startedAt) || !blank(c.endedAt) || !blank(c.agentName)) {
     const activity: Record<string, unknown> = {
-      '@type': 'prov:Activity',
+      '@type': ['prov:Activity', DPV_AI_DATA_COLLECTION],
       '@id': derivedFrom ? '#derivation' : '#collection',
     };
     if (!blank(c.name)) activity.name = text(c.name);
@@ -197,7 +204,7 @@ export function buildProvenance(
       activity['prov:wasAssociatedWith'] = organization;
     }
     if (derivedFrom) activity['prov:used'] = derivedFrom;
-    out['prov:wasGeneratedBy'] = activity;
+    activities.push(activity);
   }
 
   // H1 — sites. A site with no name is a blank row and is dropped.
@@ -272,6 +279,34 @@ export function buildProvenance(
     protocol.perRaterLabelsRetained = lp.perRaterLabelsRetained;
   }
   if (Object.keys(protocol).length > 0) out['bio:labelProtocol'] = protocol;
+
+  // H6b — the same label protocol as a dpv/ai#DataLabelling activity: the
+  // guideline as an entity, and one agent per role the wizard knows about.
+  // Roles only, never identities (spec section 5, H6b). Keyed on the
+  // protocol version: without it there is no guideline to point at.
+  const guidelineVersion = protocol['version'];
+  if (typeof guidelineVersion === 'string') {
+    const agents: Array<Record<string, unknown>> = [
+      { '@type': 'prov:Person', 'prov:hadRole': 'Annotator' },
+    ];
+    if (!blank(lp.adjudication)) {
+      agents.push({ '@type': 'prov:Person', 'prov:hadRole': 'Adjudicator' });
+    }
+    activities.push({
+      '@type': ['prov:Activity', DPV_AI_DATA_LABELLING],
+      '@id': '#labelling',
+      name: `Label production under ${guidelineVersion}`,
+      'prov:used': {
+        '@type': 'prov:Entity',
+        '@id': '#label-protocol',
+        name: guidelineVersion,
+      },
+      'prov:wasAssociatedWith': agents,
+    });
+  }
+
+  if (activities.length === 1) out['prov:wasGeneratedBy'] = activities[0];
+  else if (activities.length > 1) out['prov:wasGeneratedBy'] = activities;
 
   return out;
 }

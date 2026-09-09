@@ -21,6 +21,14 @@ export const NS = {
    * 301-redirect to the WG-Data canonical IRI once assigned.
    */
   bio: 'https://oci.ai4h.net/biocroissant/v0.1#',
+  /**
+   * Data Privacy Vocabulary — AI extension. `bio-prov` v0.2 types PROV-O
+   * activities with `dpv/ai#DataCollection` / `#DataLabelling`, the way
+   * the MLCommons Croissant Responsible AI specification does. Used as
+   * full IRIs inside `@type`, so the normalizer never sees it as a key
+   * prefix.
+   */
+  dpvAi: 'https://w3id.org/dpv/ai#',
 } as const;
 
 /**
@@ -30,6 +38,13 @@ export const NS = {
 export const CONFORMS_TO = {
   croissant10: 'http://mlcommons.org/croissant/1.0',
   croissant11: 'http://mlcommons.org/croissant/1.1',
+  /**
+   * `bio-prov` v0.2 (ADR-0022, docs/standards/bio-prov-v0.2.md). Declared
+   * alongside a Croissant target — `dct:conformsTo` is then an array — and
+   * it is what opts a manifest into the `provenance` layer. Provisional
+   * IRI, like `NS.bio`.
+   */
+  bioProv02: 'https://oci.ai4h.net/biocroissant/bio-prov/0.2',
 } as const;
 
 /** Known JSON-LD prefixes the normalizer strips when canonicalising keys. */

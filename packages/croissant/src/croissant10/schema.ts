@@ -138,14 +138,30 @@ const RecordSet = z
   })
   .passthrough();
 
+const CroissantConformanceIri = z.union([
+  z.literal('http://mlcommons.org/croissant/1.0'),
+  z.literal('http://mlcommons.org/croissant/1.1'),
+]);
+
 export const Croissant10Schema = z
   .object({
     '@context': z.union([NonEmptyString, z.array(z.unknown()), z.record(z.string(), z.unknown())]),
     '@type': z.union([z.literal('sc:Dataset'), z.literal('Dataset')]),
-    /** `dct:conformsTo` — at this layer must point at one of the supported Croissant IRIs. */
+    /**
+     * `dct:conformsTo` — at this layer must point at one of the supported
+     * Croissant IRIs, either as a bare string or as one element of an
+     * array. The array form is how a manifest declares a profile target
+     * next to the Croissant one (`bio-prov` v0.2 section 2; the same
+     * pattern the Croissant RAI specification and GeoCroissant use).
+     */
     conformsTo: z.union([
-      z.literal('http://mlcommons.org/croissant/1.0'),
-      z.literal('http://mlcommons.org/croissant/1.1'),
+      CroissantConformanceIri,
+      z
+        .array(z.string())
+        .refine(
+          (targets) => targets.some((t) => CroissantConformanceIri.safeParse(t).success),
+          'expected a supported Croissant conformance IRI among the dct:conformsTo targets',
+        ),
     ]),
 
     // Required by 1.0 spec
