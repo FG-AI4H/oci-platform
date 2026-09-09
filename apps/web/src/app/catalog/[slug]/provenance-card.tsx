@@ -3,7 +3,7 @@ import { extractProvenance, type ProvenanceSummary } from '@oci/croissant';
 
 /**
  * Read-only provenance block for the dataset page's Summary tab
- * (bio-prov v0.1, #496). Renders the flat `extractProvenance` summary in
+ * (bio-prov v0.2, #496). Renders the flat `extractProvenance` summary in
  * the same definition-list style as the rest of the summary. Returns
  * `null` when the manifest carries nothing the profile recognises, so
  * legacy manifests show no empty card.
@@ -52,7 +52,7 @@ export function ProvenanceCard({ manifest }: { manifest: unknown }) {
           Provenance
         </h3>
         <span className="text-xs text-[var(--color-muted-foreground)]">
-          Where the data came from and what was done to it (bio-prov v0.1)
+          Where the data came from and what was done to it (bio-prov v0.2)
         </span>
       </div>
       <DefinitionList>

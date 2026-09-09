@@ -337,19 +337,13 @@
           "@id": "labels/dr_grade",
           "name": "dr_grade",
           "description": "ICDR scale: 0 No DR; 1 Mild NPDR; 2 Moderate NPDR; 3 Severe NPDR; 4 Proliferative DR. Referable = grade >= 2.",
-          "dataType": [
-            "sc:Integer",
-            "cr:Label"
-          ]
+          "dataType": ["sc:Integer", "cr:Label"]
         },
         {
           "@type": "cr:Field",
           "@id": "labels/dme_risk",
           "name": "dme_risk",
-          "dataType": [
-            "sc:Integer",
-            "cr:Label"
-          ]
+          "dataType": ["sc:Integer", "cr:Label"]
         }
       ]
     }
@@ -387,10 +381,7 @@
   },
   "prov:wasGeneratedBy": [
     {
-      "@type": [
-        "prov:Activity",
-        "https://w3id.org/dpv/ai#DataCollection"
-      ],
+      "@type": ["prov:Activity", "https://w3id.org/dpv/ai#DataCollection"],
       "@id": "#activity-oci-demo-slice-v1",
       "name": "Class-stratified 30-image slice of the IDRiD disease-grading testing set, downsampled to 512 px",
       "prov:startedAtTime": "2026-07-30T00:00:00Z",
@@ -406,10 +397,7 @@
       }
     },
     {
-      "@type": [
-        "prov:Activity",
-        "https://w3id.org/dpv/ai#DataLabelling"
-      ],
+      "@type": ["prov:Activity", "https://w3id.org/dpv/ai#DataLabelling"],
       "@id": "#activity-idrid-disease-grading",
       "name": "Independent disease grading of the source IDRiD images, with adjudication",
       "prov:used": {
@@ -445,11 +433,7 @@
     "@id": "#offer-cc-by-4.0",
     "odrl:permission": [
       {
-        "odrl:action": [
-          "odrl:use",
-          "odrl:distribute",
-          "odrl:derive"
-        ],
+        "odrl:action": ["odrl:use", "odrl:distribute", "odrl:derive"],
         "odrl:target": "idrid-grading-demo",
         "odrl:duty": [
           {

@@ -124,7 +124,7 @@ export function manifestWizardInputToCroissant(
 }
 
 // ---------------------------------------------------------------------------
-// bio-prov v0.1 — dataset-level provenance (spec sections 2, 4 and 5)
+// bio-prov v0.2 — dataset-level provenance (spec sections 2, 4 and 5)
 // ---------------------------------------------------------------------------
 
 const blank = (v: string | undefined): boolean => v === undefined || v.trim().length === 0;
