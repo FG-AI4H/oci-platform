@@ -29,7 +29,7 @@ import { preflightProvenanceAction, type ProvenancePreflightState } from './acti
 import { OBLIGATION_LABEL, type ProvenanceIssue } from './provenance-issues';
 
 /**
- * Provenance step of the manifest wizard (bio-prov v0.1, #496).
+ * Provenance step of the manifest wizard (bio-prov v0.2, #496).
  *
  * Four groups, one per question the profile answers (spec section 1):
  * where the data came from, what was done to it, under what authority,
@@ -188,7 +188,7 @@ export function ProvenanceStep({
       <legend className="text-sm font-medium">Provenance</legend>
       <p className="text-xs text-[var(--color-muted-foreground)]">
         Where the data came from, what was done to it, under what authority, and how the labels were
-        produced (bio-prov v0.1). Markers follow the obligations for a <strong>{accessTier}</strong>{' '}
+        produced (bio-prov v0.2). Markers follow the obligations for a <strong>{accessTier}</strong>{' '}
         dataset, the access tier this dataset already has. Fill what you can; the check below names
         what is still missing.
       </p>

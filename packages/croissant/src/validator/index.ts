@@ -5,7 +5,7 @@ import { Croissant10Schema, type Croissant10 } from '../croissant10/schema.js';
 import { Croissant11DeltasSchema } from '../croissant11/schema.js';
 import { RaiExtensionSchema, RAI_PROPERTIES } from '../rai/schema.js';
 import { BioCroissantSchema, BIOCROISSANT_PROPERTIES } from '../biocroissant/schema.js';
-import { PROVENANCE_PROFILE_PROPERTY } from '../provenance/schema.js';
+import { PROVENANCE_CONFORMANCE_TARGET, optsIntoProvenanceProfile } from '../provenance/schema.js';
 import { validateProvenance } from '../provenance/index.js';
 import { normalize } from './normalize.js';
 
@@ -23,7 +23,7 @@ export interface ValidationIssue {
    *   `rai.invalid.<field>`
    *   `biocroissant.invalid.<field>`
    *   `provenance.missing.<id>` / `provenance.invalid.<id>[.<field>]` /
-   *   `provenance.mismatch.<id>.<field>`
+   *   `provenance.mismatch.<id>.<field>` / `provenance.deprecated.<what>`
    *   `validator.unsupported.conformance`
    */
   code: string;
@@ -37,7 +37,11 @@ export interface ValidationResult {
   conformance: Conformance;
   hasRai: boolean;
   hasBioCroissant: boolean;
-  /** `bio:provenanceProfile` present — the `bio-prov` layer ran (ADR-0022). */
+  /**
+   * The manifest opted into `bio-prov` — the `provenance` layer ran
+   * (ADR-0022). Opt-in is the v0.2 conformance target in `dct:conformsTo`,
+   * or v0.1's deprecated `bio:provenanceProfile` marker.
+   */
   hasProvenanceProfile: boolean;
   issues: ValidationIssue[];
   /** The normalised manifest if base parsing succeeded. */
@@ -56,7 +60,7 @@ export interface ValidateOptions {
    * malformed value is an error at every tier. Defaults to `true`
    * (#504). Pass `false` for the permissive reading, one level down:
    * MUST → warning, SHOULD omitted, malformed → warning. Only consulted
-   * when the manifest carries `bio:provenanceProfile`.
+   * when the manifest opts into the profile.
    */
   strictProvenance?: boolean;
 }
@@ -69,8 +73,9 @@ export interface ValidateOptions {
  * optional layers. Issues from each layer are tagged with stable codes so
  * callers (UI, audit log, CI gating) can treat them differently.
  *
- * The `bio-prov` layer runs only when the manifest opts in with
- * `bio:provenanceProfile`, at the obligations of `options.accessTier`
+ * The `bio-prov` layer runs only when the manifest opts in — the v0.2
+ * conformance target in `dct:conformsTo`, or v0.1's deprecated
+ * `bio:provenanceProfile` marker — at the obligations of `options.accessTier`
  * (`OPEN` when none is given) and strict by default. Callers that
  * validate for publish must pass the dataset's catalogue tier: the
  * obligations differ per tier, and a manifest that is conformant at
@@ -105,7 +110,7 @@ export function validate(input: unknown, options: ValidateOptions = {}): Validat
       path: '/dct:conformsTo',
       level: 'error',
       code: 'validator.unsupported.conformance',
-      message: `dct:conformsTo missing or unsupported. Expected "${CONFORMS_TO.croissant10}" or "${CONFORMS_TO.croissant11}".`,
+      message: `dct:conformsTo missing or unsupported. Expected "${CONFORMS_TO.croissant10}" or "${CONFORMS_TO.croissant11}", alone or in an array (e.g. alongside "${PROVENANCE_CONFORMANCE_TARGET}").`,
     });
   }
 
@@ -137,8 +142,8 @@ export function validate(input: unknown, options: ValidateOptions = {}): Validat
     if (!bioResult.success) issues.push(...zodIssues(bioResult.error, 'biocroissant'));
   }
 
-  // bio-prov — only when the manifest opts in with the profile marker.
-  const hasProvenanceProfile = PROVENANCE_PROFILE_PROPERTY in normalized;
+  // bio-prov — only when the manifest opts in (spec section 2).
+  const hasProvenanceProfile = optsIntoProvenanceProfile(normalized);
   if (hasProvenanceProfile) {
     issues.push(
       ...validateProvenance(normalized, {
@@ -161,11 +166,19 @@ export function validate(input: unknown, options: ValidateOptions = {}): Validat
   };
 }
 
+/**
+ * The base conformance target. `dct:conformsTo` may be a single IRI or an
+ * array — a manifest that also conforms to a profile declares both, e.g.
+ * `["http://mlcommons.org/croissant/1.1", PROVENANCE_CONFORMANCE_TARGET]`
+ * (bio-prov v0.2 section 2, the GeoCroissant pattern). Targets other than
+ * the Croissant ones are ignored here; the layers key on their own.
+ */
 function detectConformance(normalized: Record<string, unknown>): Conformance {
   // After normalization, `dct:conformsTo` becomes `conformsTo`.
-  const value = normalized['conformsTo'];
-  if (value === CONFORMS_TO.croissant10) return 'croissant-1.0';
-  if (value === CONFORMS_TO.croissant11) return 'croissant-1.1';
+  const raw = normalized['conformsTo'];
+  const targets = Array.isArray(raw) ? raw : [raw];
+  if (targets.includes(CONFORMS_TO.croissant11)) return 'croissant-1.1';
+  if (targets.includes(CONFORMS_TO.croissant10)) return 'croissant-1.0';
   return 'unknown';
 }
 

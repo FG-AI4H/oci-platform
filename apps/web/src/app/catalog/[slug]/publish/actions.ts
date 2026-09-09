@@ -181,7 +181,7 @@ export async function publishVersionAction(
   redirect(`/catalog/${parsed.data.slug}`);
 }
 
-// ---- Provenance pre-flight (bio-prov v0.1, #496) --------------------------
+// ---- Provenance pre-flight (bio-prov v0.2, #496) --------------------------
 
 export type ProvenancePreflightState =
   | { status: 'idle' }

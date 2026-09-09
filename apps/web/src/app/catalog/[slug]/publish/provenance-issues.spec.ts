@@ -7,12 +7,13 @@ import {
   REQUIREMENT_LABEL,
 } from './provenance-issues';
 
-describe('provenance-issues (#496)', () => {
-  it('names the requirement from the code and leaves the marker check unnamed', () => {
+describe('provenance-issues (#496, #519)', () => {
+  it('names the requirement from the code and leaves the deprecation notices unnamed', () => {
     expect(requirementIdOf('provenance.missing.H5')).toBe('H5');
+    expect(requirementIdOf('provenance.missing.H6b')).toBe('H6b');
     expect(requirementIdOf('provenance.invalid.P2.endedAtTime')).toBe('P2');
     expect(requirementIdOf('provenance.mismatch.H4.anonymizationLevel')).toBe('H4');
-    expect(requirementIdOf('provenance.invalid.provenanceProfile')).toBeNull();
+    expect(requirementIdOf('provenance.deprecated.marker')).toBeNull();
     expect(isProvenanceCode('provenance.missing.H5')).toBe(true);
     expect(isProvenanceCode('oci.j1.duo.missing-on-non-public')).toBe(false);
     expect(isProvenanceCode(undefined)).toBe(false);
@@ -61,10 +62,26 @@ describe('provenance-issues (#496)', () => {
     ).toBe(`P2 · ${REQUIREMENT_LABEL.P2} is present but incomplete or malformed`);
     expect(
       describeProvenanceIssue(
-        { code: 'provenance.invalid.provenanceProfile', path: '/x', message: 'm', level: 'error' },
+        {
+          code: 'provenance.deprecated.marker',
+          path: '/provenanceProfile',
+          message: 'm',
+          level: 'warning',
+        },
         'OPEN',
       ).headline,
-    ).toBe('Provenance profile marker is present but incomplete or malformed');
+    ).toBe('The bio:provenanceProfile marker is deprecated in bio-prov v0.2');
+    expect(
+      describeProvenanceIssue(
+        {
+          code: 'provenance.deprecated.activityKind',
+          path: '/distribution/0/wasGeneratedBy/activityKind',
+          message: 'm',
+          level: 'warning',
+        },
+        'OPEN',
+      ).headline,
+    ).toBe('The bio:activityKind property is deprecated in bio-prov v0.2');
   });
 
   it('every code the validator emits at SENSITIVE for an empty profile maps to a labelled requirement', () => {
@@ -72,7 +89,10 @@ describe('provenance-issues (#496)', () => {
       {
         '@context': { '@vocab': 'https://schema.org/', bio: 'x', prov: 'y' },
         '@type': 'sc:Dataset',
-        'dct:conformsTo': 'http://mlcommons.org/croissant/1.1',
+        'dct:conformsTo': [
+          'http://mlcommons.org/croissant/1.1',
+          'https://oci.ai4h.net/biocroissant/bio-prov/0.2',
+        ],
         name: 'n',
         description: 'd',
         license: 'l',
@@ -80,7 +100,6 @@ describe('provenance-issues (#496)', () => {
         creator: [{ '@type': 'sc:Person', name: 'p' }],
         datePublished: '2026-01-01',
         'cr:version': '1.0.0',
-        'bio:provenanceProfile': 'bio-prov/0.1',
       },
       { accessTier: 'SENSITIVE', strictProvenance: true },
     );
@@ -88,8 +107,8 @@ describe('provenance-issues (#496)', () => {
     expect(provenance.length).toBeGreaterThan(0);
     for (const issue of provenance) {
       const shaped = describeProvenanceIssue(issue, 'SENSITIVE');
-      expect(shaped.requirementId).not.toBeNull();
-      expect(shaped.headline).toMatch(/^[PH]\d · .+ is required for a SENSITIVE dataset$/);
+      expect(shaped.requirementId, issue.code).not.toBeNull();
+      expect(shaped.headline).toMatch(/^[PH]\d[a-z]? · .+ is required for a SENSITIVE dataset$/);
     }
   });
 });

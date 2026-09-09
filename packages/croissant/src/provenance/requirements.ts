@@ -1,8 +1,9 @@
 import type { z } from 'zod';
 import type { AccessTier } from '@oci/shared-types';
 import {
-  ANNOTATION_CAMPAIGN_ACTIVITY_KIND,
   DeidentificationSchema,
+  DPV_AI_DATA_COLLECTION,
+  DPV_AI_DATA_LABELLING,
   IntegritySchema,
   IsoDateTime,
   LabelProtocolSchema,
@@ -11,7 +12,7 @@ import {
 } from './schema.js';
 
 /**
- * `bio-prov` v0.1 obligation table (spec section 3) as data, plus the
+ * `bio-prov` v0.2 obligation table (spec section 3) as data, plus the
  * predicate for each requirement.
  *
  * Every requirement evaluates the **normalized** manifest and reports
@@ -50,6 +51,7 @@ export type RequirementId =
   | 'H4'
   | 'H5'
   | 'H6'
+  | 'H6b'
   | 'A1'
   | 'A2'
   | 'A3';
@@ -150,6 +152,19 @@ function hasType(obj: JsonObject, ...bareNames: string[]): boolean {
   );
 }
 
+/**
+ * `@type` carries a DPV AI activity type (spec section 4) as a full IRI.
+ * The `dpv-ai:` / `dpv:` prefixed spellings are accepted too: the
+ * normalizer does not touch `@type`, so both reach here verbatim.
+ */
+function hasDpvActivityType(obj: JsonObject, iri: string): boolean {
+  const local = iri.slice(iri.indexOf('#') + 1);
+  const accepted = [iri, `dpv-ai:${local}`, `dpv:${local}`];
+  const t = obj['@type'];
+  const types = Array.isArray(t) ? t : [t];
+  return types.some((x) => typeof x === 'string' && accepted.includes(x));
+}
+
 function parseIso(value: unknown): number | null {
   const r = IsoDateTime.safeParse(value);
   return r.success ? Date.parse(r.data) : null;
@@ -193,14 +208,46 @@ function fromProblems(
 // Shared readers
 // ---------------------------------------------------------------------------
 
+/** Every `wasGeneratedBy` entry that is an object typed `prov:Activity`. */
+function generatingActivities(manifest: NormalizedManifest): Array<Located<JsonObject>> {
+  const out: Array<Located<JsonObject>> = [];
+  for (const e of entries(manifest, 'wasGeneratedBy')) {
+    if (isObject(e.value) && hasType(e.value, 'Activity'))
+      out.push({ value: e.value, path: e.path });
+  }
+  return out;
+}
+
 /** The P2 activity: the first `wasGeneratedBy` entry typed `prov:Activity`. */
 export function findGeneratingActivity(manifest: NormalizedManifest): Located<JsonObject> | null {
-  for (const e of entries(manifest, 'wasGeneratedBy')) {
-    if (isObject(e.value) && hasType(e.value, 'Activity')) {
-      return { value: e.value, path: e.path };
-    }
-  }
-  return null;
+  return generatingActivities(manifest)[0] ?? null;
+}
+
+/**
+ * The collection activity H2 reads: the activity typed
+ * `dpv/ai#DataCollection` when there is one, else the P2 generating
+ * activity (spec section 5, H2).
+ */
+export function findCollectionActivity(manifest: NormalizedManifest): Located<JsonObject> | null {
+  const activities = generatingActivities(manifest);
+  return (
+    activities.find((a) => hasDpvActivityType(a.value, DPV_AI_DATA_COLLECTION)) ??
+    activities[0] ??
+    null
+  );
+}
+
+/**
+ * The annotation activity H6b reads: the first activity typed
+ * `dpv/ai#DataLabelling`, dataset-level first, then the campaign activity
+ * of a write-back distribution (spec section 5, H6b).
+ */
+export function findAnnotationActivity(manifest: NormalizedManifest): Located<JsonObject> | null {
+  const datasetLevel = generatingActivities(manifest).find((a) =>
+    hasDpvActivityType(a.value, DPV_AI_DATA_LABELLING),
+  );
+  if (datasetLevel !== undefined) return datasetLevel;
+  return findWriteBackDistributions(manifest)[0]?.activity ?? null;
 }
 
 /**
@@ -215,7 +262,10 @@ export function isDerived(manifest: NormalizedManifest): boolean {
 
 /**
  * Distributions produced by an annotation campaign: those whose
- * `wasGeneratedBy` holds an Activity with `activityKind: ANNOTATION_CAMPAIGN`.
+ * `wasGeneratedBy` holds an Activity typed `dpv/ai#DataLabelling`
+ * (spec section 6, A1). v0.1 keyed this on `bio:activityKind`, which is
+ * removed; a distribution carrying only the old marker is no longer
+ * recognised as a write-back and the marker is reported as deprecated.
  */
 export function findWriteBackDistributions(manifest: NormalizedManifest): Array<{
   distribution: Located<JsonObject>;
@@ -228,7 +278,7 @@ export function findWriteBackDistributions(manifest: NormalizedManifest): Array<
       if (
         isObject(a.value) &&
         hasType(a.value, 'Activity') &&
-        a.value['activityKind'] === ANNOTATION_CAMPAIGN_ACTIVITY_KIND
+        hasDpvActivityType(a.value, DPV_AI_DATA_LABELLING)
       ) {
         out.push({
           distribution: { value: d.value, path: d.path },
@@ -241,9 +291,36 @@ export function findWriteBackDistributions(manifest: NormalizedManifest): Array<
   return out;
 }
 
-/** Validate a `startedAtTime` / `endedAtTime` pair on an activity. */
-function activityDateProblems(activity: Located<JsonObject>): RequirementProblem[] {
+/** True when an activity declares any of the two time forms, well-formed or not. */
+function declaresAnyTime(activity: JsonObject): boolean {
+  return (
+    activity['atTime'] !== undefined ||
+    activity['startedAtTime'] !== undefined ||
+    activity['endedAtTime'] !== undefined
+  );
+}
+
+/**
+ * Validate an activity's time (spec section 4, the time rule): an instant
+ * (`prov:atTime`) **or** a period (`prov:startedAtTime` and
+ * `prov:endedAtTime`, start not after end). `prov:atTime` wins when both
+ * forms are present, so a manifest that carries an instant is never asked
+ * for bounds.
+ */
+function activityTimeProblems(activity: Located<JsonObject>): RequirementProblem[] {
   const problems: RequirementProblem[] = [];
+  const at = activity.value['atTime'];
+  if (at !== undefined) {
+    if (parseIso(at) === null) {
+      problems.push({
+        kind: 'invalid',
+        field: 'atTime',
+        path: join(activity.path, 'atTime'),
+        message: 'atTime must be an ISO 8601 date or date-time',
+      });
+    }
+    return problems;
+  }
   const start = activity.value['startedAtTime'];
   const end = activity.value['endedAtTime'];
   const startMs = parseIso(start);
@@ -255,7 +332,7 @@ function activityDateProblems(activity: Located<JsonObject>): RequirementProblem
       path: join(activity.path, 'startedAtTime'),
       message:
         start === undefined
-          ? 'startedAtTime is required on the activity'
+          ? 'the activity needs a time: either prov:atTime, or startedAtTime and endedAtTime'
           : 'startedAtTime must be an ISO 8601 date or date-time',
     });
   }
@@ -266,7 +343,7 @@ function activityDateProblems(activity: Located<JsonObject>): RequirementProblem
       path: join(activity.path, 'endedAtTime'),
       message:
         end === undefined
-          ? 'endedAtTime is required on the activity'
+          ? 'endedAtTime is required when the activity gives a period rather than a prov:atTime'
           : 'endedAtTime must be an ISO 8601 date or date-time',
     });
   } else if (startMs !== null && endMs < startMs) {
@@ -359,7 +436,7 @@ const P2: ProvenanceRequirement = {
         message: 'the generating activity must carry a non-empty name',
       });
     }
-    problems.push(...activityDateProblems(activity));
+    problems.push(...activityTimeProblems(activity));
     // A derived dataset's activity MUST `used` the upstream entity of P3.
     if (
       entries(manifest, 'wasDerivedFrom').length > 0 &&
@@ -496,31 +573,68 @@ const H1: ProvenanceRequirement = {
   },
 };
 
+/**
+ * H2 — the collection activity carries a time (spec section 5, H2).
+ * v0.1 read `rai:dataCollectionTimeframe`, which the Croissant
+ * Responsible AI attribute table no longer carries; the free text is now
+ * optional at every tier and only its shape is checked when present.
+ */
 const H2: ProvenanceRequirement = {
   id: 'H2',
-  title: 'Collection timeframe',
+  title: 'Collection activity carries a time',
   obligation: { OPEN: 'SHOULD', REGISTERED: 'MUST', CONTROLLED: 'MUST', SENSITIVE: 'MUST' },
   evaluate(manifest) {
-    const path = '/dataCollectionTimeframe';
-    const raw = manifest['dataCollectionTimeframe'];
-    if (raw === undefined || raw === null) {
+    // The RAI free text is optional; when present its shape is still checked,
+    // and only alongside a declared activity time (a `missing` outcome carries
+    // no problems).
+    const timeframe = manifest['dataCollectionTimeframe'];
+    const textProblems: RequirementProblem[] =
+      timeframe !== undefined && timeframe !== null && !isNonEmptyString(timeframe)
+        ? [
+            {
+              kind: 'invalid',
+              field: 'dataCollectionTimeframe',
+              path: '/dataCollectionTimeframe',
+              message: 'when present, rai:dataCollectionTimeframe must be a non-empty string',
+            },
+          ]
+        : [];
+
+    const activity = findCollectionActivity(manifest);
+    if (activity === null) {
       return [
         outcome(
           'H2',
           'missing',
-          path,
-          'rai:dataCollectionTimeframe must state when data was collected',
+          '/wasGeneratedBy',
+          'no collection activity to date: declare a prov:Activity typed dpv/ai#DataCollection with a time',
         ),
       ];
     }
-    if (!isNonEmptyString(raw)) {
+    if (!declaresAnyTime(activity.value)) {
       return [
-        outcome('H2', 'malformed', path, 'H2 is present but malformed', [
-          { kind: 'invalid', path, message: 'dataCollectionTimeframe must be a non-empty string' },
-        ]),
+        outcome(
+          'H2',
+          'missing',
+          activity.path,
+          'the collection activity must carry a time: prov:atTime, or startedAtTime and endedAtTime',
+        ),
       ];
     }
-    return [outcome('H2', 'satisfied', path, 'collection timeframe stated')];
+    // When the collection activity *is* the P2 generating activity — the
+    // common single-activity case — P2 already reports a malformed time at
+    // that pointer, so H2 checks presence only and does not repeat it.
+    const generating = findGeneratingActivity(manifest);
+    const timeProblems =
+      generating !== null && generating.path === activity.path
+        ? []
+        : activityTimeProblems(activity);
+    return [
+      fromProblems('H2', activity.path, 'collection activity dated', [
+        ...timeProblems,
+        ...textProblems,
+      ]),
+    ];
   },
 };
 
@@ -696,6 +810,82 @@ const H6: ProvenanceRequirement = {
   },
 };
 
+/**
+ * H6b — the annotation activity: a `dpv/ai#DataLabelling` activity whose
+ * `prov:used` names the guideline as an entity and whose agents carry
+ * `prov:hadRole` (spec section 5, H6b). This is the form the Croissant
+ * Responsible AI specification asks for now that
+ * `rai:dataAnnotationProtocol` is gone from its attribute table.
+ */
+const H6b: ProvenanceRequirement = {
+  id: 'H6b',
+  title: 'Annotation activity: guideline used, agent roles',
+  obligation: { OPEN: 'MAY', REGISTERED: 'SHOULD', CONTROLLED: 'MUST', SENSITIVE: 'MUST' },
+  evaluate(manifest) {
+    const activity = findAnnotationActivity(manifest);
+    if (activity === null) {
+      return [
+        outcome(
+          'H6b',
+          'missing',
+          '/wasGeneratedBy',
+          'declare a prov:Activity typed dpv/ai#DataLabelling that used the guideline and names its agents’ roles',
+        ),
+      ];
+    }
+    const problems: RequirementProblem[] = [];
+
+    // The guideline: an entity with an @id and a name or a version.
+    const used = entries(activity.value, 'used', activity.path);
+    const guideline = used.find(
+      (u) =>
+        isObject(u.value) &&
+        isNonEmptyString(u.value['@id']) &&
+        (isNonEmptyString(u.value['name']) || isNonEmptyString(u.value['version'])),
+    );
+    if (guideline === undefined) {
+      problems.push({
+        kind: 'invalid',
+        field: 'used',
+        path: join(activity.path, 'used'),
+        message:
+          'the annotation activity must `used` a guideline entity carrying an @id and a name or version',
+      });
+    }
+
+    // The roles: every associated agent carries prov:hadRole.
+    const agents = entries(activity.value, 'wasAssociatedWith', activity.path);
+    if (agents.length === 0) {
+      problems.push({
+        kind: 'invalid',
+        field: 'wasAssociatedWith',
+        path: join(activity.path, 'wasAssociatedWith'),
+        message:
+          'the annotation activity must be wasAssociatedWith at least one agent carrying prov:hadRole',
+      });
+    }
+    for (const agent of agents) {
+      if (isObject(agent.value) && isNonEmptyString(agent.value['hadRole'])) continue;
+      problems.push({
+        kind: 'invalid',
+        field: 'hadRole',
+        path: join(agent.path, 'hadRole'),
+        message:
+          'each agent of the annotation activity must carry a prov:hadRole (roles, not identities)',
+      });
+    }
+
+    return [
+      fromProblems(
+        'H6b',
+        activity.path,
+        'annotation activity names its guideline and roles',
+        problems,
+      ),
+    ];
+  },
+};
+
 // ---------------------------------------------------------------------------
 // A1–A3 — the annotation-campaign edge (spec section 6)
 // ---------------------------------------------------------------------------
@@ -711,6 +901,13 @@ function notApplicableWriteBack(id: RequirementId): RequirementEvaluation[] {
   ];
 }
 
+/**
+ * A1 — a campaign write-back is a derived entity generated by a
+ * `dpv/ai#DataLabelling` activity (spec section 6). The type is what
+ * identifies the distribution, so a write-back that is not typed is not
+ * seen by A1–A3 at all: that is the migration path off
+ * `bio:activityKind`.
+ */
 const A1: ProvenanceRequirement = {
   id: 'A1',
   title: 'Write-back distribution is a derived entity',
@@ -737,7 +934,7 @@ const A1: ProvenanceRequirement = {
           message: 'the campaign activity must carry the campaign identifier as @id',
         });
       }
-      problems.push(...activityDateProblems(activity));
+      problems.push(...activityTimeProblems(activity));
       const agents = entries(activity.value, 'wasAssociatedWith', activity.path);
       const tool = agents.find((a) => isObject(a.value) && hasType(a.value, 'SoftwareAgent'));
       if (tool === undefined) {
@@ -837,6 +1034,7 @@ export const PROVENANCE_REQUIREMENTS: ReadonlyArray<ProvenanceRequirement> = [
   H4,
   H5,
   H6,
+  H6b,
   A1,
   A2,
   A3,

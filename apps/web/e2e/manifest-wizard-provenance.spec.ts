@@ -4,7 +4,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 /**
  * Provenance step of the publish wizard + dataset-page provenance card
- * (bio-prov v0.1, #496, first slice).
+ * (bio-prov v0.2, #496, #519, first slice).
  *
  * The publish page and the dataset page fetch the API server-side, so
  * `page.route` cannot intercept them. This spec runs a stub API on
@@ -64,7 +64,10 @@ function dataset(slug: string, extra: Record<string, unknown>) {
 const PUBLISHED_MANIFEST = {
   '@context': { '@vocab': 'https://schema.org/', bio: 'x', prov: 'y', rai: 'z' },
   '@type': 'sc:Dataset',
-  'dct:conformsTo': 'http://mlcommons.org/croissant/1.1',
+  'dct:conformsTo': [
+    'http://mlcommons.org/croissant/1.1',
+    'https://oci.ai4h.net/biocroissant/bio-prov/0.2',
+  ],
   name: 'Provenance fixture',
   description: 'd',
   license: 'https://creativecommons.org/licenses/by/4.0/',
@@ -73,12 +76,11 @@ const PUBLISHED_MANIFEST = {
   datePublished: '2026-01-01',
   'cr:version': '1.0.0',
   'bio:anonymizationLevel': 'DEIDENTIFIED',
-  'bio:provenanceProfile': 'bio-prov/0.1',
   'prov:wasAttributedTo': [
     { '@type': 'prov:Organization', '@id': 'https://ror.org/01462r250', name: 'Fixture Hospital' },
   ],
   'prov:wasGeneratedBy': {
-    '@type': 'prov:Activity',
+    '@type': ['prov:Activity', 'https://w3id.org/dpv/ai#DataCollection'],
     '@id': '#collection',
     name: 'Prospective collection',
     'prov:startedAtTime': '2019-03-01',
@@ -295,10 +297,15 @@ test.describe('publish wizard: provenance step (#496)', () => {
       ),
     ).toBeVisible();
 
-    // What the wizard sent carried the profile marker and the P1 block.
+    // What the wizard sent declared the profile's conformance target next to
+    // the Croissant one, and carried the P1 block.
     expect(publishBodies).toHaveLength(1);
     const sent = publishBodies[0] as { croissant: Record<string, unknown> };
-    expect(sent.croissant['bio:provenanceProfile']).toBe('bio-prov/0.1');
+    expect(sent.croissant['dct:conformsTo']).toEqual([
+      'http://mlcommons.org/croissant/1.1',
+      'https://oci.ai4h.net/biocroissant/bio-prov/0.2',
+    ]);
+    expect(sent.croissant['bio:provenanceProfile']).toBeUndefined();
     expect(sent.croissant['prov:wasAttributedTo']).toEqual([
       { '@type': 'prov:Organization', name: 'Fixture Hospital' },
     ]);

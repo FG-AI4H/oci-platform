@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  CONFORMS_TO,
+  DPV_AI_DATA_COLLECTION,
+  DPV_AI_DATA_LABELLING,
+  PROVENANCE_CONFORMANCE_TARGET,
   PROVENANCE_REQUIREMENTS,
   ProvenanceProfileSchema,
   extractProvenance,
@@ -15,16 +19,21 @@ import {
 import { normalize } from '../src/validator/normalize.js';
 
 /**
- * `bio-prov` v0.1 provenance layer (#495, ADR-0022,
- * docs/standards/bio-prov-v0.1.md). Cases:
+ * `bio-prov` v0.2 provenance layer (#495, #519, ADR-0022,
+ * docs/standards/bio-prov-v0.2.md). Cases:
  *
- *   (a) the seeded IDRiD fixture, which carries the marker (#504);
+ *   (a) the seeded IDRiD fixture, which declares the conformance target;
  *   (b) a synthetic SENSITIVE manifest missing H5;
  *   (c) an H4 resultingLevel / anonymizationLevel mismatch;
- *   (d) a prov:Activity whose endedAtTime precedes startedAtTime;
+ *   (d) activity times: an instant, a period, a period that runs backwards;
  *   (e) a campaign write-back distribution missing bio:integrity;
  *   (f) extractProvenance on the IDRiD fixture;
- *   (g) manifests without the marker are untouched.
+ *   (g) manifests that opt into nothing are untouched;
+ *   (h) v0.2 opt-in and the deprecated v0.1 mechanics;
+ *   (i) ODRL on `usageInfo` and on `hasOffer`;
+ *   (j) H6b, the annotation activity;
+ *   (k) a manifest written in the Croissant RAI specification's own
+ *       worked-example shapes.
  *
  * Strict is the default since #504; the permissive reading is exercised
  * with an explicit `strictProvenance: false`.
@@ -43,16 +52,33 @@ function fixture(name: string): Json {
   return loadJson(path.join(here, 'fixtures', name));
 }
 
-/** The seeded IDRiD slice, as shipped: it carries `bio:provenanceProfile`. */
+/** The seeded IDRiD slice, as shipped: it declares the v0.2 conformance target. */
 function idrid(): Json {
   return loadJson(path.join(seedFixturesDir, 'idrid-grading-demo', 'manifest.json'));
 }
 
-/** The seeded slice without its H2 / H6 properties (both SHOULD at OPEN, MUST above). */
-function idridWithoutH2H6(): Json {
+/** The slice's activities: [0] the dated derivation, [1] the labelling activity. */
+function activitiesOf(m: Json): Json[] {
+  return m['prov:wasGeneratedBy'] as Json[];
+}
+
+/** The seeded slice without its label protocol (H6: SHOULD at OPEN, MUST above). */
+function idridWithoutH6(): Json {
   const m = idrid();
-  delete m['rai:dataCollectionTimeframe'];
   delete m['bio:labelProtocol'];
+  return m;
+}
+
+/**
+ * The seeded slice with no time on its collection activity. H2 is then
+ * missing — and so is P2's time, because for this dataset the collection
+ * activity *is* the generating activity.
+ */
+function idridWithoutActivityTime(): Json {
+  const m = idrid();
+  const activity = activitiesOf(m)[0] as Json;
+  delete activity['prov:startedAtTime'];
+  delete activity['prov:endedAtTime'];
   return m;
 }
 
@@ -66,6 +92,30 @@ function provenanceIssues<T extends { code: string }>(issues: ReadonlyArray<T>):
 
 const WRITE_BACK_ID = 'campaign-7f3a-annotations.jsonl';
 
+/** H6b — a labelling activity with its guideline and its agents' roles. */
+function annotationActivity(): Json {
+  return {
+    '@type': ['prov:Activity', DPV_AI_DATA_LABELLING],
+    '@id': '#labelling',
+    name: 'Independent reading with adjudication',
+    'prov:used': {
+      '@type': 'prov:Entity',
+      '@id': '#guideline-cxr-v3',
+      name: 'CXR pneumonia reading guideline',
+      version: '3',
+    },
+    'prov:wasAssociatedWith': [
+      { '@type': 'prov:Person', 'prov:hadRole': 'Annotator' },
+      { '@type': 'prov:Person', 'prov:hadRole': 'Adjudicator' },
+    ],
+  };
+}
+
+/** The first `prov:wasGeneratedBy` entry — the P2 / H2 activity. */
+function collectionActivityOf(m: Json): Json {
+  return (m['prov:wasGeneratedBy'] as Json[])[0] as Json;
+}
+
 /**
  * A synthetic clinical dataset that is conformant at SENSITIVE: every
  * MUST in spec section 3 is met, including the annotation-campaign edge
@@ -75,18 +125,21 @@ const WRITE_BACK_ID = 'campaign-7f3a-annotations.jsonl';
  */
 function sensitiveManifest(): Json {
   const m = fixture('valid-biocroissant-1.1.json');
-  m['bio:provenanceProfile'] = 'bio-prov/0.1';
+  m['dct:conformsTo'] = [CONFORMS_TO.croissant11, PROVENANCE_CONFORMANCE_TARGET];
   m['prov:wasAttributedTo'] = [
     { '@type': 'prov:Organization', '@id': 'https://ror.org/00000000', name: 'Test Hospital' },
   ];
-  m['prov:wasGeneratedBy'] = {
-    '@type': 'prov:Activity',
-    '@id': '#collection-2024',
-    name: 'Prospective collection of chest radiographs',
-    'prov:startedAtTime': '2024-01-01',
-    'prov:endedAtTime': '2024-12-31',
-    'prov:wasAssociatedWith': { '@type': 'prov:Organization', name: 'Test Hospital' },
-  };
+  m['prov:wasGeneratedBy'] = [
+    {
+      '@type': ['prov:Activity', DPV_AI_DATA_COLLECTION],
+      '@id': '#collection-2024',
+      name: 'Prospective collection of chest radiographs',
+      'prov:startedAtTime': '2024-01-01',
+      'prov:endedAtTime': '2024-12-31',
+      'prov:wasAssociatedWith': { '@type': 'prov:Organization', name: 'Test Hospital' },
+    },
+    annotationActivity(),
+  ];
   m['bio:sourceSite'] = [{ name: 'Test Hospital, main campus', country: 'US' }];
   m['bio:deidentification'] = {
     '@type': 'prov:Activity',
@@ -110,9 +163,8 @@ function sensitiveManifest(): Json {
     encodingFormat: 'application/jsonl',
     'prov:wasDerivedFrom': { '@type': 'prov:Entity', '@id': 'manifest.csv' },
     'prov:wasGeneratedBy': {
-      '@type': 'prov:Activity',
+      '@type': ['prov:Activity', DPV_AI_DATA_LABELLING],
       '@id': 'urn:oci:campaign:7f3a',
-      'bio:activityKind': 'ANNOTATION_CAMPAIGN',
       'prov:startedAtTime': '2026-06-01T08:00:00Z',
       'prov:endedAtTime': '2026-08-30T10:00:00Z',
       'prov:wasAssociatedWith': {
@@ -158,6 +210,7 @@ describe('bio-prov obligation table (spec section 3)', () => {
     H4: ['MAY', 'SHOULD', 'MUST', 'MUST'],
     H5: ['MAY', 'SHOULD', 'MUST', 'MUST'],
     H6: ['SHOULD', 'MUST', 'MUST', 'MUST'],
+    H6b: ['MAY', 'SHOULD', 'MUST', 'MUST'],
     A1: ['MUST', 'MUST', 'MUST', 'MUST'],
     A2: ['MUST', 'MUST', 'MUST', 'MUST'],
     A3: ['MAY', 'SHOULD', 'MUST', 'MUST'],
@@ -188,12 +241,26 @@ describe('bio-prov obligation table (spec section 3)', () => {
   });
 });
 
-describe('(a) seeded IDRiD fixture (carries the marker, spec section 10.1)', () => {
-  it('ships with the bio-prov/0.1 marker, a collection timeframe and a label protocol', () => {
+describe('(a) seeded IDRiD fixture (declares the target, spec section 10.1)', () => {
+  it('declares the v0.2 conformance target, drops the marker, and keeps H2 / H6 / H6b', () => {
     const m = idrid();
-    expect(m['bio:provenanceProfile']).toBe('bio-prov/0.1');
+    expect(m['dct:conformsTo']).toEqual([CONFORMS_TO.croissant11, PROVENANCE_CONFORMANCE_TARGET]);
+    expect(m['bio:provenanceProfile']).toBeUndefined();
     expect(typeof m['rai:dataCollectionTimeframe']).toBe('string');
     expect((m['bio:labelProtocol'] as Json)['version']).toBe('IDRiD 2018 disease-grading protocol');
+    const [collection, labelling] = activitiesOf(m) as [Json, Json];
+    expect(collection['@type']).toEqual(['prov:Activity', DPV_AI_DATA_COLLECTION]);
+    expect(collection['prov:startedAtTime']).toBe('2026-07-30T00:00:00Z');
+    expect(labelling['@type']).toEqual(['prov:Activity', DPV_AI_DATA_LABELLING]);
+    expect((labelling['prov:used'] as Json)['name']).toBe('IDRiD 2018 disease-grading protocol');
+    expect(labelling['prov:wasAssociatedWith']).toEqual([
+      { '@type': 'prov:Person', 'prov:hadRole': 'Annotator' },
+      { '@type': 'prov:Person', 'prov:hadRole': 'Adjudicator' },
+    ]);
+  });
+
+  it('the base layer still resolves Croissant 1.1 from the conformsTo array', () => {
+    expect(validate(idrid()).conformance).toBe('croissant-1.1');
   });
 
   it('validates with zero issues (errors and warnings) at OPEN in strict mode', () => {
@@ -203,15 +270,15 @@ describe('(a) seeded IDRiD fixture (carries the marker, spec section 10.1)', () 
     expect(r.ok).toBe(true);
   });
 
-  it('at OPEN strict, H2 and H6 are the SHOULDs that surface as warnings when removed', () => {
-    const r = validate(idridWithoutH2H6(), { accessTier: 'OPEN', strictProvenance: true });
+  it('at OPEN strict, H6 is the SHOULD that surfaces as a warning when removed', () => {
+    const r = validate(idridWithoutH6(), { accessTier: 'OPEN', strictProvenance: true });
     const prov = provenanceIssues(r.issues);
-    expect(codes(prov)).toEqual(['provenance.missing.H2', 'provenance.missing.H6']);
+    expect(codes(prov)).toEqual(['provenance.missing.H6']);
     for (const issue of prov) expect(issue.level).toBe('warning');
     expect(r.ok).toBe(true);
-    // H1 / H3 / H4 / H5 are MAY at OPEN: never reported as missing.
-    // H4 stays MAY because the level is ANONYMIZED (footnote 2).
-    for (const id of ['H1', 'H3', 'H4', 'H5']) {
+    // H1 / H3 / H4 / H5 are MAY at OPEN, and so is H6b: never reported as
+    // missing. H4 stays MAY because the level is ANONYMIZED (footnote 2).
+    for (const id of ['H1', 'H3', 'H4', 'H5', 'H6b']) {
       expect(
         prov.some((i) => i.code.endsWith(`.${id}`)),
         id,
@@ -219,7 +286,27 @@ describe('(a) seeded IDRiD fixture (carries the marker, spec section 10.1)', () 
     }
   });
 
-  it('at REGISTERED strict, H1 / H3 / H4 / H5 surface as SHOULD-level warnings; H2 / H6 are met', () => {
+  it('at OPEN strict, an undated collection activity is a missing H2 (and P2 wants a time too)', () => {
+    const r = validate(idridWithoutActivityTime(), { accessTier: 'OPEN', strictProvenance: true });
+    const byCode = new Map(provenanceIssues(r.issues).map((i) => [i.code, i]));
+    expect(byCode.get('provenance.missing.H2')?.level).toBe('warning');
+    expect(byCode.get('provenance.missing.H2')?.path).toBe('/wasGeneratedBy/0');
+    // The collection activity is this dataset's generating activity, so P2
+    // reports the same absence as a malformed activity — an error at every tier.
+    expect(byCode.get('provenance.invalid.P2.startedAtTime')?.level).toBe('error');
+    expect(byCode.get('provenance.invalid.P2.startedAtTime')?.message).toContain('prov:atTime');
+    expect(r.ok).toBe(false);
+  });
+
+  it('at REGISTERED strict, a missing H2 is an error', () => {
+    const r = validate(idridWithoutActivityTime(), {
+      accessTier: 'REGISTERED',
+      strictProvenance: true,
+    });
+    expect(r.issues.find((i) => i.code === 'provenance.missing.H2')?.level).toBe('error');
+  });
+
+  it('at REGISTERED strict, H1 / H3 / H4 / H5 surface as SHOULD-level warnings; H2 / H6 / H6b are met', () => {
     const r = validate(idrid(), { accessTier: 'REGISTERED', strictProvenance: true });
     const prov = provenanceIssues(r.issues);
     expect(codes(prov)).toEqual([
@@ -230,13 +317,12 @@ describe('(a) seeded IDRiD fixture (carries the marker, spec section 10.1)', () 
     ]);
     for (const issue of prov) expect(issue.level).toBe('warning');
     expect(r.ok).toBe(true);
-    // Without H2 / H6 the same tier turns them into errors (MUST at REGISTERED).
-    const stripped = validate(idridWithoutH2H6(), {
+    // Without H6 the same tier turns it into an error (MUST at REGISTERED).
+    const stripped = validate(idridWithoutH6(), {
       accessTier: 'REGISTERED',
       strictProvenance: true,
     });
     const byCode = new Map(provenanceIssues(stripped.issues).map((i) => [i.code, i.level]));
-    expect(byCode.get('provenance.missing.H2')).toBe('error');
     expect(byCode.get('provenance.missing.H6')).toBe('error');
     expect(stripped.ok).toBe(false);
     // P1–P4 are met by the fixture (derived slice with a dated activity).
@@ -249,7 +335,7 @@ describe('(a) seeded IDRiD fixture (carries the marker, spec section 10.1)', () 
   });
 
   it('the default is strict at OPEN: identical to an explicit { OPEN, strict }', () => {
-    for (const load of [idrid, idridWithoutH2H6]) {
+    for (const load of [idrid, idridWithoutH6]) {
       const byDefault = validate(load());
       const explicit = validate(load(), { accessTier: 'OPEN', strictProvenance: true });
       expect(byDefault.hasProvenanceProfile).toBe(true);
@@ -259,13 +345,14 @@ describe('(a) seeded IDRiD fixture (carries the marker, spec section 10.1)', () 
   });
 
   it('permissive mode (strictProvenance: false) reports a MUST one level down, as a warning', () => {
-    // At REGISTERED, H2 and H6 are MUSTs: errors strict, warnings permissive.
-    const permissive = validate(idridWithoutH2H6(), {
+    // At REGISTERED, H6 is a MUST: an error strict, a warning permissive. The
+    // SHOULDs (H1 / H3 / H4 / H5 / H6b) are not reported at all.
+    const permissive = validate(idridWithoutH6(), {
       accessTier: 'REGISTERED',
       strictProvenance: false,
     });
     const prov = provenanceIssues(permissive.issues);
-    expect(codes(prov)).toEqual(['provenance.missing.H2', 'provenance.missing.H6']);
+    expect(codes(prov)).toEqual(['provenance.missing.H6']);
     for (const issue of prov) expect(issue.level).toBe('warning');
     expect(permissive.ok).toBe(true);
   });
@@ -278,6 +365,9 @@ describe('(a) seeded IDRiD fixture (carries the marker, spec section 10.1)', () 
     expect(status.get('P2')).toBe('satisfied');
     expect(status.get('P3')).toBe('satisfied');
     expect(status.get('P4')).toBe('satisfied');
+    expect(status.get('H2')).toBe('satisfied');
+    expect(status.get('H6')).toBe('satisfied');
+    expect(status.get('H6b')).toBe('satisfied');
     expect(status.get('A1')).toBe('not_applicable');
     expect(status.get('A2')).toBe('not_applicable');
     expect(status.get('A3')).toBe('not_applicable');
@@ -334,20 +424,6 @@ describe('(b) synthetic SENSITIVE manifest', () => {
     const r = validate(m, { accessTier: 'OPEN', strictProvenance: true });
     expect(r.issues.some((i) => i.code === 'provenance.missing.H5')).toBe(false);
   });
-
-  it('a wrong profile version is reported as malformed: an error by default, a warning permissive', () => {
-    const m = sensitiveManifest();
-    m['bio:provenanceProfile'] = 'bio-prov/0.9';
-    const r = validate(m, { accessTier: 'OPEN' });
-    const marker = r.issues.find((i) => i.code === 'provenance.invalid.provenanceProfile');
-    expect(marker?.level).toBe('error');
-    expect(marker?.path).toBe('/provenanceProfile');
-    expect(r.ok).toBe(false);
-    const permissive = validate(m, { accessTier: 'OPEN', strictProvenance: false });
-    expect(
-      permissive.issues.find((i) => i.code === 'provenance.invalid.provenanceProfile')?.level,
-    ).toBe('warning');
-  });
 });
 
 describe('(c) H4 cross-checks', () => {
@@ -400,31 +476,72 @@ describe('(c) H4 cross-checks', () => {
   });
 });
 
-describe('(d) malformed prov:Activity dates', () => {
+describe('(d) activity times (spec section 4, the time rule)', () => {
+  it('an instant (prov:atTime) satisfies P2 and H2 — no bounds asked for', () => {
+    const m = sensitiveManifest();
+    const activity = collectionActivityOf(m);
+    delete activity['prov:startedAtTime'];
+    delete activity['prov:endedAtTime'];
+    activity['prov:atTime'] = '2024-06-30T12:00:00Z';
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    expect(r.issues, JSON.stringify(r.issues, null, 2)).toEqual([]);
+    expect(r.ok).toBe(true);
+    expect(extractProvenance(m).timeframe).toEqual({
+      start: '2024-06-30T12:00:00Z',
+      end: '2024-06-30T12:00:00Z',
+    });
+  });
+
+  it('a non-ISO prov:atTime → provenance.invalid.P2.atTime', () => {
+    const m = sensitiveManifest();
+    const activity = collectionActivityOf(m);
+    delete activity['prov:startedAtTime'];
+    delete activity['prov:endedAtTime'];
+    activity['prov:atTime'] = 'June 2024';
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    const issue = r.issues.find((i) => i.code === 'provenance.invalid.P2.atTime');
+    expect(issue?.level).toBe('error');
+    expect(issue?.path).toBe('/wasGeneratedBy/0/atTime');
+  });
+
+  it('a period with only one bound is not a period → provenance.invalid.P2.endedAtTime', () => {
+    const m = sensitiveManifest();
+    delete collectionActivityOf(m)['prov:endedAtTime'];
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    const issue = r.issues.find((i) => i.code === 'provenance.invalid.P2.endedAtTime');
+    expect(issue?.level).toBe('error');
+    expect(issue?.path).toBe('/wasGeneratedBy/0/endedAtTime');
+  });
+
   it('endedAtTime before startedAtTime → provenance.invalid.P2.endedAtTime', () => {
     const m = sensitiveManifest();
-    const activity = m['prov:wasGeneratedBy'] as Json;
+    const activity = collectionActivityOf(m);
     activity['prov:startedAtTime'] = '2024-12-31';
     activity['prov:endedAtTime'] = '2024-01-01';
     const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
     const issue = r.issues.find((i) => i.code === 'provenance.invalid.P2.endedAtTime');
     expect(issue?.level).toBe('error');
-    expect(issue?.path).toBe('/wasGeneratedBy/endedAtTime');
+    expect(issue?.path).toBe('/wasGeneratedBy/0/endedAtTime');
+    expect(issue?.message).toContain('must not be before startedAtTime');
     expect(codes(provenanceIssues(r.issues))).toEqual(['provenance.invalid.P2.endedAtTime']);
   });
 
   it('a non-ISO date → provenance.invalid.P2.startedAtTime', () => {
     const m = sensitiveManifest();
-    (m['prov:wasGeneratedBy'] as Json)['prov:startedAtTime'] = 'March 2024';
+    collectionActivityOf(m)['prov:startedAtTime'] = 'March 2024';
     const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
     expect(codes(provenanceIssues(r.issues))).toEqual(['provenance.invalid.P2.startedAtTime']);
   });
 
   it('paths index into an array of activities', () => {
     const m = sensitiveManifest();
-    const activity = m['prov:wasGeneratedBy'] as Json;
+    const activity = collectionActivityOf(m);
     delete activity['prov:endedAtTime'];
-    m['prov:wasGeneratedBy'] = ['https://example.org/some-activity', activity];
+    m['prov:wasGeneratedBy'] = [
+      'https://example.org/some-activity',
+      activity,
+      annotationActivity(),
+    ];
     const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
     const issue = r.issues.find((i) => i.code === 'provenance.invalid.P2.endedAtTime');
     expect(issue?.path).toBe('/wasGeneratedBy/1/endedAtTime');
@@ -585,6 +702,9 @@ describe('(f) extractProvenance', () => {
       start: '2026-07-30T00:00:00Z',
       end: '2026-07-30T00:00:00Z',
     });
+    expect(summary.collectionTimeframeText).toBe(
+      'IDRiD source collection published 2018; OCI demo slice prepared 30 July 2026',
+    );
     expect(summary.labelProtocolVersion).toBe('IDRiD 2018 disease-grading protocol');
     // MAY at OPEN and not declared by the slice.
     expect(summary.sites).toEqual([]);
@@ -632,7 +752,7 @@ describe('(f) extractProvenance', () => {
   });
 });
 
-describe('(g) manifests without the marker', () => {
+describe('(g) manifests that opt into nothing', () => {
   const cases: Array<[string, () => Json]> = [
     [
       'seeded oci-demo-chest-xr',
@@ -648,6 +768,14 @@ describe('(g) manifests without the marker', () => {
     ],
     ['valid-biocroissant-1.1', () => fixture('valid-biocroissant-1.1.json')],
     ['valid-croissant-1.0', () => fixture('valid-croissant-1.0.json')],
+    [
+      'the IDRiD slice with the bio-prov target dropped from conformsTo',
+      () => {
+        const m = idrid();
+        m['dct:conformsTo'] = CONFORMS_TO.croissant11;
+        return m;
+      },
+    ],
   ];
 
   for (const [name, load] of cases) {
@@ -670,5 +798,321 @@ describe('(g) manifests without the marker', () => {
 
   it('non-object input reports hasProvenanceProfile false', () => {
     expect(validate(42).hasProvenanceProfile).toBe(false);
+  });
+});
+
+describe('(h) opt-in and the deprecated v0.1 mechanics (spec section 2)', () => {
+  it('the conformance target opts the layer in as an array element', () => {
+    const m = sensitiveManifest();
+    expect(m['dct:conformsTo']).toEqual([CONFORMS_TO.croissant11, PROVENANCE_CONFORMANCE_TARGET]);
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    expect(r.hasProvenanceProfile).toBe(true);
+    expect(r.conformance).toBe('croissant-1.1');
+    expect(r.issues).toEqual([]);
+  });
+
+  it('the conformance target opts the layer in as a bare string', () => {
+    const m = sensitiveManifest();
+    m['dct:conformsTo'] = PROVENANCE_CONFORMANCE_TARGET;
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    expect(r.hasProvenanceProfile).toBe(true);
+    // No Croissant target left, so the base layer no longer knows the version:
+    // the opt-in is independent of it.
+    expect(r.conformance).toBe('unknown');
+    expect(provenanceIssues(r.issues)).toEqual([]);
+  });
+
+  it('the deprecated marker still opts in and warns, in strict and permissive mode alike', () => {
+    for (const strictProvenance of [true, false]) {
+      const m = sensitiveManifest();
+      m['dct:conformsTo'] = CONFORMS_TO.croissant11;
+      m['bio:provenanceProfile'] = 'bio-prov/0.1';
+      const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance });
+      expect(r.hasProvenanceProfile, String(strictProvenance)).toBe(true);
+      const marker = r.issues.find((i) => i.code === 'provenance.deprecated.marker');
+      expect(marker?.level, String(strictProvenance)).toBe('warning');
+      expect(marker?.path).toBe('/provenanceProfile');
+      expect(marker?.message).toContain(PROVENANCE_CONFORMANCE_TARGET);
+      // A warning never fails the manifest, and the obligations still ran.
+      expect(codes(provenanceIssues(r.issues))).toEqual(['provenance.deprecated.marker']);
+      expect(r.ok).toBe(true);
+    }
+  });
+
+  it('a leftover bio:activityKind warns and no longer identifies a write-back (A1)', () => {
+    const m = sensitiveManifest();
+    const writeBack = writeBackOf(m);
+    const activity = writeBack['prov:wasGeneratedBy'] as Json;
+    activity['@type'] = 'prov:Activity';
+    activity['bio:activityKind'] = 'ANNOTATION_CAMPAIGN';
+    const index = (m['distribution'] as Json[]).findIndex((d) => d['@id'] === WRITE_BACK_ID);
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    const deprecated = r.issues.filter((i) => i.code === 'provenance.deprecated.activityKind');
+    expect(deprecated).toHaveLength(1);
+    expect(deprecated[0]?.level).toBe('warning');
+    expect(deprecated[0]?.path).toBe(`/distribution/${index}/wasGeneratedBy/activityKind`);
+    // A1–A3 no longer see the distribution: the DPV type is what identifies it.
+    const detailed = validateProvenanceDetailed(normalize(m) as Json, {
+      accessTier: 'SENSITIVE',
+      strict: true,
+    });
+    for (const id of ['A1', 'A2', 'A3']) {
+      expect(detailed.report.find((e) => e.id === id)?.status, id).toBe('not_applicable');
+    }
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe('(i) ODRL attachment points (spec section 5.5)', () => {
+  const policy = {
+    '@type': ['CreativeWork', 'odrl:Set'],
+    '@id': '#policy-cc-by',
+    'odrl:profile': 'http://w3.org/ns/odrl/2/ai',
+    'odrl:permission': [
+      {
+        'odrl:action': ['odrl:use', 'odrl:distribute'],
+        'odrl:target': 'the-dataset',
+        'odrl:duty': [{ 'odrl:action': 'odrl:attribute' }],
+      },
+    ],
+  };
+
+  it('a usageInfo odrl:Set with an odrl:profile validates', () => {
+    const m = sensitiveManifest();
+    m['sc:usageInfo'] = policy;
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    expect(r.issues, JSON.stringify(r.issues, null, 2)).toEqual([]);
+  });
+
+  it('a usageInfo odrl:Offer, bare key, validates too', () => {
+    const m = sensitiveManifest();
+    m['usageInfo'] = { ...policy, '@type': 'odrl:Offer' };
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    expect(r.issues, JSON.stringify(r.issues, null, 2)).toEqual([]);
+  });
+
+  it('Croissant 1.1 hasOffer is still accepted, alongside usageInfo', () => {
+    const m = sensitiveManifest();
+    m['sc:usageInfo'] = policy;
+    m['odrl:hasOffer'] = {
+      '@type': 'odrl:Offer',
+      '@id': '#offer-cc-by',
+      'odrl:permission': [{ 'odrl:action': ['odrl:use'], 'odrl:target': 'the-dataset' }],
+    };
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    expect(r.issues, JSON.stringify(r.issues, null, 2)).toEqual([]);
+  });
+
+  it('a usageInfo that is not a policy is reported by the croissant11 layer', () => {
+    const m = sensitiveManifest();
+    m['sc:usageInfo'] = { '@type': 'CreativeWork', 'odrl:permission': [] };
+    const r = validate(m);
+    const issue = r.issues.find((i) => i.path.startsWith('/usageInfo'));
+    expect(issue?.code.startsWith('croissant11.')).toBe(true);
+  });
+});
+
+describe('(j) H6b — the annotation activity (spec section 5, H6b)', () => {
+  function withoutAnnotationActivity(): Json {
+    const m = sensitiveManifest();
+    m['prov:wasGeneratedBy'] = [collectionActivityOf(m)];
+    (m['distribution'] as Json[]).pop();
+    return m;
+  }
+
+  it('missing at SENSITIVE is an error', () => {
+    const r = validate(withoutAnnotationActivity(), {
+      accessTier: 'SENSITIVE',
+      strictProvenance: true,
+    });
+    const h6b = r.issues.filter((i) => i.code === 'provenance.missing.H6b');
+    expect(h6b).toHaveLength(1);
+    expect(h6b[0]?.level).toBe('error');
+    expect(h6b[0]?.path).toBe('/wasGeneratedBy');
+    expect(r.ok).toBe(false);
+  });
+
+  it('missing at CONTROLLED is an error, at REGISTERED a warning, at OPEN silent', () => {
+    const m = withoutAnnotationActivity();
+    expect(
+      validate(m, { accessTier: 'CONTROLLED', strictProvenance: true }).issues.find(
+        (i) => i.code === 'provenance.missing.H6b',
+      )?.level,
+    ).toBe('error');
+    expect(
+      validate(m, { accessTier: 'REGISTERED', strictProvenance: true }).issues.find(
+        (i) => i.code === 'provenance.missing.H6b',
+      )?.level,
+    ).toBe('warning');
+    const open = validate(m, { accessTier: 'OPEN', strictProvenance: true });
+    expect(open.issues.some((i) => i.code.endsWith('.H6b'))).toBe(false);
+  });
+
+  it('a guideline without an @id does not satisfy H6b → provenance.invalid.H6b.used', () => {
+    const m = sensitiveManifest();
+    const labelling = (m['prov:wasGeneratedBy'] as Json[])[1] as Json;
+    labelling['prov:used'] = { '@type': 'prov:Entity', name: 'A guideline with no identifier' };
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    const issue = r.issues.find((i) => i.code === 'provenance.invalid.H6b.used');
+    expect(issue?.level).toBe('error');
+    expect(issue?.path).toBe('/wasGeneratedBy/1/used');
+  });
+
+  it('an agent without prov:hadRole does not satisfy H6b → provenance.invalid.H6b.hadRole', () => {
+    const m = sensitiveManifest();
+    const labelling = (m['prov:wasGeneratedBy'] as Json[])[1] as Json;
+    (labelling['prov:wasAssociatedWith'] as Json[])[1] = {
+      '@type': 'prov:Person',
+      name: 'Someone',
+    };
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    const issue = r.issues.find((i) => i.code === 'provenance.invalid.H6b.hadRole');
+    expect(issue?.path).toBe('/wasGeneratedBy/1/wasAssociatedWith/1/hadRole');
+  });
+
+  it('the campaign activity of a write-back can satisfy H6b on its own', () => {
+    const m = sensitiveManifest();
+    m['prov:wasGeneratedBy'] = [collectionActivityOf(m)];
+    const campaign = writeBackOf(m)['prov:wasGeneratedBy'] as Json;
+    campaign['prov:used'] = {
+      '@type': 'prov:Entity',
+      '@id': '#guideline-cxr-v3',
+      name: 'CXR pneumonia reading guideline',
+      version: '3',
+    };
+    campaign['prov:wasAssociatedWith'] = [
+      {
+        '@type': 'prov:SoftwareAgent',
+        name: 'oci-annotation',
+        'prov:hadRole': 'Annotation tool',
+      },
+    ];
+    const r = validate(m, { accessTier: 'SENSITIVE', strictProvenance: true });
+    expect(r.issues, JSON.stringify(r.issues, null, 2)).toEqual([]);
+  });
+});
+
+/**
+ * (k) The point of #519: a manifest written the way the Croissant
+ * Responsible AI specification's own worked examples are written — an
+ * instant-timed collection activity typed with a DPV AI type, a labelling
+ * activity with a guideline and agent roles, an ODRL policy on
+ * `usageInfo` with an `odrl:profile`, and RAI attributes under both the
+ * old and the new spellings — validates clean.
+ */
+describe('(k) the RAI specification’s own worked-example shapes', () => {
+  function raiStyleManifest(): Json {
+    return {
+      '@context': {
+        '@vocab': 'https://schema.org/',
+        sc: 'https://schema.org/',
+        cr: 'http://mlcommons.org/croissant/',
+        rai: 'http://mlcommons.org/croissant/RAI/',
+        prov: 'http://www.w3.org/ns/prov#',
+        odrl: 'http://www.w3.org/ns/odrl/2/',
+        dct: 'http://purl.org/dc/terms/',
+      },
+      '@type': 'sc:Dataset',
+      'dct:conformsTo': [
+        'http://mlcommons.org/croissant/1.1',
+        'http://mlcommons.org/croissant/RAI/',
+        PROVENANCE_CONFORMANCE_TARGET,
+      ],
+      name: 'Retinal screening cohort (RAI-style example)',
+      description:
+        'A worked example in the shapes the Croissant Responsible AI specification uses: DPV-typed activities, an instant time, agent roles and a usageInfo policy.',
+      license: 'https://creativecommons.org/licenses/by/4.0/',
+      url: 'https://example.org/datasets/rai-style',
+      creator: { '@type': 'sc:Organization', name: 'Example Eye Hospital' },
+      datePublished: '2026-09-01',
+      'cr:version': '1.0.0',
+      'prov:wasAttributedTo': [
+        {
+          '@type': 'prov:Organization',
+          '@id': 'https://ror.org/00000000',
+          name: 'Example Eye Hospital',
+        },
+      ],
+      'prov:wasGeneratedBy': [
+        {
+          '@type': ['prov:Activity', DPV_AI_DATA_COLLECTION],
+          '@id': '#collection',
+          name: 'Retinal screening data collection',
+          'prov:atTime': '2025-11-14',
+          'prov:wasAssociatedWith': {
+            '@type': 'prov:Organization',
+            name: 'Example Eye Hospital',
+          },
+        },
+        {
+          '@type': ['prov:Activity', DPV_AI_DATA_LABELLING],
+          '@id': '#labelling',
+          name: 'Grading of the screening images',
+          'prov:atTime': '2026-01-20',
+          'prov:used': {
+            '@type': 'prov:Entity',
+            '@id': 'https://example.org/guidelines/icdr',
+            name: 'ICDR grading guideline',
+            version: '2018',
+          },
+          'prov:wasAssociatedWith': [
+            { '@type': 'prov:Person', '@id': '#grader-pool', 'prov:hadRole': 'Annotator' },
+            { '@type': 'prov:Person', '@id': '#senior', 'prov:hadRole': 'Adjudicator' },
+          ],
+        },
+      ],
+      'sc:usageInfo': {
+        '@type': ['CreativeWork', 'odrl:Set'],
+        '@id': '#policy',
+        'odrl:profile': 'http://w3.org/ns/odrl/2/ai',
+        'odrl:permission': [{ 'odrl:action': ['odrl:use'], 'odrl:target': 'rai-style' }],
+      },
+      'rai:dataCollection': 'Consecutive screening visits at one site.',
+      'rai:dataLimitations': 'One site, one camera model.',
+      'rai:dataBiases': 'Adults only; no paediatric images.',
+      'rai:personalSensitiveInformation': 'None: images are anonymised at capture.',
+      'rai:dataUseCases': 'Referable-DR triage evaluation.',
+      // The renamed spellings from the RAI attribute table.
+      'rai:dataMaintenancePlan': 'Reviewed annually; superseded versions stay resolvable.',
+      'rai:socialImpact': 'Supports triage in settings with few ophthalmologists.',
+      'bio:labelProtocol': {
+        version: 'ICDR grading guideline 2018',
+        labelScale: 'ICDR 0–4; referable ≥ 2',
+        gradersPerItem: 2,
+      },
+    };
+  }
+
+  it('validates with zero errors at OPEN in strict mode', () => {
+    const r = validate(raiStyleManifest(), { accessTier: 'OPEN', strictProvenance: true });
+    expect(
+      r.issues.filter((i) => i.level === 'error'),
+      JSON.stringify(r.issues, null, 2),
+    ).toEqual([]);
+    expect(r.ok).toBe(true);
+    expect(r.hasProvenanceProfile).toBe(true);
+    expect(r.hasRai).toBe(true);
+    expect(r.conformance).toBe('croissant-1.1');
+  });
+
+  it('has nothing to report at all at OPEN — not even a warning', () => {
+    const r = validate(raiStyleManifest(), { accessTier: 'OPEN', strictProvenance: true });
+    expect(r.issues, JSON.stringify(r.issues, null, 2)).toEqual([]);
+  });
+
+  it('is conformant up to CONTROLLED on the annotation requirements (H6, H6b)', () => {
+    const r = validate(raiStyleManifest(), { accessTier: 'CONTROLLED', strictProvenance: true });
+    const prov = provenanceIssues(r.issues);
+    expect(prov.some((i) => i.code.endsWith('.H2'))).toBe(false);
+    expect(prov.some((i) => i.code.endsWith('.H6'))).toBe(false);
+    expect(prov.some((i) => i.code.endsWith('.H6b'))).toBe(false);
+  });
+
+  it('extractProvenance reads the instant time and the guideline-backed protocol', () => {
+    const summary = extractProvenance(raiStyleManifest());
+    expect(summary.timeframe).toEqual({ start: '2025-11-14', end: '2025-11-14' });
+    expect(summary.sourceOrganizations).toEqual(['Example Eye Hospital']);
+    expect(summary.labelProtocolVersion).toBe('ICDR grading guideline 2018');
+    expect(summary.collectionTimeframeText).toBeNull();
   });
 });

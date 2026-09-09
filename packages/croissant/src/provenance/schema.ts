@@ -1,14 +1,16 @@
 import { z } from 'zod';
+import { CONFORMS_TO, NS } from '../namespaces/index.js';
 import { Croissant11DeltasSchema } from '../croissant11/schema.js';
 
 /**
- * `bio-prov` v0.1 — health-dataset provenance profile (ADR-0022,
- * `docs/standards/bio-prov-v0.1.md`).
+ * `bio-prov` v0.2 — health-dataset provenance profile (ADR-0022,
+ * `docs/standards/bio-prov-v0.2.md`).
  *
  * Encoded against the **normalized** form (prefixes stripped — see
- * validator/normalize.ts): `bio:provenanceProfile` → `provenanceProfile`,
+ * validator/normalize.ts): `dct:conformsTo` → `conformsTo`,
  * `prov:wasGeneratedBy` → `wasGeneratedBy`, `prov:startedAtTime` →
- * `startedAtTime`. `@type` values keep their prefix (`prov:Activity`).
+ * `startedAtTime`. `@type` values keep their prefix (`prov:Activity`) and
+ * carry the DPV AI activity types as full IRIs.
  *
  * Two kinds of shape live here:
  *
@@ -28,7 +30,21 @@ import { Croissant11DeltasSchema } from '../croissant11/schema.js';
  * extra properties (spec section 8).
  */
 
-export const PROVENANCE_PROFILE_VERSION = 'bio-prov/0.1' as const;
+/** Profile version this package implements. */
+export const PROVENANCE_PROFILE_VERSION = 'bio-prov/0.2' as const;
+
+/**
+ * The conformance target a manifest declares in `dct:conformsTo` to opt
+ * into the layer (spec section 2). A string or one element of an array.
+ */
+export const PROVENANCE_CONFORMANCE_TARGET = CONFORMS_TO.bioProv02;
+
+/**
+ * Data Privacy Vocabulary AI activity types (spec section 4). An activity
+ * carries one as a second entry in `@type` alongside `prov:Activity`.
+ */
+export const DPV_AI_DATA_COLLECTION = `${NS.dpvAi}DataCollection` as const;
+export const DPV_AI_DATA_LABELLING = `${NS.dpvAi}DataLabelling` as const;
 
 const NonEmptyString = z.string().min(1);
 const CountryCode = z.string().regex(/^[A-Z]{2}$/, 'expected ISO 3166-1 alpha-2');
@@ -63,10 +79,30 @@ export function isIso8601(value: string): boolean {
 
 export const IsoDateTime = z.string().refine(isIso8601, 'expected an ISO 8601 date or date-time');
 
-/** Opt-in marker. The validator runs the layer only when it is present. */
-export const ProvenanceProfileMarker = z.object({
-  provenanceProfile: z.literal(PROVENANCE_PROFILE_VERSION),
-});
+/**
+ * True when the normalized manifest declares the profile's conformance
+ * target, as a bare string or inside the `dct:conformsTo` array.
+ */
+export function declaresProvenanceConformance(manifest: Record<string, unknown>): boolean {
+  const value = manifest['conformsTo'];
+  const targets = Array.isArray(value) ? value : [value];
+  return targets.some((t) => t === PROVENANCE_CONFORMANCE_TARGET);
+}
+
+/**
+ * True when the normalized manifest still carries v0.1's
+ * `bio:provenanceProfile` marker (any value). It opts the layer in for
+ * one more version and is reported as `provenance.deprecated.marker`.
+ */
+export function hasDeprecatedProvenanceMarker(manifest: Record<string, unknown>): boolean {
+  const marker = manifest['provenanceProfile'];
+  return marker !== undefined && marker !== null;
+}
+
+/** Either opt-in mechanism (spec section 2). */
+export function optsIntoProvenanceProfile(manifest: Record<string, unknown>): boolean {
+  return declaresProvenanceConformance(manifest) || hasDeprecatedProvenanceMarker(manifest);
+}
 
 // ---------------------------------------------------------------------------
 // H1 — bio:sourceSite
@@ -172,8 +208,13 @@ export const ReceiptSchema = z
   })
   .passthrough();
 
-/** Marker value the annotation-campaign edge keys on (section 6, A1). */
-export const ANNOTATION_CAMPAIGN_ACTIVITY_KIND = 'ANNOTATION_CAMPAIGN' as const;
+/**
+ * v0.1's `bio:activityKind` is removed (spec section 4): the DPV AI types
+ * above say the same thing, and A1 keys the annotation-campaign edge on
+ * `DPV_AI_DATA_LABELLING`. A manifest that still carries the property is
+ * reported as `provenance.deprecated.activityKind`.
+ */
+export const DEPRECATED_ACTIVITY_KIND_PROPERTY = 'activityKind' as const;
 
 /**
  * The profile terms a campaign write-back distribution carries in
@@ -194,11 +235,12 @@ export const WriteBackDistributionSchema = Croissant11DeltasSchema.pick({
 // ---------------------------------------------------------------------------
 
 /**
- * The dataset-level shape of a `bio-prov/0.1` manifest. PROV-O properties
+ * The dataset-level shape of a `bio-prov/0.2` manifest. PROV-O properties
  * are the Croissant 1.1 shapes (picked, not duplicated); `bio:` terms are
- * the profile's own. Everything except the marker is optional here: which
- * of them a dataset MUST fill depends on its access tier and is decided by
- * `requirements.ts`.
+ * the profile's own. Everything is optional here: which of them a dataset
+ * MUST fill depends on its access tier and is decided by
+ * `requirements.ts`. The opt-in lives in `dct:conformsTo`, which the base
+ * Croissant layer validates.
  */
 export const ProvenanceProfileSchema = Croissant11DeltasSchema.pick({
   wasDerivedFrom: true,
@@ -206,7 +248,8 @@ export const ProvenanceProfileSchema = Croissant11DeltasSchema.pick({
   wasAttributedTo: true,
 })
   .extend({
-    provenanceProfile: z.literal(PROVENANCE_PROFILE_VERSION),
+    /** Deprecated v0.1 opt-in marker; any value is tolerated with a warning. */
+    provenanceProfile: z.string().optional(),
     sourceSite: z.array(SourceSiteSchema).optional(),
     deviceClass: z.union([DeviceClassSchema, z.array(DeviceClassSchema)]).optional(),
     deidentification: DeidentificationSchema.optional(),
@@ -221,5 +264,11 @@ export type LabelProtocol = z.infer<typeof LabelProtocolSchema>;
 export type Integrity = z.infer<typeof IntegritySchema>;
 export type Receipt = z.infer<typeof ReceiptSchema>;
 
-/** Normalized key the validator keys the layer on. */
-export const PROVENANCE_PROFILE_PROPERTY = 'provenanceProfile' as const;
+/**
+ * Normalized key of v0.1's opt-in marker (`bio:provenanceProfile`).
+ * Deprecated in v0.2: it still opts the layer in and warns.
+ */
+export const DEPRECATED_PROVENANCE_MARKER = 'provenanceProfile' as const;
+
+/** @deprecated Use {@link DEPRECATED_PROVENANCE_MARKER}. */
+export const PROVENANCE_PROFILE_PROPERTY = DEPRECATED_PROVENANCE_MARKER;

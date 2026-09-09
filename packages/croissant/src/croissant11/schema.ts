@@ -35,6 +35,12 @@ const ProvEntityRef = z.union([z.string(), ProvEntity]);
 
 const ProvAgentBase = z
   .object({
+    /**
+     * `prov:hadRole` — the role the agent held in the activity
+     * (`Annotator`, `Adjudicator`, ...). `bio-prov` v0.2 H6b requires it
+     * on the agents of a labelling activity; roles, never identities.
+     */
+    hadRole: z.union([z.string(), z.array(z.string())]).optional(),
     '@type': z
       .union([
         z.literal('prov:Agent'),
@@ -60,17 +66,43 @@ const ProvAgent = ProvAgentBase.extend({
     .optional(),
 });
 
+/**
+ * An activity's `@type`. A bare `prov:Activity`, or an array that carries
+ * it alongside a Data Privacy Vocabulary AI activity type
+ * (`https://w3id.org/dpv/ai#DataCollection` / `#DataLabelling`) — the
+ * double typing the Croissant RAI specification uses and `bio-prov` v0.2
+ * keys H2, H6b and A1 on.
+ */
+const ProvActivityType = z.union([
+  z.literal('prov:Activity'),
+  z.literal('Activity'),
+  z
+    .array(z.string())
+    .refine(
+      (types) => types.includes('prov:Activity') || types.includes('Activity'),
+      'expected prov:Activity among the activity @type values',
+    ),
+]);
+
 const ProvActivity = z
   .object({
-    '@type': z.union([z.literal('prov:Activity'), z.literal('Activity')]),
+    '@type': ProvActivityType,
     '@id': z.string().optional(),
     name: z.string().optional(),
+    /** An instant, the RAI specification's own form. Alternative to the two bounds. */
+    atTime: z.string().optional(),
     startedAtTime: z.string().optional(),
     endedAtTime: z.string().optional(),
     used: z.union([ProvEntityRef, z.array(ProvEntityRef)]).optional(),
     wasAssociatedWith: z
       .union([z.string(), ProvAgent, z.array(z.union([z.string(), ProvAgent]))])
       .optional(),
+    /**
+     * `prov:qualifiedAssociation` — the qualified form of an association
+     * (agent + role as a `prov:Association` node). Accepted and passed
+     * through; `bio-prov` v0.2 reads roles off the agents themselves.
+     */
+    qualifiedAssociation: z.unknown().optional(),
   })
   .passthrough();
 
@@ -106,6 +138,41 @@ const OdrlOffer = z
   })
   .passthrough();
 
+/**
+ * A policy node hanging off schema.org `usageInfo` — the attachment point
+ * every ODRL example in the Croissant Responsible AI specification uses,
+ * and the preferred one in `bio-prov` v0.2 (§5.5). `@type` is typically
+ * `["CreativeWork", "odrl:Set"]`, sometimes an `odrl:Offer`; the optional
+ * `odrl:profile` points at an ODRL profile such as the W3C ODRL AI
+ * vocabulary. Croissant 1.1's `hasOffer` stays accepted below.
+ */
+const POLICY_TYPES: ReadonlyArray<string> = [
+  'odrl:Set',
+  'Set',
+  'odrl:Offer',
+  'Offer',
+  'odrl:Agreement',
+  'Agreement',
+  'odrl:Policy',
+  'Policy',
+];
+
+const UsageInfoPolicy = z
+  .object({
+    '@type': z
+      .union([z.string(), z.array(z.string())])
+      .refine(
+        (t) => (Array.isArray(t) ? t : [t]).some((x) => POLICY_TYPES.includes(x)),
+        'expected an ODRL policy type (odrl:Set, odrl:Offer, ...) among the usageInfo @type values',
+      ),
+    '@id': z.string().optional(),
+    profile: z.union([Url, z.array(Url)]).optional(),
+    permission: z.union([OdrlPermission, z.array(OdrlPermission)]).optional(),
+    prohibition: z.union([OdrlPermission, z.array(OdrlPermission)]).optional(),
+    obligation: z.union([OdrlPermission, z.array(OdrlPermission)]).optional(),
+  })
+  .passthrough();
+
 // DUO — Data Use Ontology consent codes carried as DefinedTerm references.
 const DefinedTerm = z
   .object({
@@ -131,7 +198,10 @@ export const Croissant11DeltasSchema = z
       .union([z.string(), ProvAgent, z.array(z.union([z.string(), ProvAgent]))])
       .optional(),
 
-    // Usage policy
+    // Usage policy — `usageInfo` (preferred, bio-prov v0.2 §5.5) or
+    // Croissant 1.1's `hasOffer`. Both are accepted; a manifest may carry
+    // either or both.
+    usageInfo: z.union([UsageInfoPolicy, z.array(UsageInfoPolicy)]).optional(),
     hasOffer: z.union([OdrlOffer, z.array(OdrlOffer)]).optional(),
     /**
      * Convenience top-level for the most common case: a list of DUO

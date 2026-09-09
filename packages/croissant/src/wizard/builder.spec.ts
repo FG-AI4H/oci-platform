@@ -5,6 +5,11 @@ import {
   type ManifestWizardProvenance,
 } from '@oci/shared-types';
 import { validate } from '../validator/index.js';
+import {
+  DPV_AI_DATA_COLLECTION,
+  DPV_AI_DATA_LABELLING,
+  PROVENANCE_CONFORMANCE_TARGET,
+} from '../provenance/schema.js';
 import { manifestWizardInputToCroissant } from './builder.js';
 
 function baseInput(overrides: Partial<ManifestWizardInput> = {}): ManifestWizardInput {
@@ -149,6 +154,7 @@ describe('manifestWizardInputToCroissant', () => {
 
   it('omits the bio-prov profile entirely when the provenance step was not visited', () => {
     const out = manifestWizardInputToCroissant(baseInput());
+    expect(out['dct:conformsTo']).toBe('http://mlcommons.org/croissant/1.1');
     expect(out['bio:provenanceProfile']).toBeUndefined();
     expect(out['prov:wasAttributedTo']).toBeUndefined();
     expect(validate(out, { accessTier: 'SENSITIVE', strictProvenance: true }).ok).toBe(true);
@@ -208,7 +214,12 @@ describe('manifestWizardInputToCroissant — bio-prov provenance (#496)', () => 
     const out = manifestWizardInputToCroissant(
       baseInput({ anonymizationLevel: 'DEIDENTIFIED', provenance: fullProvenance() }),
     );
-    expect(out['bio:provenanceProfile']).toBe('bio-prov/0.1');
+    // v0.2 opt-in: the profile target next to the Croissant one, no marker.
+    expect(out['dct:conformsTo']).toEqual([
+      'http://mlcommons.org/croissant/1.1',
+      PROVENANCE_CONFORMANCE_TARGET,
+    ]);
+    expect(out['bio:provenanceProfile']).toBeUndefined();
     expect(out['prov:wasAttributedTo']).toEqual([
       {
         '@type': 'prov:Organization',
@@ -216,8 +227,9 @@ describe('manifestWizardInputToCroissant — bio-prov provenance (#496)', () => 
         name: 'University Hospital Zurich',
       },
     ]);
-    expect(out['prov:wasGeneratedBy']).toEqual({
-      '@type': 'prov:Activity',
+    const activities = out['prov:wasGeneratedBy'] as Array<Record<string, unknown>>;
+    expect(activities[0]).toEqual({
+      '@type': ['prov:Activity', DPV_AI_DATA_COLLECTION],
       '@id': '#collection',
       name: 'Prospective collection of fundus photographs at two sites',
       'prov:startedAtTime': '2019-03-01',
@@ -228,6 +240,22 @@ describe('manifestWizardInputToCroissant — bio-prov provenance (#496)', () => 
         '@id': 'https://ror.org/01462r250',
         name: 'University Hospital Zurich',
       },
+    });
+    // H6b — the label protocol restated as a dpv:DataLabelling activity:
+    // the guideline as an entity, one agent per role, no identities.
+    expect(activities[1]).toEqual({
+      '@type': ['prov:Activity', DPV_AI_DATA_LABELLING],
+      '@id': '#labelling',
+      name: 'Label production under ICDR grading protocol 2018',
+      'prov:used': {
+        '@type': 'prov:Entity',
+        '@id': '#label-protocol',
+        name: 'ICDR grading protocol 2018',
+      },
+      'prov:wasAssociatedWith': [
+        { '@type': 'prov:Person', 'prov:hadRole': 'Annotator' },
+        { '@type': 'prov:Person', 'prov:hadRole': 'Adjudicator' },
+      ],
     });
     expect(out['prov:wasDerivedFrom']).toBeUndefined();
     expect(out['bio:sourceSite']).toEqual([
@@ -279,11 +307,9 @@ describe('manifestWizardInputToCroissant — bio-prov provenance (#496)', () => 
     const result = validate(out, { accessTier: 'OPEN', strictProvenance: true });
     expect(result.issues.filter((i) => i.level === 'error')).toEqual([]);
     expect(result.ok).toBe(true);
-    // Only the health qualifiers that are SHOULD at OPEN are reported, as warnings.
-    expect(result.issues.map((i) => i.code).sort()).toEqual([
-      'provenance.missing.H2',
-      'provenance.missing.H6',
-    ]);
+    // Only the health qualifiers that are SHOULD at OPEN are reported, as
+    // warnings. H2 is met by the dated activity; H6b is a MAY at OPEN.
+    expect(result.issues.map((i) => i.code).sort()).toEqual(['provenance.missing.H6']);
     // Nothing blank leaks into the manifest.
     expect(out['bio:sourceSite']).toBeUndefined();
     expect(out['bio:deidentification']).toBeUndefined();
@@ -326,7 +352,10 @@ describe('manifestWizardInputToCroissant — bio-prov provenance (#496)', () => 
       '@type': 'prov:Entity',
       '@id': 'https://doi.org/10.3390/data3030025',
     });
-    const activity = out['prov:wasGeneratedBy'] as Record<string, unknown>;
+    const activity = (out['prov:wasGeneratedBy'] as Array<Record<string, unknown>>)[0] as Record<
+      string,
+      unknown
+    >;
     expect(activity['@id']).toBe('#derivation');
     expect(activity['prov:used']).toBe('https://doi.org/10.3390/data3030025');
     expect(activity['prov:wasAssociatedWith']).toEqual({

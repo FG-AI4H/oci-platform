@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { extractDuoTerms, extractProvenance, validate } from '../src/index.js';
+import {
+  CONFORMS_TO,
+  DPV_AI_DATA_COLLECTION,
+  DPV_AI_DATA_LABELLING,
+  PROVENANCE_CONFORMANCE_TARGET,
+  extractDuoTerms,
+  extractProvenance,
+  validate,
+} from '../src/index.js';
 
 /**
  * Validates every Croissant manifest under `apps/api/scripts/fixtures/`
@@ -73,13 +81,15 @@ describe('demo-seed fixture: idrid-grading-demo', () => {
     expect(ctx['odrl']).toBe('http://www.w3.org/ns/odrl/2/');
   });
 
-  it('carries a prov:Entity derivation, a prov:Activity and an odrl:Offer', () => {
+  it('carries a prov:Entity derivation, two DPV-typed activities and an odrl:Offer', () => {
     const derived = manifest['prov:wasDerivedFrom'] as Record<string, unknown>;
     expect(derived['@type']).toBe('prov:Entity');
     expect(derived['@id']).toBe('https://doi.org/10.3390/data3030025');
 
-    const activity = manifest['prov:wasGeneratedBy'] as Record<string, unknown>;
-    expect(activity['@type']).toBe('prov:Activity');
+    const activities = manifest['prov:wasGeneratedBy'] as Array<Record<string, unknown>>;
+    expect(activities).toHaveLength(2);
+    const activity = activities[0] as Record<string, unknown>;
+    expect(activity['@type']).toEqual(['prov:Activity', DPV_AI_DATA_COLLECTION]);
     expect(activity['prov:used']).toBe(derived['@id']);
     const agent = activity['prov:wasAssociatedWith'] as Record<string, unknown>;
     expect(agent['@type']).toBe('prov:SoftwareAgent');
@@ -100,9 +110,41 @@ describe('demo-seed fixture: idrid-grading-demo', () => {
     expect(extractDuoTerms(manifest)).toEqual(['DUO_0000004']);
   });
 
-  describe('bio-prov v0.1 (#504, spec section 10.1)', () => {
-    it('carries the marker, H2 and H6 without inventing an agreement value', () => {
-      expect(manifest['bio:provenanceProfile']).toBe('bio-prov/0.1');
+  describe('bio-prov v0.2 (#519, spec section 10.1)', () => {
+    it('declares the conformance target and no deprecated marker', () => {
+      expect(manifest['dct:conformsTo']).toEqual([
+        CONFORMS_TO.croissant11,
+        PROVENANCE_CONFORMANCE_TARGET,
+      ]);
+      expect(manifest['bio:provenanceProfile']).toBeUndefined();
+      // The base layer still resolves the Croissant version from the array.
+      expect(validate(manifest).conformance).toBe('croissant-1.1');
+    });
+
+    it('dates the collection activity and gives the labelling activity a guideline and roles', () => {
+      const [collection, labelling] = manifest['prov:wasGeneratedBy'] as Array<
+        Record<string, unknown>
+      >;
+      expect(collection?.['@type']).toEqual(['prov:Activity', DPV_AI_DATA_COLLECTION]);
+      expect(collection?.['prov:startedAtTime']).toBe('2026-07-30T00:00:00Z');
+      expect(collection?.['prov:endedAtTime']).toBe('2026-07-30T00:00:00Z');
+      expect(labelling?.['@type']).toEqual(['prov:Activity', DPV_AI_DATA_LABELLING]);
+      expect(labelling?.['prov:used']).toEqual({
+        '@type': 'prov:Entity',
+        '@id': '#guideline-idrid-2018-disease-grading',
+        name: 'IDRiD 2018 disease-grading protocol',
+        version: '2018',
+      });
+      // Roles, not identities, and no invented count: the prose already says
+      // two graders and one adjudicator (rai:dataAnnotationProtocol).
+      expect(labelling?.['prov:wasAssociatedWith']).toEqual([
+        { '@type': 'prov:Person', 'prov:hadRole': 'Annotator' },
+        { '@type': 'prov:Person', 'prov:hadRole': 'Adjudicator' },
+      ]);
+      expect(labelling?.['prov:atTime']).toBeUndefined();
+    });
+
+    it('keeps H2 text and H6 without inventing an agreement value', () => {
       expect(manifest['rai:dataCollectionTimeframe']).toBe(
         'IDRiD source collection published 2018; OCI demo slice prepared 30 July 2026',
       );
@@ -127,8 +169,8 @@ describe('demo-seed fixture: idrid-grading-demo', () => {
     });
 
     it('at SENSITIVE in strict mode fails on exactly the MUSTs the slice does not declare: H1, H3, H4, H5', () => {
-      // Section 3 at SENSITIVE: P1–P4, H2, H6 are met; A1–A3 do not apply
-      // (no campaign write-back); H1, H3, H4, H5 are MUST and absent.
+      // Section 3 at SENSITIVE: P1–P4, H2, H6 and H6b are met; A1–A3 do not
+      // apply (no campaign write-back); H1, H3, H4, H5 are MUST and absent.
       const r = validate(manifest, { accessTier: 'SENSITIVE', strictProvenance: true });
       const prov = r.issues.filter((i) => i.code.startsWith('provenance.'));
       expect(prov.map((i) => i.code).sort()).toEqual([
@@ -142,9 +184,15 @@ describe('demo-seed fixture: idrid-grading-demo', () => {
       expect(r.ok).toBe(false);
     });
 
-    it('extractProvenance returns the label protocol version', () => {
-      expect(extractProvenance(manifest).labelProtocolVersion).toBe(
-        'IDRiD 2018 disease-grading protocol',
+    it('extractProvenance returns the label protocol version, the slice timeframe and the RAI text', () => {
+      const summary = extractProvenance(manifest);
+      expect(summary.labelProtocolVersion).toBe('IDRiD 2018 disease-grading protocol');
+      expect(summary.timeframe).toEqual({
+        start: '2026-07-30T00:00:00Z',
+        end: '2026-07-30T00:00:00Z',
+      });
+      expect(summary.collectionTimeframeText).toBe(
+        'IDRiD source collection published 2018; OCI demo slice prepared 30 July 2026',
       );
     });
   });
@@ -161,7 +209,10 @@ describe('demo-seed fixture: idrid-grading-demo', () => {
 
   it('reports a prov:Activity missing @type under a croissant11.* code', () => {
     const broken = structuredClone(manifest);
-    const activity = broken['prov:wasGeneratedBy'] as Record<string, unknown>;
+    const activity = (broken['prov:wasGeneratedBy'] as Array<Record<string, unknown>>)[0] as Record<
+      string,
+      unknown
+    >;
     delete activity['@type'];
     const r = validate(broken);
     expect(r.ok).toBe(false);
@@ -172,10 +223,16 @@ describe('demo-seed fixture: idrid-grading-demo', () => {
       expect(issue.code.startsWith('croissant11.')).toBe(true);
       expect(issue.level).toBe('error');
     }
-    // The manifest carries the bio-prov marker, so the provenance layer
-    // also notices: without a typed Activity P2 is not met, a SHOULD at OPEN.
-    expect(issues.filter((i) => i.code.startsWith('provenance.'))).toEqual([
-      expect.objectContaining({ code: 'provenance.missing.P2', level: 'warning' }),
+    // The manifest opts into bio-prov, so the provenance layer also notices:
+    // with the derivation activity untyped, P2 falls through to the labelling
+    // activity, which carries no time — malformed P2 (an error at every tier)
+    // and a missing H2 (a SHOULD at OPEN).
+    expect(
+      issues.filter((i) => i.code.startsWith('provenance.')).map((i) => [i.code, i.level]),
+    ).toEqual([
+      ['provenance.invalid.P2.startedAtTime', 'error'],
+      ['provenance.invalid.P2.endedAtTime', 'error'],
+      ['provenance.missing.H2', 'warning'],
     ]);
   });
 

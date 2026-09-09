@@ -12,8 +12,9 @@ import { CatalogService } from './catalog.service.js';
  * `publishVersion` runs the `bio-prov` layer with the dataset row's
  * access tier, strict (#504). The tier changes the verdict: the same
  * manifest is refused on a SENSITIVE dataset and accepted on an OPEN
- * one. Manifests without the `bio:provenanceProfile` marker never see
- * the layer, whatever the tier.
+ * one. Manifests that opt into nothing — no `bio-prov` target in
+ * `dct:conformsTo`, no deprecated marker — never see the layer, whatever
+ * the tier.
  */
 
 // UUID-shaped subs short-circuit the UUIDv5 derivation.
@@ -50,7 +51,10 @@ function manifestWithoutEthicsApproval(): Json {
       bio: 'https://oci.ai4h.net/biocroissant/v0.1#',
     },
     '@type': 'sc:Dataset',
-    'dct:conformsTo': 'http://mlcommons.org/croissant/1.1',
+    'dct:conformsTo': [
+      'http://mlcommons.org/croissant/1.1',
+      'https://oci.ai4h.net/biocroissant/bio-prov/0.2',
+    ],
     name: SLUG,
     description: 'Synthetic chest radiograph manifest for the publish-path provenance test.',
     license: 'https://spdx.org/licenses/CDLA-Permissive-2.0',
@@ -79,16 +83,32 @@ function manifestWithoutEthicsApproval(): Json {
     'bio:imagingModality': { '@type': 'sc:DefinedTerm', name: 'Plain Radiography' },
     'bio:dataAcquisitionEquipment': [{ manufacturer: 'Siemens Healthineers', model: 'MULTIX' }],
     'bio:anonymizationLevel': 'DEIDENTIFIED',
-    'bio:provenanceProfile': 'bio-prov/0.1',
     'prov:wasAttributedTo': [{ '@type': 'prov:Organization', name: 'Test Hospital' }],
-    'prov:wasGeneratedBy': {
-      '@type': 'prov:Activity',
-      '@id': '#collection-2024',
-      name: 'Prospective collection of chest radiographs',
-      'prov:startedAtTime': '2024-01-01',
-      'prov:endedAtTime': '2024-12-31',
-      'prov:wasAssociatedWith': { '@type': 'prov:Organization', name: 'Test Hospital' },
-    },
+    'prov:wasGeneratedBy': [
+      {
+        '@type': ['prov:Activity', 'https://w3id.org/dpv/ai#DataCollection'],
+        '@id': '#collection-2024',
+        name: 'Prospective collection of chest radiographs',
+        'prov:startedAtTime': '2024-01-01',
+        'prov:endedAtTime': '2024-12-31',
+        'prov:wasAssociatedWith': { '@type': 'prov:Organization', name: 'Test Hospital' },
+      },
+      {
+        '@type': ['prov:Activity', 'https://w3id.org/dpv/ai#DataLabelling'],
+        '@id': '#labelling',
+        name: 'Independent reading with adjudication',
+        'prov:used': {
+          '@type': 'prov:Entity',
+          '@id': '#guideline-cxr-v3',
+          name: 'CXR pneumonia protocol',
+          version: '3',
+        },
+        'prov:wasAssociatedWith': [
+          { '@type': 'prov:Person', 'prov:hadRole': 'Annotator' },
+          { '@type': 'prov:Person', 'prov:hadRole': 'Adjudicator' },
+        ],
+      },
+    ],
     'bio:sourceSite': [{ name: 'Test Hospital, main campus', country: 'US' }],
     'rai:dataCollectionTimeframe': '2024-01-01/2024-12-31',
     'bio:deidentification': {
@@ -149,7 +169,7 @@ async function publishOn(accessTier: AccessTier, croissant: unknown) {
 }
 
 describe('CatalogService.publishVersion — bio-prov at the dataset row’s tier (#504)', () => {
-  it('refuses a SENSITIVE dataset whose manifest carries the marker but no ethics approval (H5)', async () => {
+  it('refuses a SENSITIVE dataset whose manifest opts in but has no ethics approval (H5)', async () => {
     let caught: unknown;
     try {
       await publishOn('SENSITIVE', manifestWithoutEthicsApproval());
@@ -180,14 +200,14 @@ describe('CatalogService.publishVersion — bio-prov at the dataset row’s tier
     });
   });
 
-  it('does not run the layer on a manifest without the marker, even at SENSITIVE', async () => {
+  it('does not run the layer on a manifest that opts into nothing, even at SENSITIVE', async () => {
     const m = manifestWithoutEthicsApproval();
-    delete m['bio:provenanceProfile'];
+    m['dct:conformsTo'] = 'http://mlcommons.org/croissant/1.1';
     await publishOn('SENSITIVE', m);
     expect(repo.publishVersion).toHaveBeenCalledTimes(1);
   });
 
-  it('the seeded oci-demo-chest-xr manifest (no marker) publishes at SENSITIVE unchanged', async () => {
+  it('the seeded oci-demo-chest-xr manifest (opts into nothing) publishes at SENSITIVE unchanged', async () => {
     const m = JSON.parse(
       readFileSync(path.join(seedFixturesDir, 'oci-demo-chest-xr', 'manifest.json'), 'utf8'),
     ) as Json;
