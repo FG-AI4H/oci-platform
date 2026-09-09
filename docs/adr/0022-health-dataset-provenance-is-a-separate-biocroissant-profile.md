@@ -132,4 +132,9 @@ The profile text is [`docs/standards/bio-prov-v0.1.md`](../standards/bio-prov-v0
 - [ADR-0002](./0002-metadata-conformance.md), [ADR-0003](./0003-tiered-identity-assurance-and-access-requirements.md),
   [ADR-0008](./0008-annotation-persistence-and-provenance.md), [ADR-0016](./0016-catalog-annotation-linkage.md)
 - `GI-AI4H-WGD-OCI-002` and `GI-AI4H-WGD-OCI-003` in [`docs/contributions/wg-data/`](../contributions/wg-data/)
-- W3C PROV-O (2013); HL7 FHIR R4 `Provenance`; MLCommons Croissant 1.1 (February 2026)
+- [`docs/standards/bio-prov-v0.2.md`](../standards/bio-prov-v0.2.md) (#519) — the decision above is
+  unchanged, but the profile’s mechanics now follow the MLCommons Croissant Responsible AI
+  specification: the opt-in is a `dct:conformsTo` target rather than a marker property, activity
+  kinds come from the Data Privacy Vocabulary, and H2 / H6 rest on PROV-O activities.
+- W3C PROV-O (2013); HL7 FHIR R4 `Provenance`; MLCommons Croissant 1.1 (February 2026);
+  MLCommons Croissant for Responsible AI (September 2026)
