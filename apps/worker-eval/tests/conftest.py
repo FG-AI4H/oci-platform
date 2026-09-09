@@ -138,9 +138,17 @@ class FakeClock:
 
 
 class FakeImage:
-    def __init__(self, digests: list[str], image_id: str = "sha256:deadbeef") -> None:
+    def __init__(
+        self,
+        digests: list[str],
+        image_id: str = "sha256:deadbeef",
+        volumes: dict[str, Any] | None = None,
+    ) -> None:
         self.id = image_id
-        self.attrs = {"RepoDigests": digests}
+        self.attrs: dict[str, Any] = {"RepoDigests": digests}
+        if volumes is not None:
+            # What docker reports for a Dockerfile VOLUME declaration.
+            self.attrs["Config"] = {"Volumes": volumes}
 
 
 class FakeImages:
