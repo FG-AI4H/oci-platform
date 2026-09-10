@@ -56,10 +56,10 @@ January 2027. Not presenting at Hangzhou costs you nothing in the challenge itse
 
 ## What is the Hangzhou session, and what do I need to send?
 
-Seventy-five minutes on the **afternoon of Friday 18 September 2026** — a session of its own at the
-third GI-AI4H meeting, on the meeting's last day. **Ten minutes per team**: eight to present and two
-for questions, **up to four teams**. Slots are limited and are allocated on 9 September, the day
-after registration closes. The meeting programme carries the exact clock time.
+Sixty minutes on the **afternoon of Friday 18 September 2026** — a session of its own at the third
+GI-AI4H meeting, on the meeting's last day. **Ten minutes per team**: eight to present and two for
+questions. Slots were allocated on 9 September, the day after registration closed. The meeting
+programme carries the exact clock time.
 
 The same session also carries short use-case presentations from **data hosts**, the institutions
 contributing the clinical evaluation tasks. A data host's slot is arranged directly rather than
@@ -70,8 +70,10 @@ Slides are due **Friday 11 September 2026, 23:59 UTC** — eight content slides 
 PowerPoint, 16:9, in English, to `marc.lecoultre@itu.int`. The session is public and may be recorded,
 so nothing confidential, embargoed or patient-level.
 
-If you were told four minutes and five slides, that was the earlier plan for a thirty-minute session.
-The session was extended; nobody has less time than they were promised.
+The session's total length has changed twice as the programme was built: thirty minutes, then
+seventy-five, now sixty. **The per-team time has only ever gone up.** If you were told four minutes
+and five slides, that was the thirty-minute plan; ten minutes and eight slides is what holds. Nobody
+has less time than they were promised.
 
 It is a presentation session, not a results session: nobody is scored on the day, and scored results
 follow in January 2027. The slides map onto the three declarations every solution files, so preparing
