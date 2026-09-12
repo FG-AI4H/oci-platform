@@ -82,6 +82,23 @@ for Hangzhou is preparing your entry rather than a detour from it.
 For participation arrangements — including whether you can present without travelling — contact the
 organizers before the 8 September registration deadline.
 
+## I am contributing a solution. What do I upload?
+
+**Nothing, and that is the answer rather than a gap.** The upload form on the challenge page asks for
+retinal-image predictions because it is the route for a **model developer** submitting predictions
+against the reference task. A solution provider does not use it, so none of the portal options will
+fit what you are contributing and there is nothing for Submit to do.
+
+A solution is registered by writing to `marc.lecoultre@itu.int` with the
+[three declarations](./conformance-specification.md) — threat model, disclosure profile, operational
+envelope — and a reference to a runnable implementation. Contributed routes are then integrated by us
+rather than self-served, because a route ends up executing other participants' models against a
+hospital's data, so it is onboarded deliberately. Section 9 of the conformance specification says the
+same.
+
+If you saw **"the participant team is not approved by host yet"**, ignore it. This challenge does not
+require host approval of participant teams; registering is enough.
+
 ## Where do I find the reference task's item identifiers?
 
 The reference task is `idrid-dr-grading`. Its identifiers are published in two places, and both are
