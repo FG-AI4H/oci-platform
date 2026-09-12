@@ -54,6 +54,33 @@ January 2027. Not presenting at Hangzhou costs you nothing in the challenge itse
 | January 2027                    | Phase 1 results published                                    |
 | 2027                            | Phase 2 — AI model benchmarking                              |
 
+## Which tracks are open, and why does only one have a date?
+
+Phase 1 is deliberately approach-agnostic: a solution may use sealed execution, homomorphic
+encryption, confidential computing, federated evaluation, or something not on that list. The tracks
+are a scheduling device, not a taxonomy you have to fit into.
+
+**Sealed execution is open, and has been since August.** A reference implementation exists so you
+have something concrete to work against and to disagree with. Most of Phase 1 is this track, and
+nothing is waiting on us for you to enter it.
+
+**Encrypted computation opens on 1 November 2026**, as a bounded demonstration against a reference
+task rather than an open submission route. Two things gate that date. The platform needs an adapter
+for evaluation over ciphertext, which is ours to build and is not built yet; and the track is scoped
+to inference rather than training, because the cost of training under encryption at clinical scale is
+not something the published literature supports today. What the demonstration reports is feasibility,
+the accuracy gap against a plaintext baseline, and measured computational cost.
+
+That leaves seven weeks between 1 November and the close of Phase 1 on 18 December, which is narrow
+on purpose. If you intend to enter on this track, write now rather than in November — the
+declarations can be filed and reviewed before the track opens, and the run is the last step rather
+than the first.
+
+**Confidential computing and federated evaluation are scoped for 2027**, not open. They are named
+here so that nobody builds against a door that is closed, and so that a solution using them knows it
+is early rather than unwelcome. If that is your approach, tell us now; it affects how Phase 2 is
+scoped.
+
 ## What is the Hangzhou session, and what do I need to send?
 
 Sixty minutes on the **afternoon of Friday 18 September 2026** — a session of its own at the third
