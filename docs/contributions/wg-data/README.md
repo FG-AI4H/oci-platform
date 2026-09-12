@@ -15,11 +15,14 @@ Documents here are **discussion contributions** — not formal deliverables. The
 
 ## Contents
 
-| Date       | Title                                                                                                                                                                       | Track                                                            |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| 2026-05-09 | [BuilderStatus — Proposed Visa Type extension to GA4GH Passport for AI builder accreditation](<./GI-AI4H-WGD-OCI-001 — BuilderStatus Visa proposal — 2026-05-09.docx>)      | OCI access governance → GA4GH WG-Data DURI                       |
-| 2026-05-29 | [Dataset-level DUO/ODRL + data-protection attachment in BIOCroissant](<./GI-AI4H-WGD-OCI-002 — Dataset-level DUO-ODRL attachment in BIOCroissant — 2026-05-29.docx>)        | Croissant/BIOCroissant alignment → MLCommons core team + WG-Data |
-| 2026-06-17 | [Dataset-level provenance attachment in BIOCroissant (provenance profile)](<./GI-AI4H-WGD-OCI-003 — Dataset-level provenance attachment in BIOCroissant — 2026-06-17.docx>) | BIOCroissant provenance profile → MLCommons core team + WG-Data  |
+| Date       | Title                                                                                                                                                                       | Track                                                                              |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 2026-05-09 | [BuilderStatus — Proposed Visa Type extension to GA4GH Passport for AI builder accreditation](<./GI-AI4H-WGD-OCI-001 — BuilderStatus Visa proposal — 2026-05-09.docx>)      | OCI access governance → GA4GH WG-Data DURI                                         |
+| 2026-05-29 | [Dataset-level DUO/ODRL + data-protection attachment in BIOCroissant](<./GI-AI4H-WGD-OCI-002 — Dataset-level DUO-ODRL attachment in BIOCroissant — 2026-05-29.docx>)        | Croissant/BIOCroissant alignment → MLCommons core team + WG-Data                   |
+| 2026-06-17 | [Dataset-level provenance attachment in BIOCroissant (provenance profile)](<./GI-AI4H-WGD-OCI-003 — Dataset-level provenance attachment in BIOCroissant — 2026-06-17.docx>) | BIOCroissant provenance profile → MLCommons core team + WG-Data                    |
+| 2026-09-12 | [Finishing the way we describe health datasets](<./GI-AI4H-WGD-OCI-004 — Finishing the way we describe health datasets — 2026-09-12.docx>)                                  | BIOCroissant v1.0 scope, namespace and route → MLCommons core team + WG-Data       |
+| 2026-09-12 | [Evaluating large language models in health](<./GI-AI4H-WGD-OCI-005 — Evaluating large language models in health — 2026-09-12.docx>)                                        | LLM-evaluation requirements document + first real-patient-data benchmark → WG-Data |
+| 2026-09-12 | [The data and model exchange protocol](<./GI-AI4H-WGD-OCI-006 — The data and model exchange protocol — 2026-09-12.docx>)                                                    | DMXP v0.1 contents, first profiles and drafting team → WG-Data                     |
 
 ## How a contribution lands here
 
@@ -30,7 +33,7 @@ Documents here are **discussion contributions** — not formal deliverables. The
 
 ## Tracking
 
-Each contribution document references its tracking issue on the OCI Platform board. The BuilderStatus contribution is tracked under [`FG-AI4H/oci-platform#141`](https://github.com/FG-AI4H/oci-platform/issues/141) and connects to the broader access-governance work in [ADR-0003](../../adr/0003-tiered-identity-assurance-and-access-requirements.md).
+Each contribution document references its tracking issue on the OCI Platform board. The BuilderStatus contribution is tracked under [`FG-AI4H/oci-platform#141`](https://github.com/FG-AI4H/oci-platform/issues/141); the three Hangzhou decision notes under [#527](https://github.com/FG-AI4H/oci-platform/issues/527), [#528](https://github.com/FG-AI4H/oci-platform/issues/528) and [#529](https://github.com/FG-AI4H/oci-platform/issues/529) and connects to the broader access-governance work in [ADR-0003](../../adr/0003-tiered-identity-assurance-and-access-requirements.md).
 
 ## See also
 
