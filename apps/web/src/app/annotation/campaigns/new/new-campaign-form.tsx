@@ -9,6 +9,8 @@ import type {
 } from '@oci/shared-types';
 import {
   COST_ESTIMATE_MIN_N,
+  N_ANNOTATORS_MAX,
+  N_ANNOTATORS_MIN,
   allowedTaskKindsForModalities,
   estimateCampaignEvents,
   rationaleForDisabledTaskKind,
@@ -120,7 +122,15 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
   const [nAnnotators, setNAnnotators] = useState(echoed?.nAnnotators ?? '3');
   const [expectedSamples, setExpectedSamples] = useState(echoed?.expectedSamples ?? '');
   const nValue = Number.parseInt(nAnnotators, 10);
-  const showCostEstimate = Number.isFinite(nValue) && nValue >= COST_ESTIMATE_MIN_N;
+  // Flag an out-of-range N while typing instead of waiting for the
+  // browser tooltip or the server round-trip (ADR-0009 Decision 2).
+  const nOutOfRange =
+    Number.isFinite(nValue) && (nValue < N_ANNOTATORS_MIN || nValue > N_ANNOTATORS_MAX);
+  const nShownError = nOutOfRange
+    ? `Annotators per data point must be between ${N_ANNOTATORS_MIN} and ${N_ANNOTATORS_MAX}.`
+    : nError;
+  const showCostEstimate =
+    Number.isFinite(nValue) && !nOutOfRange && nValue >= COST_ESTIMATE_MIN_N;
 
   const compatibleTools = taskKind
     ? toolIntegrations.filter((t) => t.supportedTaskKinds.includes(taskKind))
@@ -330,7 +340,7 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
             htmlFor="field-n-annotators"
             required
             hint="Range 1–12 (ADR-0009). Default 3 (clinical-validation baseline for IRR). Five+ is recommended for safety-critical or contested findings."
-            error={nError}
+            error={nShownError}
           >
             <Input
               id="field-n-annotators"
@@ -338,15 +348,16 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
               type="number"
               inputMode="numeric"
               required
-              min={1}
-              max={12}
+              min={N_ANNOTATORS_MIN}
+              max={N_ANNOTATORS_MAX}
               step={1}
               value={nAnnotators}
               onChange={(e) => setNAnnotators(e.target.value)}
-              invalid={!!nError}
+              invalid={!!nShownError}
+              aria-invalid={!!nShownError || undefined}
               aria-describedby={
                 [
-                  nError ? 'field-n-annotators-err' : null,
+                  nShownError ? 'field-n-annotators-err' : null,
                   showCostEstimate ? 'cost-estimate' : null,
                 ]
                   .filter(Boolean)

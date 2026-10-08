@@ -2104,6 +2104,10 @@ export function outputLicenseAllowedForTerms(
   );
 }
 
+/** Bounds on `nAnnotators` (ADR-0009 Decision 2), shared with the campaign-create form. */
+export const N_ANNOTATORS_MIN = 1;
+export const N_ANNOTATORS_MAX = 12;
+
 /**
  * Workflow configuration (ADR-0009 Decisions 2 + 4). Phase B.A.1 only
  * surfaces `nAnnotators`; IRR thresholds + gate config + experience-
@@ -2116,7 +2120,7 @@ export const CampaignWorkflowConfigSchema = z.object({
    * justification (recorded on the campaign — UI-side enforcement
    * lands with #222).
    */
-  nAnnotators: z.number().int().min(1).max(12).default(3),
+  nAnnotators: z.number().int().min(N_ANNOTATORS_MIN).max(N_ANNOTATORS_MAX).default(3),
   /**
    * Per-campaign abandonment timeout (#229). An assignment that stays
    * PENDING / IN_PROGRESS past `assignedAt + taskTimeoutHours` is

@@ -254,6 +254,23 @@ test.describe('annotation campaign — cost estimate when N > 5 (#311)', () => {
     await expect(page.getByRole('button', { name: /create draft/i })).toBeEnabled();
   });
 
+  test('flags N above 12 inline and drops the estimate', async ({ page }) => {
+    await signInAs(page, 'cm', 'campaign-manager');
+    await page.goto('/annotation/campaigns/new');
+    const nInput = page.getByLabel('Annotators per data point');
+
+    await nInput.fill('13');
+    await expect(page.locator('#field-n-annotators-err')).toHaveText(
+      'Annotators per data point must be between 1 and 12.',
+    );
+    await expect(nInput).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByTestId('cost-estimate')).toHaveCount(0);
+
+    await nInput.fill('12');
+    await expect(page.locator('#field-n-annotators-err')).toHaveCount(0);
+    await expect(page.getByTestId('cost-estimate')).toBeVisible();
+  });
+
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`estimate block has no axe violations (${colorScheme})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme });
