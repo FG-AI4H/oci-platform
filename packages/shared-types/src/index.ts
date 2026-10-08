@@ -2137,6 +2137,56 @@ export const CampaignWorkflowConfigSchema = z.object({
 export type CampaignWorkflowConfig = z.infer<typeof CampaignWorkflowConfigSchema>;
 
 /**
+ * Smallest `nAnnotators` at which the campaign-create form shows the
+ * cost estimate (ADR-0009 Decision 2: "when N > 5"). Distinct from the
+ * 8–12 justification threshold (#222).
+ */
+export const COST_ESTIMATE_MIN_N = 6;
+
+export interface CampaignEventsEstimateInput {
+  nAnnotators: number;
+  /** Expected number of samples. Not persisted; the form asks for it only to feed the estimate. */
+  sampleCount: number;
+}
+
+export interface CampaignEventsEstimate {
+  /** Exactly N × samples: every gate-1 annotator labels every sample. */
+  gate1Events: number;
+  /** At most one arbitration per sample (gate 2 runs only when gate 1 disagrees). */
+  maxArbitrationEvents: number;
+  /** At most one expert review per sample (gate 3 runs only when arbitration escalates). */
+  maxExpertEvents: number;
+  /** Worst case, every sample disagreeing: gate 1 plus the gate-2 and gate-3 maxima. */
+  totalProjectedEvents: number;
+}
+
+/**
+ * Projected annotation events for a campaign under the 3-gate SOP
+ * (#311, ADR-0009 Decision 2). Event counts, not money: OCI has no
+ * per-event rate. Gates 2 and 3 are upper bounds because there is no
+ * disagreement rate to project with; for N = 1 (single-rater shortcut)
+ * they never run. A missing, negative or non-finite sample count
+ * yields zero events.
+ */
+export function estimateCampaignEvents({
+  nAnnotators,
+  sampleCount,
+}: CampaignEventsEstimateInput): CampaignEventsEstimate {
+  const n = Number.isFinite(nAnnotators) ? Math.max(0, Math.trunc(nAnnotators)) : 0;
+  const samples = Number.isFinite(sampleCount) ? Math.max(0, Math.trunc(sampleCount)) : 0;
+  const gate1Events = n * samples;
+  const laterGatesRun = n > 1;
+  const maxArbitrationEvents = laterGatesRun ? samples : 0;
+  const maxExpertEvents = laterGatesRun ? samples : 0;
+  return {
+    gate1Events,
+    maxArbitrationEvents,
+    maxExpertEvents,
+    totalProjectedEvents: gate1Events + maxArbitrationEvents + maxExpertEvents,
+  };
+}
+
+/**
  * Per-task-kind completeness predicate (#231).
  *
  * Pure function shared with the annotator UI so the same warnings

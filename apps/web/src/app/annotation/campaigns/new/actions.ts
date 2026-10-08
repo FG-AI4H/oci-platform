@@ -21,6 +21,8 @@ export interface CreateCampaignValues {
   taskKind: string;
   nAnnotators: string;
   outputLicense: string;
+  /** Feeds the cost estimate only (#311); echoed back, never sent to the API. */
+  expectedSamples: string;
 }
 
 export type CreateCampaignState =
@@ -64,6 +66,7 @@ export async function createCampaignAction(
     taskKind: String(formData.get('taskKind') ?? ''),
     nAnnotators: String(formData.get('nAnnotators') ?? '3'),
     outputLicense: String(formData.get('outputLicense') ?? 'CC-BY-4.0'),
+    expectedSamples: String(formData.get('expectedSamples') ?? ''),
   };
 
   const nAnnotators = Number.parseInt(raw.nAnnotators, 10);
