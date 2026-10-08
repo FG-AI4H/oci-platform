@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # setup-internal.sh — wire the private companion repo into this checkout.
 #
-# The public oci-platform repo no longer ships `.claude/`,
+# The public oci-platform repo no longer ships `.claude/`, `CLAUDE.md`,
 # `docs/briefings/`, `docs/research/`, or `docs/planning/`. Those live
 # in https://github.com/FG-AI4H/oci-platform-internal (private).
 #
-# This script clones that repo as a sibling and symlinks the four
-# directories into the current checkout. Idempotent — re-running on
+# This script clones that repo as a sibling and symlinks those five
+# paths into the current checkout. Idempotent — re-running on
 # an already-wired checkout is a no-op.
 #
 # Without Read access to oci-platform-internal the public repo still
@@ -22,6 +22,7 @@ readonly INTERNAL_URL="${OCI_INTERNAL_REPO_URL:-https://github.com/FG-AI4H/oci-p
 
 readonly LINKS=(
   ".claude"
+  "CLAUDE.md"
   "docs/briefings"
   "docs/research"
   "docs/planning"
