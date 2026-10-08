@@ -44,6 +44,17 @@ export interface OciEnvConfig {
       outputTmpfsMiB: number;
     };
   };
+  /**
+   * Scored-submission quota (WP6), per participant per evaluation task.
+   *
+   * Here rather than hard-coded in the API because the right number is a
+   * challenge-design decision, not a platform constant: it depends on the size
+   * of the hidden set and how much of it a determined entrant could reconstruct
+   * within the allowance. Every scored submission is one query against ground
+   * truth, so `perTask` is the anti-overfitting control and `perWeek` only
+   * paces. The API falls back to these same defaults if the vars are unset.
+   */
+  scoredSubmissionQuota: { perWeek: number; perTask: number };
   /** Backups & retention */
   backupRetentionDays: number;
   /** Whether prod-grade monitoring (X-Ray, Container Insights, alarms) is on */
@@ -84,6 +95,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     // 7 days is the Security Hub RDS.50 default threshold. Cost impact on a
     // sub-2-ACU dev cluster is negligible (<$1/month for backup storage
     // beyond the cluster size).
+    scoredSubmissionQuota: { perWeek: 3, perTask: 10 },
     backupRetentionDays: 7,
     enhancedMonitoring: false,
     enableWaf: false,
@@ -103,6 +115,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
       maxRunSeconds: 1800,
       sandbox: { memoryMiB: 2048, cpus: 1, pidsLimit: 512, outputTmpfsMiB: 512 },
     },
+    scoredSubmissionQuota: { perWeek: 3, perTask: 10 },
     backupRetentionDays: 7,
     enhancedMonitoring: true,
     enableWaf: true,
@@ -125,6 +138,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
       maxRunSeconds: 3600,
       sandbox: { memoryMiB: 6144, cpus: 2, pidsLimit: 1024, outputTmpfsMiB: 1024 },
     },
+    scoredSubmissionQuota: { perWeek: 3, perTask: 10 },
     backupRetentionDays: 35,
     enhancedMonitoring: true,
     enableWaf: true,
