@@ -7,7 +7,14 @@ import type {
   CampaignOutputLicense,
   CampaignTaskKind,
 } from '@oci/shared-types';
-import { allowedTaskKindsForModalities, rationaleForDisabledTaskKind } from '@oci/shared-types';
+import {
+  COST_ESTIMATE_MIN_N,
+  N_ANNOTATORS_MAX,
+  N_ANNOTATORS_MIN,
+  allowedTaskKindsForModalities,
+  estimateCampaignEvents,
+  rationaleForDisabledTaskKind,
+} from '@oci/shared-types';
 import { createCampaignAction, type CreateCampaignState } from './actions';
 import { DatasetPicker, type PickedDataset } from './dataset-picker';
 
@@ -109,6 +116,20 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
   const allowedTaskKinds = pickedDataset
     ? allowedTaskKindsForModalities(pickedDataset.modalities)
     : null;
+
+  // N and the expected sample count drive the live cost estimate (#311),
+  // so both are controlled. The sample count is never persisted.
+  const [nAnnotators, setNAnnotators] = useState(echoed?.nAnnotators ?? '3');
+  const [expectedSamples, setExpectedSamples] = useState(echoed?.expectedSamples ?? '');
+  const nValue = Number.parseInt(nAnnotators, 10);
+  // Flag an out-of-range N while typing instead of waiting for the
+  // browser tooltip or the server round-trip (ADR-0009 Decision 2).
+  const nOutOfRange =
+    Number.isFinite(nValue) && (nValue < N_ANNOTATORS_MIN || nValue > N_ANNOTATORS_MAX);
+  const nShownError = nOutOfRange
+    ? `Annotators per data point must be between ${N_ANNOTATORS_MIN} and ${N_ANNOTATORS_MAX}.`
+    : nError;
+  const showCostEstimate = Number.isFinite(nValue) && !nOutOfRange && nValue >= COST_ESTIMATE_MIN_N;
 
   const compatibleTools = taskKind
     ? toolIntegrations.filter((t) => t.supportedTaskKinds.includes(taskKind))
@@ -311,27 +332,67 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
         </select>
       </Field>
 
-      <Field
-        label="Annotators per data point"
-        htmlFor="field-n-annotators"
-        required
-        hint="Range 1–12 (ADR-0009). Default 3 (clinical-validation baseline for IRR). Five+ is recommended for safety-critical or contested findings."
-        error={nError}
-      >
-        <Input
-          id="field-n-annotators"
-          name="nAnnotators"
-          type="number"
-          inputMode="numeric"
-          required
-          min={1}
-          max={12}
-          step={1}
-          defaultValue={echoed?.nAnnotators ?? '3'}
-          invalid={!!nError}
-          aria-describedby={nError ? 'field-n-annotators-err' : undefined}
-        />
-      </Field>
+      <div className="space-y-3">
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            label="Annotators per data point"
+            htmlFor="field-n-annotators"
+            required
+            hint="Range 1–12 (ADR-0009). Default 3 (clinical-validation baseline for IRR). Five+ is recommended for safety-critical or contested findings."
+            error={nShownError}
+          >
+            <Input
+              id="field-n-annotators"
+              name="nAnnotators"
+              type="number"
+              inputMode="numeric"
+              required
+              min={N_ANNOTATORS_MIN}
+              max={N_ANNOTATORS_MAX}
+              step={1}
+              value={nAnnotators}
+              onChange={(e) => setNAnnotators(e.target.value)}
+              invalid={!!nShownError}
+              aria-invalid={!!nShownError || undefined}
+              aria-describedby={
+                [
+                  nShownError ? 'field-n-annotators-err' : null,
+                  showCostEstimate ? 'cost-estimate' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
+            />
+          </Field>
+
+          <Field
+            label="Expected number of samples"
+            htmlFor="field-expected-samples"
+            hint="Optional. Used only for the cost estimate; not saved with the campaign."
+          >
+            <Input
+              id="field-expected-samples"
+              name="expectedSamples"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={1}
+              value={expectedSamples}
+              onChange={(e) => setExpectedSamples(e.target.value)}
+              aria-describedby={showCostEstimate ? 'cost-estimate' : undefined}
+            />
+          </Field>
+        </div>
+
+        {/* Live region stays mounted so screen readers announce the
+            estimate when it appears or changes. Informational only: it
+            never blocks submit (#311, ADR-0009 Decision 2). */}
+        <div aria-live="polite">
+          {showCostEstimate ? (
+            <CostEstimateNote nAnnotators={nValue} expectedSamples={expectedSamples} />
+          ) : null}
+        </div>
+      </div>
 
       <Field
         label="Output license"
@@ -358,6 +419,58 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Projected annotation events once N > 5 (#311, ADR-0009 Decision 2).
+ * Gate 1 is exact; gates 2–3 are worst-case bounds because only
+ * disagreeing samples reach them. Event counts, no money.
+ */
+function CostEstimateNote({
+  nAnnotators,
+  expectedSamples,
+}: {
+  nAnnotators: number;
+  expectedSamples: string;
+}) {
+  const sampleCount = Number.parseInt(expectedSamples, 10);
+  const estimate = estimateCampaignEvents({ nAnnotators, sampleCount });
+  const fmt = (n: number) => n.toLocaleString('en-GB');
+
+  return (
+    <div
+      id="cost-estimate"
+      data-testid="cost-estimate"
+      className="rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] p-3 text-sm"
+    >
+      <p className="font-medium">Cost estimate for {nAnnotators} annotators per data point</p>
+      {Number.isFinite(sampleCount) && sampleCount > 0 ? (
+        <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
+          <dt>Gate 1 — independent annotations</dt>
+          <dd className="text-end font-medium tabular-nums" data-testid="cost-estimate-gate1">
+            {fmt(estimate.gate1Events)}
+          </dd>
+          <dt>Gates 2–3 — arbitration + expert review, at most</dt>
+          <dd className="text-end tabular-nums" data-testid="cost-estimate-later-gates">
+            {fmt(estimate.maxArbitrationEvents + estimate.maxExpertEvents)}
+          </dd>
+          <dt className="font-medium">Total, worst case</dt>
+          <dd className="text-end font-medium tabular-nums" data-testid="cost-estimate-total">
+            {fmt(estimate.totalProjectedEvents)}
+          </dd>
+        </dl>
+      ) : (
+        <p className="mt-1 text-[var(--color-muted-foreground)]">
+          Gate 1 alone needs {nAnnotators} annotation events per sample. Enter the expected number
+          of samples to see the projected total.
+        </p>
+      )}
+      <p className="mt-2 text-xs text-[var(--color-muted-foreground)]">
+        Annotation events, not money. Gates 2–3 run only for samples where gate-1 annotators
+        disagree, so their count is an upper bound. This doesn&apos;t block creating the campaign.
+      </p>
+    </div>
   );
 }
 
