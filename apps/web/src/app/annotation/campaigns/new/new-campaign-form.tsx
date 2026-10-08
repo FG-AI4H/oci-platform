@@ -129,8 +129,7 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
   const nShownError = nOutOfRange
     ? `Annotators per data point must be between ${N_ANNOTATORS_MIN} and ${N_ANNOTATORS_MAX}.`
     : nError;
-  const showCostEstimate =
-    Number.isFinite(nValue) && !nOutOfRange && nValue >= COST_ESTIMATE_MIN_N;
+  const showCostEstimate = Number.isFinite(nValue) && !nOutOfRange && nValue >= COST_ESTIMATE_MIN_N;
 
   const compatibleTools = taskKind
     ? toolIntegrations.filter((t) => t.supportedTaskKinds.includes(taskKind))
