@@ -21,7 +21,11 @@ import {
 } from '@oci/shared-types';
 import { auth } from '../../../../auth';
 import { apiFetch } from '../../../../lib/api';
-import { isAnnotationWorker, isCampaignManager } from '../../../../lib/groups';
+import {
+  canReviewCalibration,
+  isAnnotationWorker,
+  isCampaignManager,
+} from '../../../../lib/groups';
 import { TasksCard } from './tasks-card';
 import { TransitionActions } from './transition-actions';
 
@@ -151,6 +155,25 @@ export default async function CampaignDetailPage({ params }: PageProps) {
             </CardHeader>
             <CardContent>
               <TransitionActions slug={detail.slug} current={detail.status} actions={actions} />
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {canReviewCalibration(session) ? (
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Calibration</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-3 text-sm text-[var(--color-muted-foreground)]">
+                Annotators whose agreement has dropped below this campaign&apos;s threshold.
+              </p>
+              <Link
+                href={`/annotation/campaigns/${detail.slug}/calibration`}
+                className="inline-flex items-center justify-center rounded-md border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+              >
+                Calibration flags
+              </Link>
             </CardContent>
           </Card>
         ) : null}
