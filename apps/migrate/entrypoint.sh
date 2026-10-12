@@ -10,6 +10,8 @@
 # image). The seed is idempotent (every INSERT uses ON CONFLICT DO
 # NOTHING, except bundled fixture manifests which refresh on conflict
 # when their content differs) — re-runs leave the row's existing id intact.
+# It fails on purpose when the stored evaluation answer key has drifted
+# from the repo (#464); `set -eu` then fails this task and the deploy.
 set -eu
 
 : "${DB_USERNAME:?DB_USERNAME not set (expected from Aurora secret)}"
