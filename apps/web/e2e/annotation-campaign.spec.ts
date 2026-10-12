@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 /**
  * E2E coverage for the annotation-campaign create flow.
@@ -220,4 +221,73 @@ test.describe('annotation campaign — header + form', () => {
     // The summary text under the heading lists the dataset modality.
     await expect(page.getByText(/Filtered against the dataset modality/i)).toBeVisible();
   });
+});
+
+test.describe('annotation campaign — cost estimate when N > 5 (#311)', () => {
+  test('shows live event counts from N=6 and hides them at N=5', async ({ page }) => {
+    await signInAs(page, 'cm', 'campaign-manager');
+    await page.goto('/annotation/campaigns/new');
+
+    const estimate = page.getByTestId('cost-estimate');
+    // Default N=3 → no estimate.
+    await expect(estimate).toHaveCount(0);
+
+    await page.getByLabel('Annotators per data point').fill('6');
+    await expect(estimate).toBeVisible();
+    // No sample count yet → per-sample prompt, no totals.
+    await expect(estimate).toContainText('6 annotation events per sample');
+
+    await page.getByLabel('Expected number of samples').fill('1000');
+    await expect(page.getByTestId('cost-estimate-gate1')).toHaveText('6,000');
+    await expect(page.getByTestId('cost-estimate-later-gates')).toHaveText('2,000');
+    await expect(page.getByTestId('cost-estimate-total')).toHaveText('8,000');
+
+    // ADR-0009 worked example: N=7 × 1 000 samples → 7 000 gate-1 events.
+    await page.getByLabel('Annotators per data point').fill('7');
+    await expect(page.getByTestId('cost-estimate-gate1')).toHaveText('7,000');
+    await expect(page.getByTestId('cost-estimate-total')).toHaveText('9,000');
+
+    await page.getByLabel('Annotators per data point').fill('5');
+    await expect(estimate).toHaveCount(0);
+
+    // Informational only: submit stays available.
+    await expect(page.getByRole('button', { name: /create draft/i })).toBeEnabled();
+  });
+
+  test('flags N above 12 inline and drops the estimate', async ({ page }) => {
+    await signInAs(page, 'cm', 'campaign-manager');
+    await page.goto('/annotation/campaigns/new');
+    const nInput = page.getByLabel('Annotators per data point');
+
+    await nInput.fill('13');
+    await expect(page.locator('#field-n-annotators-err')).toHaveText(
+      'Annotators per data point must be between 1 and 12.',
+    );
+    await expect(nInput).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByTestId('cost-estimate')).toHaveCount(0);
+
+    await nInput.fill('12');
+    await expect(page.locator('#field-n-annotators-err')).toHaveCount(0);
+    await expect(page.getByTestId('cost-estimate')).toBeVisible();
+  });
+
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`estimate block has no axe violations (${colorScheme})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await signInAs(page, 'cm', 'campaign-manager');
+      await page.goto('/annotation/campaigns/new');
+      await page.getByLabel('Annotators per data point').fill('7');
+      await page.getByLabel('Expected number of samples').fill('1000');
+      await expect(page.getByTestId('cost-estimate')).toBeVisible();
+
+      const results = await new AxeBuilder({ page })
+        .include('#cost-estimate')
+        .include('#field-n-annotators')
+        .include('#field-expected-samples')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const summary = results.violations.map((v) => `${v.impact}: ${v.id} (${v.nodes.length})`);
+      expect(summary, 'axe violations').toEqual([]);
+    });
+  }
 });
