@@ -7,7 +7,8 @@
 -- CONFLICT DO NOTHING, except the dataset + version rows of bundled
 -- fixture manifests (Sections 1b, 3 and 4), which refresh on conflict
 -- when the manifest content differs. A second run of the same file
--- changes zero rows.
+-- changes zero rows. The one deliberate failure: Section 5 aborts the
+-- seed when the stored evaluation answer key differs from this file.
 --
 -- New demo entities go here. Conventions:
 --
@@ -608,24 +609,63 @@ END $idrid_demo$;
 -- Seeded here rather than via POST /v2/evaluation/tasks so the demo is
 -- reproducible on any non-prod environment without an operator token.
 -- Ground truth is never exposed by a read endpoint or a distribution.
+--
+-- The insert stays ON CONFLICT DO NOTHING, but unlike the demo fixtures
+-- the repo is the authority for an answer key: a stored value that
+-- differs from the one below is a correctness fault, not a local edit
+-- to preserve. So after the insert the stored key is compared (as jsonb,
+-- so key order and whitespace don't matter) and the seed fails on any
+-- divergence, which fails the migrate task and the deploy. No data is
+-- changed; correcting a drifted key stays a deliberate, reviewed act
+-- (#464). The error names the differing item ids only, never grades:
+-- migrate logs are printed in the deploy output.
 -- ----------------------------------------------------------------------------
 
-INSERT INTO "evaluation"."evaluation_tasks"
-    (id, slug, name, dataset_slug, task_kind, num_classes, referable_threshold,
-     ground_truth, created_at, updated_at)
-VALUES (
-    'cc3bc9ea-9506-54da-a571-7459684bbbdf'::uuid,
-    'idrid-dr-grading',
-    'IDRiD — diabetic retinopathy severity grading (demo)',
-    'idrid-grading-demo',
-    'GRADING'::"evaluation"."EvaluationTaskKind",
-    5,
-    2,
-    '{"IDRiD_001":4,"IDRiD_002":4,"IDRiD_003":4,"IDRiD_004":4,"IDRiD_005":4,"IDRiD_006":3,"IDRiD_007":3,"IDRiD_008":2,"IDRiD_009":2,"IDRiD_010":2,"IDRiD_011":2,"IDRiD_012":2,"IDRiD_013":3,"IDRiD_014":3,"IDRiD_015":2,"IDRiD_016":3,"IDRiD_018":3,"IDRiD_029":0,"IDRiD_030":0,"IDRiD_032":4,"IDRiD_037":0,"IDRiD_038":0,"IDRiD_039":0,"IDRiD_041":0,"IDRiD_043":0,"IDRiD_063":1,"IDRiD_073":1,"IDRiD_074":1,"IDRiD_085":1,"IDRiD_101":1}'::jsonb,
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
-)
-ON CONFLICT (slug) DO NOTHING;
+DO $idrid_gt$
+DECLARE
+  expected_gt CONSTANT jsonb := '{"IDRiD_001":4,"IDRiD_002":4,"IDRiD_003":4,"IDRiD_004":4,"IDRiD_005":4,"IDRiD_006":3,"IDRiD_007":3,"IDRiD_008":2,"IDRiD_009":2,"IDRiD_010":2,"IDRiD_011":2,"IDRiD_012":2,"IDRiD_013":3,"IDRiD_014":3,"IDRiD_015":2,"IDRiD_016":3,"IDRiD_018":3,"IDRiD_029":0,"IDRiD_030":0,"IDRiD_032":4,"IDRiD_037":0,"IDRiD_038":0,"IDRiD_039":0,"IDRiD_041":0,"IDRiD_043":0,"IDRiD_063":1,"IDRiD_073":1,"IDRiD_074":1,"IDRiD_085":1,"IDRiD_101":1}'::jsonb;
+  stored_gt jsonb;
+  drifted_ids text;
+BEGIN
+  INSERT INTO "evaluation"."evaluation_tasks"
+      (id, slug, name, dataset_slug, task_kind, num_classes, referable_threshold,
+       ground_truth, created_at, updated_at)
+  VALUES (
+      'cc3bc9ea-9506-54da-a571-7459684bbbdf'::uuid,
+      'idrid-dr-grading',
+      'IDRiD — diabetic retinopathy severity grading (demo)',
+      'idrid-grading-demo',
+      'GRADING'::"evaluation"."EvaluationTaskKind",
+      5,
+      2,
+      expected_gt,
+      CURRENT_TIMESTAMP,
+      CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (slug) DO NOTHING;
+
+  SELECT ground_truth INTO stored_gt
+  FROM "evaluation"."evaluation_tasks"
+  WHERE slug = 'idrid-dr-grading';
+
+  IF stored_gt IS DISTINCT FROM expected_gt THEN
+    IF jsonb_typeof(stored_gt) IS DISTINCT FROM 'object' THEN
+      RAISE EXCEPTION 'evaluation task %: stored ground_truth is not a JSON object (got %), expected the answer key from seed/demo.sql',
+        'idrid-dr-grading', coalesce(jsonb_typeof(stored_gt), 'NULL');
+    END IF;
+
+    SELECT string_agg(item_id, ', ' ORDER BY item_id) INTO drifted_ids
+    FROM (
+      SELECT coalesce(s.key, e.key) AS item_id
+      FROM jsonb_each(stored_gt) AS s
+      FULL OUTER JOIN jsonb_each(expected_gt) AS e ON s.key = e.key
+      WHERE s.value IS DISTINCT FROM e.value
+    ) AS diff;
+
+    RAISE EXCEPTION 'evaluation task %: stored ground_truth differs from seed/demo.sql for item ids [%]. Not overwriting; see #464.',
+      'idrid-dr-grading', drifted_ids;
+  END IF;
+END $idrid_gt$;
 
 -- ----------------------------------------------------------------------------
 -- Section 6 — IDRiD annotation campaign (Phase B; ADR-0006 / 0009 / 0010).
