@@ -280,8 +280,14 @@ test.describe('campaign instructions (#555)', () => {
       test(`${mode.name} has no axe violations (${colorScheme})`, async ({ page }) => {
         await page.emulateMedia({ colorScheme });
         await signInAs(page, mode.user, mode.roles);
-        await page.goto(PAGE);
+        await page.goto(PAGE, { waitUntil: 'networkidle' });
         await expect(page.getByRole('heading', { level: 1, name: 'Instructions' })).toBeVisible();
+        if (mode.user === 'mgr') {
+          // An unpublished edit enables the danger-variant Cancel, so its
+          // contrast is checked too (axe skips disabled controls).
+          await body(page).fill('An unpublished edit.');
+          await expect(page.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+        }
 
         const results = await new AxeBuilder({ page })
           .include('main')
