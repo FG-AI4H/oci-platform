@@ -122,56 +122,60 @@ function TasksTable({ tasks }: { tasks: ReadonlyArray<TaskSummary> }) {
   // land with the supervisor inbox in slice 3.
   const head = tasks.slice(0, 25);
   return (
-    <div
-      // tabindex + role keep the table reachable via keyboard when it
-      // overflows horizontally on narrow viewports (axe
-      // scrollable-region-focusable). The aria-label is what a screen
-      // reader announces when the region gains focus.
-      tabIndex={0}
-      role="region"
-      aria-label="Annotation tasks"
-      className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
-    >
-      <table className="w-full text-sm">
-        <caption className="sr-only">Annotation tasks for this campaign</caption>
-        <thead>
-          <tr className="border-b border-[var(--color-border)] text-left text-xs uppercase tracking-wide text-[var(--color-muted-foreground)]">
-            <th scope="col" className="py-2 pr-4 font-medium">
-              Sample
-            </th>
-            <th scope="col" className="py-2 pr-4 font-medium">
-              Gate
-            </th>
-            <th scope="col" className="py-2 pr-4 font-medium">
-              Submissions
-            </th>
-            <th scope="col" className="py-2 font-medium">
-              Completed
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {head.map((t) => (
-            <tr key={t.id} className="border-b border-[var(--color-border)] last:border-b-0">
-              <td className="py-2 pr-4 font-mono text-xs">{t.sampleRef}</td>
-              <td className="py-2 pr-4">{GATE_LABEL[t.gateState]}</td>
-              <td className="py-2 pr-4 tabular-nums">
-                <SubmissionsCell task={t} />
-              </td>
-              <td className="py-2 text-xs text-[var(--color-muted-foreground)]">
-                {t.completedAt
-                  ? new Intl.DateTimeFormat('en-GB', {
-                      dateStyle: 'short',
-                      timeStyle: 'short',
-                    }).format(new Date(t.completedAt))
-                  : '—'}
-              </td>
+    <div className="space-y-2">
+      <div
+        // The table scrolls inside a capped height (and horizontally on
+        // narrow viewports) so a long list doesn't push the rest of the
+        // page down. tabindex + role keep it reachable via keyboard (axe
+        // scrollable-region-focusable); the aria-label is what a screen
+        // reader announces when the region gains focus.
+        tabIndex={0}
+        role="region"
+        aria-label="Annotation tasks"
+        className="max-h-96 overflow-auto overscroll-contain focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
+      >
+        <table className="w-full text-sm">
+          <caption className="sr-only">Annotation tasks for this campaign</caption>
+          <thead>
+            {/* Header stays visible while the rows scroll. */}
+            <tr className="sticky top-0 z-10 border-b border-[var(--color-border)] bg-[var(--color-card)] text-left text-xs uppercase tracking-wide text-[var(--color-muted-foreground)]">
+              <th scope="col" className="py-2 pr-4 font-medium">
+                Sample
+              </th>
+              <th scope="col" className="py-2 pr-4 font-medium">
+                Gate
+              </th>
+              <th scope="col" className="py-2 pr-4 font-medium">
+                Submissions
+              </th>
+              <th scope="col" className="py-2 font-medium">
+                Completed
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {head.map((t) => (
+              <tr key={t.id} className="border-b border-[var(--color-border)] last:border-b-0">
+                <td className="py-2 pr-4 font-mono text-xs">{t.sampleRef}</td>
+                <td className="py-2 pr-4">{GATE_LABEL[t.gateState]}</td>
+                <td className="py-2 pr-4 tabular-nums">
+                  <SubmissionsCell task={t} />
+                </td>
+                <td className="py-2 text-xs text-[var(--color-muted-foreground)]">
+                  {t.completedAt
+                    ? new Intl.DateTimeFormat('en-GB', {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                      }).format(new Date(t.completedAt))
+                    : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {tasks.length > head.length ? (
-        <p className="pt-2 text-xs text-[var(--color-muted-foreground)]">
+        <p className="text-xs text-[var(--color-muted-foreground)]">
           Showing {head.length} of {tasks.length}. Full paginated dashboard lands with slice 3.
         </p>
       ) : null}

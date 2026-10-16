@@ -101,21 +101,6 @@ export function isCampaignManager(session: Session | null | undefined): boolean 
 }
 
 /**
- * True when the caller can read a campaign's calibration flags (#554).
- * Mirrors `@AnnotationRoles('task-supervisor', 'campaign-manager')` on
- * the API, where `admin` is the operator override. Only decides whether
- * to show the link; the API's 403 stays authoritative.
- */
-export function canReviewCalibration(session: Session | null | undefined): boolean {
-  const groups = userGroups(session);
-  return (
-    groups.includes('task-supervisor') ||
-    groups.includes('campaign-manager') ||
-    groups.includes('admin')
-  );
-}
-
-/**
  * Server-side guard for host-only routes. Redirects unauthenticated
  * callers to the home page (sign-in CTA) and authenticated non-hosts
  * to /dashboard. Use at the top of a Server Component:
@@ -182,4 +167,23 @@ export function annotationGateForCaller(
 /** True when the caller can pick up annotation work in at least one gate. */
 export function isAnnotationWorker(session: Session | null | undefined): boolean {
   return annotationGateForCaller(session) !== null;
+}
+
+/**
+ * True when the caller oversees campaigns: can read a campaign's task
+ * list (`GET /v2/annotation/campaigns/:slug/tasks`, #556) and its
+ * calibration flags (#554). Mirrors
+ * `@AnnotationRoles('campaign-manager', 'task-supervisor')` on both
+ * endpoints, where `admin` is the operator override. Only decides what
+ * the page shows; the API's 403 stays authoritative. Supervisors see
+ * progress but not task seeding, which stays with `isCampaignManager`.
+ * If the two endpoints' role sets ever diverge, split this again.
+ */
+export function canOverseeCampaign(session: Session | null | undefined): boolean {
+  const groups = userGroups(session);
+  return (
+    groups.includes('campaign-manager') ||
+    groups.includes('task-supervisor') ||
+    groups.includes('admin')
+  );
 }
