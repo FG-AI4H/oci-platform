@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import type {
   AnnotationCampaign,
   AnnotationCampaignInstructions,
@@ -139,6 +139,49 @@ describe('InstructionsService.publish', () => {
     );
     expect(out.created).toBe(false);
     expect(out.instructions.isCurrent).toBe(true);
+  });
+
+  it('passes baseVersion through to the repository, null included', async () => {
+    repo.findBySlug.mockResolvedValue(campaign(null));
+    repo.publishInstructions.mockImplementation(async (args: { version: string }) => ({
+      row: instructionsRow(args.version, '# Hello'),
+      created: true,
+    }));
+    await service.publish(
+      'chest-xr-pilot',
+      { markdownBody: '# Hello', mediaUrls: [], baseVersion: null },
+      user(SUB),
+    );
+    expect(repo.publishInstructions).toHaveBeenCalledWith(
+      expect.objectContaining({ baseVersion: null }),
+    );
+  });
+
+  it('omits baseVersion when the request does not send one', async () => {
+    repo.findBySlug.mockResolvedValue(campaign(null));
+    repo.publishInstructions.mockImplementation(async (args: { version: string }) => ({
+      row: instructionsRow(args.version, '# Hello'),
+      created: true,
+    }));
+    await service.publish('chest-xr-pilot', { markdownBody: '# Hello', mediaUrls: [] }, user(SUB));
+    expect(repo.publishInstructions.mock.calls[0]![0]).not.toHaveProperty('baseVersion');
+  });
+
+  it('throws 409 with the current version when the base version is stale', async () => {
+    repo.findBySlug.mockResolvedValue(campaign('bbbbbbbbbbbbbbbb'));
+    repo.publishInstructions.mockResolvedValue({ staleCurrentVersion: 'bbbbbbbbbbbbbbbb' });
+    const err = await service
+      .publish(
+        'chest-xr-pilot',
+        { markdownBody: '# Hello', mediaUrls: [], baseVersion: 'aaaaaaaaaaaaaaaa' },
+        user(SUB),
+      )
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).getResponse()).toMatchObject({
+      baseVersion: 'aaaaaaaaaaaaaaaa',
+      currentInstructionsVersion: 'bbbbbbbbbbbbbbbb',
+    });
   });
 
   it('throws 404 when the campaign does not exist', async () => {

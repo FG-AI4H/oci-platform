@@ -106,6 +106,9 @@ export async function publishInstructionsAction(
   const parsed = PublishInstructionsRequestSchema.safeParse({
     markdownBody: values.markdownBody,
     mediaUrls: toMediaRefs(values.media),
+    // The API refuses the publish if the current version has moved on
+    // since this editor loaded, so a stale tab can't overwrite it.
+    baseVersion: previousVersion === '' ? null : previousVersion,
   });
   if (!parsed.success) {
     const fieldErrors = new Map<string, string>();
@@ -159,6 +162,14 @@ export async function publishInstructionsAction(
     return {
       status: 'error',
       message: 'Only campaign managers can publish instructions.',
+      values,
+    };
+  }
+  if (res.status === 409) {
+    return {
+      status: 'error',
+      message:
+        'Someone else published a new version after you opened this page. Copy your text, reload the page to see their version, then publish again.',
       values,
     };
   }
