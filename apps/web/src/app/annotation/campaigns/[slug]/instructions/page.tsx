@@ -138,7 +138,9 @@ export default async function CampaignInstructionsPage({ params, searchParams }:
                 <CardContent>
                   <InstructionsEditor
                     slug={detail.slug}
-                    currentVersion={data.current?.version ?? null}
+                    // The campaign's pointer, not `data.current`: the
+                    // pointer is what the API compares `baseVersion` to.
+                    currentVersion={detail.currentInstructionsVersion}
                     initialValues={{
                       markdownBody: data.current?.markdownBody ?? '',
                       media: (data.current?.mediaUrls ?? []).map((m) => ({

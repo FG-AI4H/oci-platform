@@ -170,7 +170,11 @@ export default async function AnnotatePage({ params }: PageProps) {
                   </time>
                 </DefinitionItem>
               </DefinitionList>
-              <AnnotateForm slug={detail.slug} assignment={assignment} />
+              <AnnotateForm
+                slug={detail.slug}
+                assignment={assignment}
+                instructionsVersion={detail.currentInstructionsVersion}
+              />
             </CardContent>
           </Card>
         ) : (

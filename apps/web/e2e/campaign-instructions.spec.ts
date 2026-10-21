@@ -53,11 +53,11 @@ function psql(sql: string): void {
   );
 }
 
-function clearInstructions(): void {
+function clearInstructions(slug = SLUG): void {
   psql(`
-    UPDATE annotation.annotation_campaigns SET current_instructions_version = NULL WHERE slug = '${SLUG}';
+    UPDATE annotation.annotation_campaigns SET current_instructions_version = NULL WHERE slug = '${slug}';
     DELETE FROM annotation.annotation_campaign_instructions
-      WHERE campaign_id = (SELECT id FROM annotation.annotation_campaigns WHERE slug = '${SLUG}');
+      WHERE campaign_id = (SELECT id FROM annotation.annotation_campaigns WHERE slug = '${slug}');
   `);
 }
 
@@ -73,8 +73,8 @@ async function signInAs(page: Page, user: string, roles: string) {
  * Opens the page and waits for the editor to hydrate: typing into the
  * controlled textarea before then is overwritten by React's state.
  */
-async function openEditor(page: Page): Promise<void> {
-  await page.goto(PAGE, { waitUntil: 'networkidle' });
+async function openEditor(page: Page, path = PAGE): Promise<void> {
+  await page.goto(path, { waitUntil: 'networkidle' });
 }
 
 const body = (page: Page) => page.getByLabel('Instructions (Markdown)');
@@ -179,6 +179,20 @@ test.describe('campaign instructions (#555)', () => {
     ).toBeVisible();
     await expect(page.getByText(/at most 65,536 bytes/)).toBeVisible();
     expect((await body(page).inputValue()).length).toBe(tooBig.length);
+  });
+
+  test('a media URL that is not https is rejected', async ({ page }) => {
+    await signInAs(page, 'mgr', 'campaign-manager');
+    await openEditor(page);
+    for (const url of ['http://example.org/a.png', 'javascript:alert(1)']) {
+      await page.getByLabel('URL').first().fill(url);
+      await publish(page).click();
+      await expect(page.getByText('Enter a full URL, starting with https://.')).toBeVisible();
+    }
+    // v1 is current again after the restore above; nothing was published.
+    await expect(page.getByRole('heading', { level: 2, name: /current version/i })).toContainText(
+      v1,
+    );
   });
 
   test('Cancel discards unpublished edits and clears the last error', async ({ page }) => {
@@ -297,5 +311,144 @@ test.describe('campaign instructions (#555)', () => {
         expect(summary, 'axe violations').toEqual([]);
       });
     }
+  }
+});
+
+/**
+ * Submissions on a campaign with published instructions must name the
+ * current version (#230): the annotate page shows it with a checkbox and
+ * sends it, and a version published mid-task asks for a fresh confirm.
+ */
+test.describe('annotating under published instructions (#555)', () => {
+  const RUNNING_SLUG = 'demo-rsna-segmentation';
+  const RUNNING_PAGE = `/annotation/campaigns/${RUNNING_SLUG}/instructions`;
+  const ANNOTATE = `/annotation/campaigns/${RUNNING_SLUG}/annotate`;
+
+  /** Tasks this block seeds; removed so other specs' queues stay as seeded. */
+  function deleteSeededTasks(): void {
+    psql(`
+      DELETE FROM annotation.annotation_task_assignments WHERE task_id IN
+        (SELECT id FROM annotation.annotation_tasks WHERE sample_ref LIKE 'e2e/instr-%');
+      DELETE FROM annotation.annotation_tasks WHERE sample_ref LIKE 'e2e/instr-%';
+    `);
+  }
+
+  test.beforeAll(() => clearInstructions(RUNNING_SLUG));
+  test.afterAll(() => {
+    clearInstructions(RUNNING_SLUG);
+    deleteSeededTasks();
+  });
+
+  /** `page` must already be signed in as a campaign manager. */
+  async function publishAs(page: Page, text: string): Promise<string> {
+    await openEditor(page, RUNNING_PAGE);
+    await body(page).fill(text);
+    await publish(page).click();
+    // Re-publishing an earlier text restores it rather than creating one.
+    await expect(statusAlert(page)).toContainText(/Published version|is current again/);
+    return publishedVersion(page);
+  }
+
+  test('annotator confirms the current version and submits', async ({ page, browser }) => {
+    test.setTimeout(90_000);
+    const manager = await browser.newPage();
+    await signInAs(manager, 'mgr', 'campaign-manager');
+    // A fresh task, so this run's annotator has one even after repeated
+    // runs used up the demo tasks.
+    await manager.goto(`/annotation/campaigns/${RUNNING_SLUG}`);
+    await manager.getByLabel(/seed sample references/i).fill(`e2e/instr-${Date.now()}`);
+    await manager.getByRole('button', { name: /seed tasks/i }).click();
+    await expect(manager.getByText(/Created 1 task/i)).toBeVisible();
+    const v1 = await publishAs(manager, V1_BODY);
+
+    // A fresh annotator per run, so pull-next hands out a new task.
+    await signInAs(page, `ack-${Date.now()}`, 'annotator');
+    await page.goto(ANNOTATE, { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: /your current task/i })).toBeVisible();
+    const ack = page.getByRole('checkbox', { name: new RegExp(`version ${v1}`) });
+    await expect(ack).not.toBeChecked();
+    await expect(
+      page.getByRole('link', { name: `Read version ${v1} (opens in new tab)` }),
+    ).toHaveAttribute('href', RUNNING_PAGE);
+
+    // Unconfirmed: the browser blocks the submit.
+    const submit = page.getByRole('button', { name: /^submit$/i });
+    const submitted = page
+      .getByText(/submission counted|gate advanced/i)
+      // A successful submit re-renders the page; with no task left for
+      // this annotator it shows the empty queue instead of the form.
+      .or(page.getByRole('heading', { name: 'All caught up' }));
+    await submit.click();
+    expect(await ack.evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true);
+    await expect(submitted).toHaveCount(0);
+
+    // Confirmed v1, but v2 is published before the submit: refused with
+    // a readable message, and the checkbox now asks about v2.
+    await ack.check();
+    const v2 = await publishAs(manager, `${V1_BODY}\n\nA new rule.`);
+    await manager.close();
+    await submit.click();
+    await expect(page.getByText(`The instructions have changed (now version ${v2})`)).toBeVisible();
+    await expect(page.getByText(/API 409/)).toHaveCount(0);
+    await expect(submitted).toHaveCount(0);
+    const ack2 = page.getByRole('checkbox', { name: new RegExp(`version ${v2}`) });
+    await expect(ack2).not.toBeChecked();
+
+    await ack2.check();
+    await submit.click();
+    await expect(submitted).toBeVisible();
+    await expect(page.getByText(/The instructions have changed/)).toHaveCount(0);
+  });
+
+  test('a stale editor cannot overwrite a newer publish', async ({ page, browser }) => {
+    await signInAs(page, 'mgr', 'campaign-manager');
+    await openEditor(page, RUNNING_PAGE);
+
+    // A second manager publishes while the first tab is still open.
+    const other = await browser.newPage();
+    await signInAs(other, 'mgr2', 'campaign-manager');
+    await openEditor(other, RUNNING_PAGE);
+    await body(other).fill(`${V1_BODY}\n\nPublished from the other tab.`);
+    await publish(other).click();
+    await expect(statusAlert(other)).toContainText('Published version');
+    const theirs = await publishedVersion(other);
+    await other.close();
+
+    await body(page).fill('Stale edit that must not win.');
+    await publish(page).click();
+    await expect(page.getByText(/Someone else published a new version/)).toBeVisible();
+    // The text is kept so it can be copied.
+    await expect(body(page)).toHaveValue('Stale edit that must not win.');
+
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 2, name: /current version/i })).toContainText(
+      theirs,
+    );
+  });
+
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`annotate page with the instructions checkbox has no axe violations (${colorScheme})`, async ({
+      page,
+      browser,
+    }) => {
+      const manager = await browser.newPage();
+      await signInAs(manager, 'mgr', 'campaign-manager');
+      await publishAs(manager, `${V1_BODY}\n\nChecked in ${colorScheme} mode.`);
+      await manager.close();
+
+      await page.emulateMedia({ colorScheme });
+      await signInAs(page, `ack-axe-${Date.now()}`, 'annotator');
+      await page.goto(ANNOTATE, { waitUntil: 'networkidle' });
+      await expect(
+        page.getByRole('checkbox', { name: /I have read the current instructions/ }),
+      ).toBeVisible();
+
+      const results = await new AxeBuilder({ page })
+        .include('main')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const summary = results.violations.map((v) => `${v.impact}: ${v.id} (${v.nodes.length})`);
+      expect(summary, 'axe violations').toEqual([]);
+    });
   }
 });

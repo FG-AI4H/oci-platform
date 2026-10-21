@@ -107,11 +107,14 @@ const components: Components = {
  */
 export function InstructionsContent({
   markdownBody,
-  mediaUrls,
+  mediaUrls: allMedia,
 }: {
   markdownBody: string;
   mediaUrls: InstructionsMediaRef[];
 }) {
+  // The schema only accepts https, but rows published before it did
+  // may hold other schemes; they go straight into `src`, so skip them.
+  const mediaUrls = allMedia.filter((m) => isHttps(m.url));
   return (
     <div className="space-y-6">
       <div className="min-w-0 break-words text-[var(--color-foreground)] [&>*:first-child]:mt-0">
@@ -154,4 +157,12 @@ export function InstructionsContent({
       ) : null}
     </div>
   );
+}
+
+function isHttps(url: string): boolean {
+  try {
+    return new URL(url).protocol === 'https:';
+  } catch {
+    return false;
+  }
 }

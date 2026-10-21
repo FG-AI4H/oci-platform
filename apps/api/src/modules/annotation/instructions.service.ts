@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   shortVersionFromHash,
   type CampaignInstructions,
@@ -54,13 +54,22 @@ export class InstructionsService {
       createHash('sha256').update(body.markdownBody, 'utf8').digest('hex'),
     );
     const createdById = cognitoSubAsUuid(user.sub);
-    const { row, created } = await this.repo.publishInstructions({
+    const result = await this.repo.publishInstructions({
       campaignId: campaign.id,
       version,
       markdownBody: body.markdownBody,
       mediaUrls: body.mediaUrls,
       createdById,
+      ...(body.baseVersion !== undefined ? { baseVersion: body.baseVersion } : {}),
     });
+    if ('staleCurrentVersion' in result) {
+      throw new ConflictException({
+        message: 'Instructions were published by someone else since this edit started',
+        baseVersion: body.baseVersion ?? null,
+        currentInstructionsVersion: result.staleCurrentVersion,
+      });
+    }
+    const { row, created } = result;
     if (created) {
       this.logger.log(`instructions.published slug=${slug} version=${version}`);
     } else {
