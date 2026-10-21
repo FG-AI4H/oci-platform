@@ -54,6 +54,21 @@ export class IdentityStack extends cdk.Stack {
    */
   public readonly userPoolClientSecretSm: secretsmanager.Secret;
 
+  /**
+   * Machine-to-machine app client for the sealed-run worker (WP2). Mints
+   * access tokens carrying `oci-eval/submit-result` — permission to WRITE a
+   * result for a run it was dispatched, and nothing else.
+   */
+  public readonly evalWorkerClient: cognito.UserPoolClient;
+  /**
+   * Machine-to-machine app client for the EvalAI seam forwarder (WP4). Mints
+   * access tokens carrying `oci-eval/seam-intake` — permission to CREATE a
+   * submission, and nothing else.
+   */
+  public readonly evalSeamClient: cognito.UserPoolClient;
+  public readonly evalWorkerClientSecretSm: secretsmanager.Secret;
+  public readonly evalSeamClientSecretSm: secretsmanager.Secret;
+
   constructor(scope: Construct, id: string, props: IdentityStackProps) {
     super(scope, id, props);
     Object.entries(props.tags).forEach(([k, v]) => cdk.Tags.of(this).add(k, v));
@@ -128,6 +143,70 @@ export class IdentityStack extends cdk.Stack {
       refreshTokenValidity: cdk.Duration.days(30),
     });
 
+    // ---------------------------------------------------------------------
+    // Machine-to-machine credentials for the evaluation backend (#462).
+    //
+    // These were assumed to exist by code already on main: `EvalWorkerGuard`
+    // (WP2) and `EvalSeamGuard` (WP4) both read an app-client id from env and
+    // construct no verifier when it is absent, which fails closed. The
+    // credential they gate on had never been provisioned, so the sealed-run
+    // outbox was rejecting every worker call. Fail-closed was right; the
+    // missing client was the defect.
+    //
+    // TWO clients, not one shared credential. The scopes are the whole point:
+    // the sealed-run worker writes results and the seam forwarder creates
+    // submissions, they are operated by DIFFERENT parties, and a single
+    // credential valid for both would let either side do the other's job —
+    // which is exactly what the two separate guards exist to prevent. Cognito
+    // enforces the split at token issuance, so the API never has to trust the
+    // caller's claim about which role it is playing.
+    // ---------------------------------------------------------------------
+    const submitResultScope = new cognito.ResourceServerScope({
+      scopeName: 'submit-result',
+      scopeDescription: 'Write the result of a sealed evaluation run the caller was dispatched',
+    });
+    const seamIntakeScope = new cognito.ResourceServerScope({
+      scopeName: 'seam-intake',
+      scopeDescription: 'Create an evaluation submission forwarded from an external front door',
+    });
+
+    // The identifier is the scope prefix the API checks: a token's scope
+    // string is `<identifier>/<scopeName>`, e.g. `oci-eval/seam-intake`.
+    // Keep it stable — it is a literal default in `evaluation.module.ts`.
+    const evalResourceServer = this.userPool.addResourceServer('EvalResourceServer', {
+      identifier: 'oci-eval',
+      userPoolResourceServerName: `oci-${props.cfg.envName}-eval`,
+      scopes: [submitResultScope, seamIntakeScope],
+    });
+
+    // `authFlows: {}` is deliberate. Left unspecified, Cognito enables the
+    // user-facing SRP/custom flows by default, which would let anyone holding
+    // a pool user's password authenticate against a machine client. These
+    // clients have no interactive purpose: client-credentials only.
+    this.evalWorkerClient = this.userPool.addClient('EvalWorkerClient', {
+      userPoolClientName: `oci-${props.cfg.envName}-eval-worker`,
+      generateSecret: true,
+      authFlows: {},
+      oAuth: {
+        flows: { clientCredentials: true },
+        scopes: [cognito.OAuthScope.resourceServer(evalResourceServer, submitResultScope)],
+      },
+      enableTokenRevocation: true,
+      accessTokenValidity: cdk.Duration.minutes(60),
+    });
+
+    this.evalSeamClient = this.userPool.addClient('EvalSeamClient', {
+      userPoolClientName: `oci-${props.cfg.envName}-eval-seam`,
+      generateSecret: true,
+      authFlows: {},
+      oAuth: {
+        flows: { clientCredentials: true },
+        scopes: [cognito.OAuthScope.resourceServer(evalResourceServer, seamIntakeScope)],
+      },
+      enableTokenRevocation: true,
+      accessTokenValidity: cdk.Duration.minutes(60),
+    });
+
     // Cross-stack indirection layer: publish identity primitives in SSM
     // (for IDs) and Secrets Manager (for the client secret) under
     // deterministic names. Consumer stacks (api, web) reference these
@@ -167,6 +246,37 @@ export class IdentityStack extends cdk.Stack {
       description: `Cognito web app-client secret ARN for ${props.cfg.envName} (consumed by web)`,
     });
 
+    // Machine-client ids: consumed by api-stack as COGNITO_EVAL_*_CLIENT_ID.
+    // Same SSM-by-name indirection as the web client, for the same reason —
+    // replacing a client must not deadlock api-stack on a CFN export in use.
+    new ssm.StringParameter(this, 'EvalWorkerClientIdParam', {
+      parameterName: `/oci/${props.cfg.envName}/cognito/eval-worker-client-id`,
+      stringValue: this.evalWorkerClient.userPoolClientId,
+      description: `Cognito sealed-run worker app-client id for ${props.cfg.envName} (consumed by api)`,
+    });
+    new ssm.StringParameter(this, 'EvalSeamClientIdParam', {
+      parameterName: `/oci/${props.cfg.envName}/cognito/eval-seam-client-id`,
+      stringValue: this.evalSeamClient.userPoolClientId,
+      description: `Cognito EvalAI seam app-client id for ${props.cfg.envName} (consumed by api)`,
+    });
+
+    // The secrets are read by the WORKERS, not by this platform — the API only
+    // ever verifies tokens, and never needs either secret. They are mirrored
+    // here so an operator can hand a worker its credential from Secrets
+    // Manager instead of a Cognito console copy-paste that leaves no trail.
+    this.evalWorkerClientSecretSm = new secretsmanager.Secret(this, 'EvalWorkerClientSecret', {
+      secretName: `/oci/${props.cfg.envName}/cognito/eval-worker-client-secret`,
+      description: `Cognito client secret for the ${props.cfg.envName} sealed-run worker (oci-eval/submit-result)`,
+      secretStringValue: this.evalWorkerClient.userPoolClientSecret,
+      removalPolicy: props.cfg.removalPolicy,
+    });
+    this.evalSeamClientSecretSm = new secretsmanager.Secret(this, 'EvalSeamClientSecret', {
+      secretName: `/oci/${props.cfg.envName}/cognito/eval-seam-client-secret`,
+      description: `Cognito client secret for the ${props.cfg.envName} EvalAI seam forwarder (oci-eval/seam-intake)`,
+      secretStringValue: this.evalSeamClient.userPoolClientSecret,
+      removalPolicy: props.cfg.removalPolicy,
+    });
+
     this.userPoolDomain = this.userPool.addDomain('Domain', {
       cognitoDomain: { domainPrefix: `oci-${props.cfg.envName}` },
       // Managed Login (the new branded sign-in UI, GA Nov 2024) needs
@@ -192,6 +302,17 @@ export class IdentityStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'UserPoolId', { value: this.userPool.userPoolId });
     new cdk.CfnOutput(this, 'UserPoolClientId', { value: this.userPoolClient.userPoolClientId });
     new cdk.CfnOutput(this, 'CognitoDomainUrl', { value: this.userPoolDomain.baseUrl() });
+    // Everything a worker operator needs to obtain a token, in one place:
+    // POST <TokenEndpoint> with grant_type=client_credentials, HTTP basic auth
+    // of <client id>:<secret from Secrets Manager>, and scope=oci-eval/<scope>.
+    new cdk.CfnOutput(this, 'EvalTokenEndpoint', {
+      value: `${this.userPoolDomain.baseUrl()}/oauth2/token`,
+      description: 'client_credentials token endpoint for the oci-eval machine clients',
+    });
+    new cdk.CfnOutput(this, 'EvalWorkerClientId', {
+      value: this.evalWorkerClient.userPoolClientId,
+    });
+    new cdk.CfnOutput(this, 'EvalSeamClientId', { value: this.evalSeamClient.userPoolClientId });
 
     if (props.cfg.envName !== 'prod') {
       NagSuppressions.addResourceSuppressions(this.userPool, [
@@ -220,6 +341,22 @@ export class IdentityStack extends cdk.Stack {
           'Cognito user-pool app-client secrets are not Secrets-Manager-rotatable (no Cognito API for it). Manual rotation via replacing the user pool client. Acceptable for the lifetime of this client.',
       },
     ]);
+
+    // Same constraint for the two machine-client secrets (#462), with one
+    // difference worth recording: for these, rotation is cheap. Replacing a
+    // machine client affects only the worker holding that credential — no
+    // signed-in user session is invalidated the way replacing WebClient would
+    // do. So the mitigation for the missing automatic rotation is a real
+    // operational option here, not just an accepted risk.
+    for (const secret of [this.evalWorkerClientSecretSm, this.evalSeamClientSecretSm]) {
+      NagSuppressions.addResourceSuppressions(secret, [
+        {
+          id: 'AwsSolutions-SMG4',
+          reason:
+            'Cognito user-pool app-client secrets are not Secrets-Manager-rotatable (no Cognito API for it). Rotation is by replacing the machine app client, which affects only the worker holding the credential and no interactive user session.',
+        },
+      ]);
+    }
 
     // CDK uses an internal Lambda-backed custom resource to read the
     // Cognito client secret at deploy time (via DescribeUserPoolClient).
