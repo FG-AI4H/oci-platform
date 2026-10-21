@@ -16,6 +16,15 @@ export class ApiError extends Error {
 }
 
 /**
+ * Where to send a caller whose API token was rejected (401), e.g. an
+ * expired Cognito access token. `reason=expired` stops /signin from
+ * bouncing straight back because the (stale) session still exists.
+ */
+export function reauthUrl(callbackPath: string): string {
+  return `/signin?reason=expired&callbackUrl=${encodeURIComponent(callbackPath)}`;
+}
+
+/**
  * Server-side API helper for Next.js Server Components / Actions.
  * Returns `null` for 404 (so callers can render notFound()), throws
  * for everything else.

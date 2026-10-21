@@ -17,15 +17,14 @@ import {
   Section,
 } from '@oci/ui';
 import type {
-  AnnotatorQualitySummary,
   CalibrationFlag,
   CalibrationFlagType,
   CalibrationMetricKind,
   CampaignDetail,
-  ListCalibrationFlagsResponse,
 } from '@oci/shared-types';
 import { auth } from '../../../../../auth';
-import { ApiError, apiFetch } from '../../../../../lib/api';
+import { ApiError, apiFetch, reauthUrl } from '../../../../../lib/api';
+import { loadFlags, loadQuality } from './load';
 
 const FLAG_TYPE_LABEL: Record<CalibrationFlagType, string> = {
   SKILL: 'Skill',
@@ -44,8 +43,19 @@ const METRIC_LABEL: Record<CalibrationMetricKind, string> = {
 };
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
-const scoreFmt = (n: number) =>
-  n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Scores round down and thresholds round up, so a score just under its
+// threshold never displays as equal to it (0.596 vs 0.60 reads
+// `0.596 < 0.60`, not `0.60 < 0.60`).
+const scoreFmt = new Intl.NumberFormat('en-GB', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 3,
+  roundingMode: 'floor',
+}).format;
+const thresholdFmt = new Intl.NumberFormat('en-GB', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 3,
+  roundingMode: 'ceil',
+}).format;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -75,27 +85,6 @@ export async function generateMetadata({ params }: PageProps) {
   };
 }
 
-// Raw API errors (internal path + response body) are never rendered;
-// the API logs the detail with a correlation id.
-type FlagsResult =
-  | { kind: 'ok'; items: CalibrationFlag[] }
-  | { kind: 'forbidden' }
-  | { kind: 'error' };
-
-async function loadFlags(slug: string, session: Session): Promise<FlagsResult | null> {
-  try {
-    const res = await apiFetch<ListCalibrationFlagsResponse>(
-      `/v2/annotation/campaigns/${encodeURIComponent(slug)}/calibration/flags`,
-      { session, revalidate: 0 },
-    );
-    if (!res) return null;
-    return { kind: 'ok', items: res.items };
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 403) return { kind: 'forbidden' };
-    return { kind: 'error' };
-  }
-}
-
 /**
  * Supervisor inbox for calibration flags (#554, ADR-0009 Decision 4).
  * Lists ACTIVE flags newest-first; selecting a flag loads that
@@ -105,20 +94,27 @@ export default async function CalibrationFlagsPage({ params, searchParams }: Pag
   const { slug } = await params;
   const { flag } = await searchParams;
   const session = await auth();
+  const selfPath = `/annotation/campaigns/${slug}/calibration`;
   if (!session?.user) {
-    redirect(
-      `/signin?callbackUrl=${encodeURIComponent(`/annotation/campaigns/${slug}/calibration`)}`,
-    );
+    redirect(`/signin?callbackUrl=${encodeURIComponent(selfPath)}`);
   }
 
-  const detail = await apiFetch<CampaignDetail>(
-    `/v2/annotation/campaigns/${encodeURIComponent(slug)}`,
-    { session, revalidate: 0 },
-  );
+  let detail: CampaignDetail | null;
+  try {
+    detail = await apiFetch<CampaignDetail>(
+      `/v2/annotation/campaigns/${encodeURIComponent(slug)}`,
+      { session, revalidate: 0 },
+    );
+  } catch (err) {
+    // An expired token: sign in again rather than show an error page.
+    if (err instanceof ApiError && err.status === 401) redirect(reauthUrl(selfPath));
+    throw err;
+  }
   if (!detail) notFound();
 
   const flags = await loadFlags(detail.slug, session);
-  if (!flags) notFound();
+  if (flags.kind === 'unauthenticated') redirect(reauthUrl(selfPath));
+  if (flags.kind === 'not-found') notFound();
 
   return (
     <Container size="md">
@@ -269,7 +265,7 @@ async function FlagsInbox({
                       </td>
                       <td className="py-2 pe-4 whitespace-nowrap">{METRIC_LABEL[f.metric]}</td>
                       <td className="py-2 pe-4 text-end tabular-nums whitespace-nowrap">
-                        {scoreFmt(f.score)} &lt; {scoreFmt(f.threshold)}
+                        {scoreFmt(f.score)} &lt; {thresholdFmt(f.threshold)}
                       </td>
                       <td className="py-2 pe-4 text-end tabular-nums">
                         {f.sampleSize.toLocaleString('en-GB')}
@@ -304,17 +300,13 @@ async function QualityPanel({
   session: Session;
 }) {
   const userId = flag.annotatorUserId;
-  let summary: AnnotatorQualitySummary | null = null;
-  let failed = false;
-  try {
-    summary = await apiFetch<AnnotatorQualitySummary>(
-      `/v2/annotation/campaigns/${encodeURIComponent(slug)}/annotators/${userId}/quality`,
-      { session, revalidate: 0 },
-    );
-  } catch {
-    // Raw API error detail is not rendered (see FlagsResult).
-    failed = true;
+  const quality = await loadQuality(slug, userId, session);
+  if (quality.kind === 'unauthenticated') {
+    redirect(reauthUrl(`/annotation/campaigns/${slug}/calibration?flag=${flag.id}`));
   }
+  // Raw API error detail is not rendered (see FlagsResult in ./load).
+  const summary = quality.kind === 'ok' ? quality.summary : null;
+  const failed = quality.kind === 'error';
 
   return (
     <Card id="annotator-quality">
@@ -333,7 +325,7 @@ async function QualityPanel({
           <DefinitionItem term="Selected flag">
             <span className="tabular-nums">
               {FLAG_TYPE_LABEL[flag.flagType]} · {METRIC_LABEL[flag.metric]} ·{' '}
-              {scoreFmt(flag.score)} &lt; {scoreFmt(flag.threshold)}
+              {scoreFmt(flag.score)} &lt; {thresholdFmt(flag.threshold)}
             </span>
           </DefinitionItem>
           {summary ? (
@@ -342,7 +334,7 @@ async function QualityPanel({
                 <span className="tabular-nums">
                   {summary.irrAgainstGold === null
                     ? 'Not scored yet'
-                    : `${scoreFmt(summary.irrAgainstGold)} (threshold ${scoreFmt(summary.threshold)})`}
+                    : `${scoreFmt(summary.irrAgainstGold)} (threshold ${thresholdFmt(summary.threshold)})`}
                 </span>
               </DefinitionItem>
               <DefinitionItem term="Gold samples scored">

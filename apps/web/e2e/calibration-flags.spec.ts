@@ -27,6 +27,16 @@ const EMPTY_SLUG = 'demo-rsna-classification';
 /** Distinct 8-char prefixes so each row's pseudonym is unique. */
 const SKILL_ANNOTATOR = 'e2e55401-0000-4000-8000-000000000554';
 const DRIFT_ANNOTATOR = 'e2e55402-0000-4000-8000-000000000554';
+/**
+ * Valid for the Postgres uuid column but not an RFC 4122 uuid (version
+ * nibble 0), so the API's quality endpoint rejects it: a real failed
+ * quality-summary request without stubbing the API.
+ */
+const BAD_ID_ANNOTATOR = 'e2e55403-0000-0000-0000-000000000554';
+
+const FLAGS_TABLE = 'annotation.annotator_calibration_flags';
+/** The flags table is renamed to this to make the flags endpoint fail. */
+const FLAGS_TABLE_OFF = 'annotator_calibration_flags_e2e_off';
 
 function psql(sql: string): void {
   execFileSync(
@@ -40,7 +50,14 @@ function psql(sql: string): void {
 
 function deleteTestFlags(): void {
   psql(
-    `DELETE FROM annotation.annotator_calibration_flags WHERE annotator_user_id IN ('${SKILL_ANNOTATOR}', '${DRIFT_ANNOTATOR}');`,
+    `DELETE FROM annotation.annotator_calibration_flags WHERE annotator_user_id IN ('${SKILL_ANNOTATOR}', '${DRIFT_ANNOTATOR}', '${BAD_ID_ANNOTATOR}');`,
+  );
+}
+
+/** Puts the flags table back if a failed run left it renamed. */
+function restoreFlagsTable(): void {
+  psql(
+    `ALTER TABLE IF EXISTS annotation.${FLAGS_TABLE_OFF} RENAME TO annotator_calibration_flags;`,
   );
 }
 
@@ -54,12 +71,15 @@ async function signInAs(page: Page, user: string, roles: string) {
 
 test.describe('calibration-flags inbox (#554)', () => {
   test.beforeAll(() => {
+    restoreFlagsTable();
     deleteTestFlags();
-    // SKILL raised a day before DRIFT, so DRIFT must list first.
+    // SKILL raised a day before DRIFT, so DRIFT must list first. The
+    // SKILL score sits just under its threshold so the formatter can't
+    // round it up to equal it.
     psql(`
       INSERT INTO annotation.annotator_calibration_flags
         (campaign_id, annotator_user_id, flag_type, metric, score, threshold, sample_size, window_meta, created_at)
-      SELECT id, '${SKILL_ANNOTATOR}', 'SKILL', 'vs-gold', 0.52, 0.60, 24, '{}'::jsonb, NOW() - INTERVAL '1 day'
+      SELECT id, '${SKILL_ANNOTATOR}', 'SKILL', 'vs-gold', 0.596, 0.60, 24, '{}'::jsonb, NOW() - INTERVAL '1 day'
         FROM annotation.annotation_campaigns WHERE slug = '${FLAGGED_SLUG}';
       INSERT INTO annotation.annotator_calibration_flags
         (campaign_id, annotator_user_id, flag_type, metric, score, threshold, sample_size, window_meta, created_at)
@@ -69,6 +89,7 @@ test.describe('calibration-flags inbox (#554)', () => {
   });
 
   test.afterAll(() => {
+    restoreFlagsTable();
     deleteTestFlags();
   });
 
@@ -89,8 +110,8 @@ test.describe('calibration-flags inbox (#554)', () => {
     await expect(rows.nth(0)).toContainText('0.71 < 0.85');
     await expect(rows.nth(1)).toContainText('e2e55401');
     await expect(rows.nth(1)).toContainText('Skill');
-    await expect(rows.nth(1)).toContainText('0.52 < 0.60');
-    await expect(rows.nth(1)).toContainText('24');
+    await expect(rows.nth(1)).toContainText('0.596 < 0.60');
+    await expect(rows.nth(1).getByRole('cell').nth(4)).toHaveText('24');
     await expect(page.getByText(SKILL_ANNOTATOR)).toHaveCount(0);
 
     await page.getByRole('link', { name: /annotator e2e55401/i }).click();
@@ -102,7 +123,7 @@ test.describe('calibration-flags inbox (#554)', () => {
     expect(page.url()).toMatch(/[?&]flag=[0-9a-f-]{36}/);
     expect(page.url()).not.toContain(SKILL_ANNOTATOR);
     const panel = page.locator('#annotator-quality');
-    await expect(panel).toContainText('Skill · vs gold · 0.52 < 0.60');
+    await expect(panel).toContainText('Skill · vs gold · 0.596 < 0.60');
   });
 
   test('a DRIFT flag restates its own score next to the gold summary', async ({ page }) => {
@@ -129,6 +150,95 @@ test.describe('calibration-flags inbox (#554)', () => {
       ).toHaveCount(2);
       await expect(page.getByRole('heading', { name: /quality summary/i })).toHaveCount(0);
     }
+  });
+
+  for (const { user, roles } of [
+    { user: 'cm', roles: 'campaign-manager' },
+    { user: 'alice', roles: 'admin' },
+  ]) {
+    test(`${roles} follows the link and sees the flags`, async ({ page }) => {
+      await signInAs(page, user, roles);
+      await page.goto(`/annotation/campaigns/${FLAGGED_SLUG}`);
+      await page.getByRole('link', { name: 'Calibration flags' }).click();
+      await expect(
+        page.getByRole('region', { name: 'Active calibration flags' }).locator('tbody tr'),
+      ).toHaveCount(2);
+      await page.getByRole('link', { name: /annotator e2e55401/i }).click();
+      await expect(
+        page.getByRole('heading', { level: 2, name: /quality summary — e2e55401/i }),
+      ).toBeVisible();
+    });
+  }
+
+  test('a failing flags request shows the error state, not the API detail', async ({ page }) => {
+    await signInAs(page, 'sup', 'task-supervisor');
+    // Without its table the flags endpoint fails with a 500; the
+    // campaign lookup before it doesn't use the table.
+    psql(`ALTER TABLE ${FLAGS_TABLE} RENAME TO ${FLAGS_TABLE_OFF};`);
+    try {
+      await page.goto(`/annotation/campaigns/${FLAGGED_SLUG}/calibration`);
+      await expect(
+        page.getByRole('heading', { level: 2, name: 'Could not load calibration flags' }),
+      ).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Active calibration flags' })).toHaveCount(0);
+      await expect(page.getByText(/API 5\d\d|\/v2\/|calibration_flags/)).toHaveCount(0);
+    } finally {
+      restoreFlagsTable();
+    }
+  });
+
+  test('a failing quality-summary request keeps the selected flag and shows an error', async ({
+    page,
+  }) => {
+    psql(`
+      INSERT INTO annotation.annotator_calibration_flags
+        (campaign_id, annotator_user_id, flag_type, metric, score, threshold, sample_size, window_meta, created_at)
+      SELECT id, '${BAD_ID_ANNOTATOR}', 'SKILL', 'vs-peers', 0.4, 0.6, 9, '{}'::jsonb, NOW() - INTERVAL '2 days'
+        FROM annotation.annotation_campaigns WHERE slug = '${FLAGGED_SLUG}';
+    `);
+    try {
+      await signInAs(page, 'sup', 'task-supervisor');
+      await page.goto(`/annotation/campaigns/${FLAGGED_SLUG}/calibration`);
+      await page.getByRole('link', { name: /annotator e2e55403/i }).click();
+
+      const panel = page.locator('#annotator-quality');
+      await expect(
+        panel.getByRole('heading', { name: /quality summary — e2e55403/i }),
+      ).toBeVisible();
+      await expect(
+        panel.getByRole('heading', { level: 3, name: 'Could not load the quality summary' }),
+      ).toBeVisible();
+      await expect(panel).toContainText('Skill · vs peers · 0.40 < 0.60');
+      await expect(panel.getByText('Gold samples scored')).toHaveCount(0);
+      await expect(page.getByText(/API 4\d\d|\/v2\//)).toHaveCount(0);
+    } finally {
+      psql(
+        `DELETE FROM annotation.annotator_calibration_flags WHERE annotator_user_id = '${BAD_ID_ANNOTATOR}';`,
+      );
+    }
+  });
+
+  test('an expired session is sent to sign in again and returns to the inbox', async ({ page }) => {
+    // Local dev tokens never expire, so this drives the sign-in step the
+    // page redirects to on a 401 (the 401 mapping is unit-tested in
+    // calibration/load.spec.ts). Signed in, /signin would normally
+    // bounce straight back, which would loop on an expired token.
+    const target = `/annotation/campaigns/${FLAGGED_SLUG}/calibration`;
+    await signInAs(page, 'sup', 'task-supervisor');
+    await page.goto(`/signin?reason=expired&callbackUrl=${encodeURIComponent(target)}`);
+    await expect(page.getByRole('status')).toHaveText(
+      'Your session has expired. Sign in again to continue.',
+    );
+
+    await page.getByLabel('User').fill('sup');
+    await page.getByLabel('Roles').fill('task-supervisor');
+    await page.getByRole('button', { name: /sign in.*local dev/i }).click();
+    await expect(page).toHaveURL(new RegExp(`${target}$`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Calibration flags' })).toBeVisible();
+
+    // Without the reason, a signed-in caller still bounces straight on.
+    await page.goto(`/signin?callbackUrl=${encodeURIComponent(target)}`);
+    await expect(page).toHaveURL(new RegExp(`${target}$`));
   });
 
   test('supervisor sees the empty state on a campaign without flags', async ({ page }) => {
