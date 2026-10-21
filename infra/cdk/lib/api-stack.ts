@@ -189,6 +189,12 @@ export class ApiStack extends cdk.Stack {
           // (eval-stack: visibility = maxRunSeconds + pull + outbox), so the
           // two cannot drift into a queue that redelivers a healthy run.
           OCI_EVAL_RUN_TIMEOUT_SEC: String(props.cfg.evalRunner.maxRunSeconds),
+          // Scored-submission quota (WP6). Set explicitly rather than left to
+          // the API's defaults so the caps in force for an environment are
+          // readable in one place — environments.ts — instead of being inferred
+          // from the absence of a variable.
+          OCI_EVAL_SCORED_PER_WEEK: String(props.cfg.scoredSubmissionQuota.perWeek),
+          OCI_EVAL_SCORED_PER_TASK: String(props.cfg.scoredSubmissionQuota.perTask),
           // DocuSeal endpoint (#128). Gated on `--context docusealEnabled=true`
           // so a greenfield environment can deploy api-stack first
           // (docuseal-stack depends on api.cluster + api.listener, so
