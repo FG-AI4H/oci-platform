@@ -14,6 +14,8 @@ export const metadata = {
 interface SearchParams {
   callbackUrl?: string;
   error?: string;
+  /** `expired`: the API rejected the session's token; sign in again. */
+  reason?: string;
 }
 
 const ALLOWED_CALLBACK_PREFIX = '/';
@@ -36,8 +38,11 @@ export default async function SignInPage({
   const session = await auth();
   const callbackUrl = safeCallbackUrl(params.callbackUrl);
 
-  // Already signed in — bounce straight to the destination.
-  if (session?.user) {
+  const expired = params.reason === 'expired';
+
+  // Already signed in — bounce straight to the destination. Not when
+  // the token expired: the session still exists, so bouncing would loop.
+  if (session?.user && !expired) {
     redirect(callbackUrl);
   }
 
@@ -60,6 +65,14 @@ export default async function SignInPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {expired && !params.error ? (
+              <p
+                role="status"
+                className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] px-3 py-2 text-sm"
+              >
+                Your session has expired. Sign in again to continue.
+              </p>
+            ) : null}
             {params.error ? (
               <p
                 role="alert"

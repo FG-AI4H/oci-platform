@@ -101,6 +101,21 @@ export function isCampaignManager(session: Session | null | undefined): boolean 
 }
 
 /**
+ * True when the caller can read a campaign's calibration flags (#554).
+ * Mirrors `@AnnotationRoles('task-supervisor', 'campaign-manager')` on
+ * the API, where `admin` is the operator override. Only decides whether
+ * to show the link; the API's 403 stays authoritative.
+ */
+export function canReviewCalibration(session: Session | null | undefined): boolean {
+  const groups = userGroups(session);
+  return (
+    groups.includes('task-supervisor') ||
+    groups.includes('campaign-manager') ||
+    groups.includes('admin')
+  );
+}
+
+/**
  * Server-side guard for host-only routes. Redirects unauthenticated
  * callers to the home page (sign-in CTA) and authenticated non-hosts
  * to /dashboard. Use at the top of a Server Component:

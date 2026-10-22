@@ -278,6 +278,16 @@ test.describe('ui/ux diagnostic', () => {
     sections.push({ label: 'annotation-campaigns-new', runs });
   });
 
+  test('annotation campaign — calibration flags (task-supervisor)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'annotation-campaign-calibration', async (page) => {
+      await signInAs(page, 'sup', 'task-supervisor');
+      await page.goto('/annotation/campaigns/demo-rsna-segmentation/calibration');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'annotation-campaign-calibration', runs });
+  });
+
   test('admin index (admin)', async ({ browser }) => {
     const runs = await runMatrix(browser, 'admin-index', async (page) => {
       await signInAs(page, 'alice', 'admin');

@@ -1,6 +1,30 @@
 import type { Session } from 'next-auth';
 
 /**
+ * Thrown by `apiFetch` for any non-2xx, non-404 response. Carries the
+ * HTTP status so callers can branch on it (e.g. render a not-authorised
+ * state on 403) without parsing the message.
+ */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+/**
+ * Where to send a caller whose API token was rejected (401), e.g. an
+ * expired Cognito access token. `reason=expired` stops /signin from
+ * bouncing straight back because the (stale) session still exists.
+ */
+export function reauthUrl(callbackPath: string): string {
+  return `/signin?reason=expired&callbackUrl=${encodeURIComponent(callbackPath)}`;
+}
+
+/**
  * Server-side API helper for Next.js Server Components / Actions.
  * Returns `null` for 404 (so callers can render notFound()), throws
  * for everything else.
@@ -29,7 +53,10 @@ export async function apiFetch<T>(
   if (res.status === 404) return null;
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`API ${res.status} ${res.statusText} on ${path}: ${body.slice(0, 200)}`);
+    throw new ApiError(
+      res.status,
+      `API ${res.status} ${res.statusText} on ${path}: ${body.slice(0, 200)}`,
+    );
   }
   return (await res.json()) as T;
 }
