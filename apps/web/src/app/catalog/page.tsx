@@ -262,7 +262,7 @@ export default async function CatalogPage({
   }
 
   return (
-    <Container>
+    <Container size="wide">
       <Section spacing="md">
         <header className="mb-6 flex flex-col gap-3">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
@@ -311,7 +311,7 @@ export default async function CatalogPage({
             defaultValue={filters.q ?? ''}
             placeholder="Search by name, slug, or description"
             leadingIcon={<SearchIcon size={16} />}
-            className="min-w-0 flex-1 sm:flex-1"
+            wrapperClassName="min-w-0 flex-1"
           />
           <input type="hidden" name="source" value={filters.source} />
           {filters.sort !== 'recent' ? (
@@ -345,8 +345,32 @@ export default async function CatalogPage({
 
         <AppliedFilters filters={filters} />
 
-        <div className="grid gap-6 lg:grid-cols-[16rem_1fr]">
-          <FilterPanel filters={filters} />
+        <div className="grid gap-6 lg:grid-cols-[16rem_1fr] lg:gap-8">
+          <div className="min-w-0">
+            {/* Below lg the facets would push every result under ~30 links, so
+                they collapse behind a native disclosure (no JS). At lg+ the
+                rail is always visible and scrolls with the page. */}
+            <details className="group rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] lg:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-4 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] [&::-webkit-details-marker]:hidden">
+                Filters
+                {activeFilterCount(filters) > 0 ? (
+                  <Badge tone="primary">{activeFilterCount(filters)} active</Badge>
+                ) : null}
+                <span
+                  aria-hidden="true"
+                  className="ms-auto text-[var(--color-muted-foreground)] motion-safe:transition-transform group-open:rotate-180"
+                >
+                  ▾
+                </span>
+              </summary>
+              <div className="border-t border-[var(--color-border)] p-4">
+                <FilterPanel filters={filters} />
+              </div>
+            </details>
+            <div className="hidden lg:block">
+              <FilterPanel filters={filters} />
+            </div>
+          </div>
           <div className="min-w-0">
             <SortToolbar filters={filters} response={response} />
             {error ? (
@@ -362,7 +386,7 @@ export default async function CatalogPage({
               <EmptyState filters={filters} />
             ) : (
               <>
-                <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {response.items.map((d) => (
                     <li key={d.id}>
                       <DatasetCard d={d} />
@@ -379,12 +403,23 @@ export default async function CatalogPage({
   );
 }
 
-function FilterPanel({ filters }: { filters: FilterState }) {
+function activeFilterCount(filters: FilterState): number {
   return (
-    <aside
-      aria-label="Filters"
-      className="space-y-5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-auto"
-    >
+    filters.modality.length +
+    filters.bodyRegion.length +
+    filters.condition.length +
+    filters.license.length +
+    filters.duoTerms.length +
+    (filters.anonymizationLevel ? 1 : 0) +
+    (filters.commercialUseTerms ? 1 : 0)
+  );
+}
+
+function FilterPanel({ filters }: { filters: FilterState }) {
+  // No sticky / max-height / inner overflow: seven facet groups are taller
+  // than any viewport, so a sticky rail always grew its own scrollbars (#597).
+  return (
+    <aside aria-label="Filters" className="space-y-5">
       <FacetSection
         title="Imaging modality"
         options={MODALITY_OPTIONS.map((v) => ({ label: v, value: v }))}
@@ -467,7 +502,9 @@ function FacetSection({
   toggleHref: (value: string) => string;
 }) {
   return (
-    <fieldset className="space-y-2">
+    // `min-w-0`: fieldsets default to `min-inline-size: min-content`, which
+    // let long DUO / anonymisation labels widen the rail instead of truncating.
+    <fieldset className="min-w-0 space-y-2">
       <legend className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
         {title}
       </legend>
@@ -484,7 +521,7 @@ function FacetSection({
                 // sr-only suffix makes the toggle affordance explicit for AT.
                 aria-current={isSelected ? 'true' : undefined}
                 className={
-                  'flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
+                  'flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
                   (isSelected
                     ? 'bg-[var(--color-primary-soft)] text-[var(--color-foreground)] font-medium'
                     : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-subtle)] hover:text-[var(--color-foreground)]')

@@ -12,10 +12,16 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   leadingIcon?: ReactNode;
   /** Slot for an icon rendered inside the end of the input. */
   trailingIcon?: ReactNode;
+  /**
+   * Classes for the outer wrapper when an icon is present. `className`
+   * styles the `<input>` itself, so layout classes (`flex-1`, `w-…`)
+   * that should size the whole field go here instead.
+   */
+  wrapperClassName?: string;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { className, invalid, leadingIcon, trailingIcon, ...rest },
+  { className, wrapperClassName, invalid, leadingIcon, trailingIcon, ...rest },
   ref,
 ) {
   if (leadingIcon || trailingIcon) {
@@ -24,6 +30,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         className={cn(
           'flex items-center rounded-md border bg-[var(--color-card)] focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--color-ring)]',
           invalid ? 'border-[var(--color-danger)]' : 'border-[var(--color-border)]',
+          wrapperClassName,
         )}
       >
         {leadingIcon ? (
@@ -32,7 +39,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         <input
           ref={ref}
           className={cn(
-            'flex-1 h-10 bg-transparent px-3 text-base sm:text-sm placeholder:text-[var(--color-muted-foreground)] focus:outline-none',
+            'min-w-0 flex-1 h-10 bg-transparent px-3 text-base sm:text-sm placeholder:text-[var(--color-muted-foreground)] focus:outline-none',
             className,
           )}
           {...rest}

@@ -226,6 +226,21 @@
   }
 }
 
+/* Native chrome (scrollbars, form controls, autofill) follows the same
+   theme resolution as the tokens above. Without this the browser draws
+   light scrollbars on the dark surface (#597). */
+:root {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+  }
+}
+
 /*
  * Subtle hero motif — a low-contrast radial wash that anchors hero
  * sections without pulling visual weight from the headline. Reused
