@@ -10,6 +10,8 @@ const container = cva('mx-auto w-full px-4 sm:px-6', {
       lg: 'max-w-4xl',
       xl: 'max-w-5xl',
       page: 'max-w-6xl',
+      /** Browse / data-dense surfaces (facet rail + result grid). Matches the site chrome. */
+      wide: 'max-w-(--breakpoint-2xl)',
     },
   },
   defaultVariants: { size: 'page' },
@@ -21,6 +23,8 @@ export interface ContainerProps
 /**
  * Page-level horizontal gutter + max-width. Always use this around the
  * outermost section of a route — never a hand-rolled `mx-auto max-w-…`.
+ * `page` (the default) is a reading width; use `wide` for list/browse
+ * pages that would otherwise leave most of a large screen empty.
  */
 export function Container({ className, size, ...props }: ContainerProps) {
   return <div className={cn(container({ size }), className)} {...props} />;
