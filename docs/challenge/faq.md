@@ -72,9 +72,10 @@ not something the published literature supports today. What the demonstration re
 the accuracy gap against a plaintext baseline, and measured computational cost.
 
 That leaves seven weeks between 1 November and the close of Phase 1 on 18 December, which is narrow
-on purpose. If you intend to enter on this track, write now rather than in November — the
-declarations can be filed and reviewed before the track opens, and the run is the last step rather
-than the first.
+on purpose. If you intend to enter on this track, write now rather than in November: the declarations
+can be drafted and read informally before the track opens, and the run is the last step rather than
+the first. The [integration note for encrypted-computation routes](./encrypted-computation-integration.md)
+says where such a route meets the platform.
 
 **Confidential computing and federated evaluation are scoped for 2027**, not open. They are named
 here so that nobody builds against a door that is closed, and so that a solution using them knows it
@@ -125,6 +126,19 @@ same.
 
 If you saw **"the participant team is not approved by host yet"**, ignore it. This challenge does not
 require host approval of participant teams; registering is enough.
+
+## When are solutions reviewed?
+
+**After Phase 1 closes, all together.** Everything is submitted by **18 December 2026, 23:59 UTC**:
+the three declarations and a runnable implementation. Until then you may change either as often as
+you like. When the window closes, the declarations are frozen and technical review and adversarial
+testing begin, for every route at once. Results are published in January 2027.
+
+Demonstration on the reference task is enough for Phase 1. A route does not need to have run against
+a data host's own task first.
+
+Sending the declarations earlier is still worth it. We will read a draft and tell you where it does
+not match the specification. That reading is informal and does not count as review.
 
 ## Where do I find the reference task's item identifiers?
 
