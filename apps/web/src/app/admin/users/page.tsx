@@ -35,6 +35,7 @@ const GROUP_TONE: Partial<
   host: 'primary',
   reviewer: 'primary',
   'expert-reviewer': 'primary',
+  'evaluation-reviewer': 'primary',
   'arbitration-annotator': 'info',
   annotator: 'info',
   participant: 'neutral',

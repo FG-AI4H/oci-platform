@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -25,6 +26,8 @@ import {
   type RouteVersionResponse,
   type ThreatModel,
 } from '@oci/shared-types';
+import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
+import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { RouteRegistryRepository } from './route-registry.repository.js';
 
@@ -77,7 +80,10 @@ export class RouteRegistryService {
     @Inject(AUDIT_EMITTER) private readonly audit: AuditEmitter,
   ) {}
 
-  async createRoute(body: CreateEvaluationRouteRequest): Promise<EvaluationRouteResponse> {
+  async createRoute(
+    body: CreateEvaluationRouteRequest,
+    user: CognitoAccessTokenPayload,
+  ): Promise<EvaluationRouteResponse> {
     if (await this.repo.findRouteBySlug(body.slug)) {
       throw new ConflictException(`route '${body.slug}' already exists`);
     }
@@ -91,19 +97,21 @@ export class RouteRegistryService {
         );
       }
     }
+    const actorUserId = cognitoSubAsUuid(user.sub);
     const created = await this.repo.createRoute({
       slug: body.slug,
       name: body.name,
       mode: body.mode,
       providerName: body.providerName ?? null,
       isReference: body.isReference,
+      submitterUserId: actorUserId,
     });
     await this.audit.emitSync({
       module: 'evaluation',
       action: 'route.registered',
       subjectType: 'evaluation-route',
       subjectId: created.id,
-      actorUserId: null,
+      actorUserId,
       payload: { slug: created.slug, mode: created.mode, isReference: created.isReference },
     });
     this.logger.log(`route.registered slug=${created.slug} mode=${created.mode}`);
@@ -118,6 +126,7 @@ export class RouteRegistryService {
   async declareVersion(
     slug: string,
     body: CreateRouteVersionRequest,
+    user: CognitoAccessTokenPayload,
   ): Promise<RouteVersionResponse> {
     const route = await this.repo.findRouteBySlug(slug);
     if (!route) throw new NotFoundException(`route '${slug}' not found`);
@@ -132,19 +141,21 @@ export class RouteRegistryService {
       throw new ConflictException(`route '${slug}' already has version ${body.version}`);
     }
 
+    const actorUserId = cognitoSubAsUuid(user.sub);
     const created = await this.repo.createVersion({
       routeId: route.id,
       version: body.version,
       threatModel: body.threatModel,
       disclosureProfile: body.disclosureProfile,
       operationalEnvelope: body.operationalEnvelope,
+      declaredByUserId: actorUserId,
     });
     await this.audit.emitSync({
       module: 'evaluation',
       action: 'route.version.declared',
       subjectType: 'route-version',
       subjectId: created.id,
-      actorUserId: null,
+      actorUserId,
       payload: { routeSlug: slug, version: created.version },
     });
     this.logger.log(`route.version.declared route=${slug} version=${created.version}`);
@@ -157,16 +168,26 @@ export class RouteRegistryService {
    * records the outcome, and what is *rendered* from it is a publication rule
    * decided at the read boundary. A rule enforced by what we declined to store
    * cannot be revised without losing the record it was applied to.
+   *
+   * The controller restricts this to `evaluation-reviewer` (or `admin`). Review
+   * is in pairs, so whoever registered the route or declared the version may
+   * not review it, admin included.
    */
   async review(
     slug: string,
     version: string,
     body: ReviewRouteVersionRequest,
+    user: CognitoAccessTokenPayload,
   ): Promise<RouteVersionResponse> {
     const route = await this.repo.findRouteBySlug(slug);
     if (!route) throw new NotFoundException(`route '${slug}' not found`);
     const row = await this.repo.findVersion(route.id, version);
     if (!row) throw new NotFoundException(`route '${slug}' has no version ${version}`);
+
+    const actorUserId = cognitoSubAsUuid(user.sub);
+    if (actorUserId === route.submitterUserId || actorUserId === row.declaredByUserId) {
+      throw new ForbiddenException(`you submitted route ${slug}@${version} and cannot review it`);
+    }
 
     const from = row.reviewStatus as RouteReviewStatus;
     const to = body.status;
@@ -191,7 +212,7 @@ export class RouteRegistryService {
       action: 'route.version.reviewed',
       subjectType: 'route-version',
       subjectId: updated.id,
-      actorUserId: null,
+      actorUserId,
       payload: { routeSlug: slug, version, from, to },
     });
     this.logger.log(`route.version.reviewed route=${slug} version=${version} ${from}->${to}`);

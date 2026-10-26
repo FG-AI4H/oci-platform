@@ -3,6 +3,7 @@ import type { AuditEmitter } from '@oci/audit';
 import type { CreateModelCardRequest, IntendedUseStatement } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { IntendedUseService } from '../intended-use/intended-use.service.js';
 import { PredictionRepository } from './prediction.repository.js';
 import { PredictionService } from './prediction.service.js';
@@ -49,7 +50,7 @@ function dbRow(over: Record<string, unknown> = {}) {
   return {
     id: '11111111-1111-1111-1111-111111111111',
     slug: 'acme-triage-v1',
-    submitterUserId: '99999999-9999-9999-9999-999999999999',
+    submitterUserId: cognitoSubAsUuid(actor().sub),
     intendedUse: IUS,
     modelClass: 'lmm',
     architectureSummary: 'Transformer decoder, 7B params.',
@@ -204,7 +205,7 @@ describe('PredictionService.modelFactsLabel (#261)', () => {
   it('renders the WHO Fig. 7 sections from the card + IUS', async () => {
     repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
 
-    const label = await service.modelFactsLabel('acme-triage-v1');
+    const label = await service.modelFactsLabel('acme-triage-v1', actor());
 
     expect(label.v).toBe(1);
     expect(label.summary.developer).toBe('Acme Health AI GmbH');
@@ -218,7 +219,7 @@ describe('PredictionService.modelFactsLabel (#261)', () => {
   it('declares its gaps rather than silently omitting them', async () => {
     repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
 
-    const label = await service.modelFactsLabel('acme-triage-v1');
+    const label = await service.modelFactsLabel('acme-triage-v1', actor());
 
     // No evaluations linked, no subgroup report, no clinical summary on the fixture.
     expect(label.validationAndPerformance.entries).toEqual([]);
@@ -232,7 +233,7 @@ describe('PredictionService.modelFactsLabel (#261)', () => {
   it('refuses to render a label for a DRAFT card', async () => {
     repo.findBySlug.mockResolvedValue(dbRow({ status: 'DRAFT' }));
 
-    await expect(service.modelFactsLabel('acme-triage-v1')).rejects.toBeInstanceOf(
+    await expect(service.modelFactsLabel('acme-triage-v1', actor())).rejects.toBeInstanceOf(
       ConflictException,
     );
   });
@@ -240,13 +241,15 @@ describe('PredictionService.modelFactsLabel (#261)', () => {
   it('404s for an unknown slug', async () => {
     repo.findBySlug.mockResolvedValue(null);
 
-    await expect(service.modelFactsLabel('nope')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.modelFactsLabel('nope', actor())).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('renders markdown with the WHO section headings', async () => {
     repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
 
-    const md = await service.modelFactsMarkdown('acme-triage-v1');
+    const md = await service.modelFactsMarkdown('acme-triage-v1', actor());
 
     for (const heading of [
       '# Model Facts —',

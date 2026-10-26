@@ -16,7 +16,9 @@ import { ZodPipe } from './dto/zod-pipe.js';
  *
  * A model card submission MUST embed an Intended-Use Statement (the IUS
  * attaches to the submission, never to a dataset). Authenticated via
- * Cognito JWT; the caller's `sub` is recorded as the submitter.
+ * Cognito JWT; the caller's `sub` is recorded as the submitter. Who may read
+ * or move a card depends on its status and submitter, so that check lives in
+ * the service rather than in a role guard.
  */
 @ApiTags('prediction')
 @Controller({ path: 'prediction/model-cards', version: '2' })
@@ -53,8 +55,8 @@ export class PredictionController {
   @ApiOperation({ summary: 'WHO Fig. 7 Model Facts Label for a model card (structured)' })
   @ApiOkResponse({ description: 'The rendered label. 409 while the card is DRAFT.' })
   @UseGuards(CognitoJwtGuard)
-  modelFacts(@Param('slug') slug: string) {
-    return this.prediction.modelFactsLabel(slug);
+  modelFacts(@Param('slug') slug: string, @CurrentUser() user: CognitoAccessTokenPayload) {
+    return this.prediction.modelFactsLabel(slug, user);
   }
 
   @Get(':slug/model-facts.md')
@@ -63,8 +65,8 @@ export class PredictionController {
   @ApiOkResponse({ description: 'Markdown rendering of the label.' })
   @Header('Content-Type', 'text/markdown; charset=utf-8')
   @UseGuards(CognitoJwtGuard)
-  modelFactsMarkdown(@Param('slug') slug: string) {
-    return this.prediction.modelFactsMarkdown(slug);
+  modelFactsMarkdown(@Param('slug') slug: string, @CurrentUser() user: CognitoAccessTokenPayload) {
+    return this.prediction.modelFactsMarkdown(slug, user);
   }
 
   @Get(':slug')
@@ -72,7 +74,7 @@ export class PredictionController {
   @ApiOperation({ summary: 'Fetch a model card by slug' })
   @ApiOkResponse({ description: 'The model card.' })
   @UseGuards(CognitoJwtGuard)
-  get(@Param('slug') slug: string) {
-    return this.prediction.getBySlug(slug);
+  get(@Param('slug') slug: string, @CurrentUser() user: CognitoAccessTokenPayload) {
+    return this.prediction.getBySlug(slug, user);
   }
 }

@@ -138,6 +138,7 @@ export const RoleSchema = z.enum([
   'participant',
   'annotator',
   'reviewer',
+  'evaluation-reviewer',
   'supervisor',
   'regulator',
 ]);
@@ -3346,6 +3347,7 @@ export const PlatformGroupSchema = z.enum([
   'reviewer',
   'arbitration-annotator',
   'expert-reviewer',
+  'evaluation-reviewer',
   'annotator',
   'supervisor',
   'regulator',

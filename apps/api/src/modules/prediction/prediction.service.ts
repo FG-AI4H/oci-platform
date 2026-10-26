@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -119,8 +120,7 @@ export class PredictionService {
     body: ChangeModelCardStatusRequest,
     user: CognitoAccessTokenPayload,
   ): Promise<ModelCardResponse> {
-    const existing = await this.repo.findBySlug(slug);
-    if (!existing) throw new NotFoundException(`Model card '${slug}' not found`);
+    const existing = await this.findVisible(slug, user);
 
     const from = existing.status;
     const to = body.status;
@@ -137,8 +137,25 @@ export class PredictionService {
       );
     }
 
-    const updated = await this.repo.updateStatus(existing.id, to);
+    // Submitting is the submitter's act; publishing and withdrawing are a
+    // reviewer's. Returning a submission to DRAFT is open to either.
     const actorUserId = cognitoSubAsUuid(user.sub);
+    const isSubmitter = existing.submitterUserId === actorUserId;
+    const permitted =
+      to === 'SUBMITTED'
+        ? isSubmitter
+        : to === 'DRAFT'
+          ? isSubmitter || isModelCardReviewer(user)
+          : isModelCardReviewer(user);
+    if (!permitted) {
+      throw new ForbiddenException(
+        to === 'SUBMITTED'
+          ? `Only the submitter may submit model card '${slug}'`
+          : `Moving model card '${slug}' to ${to} requires evaluation-reviewer or admin`,
+      );
+    }
+
+    const updated = await this.repo.updateStatus(existing.id, to);
     await this.audit.emitSync({
       module: 'prediction',
       action: 'modelcard.status.changed',
@@ -165,9 +182,8 @@ export class PredictionService {
    * absence in `gaps` rather than rendering a blank table as if it were a
    * finding of no effect.
    */
-  async modelFactsLabel(slug: string): Promise<ModelFactsLabel> {
-    const row = await this.repo.findBySlug(slug);
-    if (!row) throw new NotFoundException(`Model card '${slug}' not found`);
+  async modelFactsLabel(slug: string, user: CognitoAccessTokenPayload): Promise<ModelFactsLabel> {
+    const row = await this.findVisible(slug, user);
     if (row.status === 'DRAFT') {
       throw new ConflictException(
         `Model card '${slug}' is DRAFT — a Model Facts Label is only rendered once it is submitted or published`,
@@ -180,13 +196,32 @@ export class PredictionService {
     });
   }
 
-  async modelFactsMarkdown(slug: string): Promise<string> {
-    return renderModelFactsMarkdown(await this.modelFactsLabel(slug));
+  async modelFactsMarkdown(slug: string, user: CognitoAccessTokenPayload): Promise<string> {
+    return renderModelFactsMarkdown(await this.modelFactsLabel(slug, user));
   }
 
-  async getBySlug(slug: string): Promise<ModelCardResponse> {
-    const row = await this.repo.findBySlug(slug);
-    if (!row) throw new NotFoundException(`Model card '${slug}' not found`);
-    return toModelCardResponse(row);
+  async getBySlug(slug: string, user: CognitoAccessTokenPayload): Promise<ModelCardResponse> {
+    return toModelCardResponse(await this.findVisible(slug, user));
   }
+
+  /**
+   * A PUBLISHED card is readable by anyone signed in; any other status only by
+   * its submitter and reviewers. Everyone else gets the same 404 as a missing
+   * slug, so an unpublished card's existence doesn't leak.
+   */
+  private async findVisible(slug: string, user: CognitoAccessTokenPayload) {
+    const row = await this.repo.findBySlug(slug);
+    const visible =
+      row !== null &&
+      (row.status === 'PUBLISHED' ||
+        row.submitterUserId === cognitoSubAsUuid(user.sub) ||
+        isModelCardReviewer(user));
+    if (!visible) throw new NotFoundException(`Model card '${slug}' not found`);
+    return row;
+  }
+}
+
+function isModelCardReviewer(user: CognitoAccessTokenPayload): boolean {
+  const groups = (user['cognito:groups'] ?? []) as string[];
+  return groups.includes('evaluation-reviewer') || groups.includes('admin');
 }
