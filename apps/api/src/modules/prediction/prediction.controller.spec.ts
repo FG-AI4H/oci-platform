@@ -30,6 +30,8 @@ const stubJwt = {
 };
 
 const SUBMITTER = { 'x-test-user': 'submitter', 'x-test-groups': 'participant' };
+const SUBMITTER_REVIEWER = { 'x-test-user': 'submitter', 'x-test-groups': 'evaluation-reviewer' };
+const SUBMITTER_ADMIN = { 'x-test-user': 'submitter', 'x-test-groups': 'admin' };
 const STRANGER = { 'x-test-user': 'stranger', 'x-test-groups': 'participant,host' };
 const REVIEWER = { 'x-test-user': 'reviewer-1', 'x-test-groups': 'evaluation-reviewer' };
 const ADMIN = { 'x-test-user': 'admin-1', 'x-test-groups': 'admin' };
@@ -127,13 +129,29 @@ describe('/v2/prediction/model-cards authorization', () => {
       expect((await get(path, STRANGER)).statusCode).toBe(200);
     });
 
+    it('a WITHDRAWN card stays readable by anyone signed in, marked as withdrawn', async () => {
+      repo.findBySlug.mockResolvedValue(cardRow('WITHDRAWN'));
+
+      const card = await get('', STRANGER);
+      expect(card.statusCode).toBe(200);
+      expect(card.json()).toMatchObject({ slug: 'acme-triage-v1', status: 'WITHDRAWN' });
+
+      const label = await get('/model-facts', STRANGER);
+      expect(label.statusCode).toBe(200);
+      expect(label.json()).toMatchObject({ summary: { status: 'WITHDRAWN' } });
+
+      const md = await get('/model-facts.md', STRANGER);
+      expect(md.statusCode).toBe(200);
+      expect(md.body).toContain('**Status** WITHDRAWN');
+    });
+
     it.each(paths)('GET %s 401s without a token', async (path) => {
       repo.findBySlug.mockResolvedValue(cardRow('PUBLISHED'));
 
       expect((await get(path, {})).statusCode).toBe(401);
     });
 
-    it.each(['DRAFT', 'SUBMITTED', 'WITHDRAWN'])(
+    it.each(['DRAFT', 'SUBMITTED'])(
       'a %s card 404s for a stranger on every read',
       async (status) => {
         repo.findBySlug.mockResolvedValue(cardRow(status));
@@ -169,13 +187,16 @@ describe('/v2/prediction/model-cards authorization', () => {
       ['SUBMITTED', 'PUBLISHED', REVIEWER, 201],
       ['SUBMITTED', 'PUBLISHED', ADMIN, 201],
       ['SUBMITTED', 'PUBLISHED', SUBMITTER, 403],
+      ['SUBMITTED', 'PUBLISHED', SUBMITTER_REVIEWER, 403],
+      ['SUBMITTED', 'PUBLISHED', SUBMITTER_ADMIN, 403],
       ['SUBMITTED', 'PUBLISHED', STRANGER, 404],
       ['SUBMITTED', 'DRAFT', SUBMITTER, 201],
       ['SUBMITTED', 'DRAFT', REVIEWER, 201],
       ['SUBMITTED', 'DRAFT', STRANGER, 404],
       ['PUBLISHED', 'WITHDRAWN', REVIEWER, 201],
       ['PUBLISHED', 'WITHDRAWN', ADMIN, 201],
-      ['PUBLISHED', 'WITHDRAWN', SUBMITTER, 403],
+      ['PUBLISHED', 'WITHDRAWN', SUBMITTER, 201],
+      ['PUBLISHED', 'WITHDRAWN', SUBMITTER_ADMIN, 201],
       ['PUBLISHED', 'WITHDRAWN', STRANGER, 403],
     ] as const)('%s → %s by %o: %i', async (from, to, headers, expected) => {
       repo.findBySlug.mockResolvedValue(cardRow(from));

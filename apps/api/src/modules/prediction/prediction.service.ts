@@ -137,21 +137,26 @@ export class PredictionService {
       );
     }
 
-    // Submitting is the submitter's act; publishing and withdrawing are a
-    // reviewer's. Returning a submission to DRAFT is open to either.
+    // Submitting is the submitter's act; publishing is a reviewer's, and review
+    // is in pairs, so the submitter may not publish their own card, admin
+    // included. Returning a submission to DRAFT or withdrawing a published card
+    // is open to either: neither approves anything.
     const actorUserId = cognitoSubAsUuid(user.sub);
     const isSubmitter = existing.submitterUserId === actorUserId;
+    const isReviewer = isModelCardReviewer(user);
     const permitted =
       to === 'SUBMITTED'
         ? isSubmitter
-        : to === 'DRAFT'
-          ? isSubmitter || isModelCardReviewer(user)
-          : isModelCardReviewer(user);
+        : to === 'PUBLISHED'
+          ? isReviewer && !isSubmitter
+          : isSubmitter || isReviewer;
     if (!permitted) {
       throw new ForbiddenException(
         to === 'SUBMITTED'
           ? `Only the submitter may submit model card '${slug}'`
-          : `Moving model card '${slug}' to ${to} requires evaluation-reviewer or admin`,
+          : isSubmitter
+            ? `You submitted model card '${slug}' and cannot publish it`
+            : `Moving model card '${slug}' to ${to} requires evaluation-reviewer or admin`,
       );
     }
 
@@ -205,15 +210,18 @@ export class PredictionService {
   }
 
   /**
-   * A PUBLISHED card is readable by anyone signed in; any other status only by
-   * its submitter and reviewers. Everyone else gets the same 404 as a missing
-   * slug, so an unpublished card's existence doesn't leak.
+   * A PUBLISHED or WITHDRAWN card is readable by anyone signed in: a card that
+   * was once public stays on the record, with its status saying it was
+   * withdrawn. DRAFT and SUBMITTED cards are readable only by the submitter and
+   * reviewers. Everyone else gets the same 404 as a missing slug, so an
+   * unpublished card's existence doesn't leak.
    */
   private async findVisible(slug: string, user: CognitoAccessTokenPayload) {
     const row = await this.repo.findBySlug(slug);
     const visible =
       row !== null &&
       (row.status === 'PUBLISHED' ||
+        row.status === 'WITHDRAWN' ||
         row.submitterUserId === cognitoSubAsUuid(user.sub) ||
         isModelCardReviewer(user));
     if (!visible) throw new NotFoundException(`Model card '${slug}' not found`);

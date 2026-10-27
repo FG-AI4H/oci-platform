@@ -131,6 +131,13 @@ export class RouteRegistryService {
     const route = await this.repo.findRouteBySlug(slug);
     if (!route) throw new NotFoundException(`route '${slug}' not found`);
 
+    // Only the route's submitter (or admin) adds versions to it. A route with
+    // no recorded submitter predates the column, so it is admin-only.
+    const actorUserId = cognitoSubAsUuid(user.sub);
+    if (route.submitterUserId !== actorUserId && !isAdmin(user)) {
+      throw new ForbiddenException(`only the submitter of route '${slug}' may declare versions`);
+    }
+
     // Belt and braces: the controller pipe already parsed these, but the
     // service is the enforcement point named by the spec.
     ThreatModelSchema.parse(body.threatModel);
@@ -141,7 +148,6 @@ export class RouteRegistryService {
       throw new ConflictException(`route '${slug}' already has version ${body.version}`);
     }
 
-    const actorUserId = cognitoSubAsUuid(user.sub);
     const created = await this.repo.createVersion({
       routeId: route.id,
       version: body.version,
@@ -169,9 +175,10 @@ export class RouteRegistryService {
    * decided at the read boundary. A rule enforced by what we declined to store
    * cannot be revised without losing the record it was applied to.
    *
-   * The controller restricts this to `evaluation-reviewer` (or `admin`). Review
-   * is in pairs, so whoever registered the route or declared the version may
-   * not review it, admin included.
+   * Recording an outcome needs `evaluation-reviewer` (or `admin`). Review is in
+   * pairs, so whoever registered the route or declared the version may not
+   * review it, admin included. The one exception is the route's submitter
+   * moving it to WITHDRAWN: withdrawing isn't approving.
    */
   async review(
     slug: string,
@@ -184,13 +191,20 @@ export class RouteRegistryService {
     const row = await this.repo.findVersion(route.id, version);
     if (!row) throw new NotFoundException(`route '${slug}' has no version ${version}`);
 
-    const actorUserId = cognitoSubAsUuid(user.sub);
-    if (actorUserId === route.submitterUserId || actorUserId === row.declaredByUserId) {
-      throw new ForbiddenException(`you submitted route ${slug}@${version} and cannot review it`);
-    }
-
     const from = row.reviewStatus as RouteReviewStatus;
     const to = body.status;
+    const actorUserId = cognitoSubAsUuid(user.sub);
+    const isRouteSubmitter = actorUserId === route.submitterUserId;
+    const submitterWithdrawing = isRouteSubmitter && to === 'WITHDRAWN';
+    if (!submitterWithdrawing) {
+      if (!isEvaluationReviewer(user)) {
+        throw new ForbiddenException('requires one of: evaluation-reviewer');
+      }
+      if (isRouteSubmitter || actorUserId === row.declaredByUserId) {
+        throw new ForbiddenException(`you submitted route ${slug}@${version} and cannot review it`);
+      }
+    }
+
     if (from === to) throw new ConflictException(`version ${version} is already ${from}`);
     if (!canReviewTransition(from, to)) {
       const allowed = allowedReviewTransitionsFrom(from);
@@ -252,4 +266,16 @@ export class RouteRegistryService {
   static declarationsEditable(status: RouteReviewStatus): boolean {
     return !declarationsAreFrozen(status);
   }
+}
+
+function groupsOf(user: CognitoAccessTokenPayload): string[] {
+  return (user['cognito:groups'] ?? []) as string[];
+}
+
+function isAdmin(user: CognitoAccessTokenPayload): boolean {
+  return groupsOf(user).includes('admin');
+}
+
+function isEvaluationReviewer(user: CognitoAccessTokenPayload): boolean {
+  return groupsOf(user).includes('evaluation-reviewer') || isAdmin(user);
 }
