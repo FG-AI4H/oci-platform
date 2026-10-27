@@ -2,7 +2,20 @@
 
 The OCI exposes a JSON-over-HTTPS API at `https://oci.ai4h.net/v2/`. URI versioning is the contract: `/v2/` is the current major. `/v1/` is the legacy Django API and is **never** served from the new platform.
 
-> **Live spec.** OpenAPI is exposed at `/docs` in `dev` and `int` (not `prod`). For the canonical machine-readable spec, fetch `/docs-json` from a non-prod environment.
+> **Live spec.** The OpenAPI document is published at `/docs-json` in every environment, `prod` included. The interactive UI at `/docs` (and the `/docs-yaml` twin) stays `dev` and `int` only. Worker-only routes, such as the sealed-run result callback, are left out of the document.
+
+## Discovery
+
+### `GET /.well-known/oci-capabilities.json`
+
+What this deployment offers, readable by machine. Public, no auth, `Cache-Control: public, max-age=3600`. Shape: `OciCapabilitiesDocument` in `@oci/shared-types`.
+
+- `platform`: `name`, `version`, `environment`, `baseUrl` (from `OCI_API_URL`) and `jurisdiction` (from `OCI_JURISDICTION`, else `null`).
+- `standards`: Croissant 1.1, BIOCroissant, GA4GH DUO and GA4GH Passport as `implements`; ITU-T Y.3176 and Y.3181 as `alignsWith`, not certification.
+- `capabilities`: grouped by the AI for Good Sandbox verbs `discover`, `publish`, `trust` and `operate`. Each entry has `id`, `method`, `path` (OpenAPI template form), `auth` (`none`, `bearer` or `passport`) and a one-line `description`. `operate` is empty, with a note: OCI produces evaluation evidence, not deployments.
+- `links`: the OpenAPI document and the Croissant catalogue index.
+
+Every `path` is checked against the generated OpenAPI document in `capabilities.service.spec.ts`, so renaming or removing a listed route fails CI. Add a new entry to `CAPABILITY_GROUPS` in `apps/api/src/modules/discovery/capabilities.service.ts` when an endpoint serves one of the four verbs.
 
 This page is the human-readable summary. Fields and constraints are derived from the Zod schemas in `@oci/shared-types`; that package is the source of truth.
 
@@ -203,7 +216,7 @@ Auto-mint hooks (no caller-driven endpoint needed):
 
 ### `GET /.well-known/jwks.json`
 
-RFC 7517 — public JWKS so external verifiers can validate visas signed by the platform. Returns `{ keys: PublicJwk[] }`. Mounted at the well-known prefix per JOSE convention.
+RFC 7517 — public JWKS so external verifiers can validate visas signed by the platform. Returns `{ keys: PublicJwk[] }`. Mounted at the root well-known prefix per JOSE convention (version-neutral: not under `/v2/`), so `<issuer>/.well-known/jwks.json` resolves.
 
 ### `GET /v2/me/passport/issued`
 

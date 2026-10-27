@@ -32,8 +32,8 @@ export interface WebStackProps extends cdk.StackProps {
  * Next.js (App Router, RSC) on ECS Fargate, sharing the cluster + ALB with
  * the API. Path-based routing on the existing HTTPS listener:
  *
- *   /v2/* | /health | /docs | /docs/*   →  API target group  (priority 100)
- *   anything else                       →  Web target group  (default)
+ *   /v2/* | /health | /docs* | /.well-known/*  →  API target group  (priority 50)
+ *   anything else                              →  Web target group  (default)
  *
  * Listener default action is overridden via CFN escape hatch — the
  * ApiStack's `ApplicationLoadBalancedFargateService` initially set the
@@ -167,7 +167,7 @@ export class WebStack extends cdk.Stack {
     grantGuardDutyAgentEcrPull(taskDef);
 
     // Catch-all listener rule for everything API paths don't claim. ApiStack
-    // owns the priority-50 rule for /v2/*, /health, /docs/*; this priority-100
+    // owns the priority-50 rule for /v2/*, /health, /docs*, /.well-known/*; this priority-100
     // rule for /* gets everything else (effectively the default route, but
     // without mutating ApiStack's listener defaultAction — keeping the api
     // and web stacks dependency-acyclic).
