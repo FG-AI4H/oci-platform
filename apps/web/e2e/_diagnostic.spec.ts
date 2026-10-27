@@ -288,6 +288,26 @@ test.describe('ui/ux diagnostic', () => {
     sections.push({ label: 'annotation-campaign-calibration', runs });
   });
 
+  test('annotation campaign — instructions (campaign-manager)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'annotation-campaign-instructions', async (page) => {
+      await signInAs(page, 'mgr', 'campaign-manager');
+      await page.goto('/annotation/campaigns/demo-rsna-classification/instructions');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'annotation-campaign-instructions', runs });
+  });
+
+  test('annotation campaign — progress card (task-supervisor)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'annotation-campaign-progress', async (page) => {
+      await signInAs(page, 'sup', 'task-supervisor');
+      await page.goto('/annotation/campaigns/demo-rsna-segmentation');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'annotation-campaign-progress', runs });
+  });
+
   test('admin index (admin)', async ({ browser }) => {
     const runs = await runMatrix(browser, 'admin-index', async (page) => {
       await signInAs(page, 'alice', 'admin');

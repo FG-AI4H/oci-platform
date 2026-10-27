@@ -10,6 +10,7 @@ import {
   Container,
   DefinitionItem,
   DefinitionList,
+  ExternalLinkIcon,
   Section,
 } from '@oci/ui';
 import {
@@ -111,6 +112,17 @@ export default async function AnnotatePage({ params }: PageProps) {
             <Badge tone="info">{GATE_LABEL[gate]}</Badge>
           </div>
           <p className="font-mono text-sm text-[var(--color-muted-foreground)]">{detail.slug}</p>
+          {/* New tab, so the instructions stay open beside the task. */}
+          <Link
+            href={`/annotation/campaigns/${detail.slug}/instructions`}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Instructions (opens in new tab)"
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-primary)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
+          >
+            <span>Instructions</span>
+            <ExternalLinkIcon size={14} aria-hidden="true" />
+          </Link>
         </header>
 
         {detail.status !== 'RUNNING' ? (
@@ -158,7 +170,11 @@ export default async function AnnotatePage({ params }: PageProps) {
                   </time>
                 </DefinitionItem>
               </DefinitionList>
-              <AnnotateForm slug={detail.slug} assignment={assignment} />
+              <AnnotateForm
+                slug={detail.slug}
+                assignment={assignment}
+                instructionsVersion={detail.currentInstructionsVersion}
+              />
             </CardContent>
           </Card>
         ) : (

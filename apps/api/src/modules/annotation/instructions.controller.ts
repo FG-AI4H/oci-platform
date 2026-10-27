@@ -40,7 +40,7 @@ export class InstructionsController {
   @ApiOperation({
     summary: 'Publish (or re-publish) instructions for a campaign (campaign-manager only)',
     description:
-      'Content-hash-keyed. Posting the same markdown body twice returns the same row with created=false. The campaign pointer advances on every successful call.',
+      'Content-hash-keyed. Posting the same markdown body twice returns the same row with created=false. The campaign pointer advances on every successful call. When `baseVersion` is sent and the current version is no longer that version, returns 409 and writes nothing.',
   })
   @UseGuards(CognitoJwtGuard, AnnotationRolesGuard)
   @AnnotationRoles('campaign-manager')

@@ -3234,7 +3234,12 @@ export type GateTransitionAction = z.infer<typeof GateTransitionActionSchema>;
 
 /** Embedded media reference inside instructions markdown. */
 export const InstructionsMediaRefSchema = z.object({
-  url: z.string().url(),
+  /**
+   * https only. The web renders this straight into `<img src>` /
+   * `<video src>`, outside react-markdown's `urlTransform`, so
+   * `javascript:`, `data:`, `file:` and plain `http:` are refused here.
+   */
+  url: z.url({ protocol: /^https$/, error: 'Media URLs must start with https://' }),
   kind: z.enum(['image', 'video']),
   caption: z.string().max(200).optional(),
 });
@@ -3287,6 +3292,13 @@ export const PublishInstructionsRequestSchema = z.object({
       `markdownBody must be ≤ ${INSTRUCTIONS_MARKDOWN_MAX_BYTES} bytes`,
     ),
   mediaUrls: z.array(InstructionsMediaRefSchema).max(20).default([]),
+  /**
+   * The version the editor was based on (`null` when nothing was
+   * published yet). When sent, the API returns 409 if the campaign's
+   * current version has moved on since, so a stale editor can't
+   * silently replace someone else's publish. Omit to skip the check.
+   */
+  baseVersion: z.string().min(1).max(64).nullable().optional(),
 });
 export type PublishInstructionsRequest = z.infer<typeof PublishInstructionsRequestSchema>;
 
