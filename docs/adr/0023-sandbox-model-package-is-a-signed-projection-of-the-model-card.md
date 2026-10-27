@@ -1,6 +1,6 @@
 # ADR-0023: The Sandbox model package is a signed projection of the model card
 
-- **Status:** proposed
+- **Status:** accepted (2026-10-27)
 - **Date:** 2026-10-22
 - **Deciders:** Marc Lecoultre
 - **Tags:** `area:prediction` | `area:platform` | `package:PP` | `phase:C`

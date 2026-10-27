@@ -1,6 +1,6 @@
 # ADR-0024: Identity goes through a generic OIDC verifier; Cognito becomes one configuration
 
-- **Status:** proposed
+- **Status:** accepted (2026-10-27)
 - **Date:** 2026-10-22
 - **Deciders:** Marc Lecoultre
 - **Tags:** `area:platform` | `package:DP` | `security`
