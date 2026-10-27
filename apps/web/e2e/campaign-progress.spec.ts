@@ -164,17 +164,16 @@ test.describe('campaign progress card (#556)', () => {
   });
 
   for (const colorScheme of ['light', 'dark'] as const) {
-    test(`Progress card has no axe violations (${colorScheme})`, async ({ page }) => {
+    test(`campaign page with the Progress card has no axe violations (${colorScheme})`, async ({
+      page,
+    }) => {
       await page.emulateMedia({ colorScheme });
       await signInAs(page, 'mgr', 'campaign-manager');
       await page.goto(PAGE);
       await expect(page.getByRole('img', { name: /burndown/i })).toBeVisible();
 
       const results = await new AxeBuilder({ page })
-        // Scoped to the card this ticket adds. The page has one existing
-        // violation outside it: the danger-variant Lifecycle button fails
-        // colour contrast in dark mode (2.2:1).
-        .include('#campaign-progress')
+        .include('main')
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
         .analyze();
       const summary = results.violations.map((v) => `${v.impact}: ${v.id} (${v.nodes.length})`);
