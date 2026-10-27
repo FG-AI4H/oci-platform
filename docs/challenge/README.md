@@ -7,10 +7,11 @@ the model developer, and without the model being disclosed to the institution ho
 Organized by the WG-Data working group of the Global Initiative on AI for Health (ITU · WHO · WIPO),
 co-organized by CAICT in collaboration with Tsinghua University.
 
-| Document                                                    | For                                                            |
-| ----------------------------------------------------------- | -------------------------------------------------------------- |
-| [FAQ](./faq.md)                                             | Anyone — deadlines, eligibility, submission limits, task data  |
-| [Conformance specification](./conformance-specification.md) | Solution providers — what an entry must satisfy to be accepted |
+| Document                                                                         | For                                                                      |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [FAQ](./faq.md)                                                                  | Anyone — deadlines, eligibility, submission limits, task data            |
+| [Conformance specification](./conformance-specification.md)                      | Solution providers — what an entry must satisfy to be accepted           |
+| [Encrypted-computation integration note](./encrypted-computation-integration.md) | Track B route providers — where a cryptographic route meets the platform |
 
 ## The short version
 

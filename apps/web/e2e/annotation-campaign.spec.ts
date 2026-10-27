@@ -1,5 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import {
+  CampaignOutputLicenseSchema,
+  outputLicenseAllowedForTerms,
+  type CommercialUseTerms,
+} from '@oci/shared-types';
 
 /**
  * E2E coverage for the annotation-campaign create flow.
@@ -24,6 +29,9 @@ import AxeBuilder from '@axe-core/playwright';
 
 /** Seed-data slug — PUBLIC, visible to all roles. */
 const SEED_DATASET_SLUG = 'rsna-pneumonia-2018';
+
+/** Commercial-use terms of `SEED_DATASET_SLUG` in `seed/demo.sql` (#564). */
+const SEED_DATASET_TERMS: CommercialUseTerms = 'NON_COMMERCIAL_ONLY';
 
 /**
  * Text-only seed dataset (#247). Picking it must disable the spatial
@@ -52,6 +60,20 @@ async function selectToolByName(page: Page, namePrefix: string) {
     .getAttribute('value');
   if (!value) throw new Error(`No tool option matching "${namePrefix}"`);
   await select.selectOption(value);
+}
+
+/**
+ * Choose an output licence the dataset's terms allow (#564). The form
+ * defaults to CC-BY-4.0, which the API rejects for a
+ * NON_COMMERCIAL_ONLY dataset; asking the shared rule keeps the test
+ * from drifting when the rule changes.
+ */
+async function selectAllowedLicense(page: Page, terms: CommercialUseTerms) {
+  const license = CampaignOutputLicenseSchema.options.find(
+    (l) => outputLicenseAllowedForTerms(l, terms) === null,
+  );
+  if (!license) throw new Error(`No output license allowed for terms ${terms}`);
+  await page.getByLabel('Output license').selectOption(license);
 }
 
 /** Pick a dataset via the typeahead. */
@@ -119,6 +141,7 @@ test.describe('annotation campaign — header + form', () => {
     await selectToolByName(page, 'MONAI Label');
 
     await page.getByLabel('Annotators per data point').fill('5');
+    await selectAllowedLicense(page, SEED_DATASET_TERMS);
 
     await page.getByRole('button', { name: /create draft/i }).click();
 
@@ -161,6 +184,7 @@ test.describe('annotation campaign — header + form', () => {
     await page.getByRole('radio', { name: 'Classification' }).check();
     await pickDataset(page, SEED_DATASET_SLUG);
     await selectToolByName(page, 'MONAI Label');
+    await selectAllowedLicense(page, SEED_DATASET_TERMS);
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page).toHaveURL(new RegExp(`/annotation/campaigns/${slug}$`));
 
@@ -171,6 +195,7 @@ test.describe('annotation campaign — header + form', () => {
     await page.getByRole('radio', { name: 'Classification' }).check();
     await pickDataset(page, SEED_DATASET_SLUG);
     await selectToolByName(page, 'MONAI Label');
+    await selectAllowedLicense(page, SEED_DATASET_TERMS);
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page.getByText(/already taken/i)).toBeVisible();
   });

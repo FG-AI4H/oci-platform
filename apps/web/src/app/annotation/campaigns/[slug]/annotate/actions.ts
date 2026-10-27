@@ -103,6 +103,11 @@ export async function submitAssignmentAction(
     };
   }
   const slug = String(formData.get('slug') ?? '');
+  // Set by the instructions checkbox; absent when the campaign has no
+  // published instructions.
+  const acknowledgedInstructionsVersion = String(
+    formData.get('acknowledgedInstructionsVersion') ?? '',
+  );
 
   let submission: Record<string, unknown>;
   try {
@@ -135,10 +140,28 @@ export async function submitAssignmentAction(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.accessToken}`,
       },
-      body: JSON.stringify({ submission }),
+      body: JSON.stringify({
+        submission,
+        ...(acknowledgedInstructionsVersion ? { acknowledgedInstructionsVersion } : {}),
+      }),
       cache: 'no-store',
     },
   );
+  if (res.status === 409) {
+    const body = (await res.json().catch(() => null)) as {
+      requiredInstructionsVersion?: unknown;
+    } | null;
+    if (typeof body?.requiredInstructionsVersion === 'string') {
+      // The instructions changed while the annotator worked. Re-render
+      // so the form shows the new version to acknowledge.
+      if (slug) revalidatePath(`/annotation/campaigns/${slug}/annotate`);
+      return {
+        status: 'error',
+        message: `The instructions have changed (now version ${body.requiredInstructionsVersion}). Read the current instructions and confirm them before submitting. Your annotation was kept.`,
+        submission: submissionRaw,
+      };
+    }
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     return {

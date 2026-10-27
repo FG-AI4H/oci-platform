@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState, useTransition } from 'react';
+import { useActionState, useId, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Textarea } from '@oci/ui';
 import type { AssignmentSummary } from '@oci/shared-types';
@@ -17,6 +18,8 @@ const initialSubmit: SubmitState = { status: 'idle' };
 interface AnnotateFormProps {
   slug: string;
   assignment: AssignmentSummary;
+  /** The campaign's current instructions version; null when none is published. */
+  instructionsVersion: string | null;
 }
 
 /**
@@ -33,7 +36,7 @@ interface AnnotateFormProps {
  * placeholder shows a minimal valid example so first-time annotators
  * aren't staring at a blank box.
  */
-export function AnnotateForm({ slug, assignment }: AnnotateFormProps) {
+export function AnnotateForm({ slug, assignment, instructionsVersion }: AnnotateFormProps) {
   const [submitState, submitAction, submitPending] = useActionState(
     submitAssignmentAction,
     initialSubmit,
@@ -41,6 +44,10 @@ export function AnnotateForm({ slug, assignment }: AnnotateFormProps) {
   const [pullState, pullAction, pullPending] = useActionState(pullNextAction, initialPull);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  // The version the annotator confirmed. It stays confirmed across
+  // tasks, and un-confirms itself when a new version is published.
+  const [acknowledged, setAcknowledged] = useState<string | null>(null);
+  const ackId = useId();
 
   // On a successful submit that completed the task, refresh the page
   // so the server picks up the next assignment via the idempotent
@@ -86,6 +93,36 @@ export function AnnotateForm({ slug, assignment }: AnnotateFormProps) {
             className="font-mono"
           />
         </Field>
+        {instructionsVersion ? (
+          // The API refuses a submission that doesn't name the current
+          // instructions version (#230).
+          <div className="rounded-md border border-[var(--color-border)] p-3 text-sm">
+            <label htmlFor={ackId} className="flex items-start gap-2">
+              <input
+                id={ackId}
+                type="checkbox"
+                name="acknowledgedInstructionsVersion"
+                value={instructionsVersion}
+                checked={acknowledged === instructionsVersion}
+                onChange={(e) => setAcknowledged(e.target.checked ? instructionsVersion : null)}
+                required
+                className="mt-0.5 accent-[var(--color-primary)]"
+              />
+              <span>
+                I have read the current instructions, version{' '}
+                <span className="font-mono">{instructionsVersion}</span>.
+              </span>
+            </label>
+            <Link
+              href={`/annotation/campaigns/${slug}/instructions`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ms-6 mt-1 inline-block text-[var(--color-primary)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
+            >
+              Read version {instructionsVersion} (opens in new tab)
+            </Link>
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <Button type="submit" variant="primary" disabled={submitPending || isPending}>
             {submitPending ? 'Submitting…' : 'Submit'}
