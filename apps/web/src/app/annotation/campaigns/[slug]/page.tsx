@@ -21,11 +21,8 @@ import {
 } from '@oci/shared-types';
 import { auth } from '../../../../auth';
 import { apiFetch } from '../../../../lib/api';
-import {
-  canReviewCalibration,
-  isAnnotationWorker,
-  isCampaignManager,
-} from '../../../../lib/groups';
+import { canOverseeCampaign, isAnnotationWorker, isCampaignManager } from '../../../../lib/groups';
+import { ProgressCard } from './progress-card';
 import { TasksCard } from './tasks-card';
 import { TransitionActions } from './transition-actions';
 
@@ -73,11 +70,14 @@ export default async function CampaignDetailPage({ params }: PageProps) {
   const canAnnotate = isAnnotationWorker(session) && detail.status === 'RUNNING';
   const actions = availableCampaignActions(detail.status);
 
-  // Manager + supervisor see the full task list; annotators don't
-  // need it (they have the /annotate route below). 403 from the API
-  // is mapped to an empty list so the rest of the page still renders.
+  // Managers and supervisors read the task list (#556 extends it to
+  // supervisors, matching the endpoint's role guard): both get the
+  // Progress card, only managers the Tasks card with seeding.
+  // Annotators don't need it (they have the /annotate route below).
+  const hasTasks = detail.status === 'RUNNING' || detail.status === 'COMPLETED';
+  const canOversee = canOverseeCampaign(session);
   const tasks =
-    canManage && (detail.status === 'RUNNING' || detail.status === 'COMPLETED')
+    canOversee && hasTasks
       ? ((await apiFetch<TaskSummary[]>(
           `/v2/annotation/campaigns/${encodeURIComponent(detail.slug)}/tasks`,
           { session, revalidate: 0 },
@@ -183,7 +183,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
           </Card>
         ) : null}
 
-        {canReviewCalibration(session) ? (
+        {canOversee ? (
           <Card className="mt-4">
             <CardHeader>
               <CardTitle>Calibration</CardTitle>
@@ -221,7 +221,18 @@ export default async function CampaignDetailPage({ params }: PageProps) {
           </Card>
         ) : null}
 
-        {canManage && (detail.status === 'RUNNING' || detail.status === 'COMPLETED') ? (
+        {canOversee && hasTasks ? (
+          <Card className="mt-4" id="campaign-progress">
+            <CardHeader>
+              <CardTitle>Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ProgressCard tasks={tasks} today={new Date()} />
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {canManage && hasTasks ? (
           <Card className="mt-4">
             <CardHeader>
               <CardTitle>Tasks</CardTitle>

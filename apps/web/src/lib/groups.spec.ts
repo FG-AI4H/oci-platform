@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from 'next-auth';
-import { isAdmin, isHost, userGroups } from './groups';
+import { canOverseeCampaign, isAdmin, isHost, userGroups } from './groups';
 
 function s(accessToken?: string): Session | null {
   if (!accessToken) return null;
@@ -85,5 +85,19 @@ describe('isAdmin', () => {
   });
   it('false for unauthenticated', () => {
     expect(isAdmin(null)).toBe(false);
+  });
+});
+
+describe('canOverseeCampaign', () => {
+  it('allows campaign managers, task supervisors and admins', () => {
+    expect(canOverseeCampaign(s('dev:m:campaign-manager'))).toBe(true);
+    expect(canOverseeCampaign(s('dev:s:task-supervisor'))).toBe(true);
+    expect(canOverseeCampaign(s('dev:a:admin'))).toBe(true);
+  });
+
+  it('refuses annotators and signed-out callers', () => {
+    expect(canOverseeCampaign(s('dev:n:annotator'))).toBe(false);
+    expect(canOverseeCampaign(s('dev:e:expert-reviewer'))).toBe(false);
+    expect(canOverseeCampaign(null)).toBe(false);
   });
 });
