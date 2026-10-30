@@ -117,6 +117,25 @@ export type {
   ScoreAttribution,
 } from './evaluation-route.js';
 
+// Capability document (#590) — `/.well-known/oci-capabilities.json`, grouped
+// by the AI for Good Sandbox's Discover / Publish / Trust / Operate verbs.
+export {
+  CapabilityVerbSchema,
+  CapabilityAuthSchema,
+  CapabilityEntrySchema,
+  CapabilityGroupSchema,
+  CapabilityStandardSchema,
+  OciCapabilitiesDocumentSchema,
+} from './capabilities.js';
+export type {
+  CapabilityVerb,
+  CapabilityAuth,
+  CapabilityEntry,
+  CapabilityGroup,
+  CapabilityStandard,
+  OciCapabilitiesDocument,
+} from './capabilities.js';
+
 // Model Facts Label (#261) — a WHO Fig. 7 rendering of the canonical ModelCard.
 export { ModelFactsLabelSchema, ModelFactsPerformanceEntrySchema } from './model-facts-label.js';
 export type { ModelFactsLabel, ModelFactsPerformanceEntry } from './model-facts-label.js';
