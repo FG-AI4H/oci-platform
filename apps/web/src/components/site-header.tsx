@@ -38,6 +38,8 @@ export async function SiteHeader() {
           </Link>
           <nav aria-label="Primary" className="hidden sm:flex items-center gap-5">
             <NavLink href="/catalog">Catalog</NavLink>
+            {/* Public like /catalog: PUBLISHED model cards only (#591). */}
+            <NavLink href="/models">Models</NavLink>
             {/* Public like /catalog: evaluation tasks and their scores are
                 readable by anyone (ADR-0017); ground truth never is. */}
             <NavLink href="/evaluation">Evaluation</NavLink>

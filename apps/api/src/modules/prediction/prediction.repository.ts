@@ -3,11 +3,16 @@ import type { ModelCard, Prisma } from '@oci/database';
 import type {
   IntendedUseStatement,
   ModelCardResponse,
+  ModelCardSummary,
   ModelCardStatus,
   ModelClass,
   RegulatoryApproval,
 } from '@oci/shared-types';
 import { PrismaService } from '../../prisma.service.js';
+import {
+  searchPublishedModelCards,
+  type SearchPublishedModelCardsArgs,
+} from './repositories/model-card-search.raw.js';
 
 /** Map a DB row to the API response. Json columns are cast back to their
  * validated shapes (the write path guarantees they parsed on the way in). */
@@ -112,6 +117,13 @@ export class PredictionRepository {
 
   async findById(id: string): Promise<ModelCard | null> {
     return this.prisma.client.modelCard.findUnique({ where: { id } });
+  }
+
+  /** Public catalogue search (#591) — PUBLISHED only; see the raw query. */
+  async searchPublished(
+    args: SearchPublishedModelCardsArgs,
+  ): Promise<{ rows: ModelCardSummary[]; total: number }> {
+    return searchPublishedModelCards(this.prisma.client, args);
   }
 
   async updateStatus(id: string, status: ModelCardStatus): Promise<ModelCard> {

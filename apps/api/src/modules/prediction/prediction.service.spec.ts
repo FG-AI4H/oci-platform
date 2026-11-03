@@ -82,6 +82,7 @@ interface RepoMock {
   findBySlug: ReturnType<typeof vi.fn>;
   findById: ReturnType<typeof vi.fn>;
   updateStatus: ReturnType<typeof vi.fn>;
+  searchPublished: ReturnType<typeof vi.fn>;
 }
 
 let repo: RepoMock;
@@ -90,7 +91,13 @@ let audit: { emit: ReturnType<typeof vi.fn>; emitSync: ReturnType<typeof vi.fn> 
 let service: PredictionService;
 
 beforeEach(() => {
-  repo = { create: vi.fn(), findBySlug: vi.fn(), findById: vi.fn(), updateStatus: vi.fn() };
+  repo = {
+    create: vi.fn(),
+    findBySlug: vi.fn(),
+    findById: vi.fn(),
+    updateStatus: vi.fn(),
+    searchPublished: vi.fn(),
+  };
   intendedUse = { validate: vi.fn().mockReturnValue(IUS) };
   audit = { emit: vi.fn().mockResolvedValue(undefined), emitSync: vi.fn().mockResolvedValue({}) };
   service = new PredictionService(
@@ -264,5 +271,87 @@ describe('PredictionService.modelFactsLabel (#261)', () => {
     ]) {
       expect(md).toContain(heading);
     }
+  });
+});
+
+describe('PredictionService — anonymous reads (#591)', () => {
+  it('serves a PUBLISHED card anonymously, without submitterUserId', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
+
+    const out = await service.getBySlug('acme-triage-v1');
+
+    expect(out.slug).toBe('acme-triage-v1');
+    expect(out).not.toHaveProperty('submitterUserId');
+  });
+
+  it.each(['DRAFT', 'SUBMITTED', 'WITHDRAWN'])(
+    '404s an anonymous read of a %s card, same as an unknown slug',
+    async (status) => {
+      repo.findBySlug.mockResolvedValue(dbRow({ status }));
+
+      await expect(service.getBySlug('acme-triage-v1')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.modelFactsLabel('acme-triage-v1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(service.modelFactsMarkdown('acme-triage-v1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    },
+  );
+
+  it('keeps the signed-in rules: the submitter sees their own DRAFT, with submitterUserId', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'DRAFT' }));
+
+    const out = await service.getBySlug('acme-triage-v1', actor());
+
+    expect(out).toHaveProperty('submitterUserId', cognitoSubAsUuid(actor().sub));
+  });
+
+  it('renders the Model Facts Label anonymously for a PUBLISHED card', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
+
+    const label = await service.modelFactsLabel('acme-triage-v1');
+
+    expect(label.modelCardSlug).toBe('acme-triage-v1');
+  });
+});
+
+describe('PredictionService.listPublished (#591)', () => {
+  it('passes the filters through and turns page/limit into an offset', async () => {
+    repo.searchPublished.mockResolvedValue({ rows: [], total: 0 });
+
+    await service.listPublished({
+      q: 'retina',
+      modelClass: 'classical',
+      jurisdiction: 'CH',
+      sort: 'name',
+      page: 3,
+      limit: 10,
+    });
+
+    expect(repo.searchPublished).toHaveBeenCalledWith({
+      q: 'retina',
+      modelClass: 'classical',
+      jurisdiction: 'CH',
+      sort: 'name',
+      offset: 20,
+      limit: 10,
+    });
+  });
+
+  it('reports page metadata from the total', async () => {
+    repo.searchPublished.mockResolvedValue({ rows: [], total: 51 });
+
+    const out = await service.listPublished({ sort: 'recent', page: 2, limit: 25 });
+
+    expect(out).toEqual({ items: [], total: 51, page: 2, pageSize: 25, totalPages: 3 });
+  });
+
+  it('reports one page, not zero, when nothing matches', async () => {
+    repo.searchPublished.mockResolvedValue({ rows: [], total: 0 });
+
+    const out = await service.listPublished({ sort: 'recent', page: 1, limit: 25 });
+
+    expect(out.totalPages).toBe(1);
   });
 });

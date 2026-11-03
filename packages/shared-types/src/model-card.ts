@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { IntendedUseStatementSchema } from './intended-use.js';
-import { ModelClassSchema } from './evaluation-task-kind.js';
+import { ModelClassSchema, type ModelClass } from './evaluation-task-kind.js';
 import { RegulatoryPathwaySchema } from './regulatory-pathway.js';
 
 /**
@@ -17,6 +17,23 @@ const SEMVER = /^\d+\.\d+\.\d+$/;
 // Lowercase alphanumerics + hyphens. Kept as a single character class
 // (no nested quantifier) so it's linear-time — security/detect-unsafe-regex.
 const SLUG = /^[a-z0-9-]+$/;
+
+/** Model card slug — also validates the `:slug` path param on the public reads (#591). */
+export const ModelCardSlugSchema = z.string().min(3).max(120).regex(SLUG);
+export type ModelCardSlug = z.infer<typeof ModelCardSlugSchema>;
+
+/**
+ * Free-text search input. Postgres rejects NUL in text parameters with an
+ * encoding error, which would surface as a 500 on a public endpoint — refuse
+ * it here as a 400 instead.
+ */
+const searchText = (min: number, max: number) =>
+  z
+    .string()
+    .trim()
+    .min(min)
+    .max(max)
+    .refine((s) => !s.includes('\0'), 'NUL characters are not allowed');
 
 /**
  * Model lifecycle (#432, ADR-0019 Decision 3 / CHAI `ReleaseInfo.ReleaseStage`).
@@ -60,7 +77,7 @@ export type RegulatoryApproval = z.infer<typeof RegulatoryApprovalSchema>;
 
 export const CreateModelCardRequestSchema = z
   .object({
-    slug: z.string().min(3).max(120).regex(SLUG),
+    slug: ModelCardSlugSchema,
     intendedUse: IntendedUseStatementSchema,
     /** ADR-0015 door-opener: classical | time-series | foundation | lmm | agent. */
     modelClass: ModelClassSchema,
@@ -121,6 +138,61 @@ export const ModelCardResponseSchema = z.object({
   updatedAt: z.string(),
 });
 export type ModelCardResponse = z.infer<typeof ModelCardResponseSchema>;
+
+/**
+ * A model card as served to an anonymous caller (#591). Same fields as the
+ * signed-in response minus `submitterUserId`: that is a platform account, not
+ * the accountable developer, and must never leave the API in a public read.
+ */
+export const PublicModelCardSchema = ModelCardResponseSchema.omit({ submitterUserId: true });
+export type PublicModelCard = z.infer<typeof PublicModelCardSchema>;
+
+/**
+ * Public model catalogue — `GET /v2/prediction/model-cards` (#591, Y.3176
+ * Discover). Lists PUBLISHED cards only, whoever is asking. Offset
+ * pagination and the sort vocabulary mirror `ListDatasetsQuerySchema`;
+ * `name` sorts by slug, the closest thing a model card has to a name.
+ */
+export const ListModelCardsSortSchema = z.enum(['recent', 'name', 'oldest']);
+export type ListModelCardsSort = z.infer<typeof ListModelCardsSortSchema>;
+
+export const ListModelCardsQuerySchema = z.object({
+  /** Case-insensitive substring over slug, developer, clinical summary and IUS text. */
+  q: searchText(1, 200).optional(),
+  modelClass: ModelClassSchema.optional(),
+  /** Matches `trainingDataJurisdictions` or `regulatoryApproval.jurisdictions`, case-insensitive. */
+  jurisdiction: searchText(2, 64).optional(),
+  sort: ListModelCardsSortSchema.default('recent'),
+  /** 1-indexed page. */
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type ListModelCardsQuery = z.infer<typeof ListModelCardsQuerySchema>;
+
+/** One row of the public model list — enough to scan and pick, nothing private. */
+export interface ModelCardSummary {
+  id: string;
+  slug: string;
+  modelClass: ModelClass;
+  versionMajorMinorPatch: string;
+  modelDeveloper: string | null;
+  clinicalSummary: string | null;
+  medicalPurpose: string;
+  riskTier: string;
+  generativeAi: boolean;
+  trainingDataJurisdictions: string[];
+  regulatoryApprovalStatus: RegulatoryApproval['status'] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListModelCardsResponse {
+  items: ModelCardSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
 
 /** Lifecycle transition request — `POST /v2/prediction/model-cards/:slug/status`. */
 export const ChangeModelCardStatusRequestSchema = z

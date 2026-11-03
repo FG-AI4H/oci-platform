@@ -313,6 +313,33 @@ Caller's audit trail. Most-recent-first list. Excludes the bulky `policyText` fr
 
 Response: `ListPolicyAcceptancesResponse` — `{ items: PolicyAcceptanceReceipt[] }`.
 
+## Model catalogue (#591)
+
+Public discovery of model cards (ITU-T Y.3176 Discover). Writes on `/v2/prediction/model-cards` stay authenticated; the reads below are anonymous. A bearer token, when sent, keeps the signed-in behaviour. The list and the card are advertised under `discover` in the capability document as `model.search` and `model.detail`.
+
+### `GET /v2/prediction/model-cards`
+
+List / search **PUBLISHED** model cards. No other status is ever returned, whoever asks.
+
+| Query param    | Type                                                             | Default  | Notes                                                                                      |
+| -------------- | ---------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `q`            | string (1..200)                                                  | –        | Case-insensitive substring over slug, developer, clinical summary and Intended-Use values. |
+| `modelClass`   | `classical` \| `time-series` \| `foundation` \| `lmm` \| `agent` | –        | Filter.                                                                                    |
+| `jurisdiction` | string (2..64)                                                   | –        | Matches `trainingDataJurisdictions` or `regulatoryApproval.jurisdictions`, any case.       |
+| `sort`         | `recent` \| `name` \| `oldest`                                   | `recent` | `name` sorts by slug.                                                                      |
+| `page`         | int (1-indexed, 1..10000)                                        | 1        | Offset pagination.                                                                         |
+| `limit`        | int (1..100)                                                     | 25       | Page size.                                                                                 |
+
+Response: `ListModelCardsResponse` — `{ items: ModelCardSummary[]; total; page; pageSize; totalPages }`. A summary carries the slug, class, version, developer, clinical summary, medical purpose, risk tier, generative-AI flag, training-data jurisdictions and regulatory-approval status. It never carries `submitterUserId`.
+
+### `GET /v2/prediction/model-cards/:slug`
+
+One model card. Anonymous: PUBLISHED cards only, as `PublicModelCard` (the full card minus `submitterUserId`); any other status is a `404`, the same as an unknown slug. Signed in: unchanged.
+
+### `GET /v2/prediction/model-cards/:slug/model-facts` and `/model-facts.md`
+
+The WHO Fig. 7 Model Facts Label, structured or as Markdown. Anonymous: PUBLISHED cards only, else `404`. Signed in: any non-DRAFT card; DRAFT is a `409`.
+
 ## Errors
 
 The API emits RFC 7807 `application/problem+json` for all error responses:

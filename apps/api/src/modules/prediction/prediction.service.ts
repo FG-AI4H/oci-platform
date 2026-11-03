@@ -8,13 +8,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { AuditEmitter } from '@oci/audit';
+import type { ModelCard } from '@oci/database';
 import type { ModelFactsLabel } from '@oci/shared-types';
 import {
   allowedTransitionsFrom,
   canTransition,
   type ChangeModelCardStatusRequest,
   type CreateModelCardRequest,
+  type ListModelCardsQuery,
+  type ListModelCardsResponse,
   type ModelCardResponse,
+  type PublicModelCard,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
@@ -187,7 +191,7 @@ export class PredictionService {
    * absence in `gaps` rather than rendering a blank table as if it were a
    * finding of no effect.
    */
-  async modelFactsLabel(slug: string, user: CognitoAccessTokenPayload): Promise<ModelFactsLabel> {
+  async modelFactsLabel(slug: string, user?: CognitoAccessTokenPayload): Promise<ModelFactsLabel> {
     const row = await this.findVisible(slug, user);
     if (row.status === 'DRAFT') {
       throw new ConflictException(
@@ -201,30 +205,64 @@ export class PredictionService {
     });
   }
 
-  async modelFactsMarkdown(slug: string, user: CognitoAccessTokenPayload): Promise<string> {
+  async modelFactsMarkdown(slug: string, user?: CognitoAccessTokenPayload): Promise<string> {
     return renderModelFactsMarkdown(await this.modelFactsLabel(slug, user));
   }
 
-  async getBySlug(slug: string, user: CognitoAccessTokenPayload): Promise<ModelCardResponse> {
-    return toModelCardResponse(await this.findVisible(slug, user));
+  /**
+   * Fetch one card. An anonymous caller gets a PUBLISHED card without
+   * `submitterUserId` (#591); a signed-in caller gets the full response.
+   */
+  async getBySlug(
+    slug: string,
+    user?: CognitoAccessTokenPayload,
+  ): Promise<ModelCardResponse | PublicModelCard> {
+    const card = toModelCardResponse(await this.findVisible(slug, user));
+    if (user) return card;
+    const { submitterUserId: _submitter, ...publicCard } = card;
+    return publicCard;
   }
 
   /**
-   * A PUBLISHED or WITHDRAWN card is readable by anyone signed in: a card that
-   * was once public stays on the record, with its status saying it was
-   * withdrawn. DRAFT and SUBMITTED cards are readable only by the submitter and
+   * Public model catalogue (#591, Y.3176 Discover). PUBLISHED cards only,
+   * for every caller — the list is a discovery surface, not a workspace.
+   */
+  async listPublished(query: ListModelCardsQuery): Promise<ListModelCardsResponse> {
+    const { rows, total } = await this.repo.searchPublished({
+      q: query.q,
+      modelClass: query.modelClass,
+      jurisdiction: query.jurisdiction,
+      sort: query.sort,
+      offset: (query.page - 1) * query.limit,
+      limit: query.limit,
+    });
+    return {
+      items: rows,
+      total,
+      page: query.page,
+      pageSize: query.limit,
+      totalPages: Math.max(1, Math.ceil(total / query.limit)),
+    };
+  }
+
+  /**
+   * An anonymous caller sees PUBLISHED cards only (#591). A PUBLISHED or
+   * WITHDRAWN card is readable by anyone signed in: a card that was once
+   * public stays on the record, with its status saying it was withdrawn.
+   * DRAFT and SUBMITTED cards are readable only by the submitter and
    * reviewers. Everyone else gets the same 404 as a missing slug, so an
    * unpublished card's existence doesn't leak.
    */
-  private async findVisible(slug: string, user: CognitoAccessTokenPayload) {
+  private async findVisible(slug: string, user?: CognitoAccessTokenPayload): Promise<ModelCard> {
     const row = await this.repo.findBySlug(slug);
     const visible =
       row !== null &&
       (row.status === 'PUBLISHED' ||
-        row.status === 'WITHDRAWN' ||
-        row.submitterUserId === cognitoSubAsUuid(user.sub) ||
-        isModelCardReviewer(user));
-    if (!visible) throw new NotFoundException(`Model card '${slug}' not found`);
+        (user !== undefined &&
+          (row.status === 'WITHDRAWN' ||
+            row.submitterUserId === cognitoSubAsUuid(user.sub) ||
+            isModelCardReviewer(user))));
+    if (!row || !visible) throw new NotFoundException(`Model card '${slug}' not found`);
     return row;
   }
 }

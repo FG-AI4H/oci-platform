@@ -42,6 +42,7 @@ export function SiteFooter() {
 
         <FooterColumn title="Platform">
           <FooterLink href="/catalog">Catalog</FooterLink>
+          <FooterLink href="/models">Models</FooterLink>
           <FooterLink href="/dashboard">Dashboard</FooterLink>
         </FooterColumn>
 
