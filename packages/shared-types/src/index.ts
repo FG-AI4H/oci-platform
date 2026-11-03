@@ -2147,6 +2147,17 @@ export type CampaignWorkflowConfig = z.infer<typeof CampaignWorkflowConfigSchema
  */
 export const COST_ESTIMATE_MIN_N = 6;
 
+/**
+ * Whether the campaign-create form shows the cost estimate for this N:
+ * a finite N inside [N_ANNOTATORS_MIN, N_ANNOTATORS_MAX] and at least
+ * COST_ESTIMATE_MIN_N. An out-of-range N shows the range error instead.
+ */
+export function shouldShowCostEstimate(n: number): boolean {
+  return (
+    Number.isFinite(n) && n >= N_ANNOTATORS_MIN && n <= N_ANNOTATORS_MAX && n >= COST_ESTIMATE_MIN_N
+  );
+}
+
 export interface CampaignEventsEstimateInput {
   nAnnotators: number;
   /** Expected number of samples. Not persisted; the form asks for it only to feed the estimate. */
