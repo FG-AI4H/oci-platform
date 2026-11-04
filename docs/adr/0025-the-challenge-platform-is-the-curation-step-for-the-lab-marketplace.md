@@ -24,7 +24,7 @@ ADR-0018 assigns EvalAI the participant surface and the OCI the evaluation backe
 3. a **frozen results snapshot** per leaderboard, carrying the evaluation script and test-set digests;
 4. **certificates as Open Badges 3.0 credentials**, tied to an ORCID iD when the holder links one.
 
-The fork signs packages, snapshots and credentials with **its own ES256 platform key**, JWS over the RFC 8785 canonical form, public key published at `/.well-known/jwks.json` on the API host, exactly the mechanism ADR-0023 specifies. When the OCI key lands (#584), OCI-evaluated challenges switch to it; both keys stay in their JWKS so earlier artefacts remain verifiable.
+The fork signs packages, snapshots and credentials with **its own ES256 platform key**, JWS over the RFC 8785 canonical form, public key published at `/.well-known/jwks.json` **on the competition domain**, `competition.aiforgood.itu.int`, exactly the mechanism ADR-0023 specifies. The issuer URL and the JWK Set URL are embedded in every artefact for its lifetime, so they are tied to the identity participants see and not to the hosting domain: `health.aiaudit.org` is a legacy hostname that ADR-0001 retires at the Phase C cutover, and ITU's domain outlives the AWS account. The hosting domain keeps serving the same key set as a fallback. When the OCI key lands (#584), OCI-evaluated challenges switch to it; both keys stay in their JWKS so earlier artefacts remain verifiable.
 
 The ownership table of ADR-0018 gains one row: **evidence artefacts for a challenge are produced where the challenge was scored.** EvalAI-scored challenges publish from EvalAI; OCI-scored challenges publish from the OCI.
 
@@ -43,6 +43,7 @@ Content the Lab or other ITU sites need (challenge lists, leaderboards, archive,
 
 - Two signing keys for a while, and two implementations of the package exporter (Python here, TypeScript in the OCI). The profile JSON is the contract between them and needs a shared test fixture.
 - The EvalAI fork takes on key custody. It has no KMS today; the key lives in Secrets Manager and is loaded at start, which is weaker than KMS signing and must be stated in the verification runbook.
+- The issuer depends on ITU keeping the reverse proxy entry for `competition.aiforgood.itu.int` and leaving `/.well-known/` and `/api/` unfiltered. Keys are matched by `kid`, so a verifier with a cached JWK Set or the hosting-domain fallback is unaffected by an outage, but the issuer identity itself is ITU's to keep.
 - The fork grows further from upstream EvalAI, which is already the case and already accepted (ADR-0018 negative consequences).
 
 ### Neutral
