@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COST_ESTIMATE_MIN_N, estimateCampaignEvents } from './index.js';
+import { COST_ESTIMATE_MIN_N, estimateCampaignEvents, shouldShowCostEstimate } from './index.js';
 
 describe('estimateCampaignEvents (#311)', () => {
   it('reconciles with the ADR-0009 worked example: N=7, 1 000 samples → 7 000 gate-1 events', () => {
@@ -11,10 +11,21 @@ describe('estimateCampaignEvents (#311)', () => {
     });
   });
 
-  it('shows the estimate from N=6, not at N=5', () => {
+  it.each([
+    [5, false],
+    [6, true],
+    [12, true],
+    [13, false],
+  ])('shouldShowCostEstimate(%d) is %s', (n, expected) => {
     expect(COST_ESTIMATE_MIN_N).toBe(6);
-    expect(5 >= COST_ESTIMATE_MIN_N).toBe(false);
-    expect(6 >= COST_ESTIMATE_MIN_N).toBe(true);
+    expect(shouldShowCostEstimate(n)).toBe(expected);
+  });
+
+  it.each([
+    ['NaN (blank input)', Number.NaN],
+    ['infinite', Number.POSITIVE_INFINITY],
+  ])('shouldShowCostEstimate is false for a %s N', (_label, n) => {
+    expect(shouldShowCostEstimate(n)).toBe(false);
   });
 
   it('computes both sides of the threshold boundary', () => {

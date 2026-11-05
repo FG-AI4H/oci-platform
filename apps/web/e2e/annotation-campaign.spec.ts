@@ -279,6 +279,23 @@ test.describe('annotation campaign — cost estimate when N > 5 (#311)', () => {
     await expect(page.getByRole('button', { name: /create draft/i })).toBeEnabled();
   });
 
+  test('formats the numbers in the locale saved in Settings (#582)', async ({ page }) => {
+    // A fresh user per run so the saved locale doesn't leak into the
+    // `cm` user the other tests format as en-GB.
+    await signInAs(page, `cm-locale-${Date.now()}`, 'campaign-manager');
+    await page.goto('/settings');
+    await page.getByLabel('Language').fill('fr-CH');
+    await page.getByRole('button', { name: /save preferences/i }).click();
+    await expect(page).toHaveURL(/\/settings\?saved=1/);
+
+    await page.goto('/annotation/campaigns/new');
+    await page.getByLabel('Annotators per data point').fill('7');
+    await page.getByLabel('Expected number of samples').fill('1000');
+    // fr-CH groups thousands with a (narrow) no-break space, not a comma.
+    await expect(page.getByTestId('cost-estimate-gate1')).toHaveText(/^7\s000$/);
+    await expect(page.getByTestId('cost-estimate-total')).toHaveText(/^9\s000$/);
+  });
+
   test('flags N above 12 inline and drops the estimate', async ({ page }) => {
     await signInAs(page, 'cm', 'campaign-manager');
     await page.goto('/annotation/campaigns/new');
@@ -307,6 +324,7 @@ test.describe('annotation campaign — cost estimate when N > 5 (#311)', () => {
 
       const results = await new AxeBuilder({ page })
         .include('#cost-estimate')
+        .include('#cost-estimate-note')
         .include('#field-n-annotators')
         .include('#field-expected-samples')
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])

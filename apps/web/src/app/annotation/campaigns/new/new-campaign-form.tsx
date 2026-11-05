@@ -8,12 +8,12 @@ import type {
   CampaignTaskKind,
 } from '@oci/shared-types';
 import {
-  COST_ESTIMATE_MIN_N,
   N_ANNOTATORS_MAX,
   N_ANNOTATORS_MIN,
   allowedTaskKindsForModalities,
   estimateCampaignEvents,
   rationaleForDisabledTaskKind,
+  shouldShowCostEstimate,
 } from '@oci/shared-types';
 import { createCampaignAction, type CreateCampaignState } from './actions';
 import { DatasetPicker, type PickedDataset } from './dataset-picker';
@@ -61,6 +61,8 @@ export interface NewCampaignFormProps {
    * page. Null when no preselection is in play.
    */
   preselectedDataset: PreselectedDataset | null;
+  /** BCP-47 tag for the cost-estimate numbers, resolved server-side from the user's preferences (#144). */
+  numberLocale: string;
 }
 
 /**
@@ -86,7 +88,11 @@ export interface NewCampaignFormProps {
  * every kind enabled and the server logs a warning rather than
  * blocking the manager.
  */
-export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCampaignFormProps) {
+export function NewCampaignForm({
+  toolIntegrations,
+  preselectedDataset,
+  numberLocale,
+}: NewCampaignFormProps) {
   const [state, action, pending] = useActionState(createCampaignAction, initial);
   const echoed = state.status === 'error' ? state.values : undefined;
 
@@ -129,7 +135,7 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
   const nShownError = nOutOfRange
     ? `Annotators per data point must be between ${N_ANNOTATORS_MIN} and ${N_ANNOTATORS_MAX}.`
     : nError;
-  const showCostEstimate = Number.isFinite(nValue) && !nOutOfRange && nValue >= COST_ESTIMATE_MIN_N;
+  const showCostEstimate = shouldShowCostEstimate(nValue);
 
   const compatibleTools = taskKind
     ? toolIntegrations.filter((t) => t.supportedTaskKinds.includes(taskKind))
@@ -379,19 +385,32 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
               step={1}
               value={expectedSamples}
               onChange={(e) => setExpectedSamples(e.target.value)}
-              aria-describedby={showCostEstimate ? 'cost-estimate' : undefined}
+              aria-describedby={showCostEstimate ? 'cost-estimate cost-estimate-note' : undefined}
             />
           </Field>
         </div>
 
         {/* Live region stays mounted so screen readers announce the
-            estimate when it appears or changes. Informational only: it
-            never blocks submit (#311, ADR-0009 Decision 2). */}
+            estimate when it appears or changes. It holds only the
+            numbers; the static explanation sits outside it so it isn't
+            re-read on every keystroke. Informational only: it never
+            blocks submit (#311, ADR-0009 Decision 2). */}
         <div aria-live="polite">
           {showCostEstimate ? (
-            <CostEstimateNote nAnnotators={nValue} expectedSamples={expectedSamples} />
+            <CostEstimateNote
+              nAnnotators={nValue}
+              expectedSamples={expectedSamples}
+              locale={numberLocale}
+            />
           ) : null}
         </div>
+        {showCostEstimate ? (
+          <p id="cost-estimate-note" className="text-xs text-[var(--color-muted-foreground)]">
+            Annotation events, not money. Gates 2–3 run only for samples where gate-1 annotators
+            disagree, so their count is an upper bound. This doesn&apos;t block creating the
+            campaign.
+          </p>
+        ) : null}
       </div>
 
       <Field
@@ -430,13 +449,15 @@ export function NewCampaignForm({ toolIntegrations, preselectedDataset }: NewCam
 function CostEstimateNote({
   nAnnotators,
   expectedSamples,
+  locale,
 }: {
   nAnnotators: number;
   expectedSamples: string;
+  locale: string;
 }) {
   const sampleCount = Number.parseInt(expectedSamples, 10);
   const estimate = estimateCampaignEvents({ nAnnotators, sampleCount });
-  const fmt = (n: number) => n.toLocaleString('en-GB');
+  const fmt = (n: number) => n.toLocaleString(locale);
 
   return (
     <div
@@ -466,10 +487,6 @@ function CostEstimateNote({
           of samples to see the projected total.
         </p>
       )}
-      <p className="mt-2 text-xs text-[var(--color-muted-foreground)]">
-        Annotation events, not money. Gates 2–3 run only for samples where gate-1 annotators
-        disagree, so their count is an upper bound. This doesn&apos;t block creating the campaign.
-      </p>
     </div>
   );
 }
