@@ -8,6 +8,7 @@ import { AuditModule } from './modules/audit/audit.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { ConsentModule } from './modules/consent/consent.module.js';
 import { DuaSigningModule } from './modules/dua-signing/dua-signing.module.js';
+import { DiscoveryModule } from './modules/discovery/discovery.module.js';
 import { DuaTemplateModule } from './modules/dua-template/dua-template.module.js';
 import { EvaluationModule } from './modules/evaluation/evaluation.module.js';
 import { RemoteCatalogModule } from './modules/remote-catalog/remote-catalog.module.js';
@@ -44,6 +45,7 @@ import { MeController } from './me/me.controller.js';
     AnnotationModule,
     CatalogModule,
     ConsentModule,
+    DiscoveryModule,
     DuaTemplateModule,
     DuaSigningModule,
     RemoteCatalogModule,

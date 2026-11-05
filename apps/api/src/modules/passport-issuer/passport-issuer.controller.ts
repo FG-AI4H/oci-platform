@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Inject, Param, UseGuards, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   IssuedPassportVisaJwt,
@@ -15,10 +15,12 @@ import { PassportKeyService } from './passport-key.service.js';
  *
  * The endpoint is mounted at the root rather than `/v2/...` because
  * the well-known prefix is what every JOSE/Passport verifier expects
- * by convention; that's the discovery contract.
+ * by convention; that's the discovery contract. `VERSION_NEUTRAL` is what
+ * keeps it there: a bare `@Controller()` picks up the app's default `/v2`
+ * prefix, which served it at `/v2/.well-known/jwks.json` until #590.
  */
 @ApiTags('passport-issuer')
-@Controller()
+@Controller({ version: VERSION_NEUTRAL })
 export class JwksController {
   constructor(@Inject(PassportKeyService) private readonly keyService: PassportKeyService) {}
 
