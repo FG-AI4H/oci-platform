@@ -273,10 +273,18 @@ export class ApiStack extends cdk.Stack {
     // construct sets the listener default to api TG, but WebStack adds a
     // catch-all rule at priority 100 (`/*` → web TG) which would otherwise
     // also match API paths. Priority 50 wins for API URLs.
+    //
+    // `/docs*` covers `/docs`, `/docs/*` and `/docs-json` (the OpenAPI
+    // document, published in every environment — #590). `/.well-known/*`
+    // carries the root discovery documents the API owns: the Passport
+    // issuer JWKS and the capability document. ALB allows five values per
+    // condition, so the patterns are kept to four.
     new elbv2.ApplicationListenerRule(this, 'ApiRoutes', {
       listener: fargate.listener,
       priority: 50,
-      conditions: [elbv2.ListenerCondition.pathPatterns(['/v2/*', '/health', '/docs', '/docs/*'])],
+      conditions: [
+        elbv2.ListenerCondition.pathPatterns(['/v2/*', '/health', '/docs*', '/.well-known/*']),
+      ],
       action: elbv2.ListenerAction.forward([fargate.targetGroup]),
     });
 
