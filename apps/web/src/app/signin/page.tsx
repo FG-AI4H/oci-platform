@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Container } from '@oci/ui';
 import { auth } from '../../auth';
 import { BrandLockup } from '../../components/brand-mark';
+import { safeCallbackUrl } from '../../lib/safe-callback-url';
 import { CognitoSignInButton } from './cognito-signin-button';
 import { LocalSignInForm } from './local-signin-form';
 
@@ -16,17 +17,6 @@ interface SearchParams {
   error?: string;
   /** `expired`: the API rejected the session's token; sign in again. */
   reason?: string;
-}
-
-const ALLOWED_CALLBACK_PREFIX = '/';
-
-function safeCallbackUrl(raw: string | undefined): string {
-  // Only allow same-origin redirects; an open redirect here would let
-  // an attacker funnel a user to an external site after sign-in.
-  if (!raw || !raw.startsWith(ALLOWED_CALLBACK_PREFIX) || raw.startsWith('//')) {
-    return '/dashboard';
-  }
-  return raw;
 }
 
 export default async function SignInPage({
