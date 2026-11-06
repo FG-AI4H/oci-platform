@@ -8,7 +8,8 @@ import {
   type CreateRouteVersionRequest,
   type ReviewRouteVersionRequest,
 } from '@oci/shared-types';
-import { CognitoJwtGuard } from '../../auth/cognito-jwt.guard.js';
+import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
+import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
 import { ZodPipe } from './dto/zod-pipe.js';
 import { RouteRegistryService } from './route-registry.service.js';
 
@@ -18,7 +19,11 @@ import { RouteRegistryService } from './route-registry.service.js';
  * This is where "register a solution" lands: a route plus at least one version
  * carrying the three declarations. Reads are public — a route's declarations are
  * meant to be inspectable, since a result is reported with the route that
- * produced it. Writes require authentication.
+ * produced it. Writes require authentication; declaring a version also requires
+ * being the route's submitter (or `admin`), and recording a review outcome
+ * requires `evaluation-reviewer` (or `admin`), except that a route's submitter
+ * may withdraw it. Those checks depend on the route, so they live in the
+ * service rather than in a role guard.
  */
 @ApiTags('evaluation-routes')
 @Controller({ path: 'evaluation/routes', version: '2' })
@@ -46,32 +51,41 @@ export class RouteRegistryController {
   @UseGuards(CognitoJwtGuard)
   create(
     @Body(new ZodPipe(CreateEvaluationRouteRequestSchema)) body: CreateEvaluationRouteRequest,
+    @CurrentUser() user: CognitoAccessTokenPayload,
   ) {
-    return this.routes.createRoute(body);
+    return this.routes.createRoute(body, user);
   }
 
   @Post(':slug/versions')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Declare a route version (threat model, disclosure, envelope)' })
-  @ApiOkResponse({ description: 'The declared version, status DECLARED.' })
+  @ApiOkResponse({
+    description:
+      "The declared version, status DECLARED. 403 unless the route's submitter or admin.",
+  })
   @UseGuards(CognitoJwtGuard)
   declare(
     @Param('slug') slug: string,
     @Body(new ZodPipe(CreateRouteVersionRequestSchema)) body: CreateRouteVersionRequest,
+    @CurrentUser() user: CognitoAccessTokenPayload,
   ) {
-    return this.routes.declareVersion(slug, body);
+    return this.routes.declareVersion(slug, body, user);
   }
 
   @Post(':slug/versions/:version/review')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Record a review outcome for a route version' })
-  @ApiOkResponse({ description: 'The updated version.' })
+  @ApiOkResponse({
+    description:
+      "The updated version. 403 for the route's own submitter, except moving it to WITHDRAWN.",
+  })
   @UseGuards(CognitoJwtGuard)
   review(
     @Param('slug') slug: string,
     @Param('version') version: string,
     @Body(new ZodPipe(ReviewRouteVersionRequestSchema)) body: ReviewRouteVersionRequest,
+    @CurrentUser() user: CognitoAccessTokenPayload,
   ) {
-    return this.routes.review(slug, version, body);
+    return this.routes.review(slug, version, body, user);
   }
 }

@@ -150,12 +150,15 @@ describe('WP5 invariant 5 — at most one reference route per mode', () => {
     const svc = new RouteRegistryService(repo as never, audit as never);
 
     await expect(
-      svc.createRoute({
-        slug: 'rival-sealed',
-        name: 'Rival',
-        mode: 'CONTAINER',
-        isReference: true,
-      }),
+      svc.createRoute(
+        {
+          slug: 'rival-sealed',
+          name: 'Rival',
+          mode: 'CONTAINER',
+          isReference: true,
+        },
+        { sub: 'route-owner' } as never,
+      ),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(repo.createRoute).not.toHaveBeenCalled();
   });
