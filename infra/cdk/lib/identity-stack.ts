@@ -22,6 +22,7 @@ const GROUP_PRECEDENCE: Record<PlatformGroup, number> = {
   'task-supervisor': 13,
   reviewer: 15,
   'expert-reviewer': 16,
+  'evaluation-reviewer': 17,
   host: 20,
   'arbitration-annotator': 23,
   annotator: 25,

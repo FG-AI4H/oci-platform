@@ -272,6 +272,7 @@ const PLATFORM_GROUPS: ReadonlySet<PlatformGroup> = new Set([
   'reviewer',
   'arbitration-annotator',
   'expert-reviewer',
+  'evaluation-reviewer',
   'annotator',
   'supervisor',
   'regulator',
