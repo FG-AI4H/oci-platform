@@ -45,6 +45,7 @@ export class RouteRegistryRepository {
     mode: string;
     providerName: string | null;
     isReference: boolean;
+    submitterUserId: string;
   }): Promise<EvaluationRoute> {
     return this.prisma.client.evaluationRoute.create({
       data: {
@@ -53,6 +54,7 @@ export class RouteRegistryRepository {
         mode: args.mode as EvaluationRoute['mode'],
         providerName: args.providerName,
         isReference: args.isReference,
+        submitterUserId: args.submitterUserId,
       },
     });
   }
@@ -69,6 +71,7 @@ export class RouteRegistryRepository {
     threatModel: ThreatModel;
     disclosureProfile: DisclosureProfile;
     operationalEnvelope: OperationalEnvelope;
+    declaredByUserId: string;
   }): Promise<RouteVersion> {
     return this.prisma.client.routeVersion.create({
       data: {
@@ -79,6 +82,7 @@ export class RouteRegistryRepository {
         threatModel: args.threatModel as unknown as Prisma.InputJsonValue,
         disclosureProfile: args.disclosureProfile as unknown as Prisma.InputJsonValue,
         operationalEnvelope: args.operationalEnvelope as unknown as Prisma.InputJsonValue,
+        declaredByUserId: args.declaredByUserId,
       },
     });
   }

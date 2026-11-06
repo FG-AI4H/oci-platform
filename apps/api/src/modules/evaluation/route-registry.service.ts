@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -25,6 +26,8 @@ import {
   type RouteVersionResponse,
   type ThreatModel,
 } from '@oci/shared-types';
+import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
+import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { RouteRegistryRepository } from './route-registry.repository.js';
 
@@ -77,7 +80,10 @@ export class RouteRegistryService {
     @Inject(AUDIT_EMITTER) private readonly audit: AuditEmitter,
   ) {}
 
-  async createRoute(body: CreateEvaluationRouteRequest): Promise<EvaluationRouteResponse> {
+  async createRoute(
+    body: CreateEvaluationRouteRequest,
+    user: CognitoAccessTokenPayload,
+  ): Promise<EvaluationRouteResponse> {
     if (await this.repo.findRouteBySlug(body.slug)) {
       throw new ConflictException(`route '${body.slug}' already exists`);
     }
@@ -91,19 +97,21 @@ export class RouteRegistryService {
         );
       }
     }
+    const actorUserId = cognitoSubAsUuid(user.sub);
     const created = await this.repo.createRoute({
       slug: body.slug,
       name: body.name,
       mode: body.mode,
       providerName: body.providerName ?? null,
       isReference: body.isReference,
+      submitterUserId: actorUserId,
     });
     await this.audit.emitSync({
       module: 'evaluation',
       action: 'route.registered',
       subjectType: 'evaluation-route',
       subjectId: created.id,
-      actorUserId: null,
+      actorUserId,
       payload: { slug: created.slug, mode: created.mode, isReference: created.isReference },
     });
     this.logger.log(`route.registered slug=${created.slug} mode=${created.mode}`);
@@ -118,9 +126,17 @@ export class RouteRegistryService {
   async declareVersion(
     slug: string,
     body: CreateRouteVersionRequest,
+    user: CognitoAccessTokenPayload,
   ): Promise<RouteVersionResponse> {
     const route = await this.repo.findRouteBySlug(slug);
     if (!route) throw new NotFoundException(`route '${slug}' not found`);
+
+    // Only the route's submitter (or admin) adds versions to it. A route with
+    // no recorded submitter predates the column, so it is admin-only.
+    const actorUserId = cognitoSubAsUuid(user.sub);
+    if (route.submitterUserId !== actorUserId && !isAdmin(user)) {
+      throw new ForbiddenException(`only the submitter of route '${slug}' may declare versions`);
+    }
 
     // Belt and braces: the controller pipe already parsed these, but the
     // service is the enforcement point named by the spec.
@@ -138,13 +154,14 @@ export class RouteRegistryService {
       threatModel: body.threatModel,
       disclosureProfile: body.disclosureProfile,
       operationalEnvelope: body.operationalEnvelope,
+      declaredByUserId: actorUserId,
     });
     await this.audit.emitSync({
       module: 'evaluation',
       action: 'route.version.declared',
       subjectType: 'route-version',
       subjectId: created.id,
-      actorUserId: null,
+      actorUserId,
       payload: { routeSlug: slug, version: created.version },
     });
     this.logger.log(`route.version.declared route=${slug} version=${created.version}`);
@@ -157,11 +174,17 @@ export class RouteRegistryService {
    * records the outcome, and what is *rendered* from it is a publication rule
    * decided at the read boundary. A rule enforced by what we declined to store
    * cannot be revised without losing the record it was applied to.
+   *
+   * Recording an outcome needs `evaluation-reviewer` (or `admin`). Review is in
+   * pairs, so whoever registered the route or declared the version may not
+   * review it, admin included. The one exception is the route's submitter
+   * moving it to WITHDRAWN: withdrawing isn't approving.
    */
   async review(
     slug: string,
     version: string,
     body: ReviewRouteVersionRequest,
+    user: CognitoAccessTokenPayload,
   ): Promise<RouteVersionResponse> {
     const route = await this.repo.findRouteBySlug(slug);
     if (!route) throw new NotFoundException(`route '${slug}' not found`);
@@ -170,6 +193,18 @@ export class RouteRegistryService {
 
     const from = row.reviewStatus as RouteReviewStatus;
     const to = body.status;
+    const actorUserId = cognitoSubAsUuid(user.sub);
+    const isRouteSubmitter = actorUserId === route.submitterUserId;
+    const submitterWithdrawing = isRouteSubmitter && to === 'WITHDRAWN';
+    if (!submitterWithdrawing) {
+      if (!isEvaluationReviewer(user)) {
+        throw new ForbiddenException('requires one of: evaluation-reviewer');
+      }
+      if (isRouteSubmitter || actorUserId === row.declaredByUserId) {
+        throw new ForbiddenException(`you submitted route ${slug}@${version} and cannot review it`);
+      }
+    }
+
     if (from === to) throw new ConflictException(`version ${version} is already ${from}`);
     if (!canReviewTransition(from, to)) {
       const allowed = allowedReviewTransitionsFrom(from);
@@ -191,7 +226,7 @@ export class RouteRegistryService {
       action: 'route.version.reviewed',
       subjectType: 'route-version',
       subjectId: updated.id,
-      actorUserId: null,
+      actorUserId,
       payload: { routeSlug: slug, version, from, to },
     });
     this.logger.log(`route.version.reviewed route=${slug} version=${version} ${from}->${to}`);
@@ -231,4 +266,16 @@ export class RouteRegistryService {
   static declarationsEditable(status: RouteReviewStatus): boolean {
     return !declarationsAreFrozen(status);
   }
+}
+
+function groupsOf(user: CognitoAccessTokenPayload): string[] {
+  return (user['cognito:groups'] ?? []) as string[];
+}
+
+function isAdmin(user: CognitoAccessTokenPayload): boolean {
+  return groupsOf(user).includes('admin');
+}
+
+function isEvaluationReviewer(user: CognitoAccessTokenPayload): boolean {
+  return groupsOf(user).includes('evaluation-reviewer') || isAdmin(user);
 }
