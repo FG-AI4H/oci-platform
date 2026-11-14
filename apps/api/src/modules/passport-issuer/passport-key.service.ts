@@ -1,8 +1,19 @@
-import { generateKeyPairSync, createPrivateKey, type KeyObject } from 'node:crypto';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  createPrivateKey,
+  createPublicKey,
+  generateKeyPairSync,
+  type KeyObject,
+} from 'node:crypto';
+import { GetPublicKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { Inject, Injectable, Logger, Optional, type OnApplicationBootstrap } from '@nestjs/common';
 import type { PublicJwk } from '@oci/shared-types';
-import { exportJWK } from 'jose';
+import { calculateJwkThumbprint, exportJWK } from 'jose';
 import { PrismaService } from '../../prisma.service.js';
+
+/** The slice of the KMS client this service calls; injectable for tests. */
+export interface KmsPublicKeyPort {
+  send(command: GetPublicKeyCommand): Promise<{ PublicKey?: Uint8Array; KeySpec?: string }>;
+}
 
 /**
  * Passport signing-key registry (#127).
@@ -38,17 +49,47 @@ export interface SigningKeyMaterial {
   publicJwk: PublicJwk;
 }
 
-@Injectable()
-export class PassportKeyService {
-  private readonly logger = new Logger(PassportKeyService.name);
+/** Injection token for the KMS port; absent in Nest wiring, so the service builds its own client. */
+export const KMS_PUBLIC_KEY_PORT = Symbol('KMS_PUBLIC_KEY_PORT');
 
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+@Injectable()
+export class PassportKeyService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(PassportKeyService.name);
+  private readonly kmsKeyArn: string | null;
+  private readonly kms: KmsPublicKeyPort | null;
+
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Optional() @Inject(KMS_PUBLIC_KEY_PORT) kms?: KmsPublicKeyPort,
+  ) {
+    this.kmsKeyArn = process.env.OCI_PASSPORT_ISSUER_KMS_KEY_ARN || null;
+    this.kms = kms ?? (this.kmsKeyArn ? new KMSClient({}) : null);
+  }
 
   /**
-   * Returns the current ACTIVE key, seeding a local keypair on first
-   * boot when none exists. Production deployments should provision
-   * the KMS key out-of-band and seed the row via deploy script; the
-   * local-dev seeding is a convenience that's refused in prod.
+   * Seed the KMS-backed row at boot (#620), so `/.well-known/jwks.json`
+   * publishes the key before the first visa is issued. A failure here is
+   * logged, not thrown: the API still serves everything else, and the next
+   * `ensureActiveKey()` call retries.
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    if (!this.kmsKeyArn) return;
+    try {
+      const key = await this.ensureActiveKey();
+      this.logger.log(`Passport signing key ready (kid=${key.kid})`);
+    } catch (err) {
+      this.logger.error(
+        `Passport signing key not ready at boot: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /**
+   * Returns the current ACTIVE key. When none exists:
+   *   - with `OCI_PASSPORT_ISSUER_KMS_KEY_ARN` set (deployed environments),
+   *     seeds a row from the KMS key's public half (#620);
+   *   - otherwise, outside production, generates an ephemeral local keypair;
+   *   - otherwise throws.
    */
   async ensureActiveKey(): Promise<SigningKeyMaterial> {
     const existing = await this.prisma.client.passportSigningKey.findFirst({
@@ -57,9 +98,11 @@ export class PassportKeyService {
     });
     if (existing) return rowToMaterial(existing as unknown as SigningKeyRow);
 
+    if (this.kmsKeyArn) return this.seedKmsKey(this.kmsKeyArn);
+
     if (process.env.NODE_ENV === 'production') {
       throw new Error(
-        'No ACTIVE Passport signing key configured. Provision via KMS and seed `passport_signing_keys` before boot.',
+        'No ACTIVE Passport signing key configured. Set OCI_PASSPORT_ISSUER_KMS_KEY_ARN to an RSA_2048 SIGN_VERIFY KMS key.',
       );
     }
 
@@ -88,6 +131,44 @@ export class PassportKeyService {
   }
 
   // --- internals --------------------------------------------------------
+
+  /**
+   * Insert the ACTIVE row for a KMS key: public JWK from `GetPublicKey`,
+   * `kid` = its RFC 7638 thumbprint. The thumbprint makes the insert
+   * idempotent: two API tasks booting together compute the same `kid`, and
+   * the loser of the race reads the winner's row instead of adding a second
+   * ACTIVE key.
+   */
+  private async seedKmsKey(arn: string): Promise<SigningKeyMaterial> {
+    if (!this.kms) throw new Error('KMS client not available');
+    const out = await this.kms.send(new GetPublicKeyCommand({ KeyId: arn }));
+    if (!out.PublicKey) throw new Error(`KMS GetPublicKey returned no key for ${arn}`);
+    if (out.KeySpec && !out.KeySpec.startsWith('RSA_')) {
+      // signWithKms signs with RSASSA_PKCS1_V1_5_SHA_256, so the key must be RSA.
+      throw new Error(`Passport signing key must be RSA, got ${out.KeySpec}`);
+    }
+    const publicKey = createPublicKey({
+      key: Buffer.from(out.PublicKey),
+      format: 'der',
+      type: 'spki',
+    });
+    const alg = 'RS256';
+    const kid = await calculateJwkThumbprint(await exportJWK(publicKey));
+    const publicJwk = await jwkFromKeyObject(publicKey, kid, alg);
+
+    try {
+      const row = await this.prisma.client.passportSigningKey.create({
+        data: { kid, alg, kmsKeyArn: arn, publicJwk: publicJwk as never, status: 'ACTIVE' },
+      });
+      this.logger.log(`Seeded KMS-backed Passport signing key (kid=${kid})`);
+      return rowToMaterial(row as unknown as SigningKeyRow);
+    } catch (err) {
+      if ((err as { code?: string }).code !== 'P2002') throw err;
+      const row = await this.prisma.client.passportSigningKey.findUnique({ where: { kid } });
+      if (!row) throw err;
+      return rowToMaterial(row as unknown as SigningKeyRow);
+    }
+  }
 
   private async seedLocalKey(): Promise<SigningKeyMaterial> {
     const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
