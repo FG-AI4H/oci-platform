@@ -334,7 +334,9 @@ Response: `ListModelCardsResponse` — `{ items: ModelCardSummary[]; total; page
 
 ### `GET /v2/prediction/model-cards/:slug`
 
-One model card. Anonymous: PUBLISHED cards only, as `PublicModelCard` (the full card minus `submitterUserId`); any other status is a `404`, the same as an unknown slug. Signed in: unchanged.
+One model card. Anonymous: PUBLISHED cards only; any other status is a `404`, the same as an unknown slug. Signed in: PUBLISHED and WITHDRAWN cards, plus DRAFT and SUBMITTED for the submitter and reviewers.
+
+Who sees which shape: the submitter, `evaluation-reviewer` and `admin` get the full `ModelCardResponse`. Everyone else, signed in or not, gets `PublicModelCard`, an allowlist that leaves out `submitterUserId`, `securityPosture`, `trainingDataLineage`, `parentModelCardId` and `changeJustification`. A field added to the card later stays private until it is added to the allowlist.
 
 ### `GET /v2/prediction/model-cards/:slug/model-facts` and `/model-facts.md`
 

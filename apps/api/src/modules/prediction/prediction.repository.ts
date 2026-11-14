@@ -6,6 +6,7 @@ import type {
   ModelCardSummary,
   ModelCardStatus,
   ModelClass,
+  PublicModelCard,
   RegulatoryApproval,
 } from '@oci/shared-types';
 import { PrismaService } from '../../prisma.service.js';
@@ -43,6 +44,37 @@ export function toModelCardResponse(row: ModelCard): ModelCardResponse {
     securityPosture: row.securityPosture,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * The public card (#591): named fields only, matching the allowlist in
+ * `PublicModelCardSchema`. Built field by field rather than by deleting from the
+ * full card, so a field added to `ModelCardResponse` later is not published by
+ * default.
+ */
+export function toPublicModelCard(card: ModelCardResponse): PublicModelCard {
+  return {
+    id: card.id,
+    slug: card.slug,
+    intendedUse: card.intendedUse,
+    modelClass: card.modelClass,
+    architectureSummary: card.architectureSummary,
+    versionMajorMinorPatch: card.versionMajorMinorPatch,
+    materialChange: card.materialChange,
+    trainingDataJurisdictions: card.trainingDataJurisdictions,
+    generativeAi: card.generativeAi,
+    lmmSpecificLimitations: card.lmmSpecificLimitations,
+    status: card.status,
+    modelDeveloper: card.modelDeveloper,
+    developerContact: card.developerContact,
+    clinicalSummary: card.clinicalSummary,
+    regulatoryApproval: card.regulatoryApproval,
+    knownBiasesOrEthicalConsiderations: card.knownBiasesOrEthicalConsiderations,
+    biasMitigationApproaches: card.biasMitigationApproaches,
+    ongoingMaintenance: card.ongoingMaintenance,
+    createdAt: card.createdAt,
+    updatedAt: card.updatedAt,
   };
 }
 

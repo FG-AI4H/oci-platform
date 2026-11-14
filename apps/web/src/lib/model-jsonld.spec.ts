@@ -15,10 +15,7 @@ const card: PublicModelCard = {
   },
   modelClass: 'foundation',
   architectureSummary: 'Vision transformer.',
-  trainingDataLineage: {},
-  parentModelCardId: null,
   versionMajorMinorPatch: '2.0.1',
-  changeJustification: null,
   materialChange: false,
   trainingDataJurisdictions: ['US'],
   generativeAi: false,
@@ -31,7 +28,6 @@ const card: PublicModelCard = {
   knownBiasesOrEthicalConsiderations: null,
   biasMitigationApproaches: null,
   ongoingMaintenance: null,
-  securityPosture: null,
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-11-01T00:00:00.000Z',
 };

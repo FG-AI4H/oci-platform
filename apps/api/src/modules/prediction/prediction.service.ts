@@ -24,7 +24,11 @@ import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { IntendedUseService } from '../intended-use/intended-use.service.js';
-import { PredictionRepository, toModelCardResponse } from './prediction.repository.js';
+import {
+  PredictionRepository,
+  toModelCardResponse,
+  toPublicModelCard,
+} from './prediction.repository.js';
 import { buildModelFactsLabel } from './renderers/model-facts-label.js';
 import { renderModelFactsMarkdown } from './renderers/render-model-facts-markdown.js';
 
@@ -210,17 +214,21 @@ export class PredictionService {
   }
 
   /**
-   * Fetch one card. An anonymous caller gets a PUBLISHED card without
-   * `submitterUserId` (#591); a signed-in caller gets the full response.
+   * Fetch one card. The submitter, reviewers and admin get the full card;
+   * everyone else, signed in or not, gets the public card (#591). Signing in
+   * doesn't make a field any less public: anyone can register an account and
+   * read a PUBLISHED card.
    */
   async getBySlug(
     slug: string,
     user?: CognitoAccessTokenPayload,
   ): Promise<ModelCardResponse | PublicModelCard> {
-    const card = toModelCardResponse(await this.findVisible(slug, user));
-    if (user) return card;
-    const { submitterUserId: _submitter, ...publicCard } = card;
-    return publicCard;
+    const row = await this.findVisible(slug, user);
+    const card = toModelCardResponse(row);
+    const privileged =
+      user !== undefined &&
+      (row.submitterUserId === cognitoSubAsUuid(user.sub) || isModelCardReviewer(user));
+    return privileged ? card : toPublicModelCard(card);
   }
 
   /**

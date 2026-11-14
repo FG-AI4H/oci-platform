@@ -1,6 +1,10 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import type { AuditEmitter } from '@oci/audit';
-import type { CreateModelCardRequest, IntendedUseStatement } from '@oci/shared-types';
+import {
+  PublicModelCardSchema,
+  type CreateModelCardRequest,
+  type IntendedUseStatement,
+} from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
@@ -274,14 +278,61 @@ describe('PredictionService.modelFactsLabel (#261)', () => {
   });
 });
 
-describe('PredictionService — anonymous reads (#591)', () => {
-  it('serves a PUBLISHED card anonymously, without submitterUserId', async () => {
-    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
+/** Fields kept off the public card (#591); given values so their absence is meaningful. */
+const PRIVATE_VALUES = {
+  securityPosture: 'Pen-tested quarterly; model weights encrypted at rest.',
+  trainingDataLineage: { source: 's3://internal-bucket/training' },
+  parentModelCardId: '22222222-2222-2222-2222-222222222222',
+  changeJustification: 'Internal: retrained after reviewer feedback.',
+};
+const PRIVATE_KEYS = ['submitterUserId', ...Object.keys(PRIVATE_VALUES)];
+const PUBLIC_KEYS = Object.keys(PublicModelCardSchema.shape).sort();
+
+function stranger(): CognitoAccessTokenPayload {
+  return {
+    sub: 'stranger-sub',
+    'cognito:groups': ['participant'],
+  } as unknown as CognitoAccessTokenPayload;
+}
+
+function reviewer(group: string): CognitoAccessTokenPayload {
+  return { sub: 'reviewer-sub', 'cognito:groups': [group] } as unknown as CognitoAccessTokenPayload;
+}
+
+describe('PredictionService — public reads (#591)', () => {
+  it('serves a PUBLISHED card anonymously as the public card', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED', ...PRIVATE_VALUES }));
 
     const out = await service.getBySlug('acme-triage-v1');
 
     expect(out.slug).toBe('acme-triage-v1');
-    expect(out).not.toHaveProperty('submitterUserId');
+    expect(Object.keys(out).sort()).toEqual(PUBLIC_KEYS);
+  });
+
+  it('serves a signed-in stranger the public card too', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED', ...PRIVATE_VALUES }));
+
+    const out = await service.getBySlug('acme-triage-v1', stranger());
+
+    expect(Object.keys(out).sort()).toEqual(PUBLIC_KEYS);
+    for (const key of PRIVATE_KEYS) expect(out).not.toHaveProperty(key);
+    // The CHAI developer-contact disclosure is meant to be published.
+    expect(out).toHaveProperty('developerContact', 'regulatory@acme.example');
+  });
+
+  it.each([
+    ['submitter', () => actor()],
+    ['evaluation-reviewer', () => reviewer('evaluation-reviewer')],
+    ['admin', () => reviewer('admin')],
+  ])('serves the %s the full card', async (_who, who) => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED', ...PRIVATE_VALUES }));
+
+    const out = await service.getBySlug('acme-triage-v1', who());
+
+    expect(out).toMatchObject({
+      submitterUserId: cognitoSubAsUuid(actor().sub),
+      ...PRIVATE_VALUES,
+    });
   });
 
   it.each(['DRAFT', 'SUBMITTED', 'WITHDRAWN'])(

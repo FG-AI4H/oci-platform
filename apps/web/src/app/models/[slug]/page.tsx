@@ -181,9 +181,6 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
                     {card.biasMitigationApproaches}
                   </DefinitionItem>
                 ) : null}
-                {card.securityPosture ? (
-                  <DefinitionItem term="Security posture">{card.securityPosture}</DefinitionItem>
-                ) : null}
               </DefinitionList>
             </CardContent>
           </Card>

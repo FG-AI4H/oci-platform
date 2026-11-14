@@ -140,11 +140,39 @@ export const ModelCardResponseSchema = z.object({
 export type ModelCardResponse = z.infer<typeof ModelCardResponseSchema>;
 
 /**
- * A model card as served to an anonymous caller (#591). Same fields as the
- * signed-in response minus `submitterUserId`: that is a platform account, not
- * the accountable developer, and must never leave the API in a public read.
+ * A model card as served to anyone who is not its submitter, a reviewer or an
+ * admin, signed in or not (#591). An allowlist, not a strip list: a field added
+ * to the card later stays private until someone decides to publish it.
+ *
+ * Left out on purpose: `submitterUserId` (a platform account, not the
+ * accountable developer), `securityPosture` (a guide for an attacker),
+ * `trainingDataLineage` (free-form, can hold internal IDs and URLs),
+ * `parentModelCardId` (may point at a card never published) and
+ * `changeJustification` (a note for reviewers). `developerContact` stays: it is
+ * the CHAI developer-contact disclosure, meant to be published.
  */
-export const PublicModelCardSchema = ModelCardResponseSchema.omit({ submitterUserId: true });
+export const PublicModelCardSchema = ModelCardResponseSchema.pick({
+  id: true,
+  slug: true,
+  intendedUse: true,
+  modelClass: true,
+  architectureSummary: true,
+  versionMajorMinorPatch: true,
+  materialChange: true,
+  trainingDataJurisdictions: true,
+  generativeAi: true,
+  lmmSpecificLimitations: true,
+  status: true,
+  modelDeveloper: true,
+  developerContact: true,
+  clinicalSummary: true,
+  regulatoryApproval: true,
+  knownBiasesOrEthicalConsiderations: true,
+  biasMitigationApproaches: true,
+  ongoingMaintenance: true,
+  createdAt: true,
+  updatedAt: true,
+});
 export type PublicModelCard = z.infer<typeof PublicModelCardSchema>;
 
 /**

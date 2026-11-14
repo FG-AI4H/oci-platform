@@ -162,11 +162,14 @@ describe('/v2/prediction/model-cards authorization', () => {
       expect((await get(path, {})).statusCode).toBe(200);
     });
 
-    it('an anonymous card read never carries submitterUserId (#591)', async () => {
+    it('only the submitter, reviewers and admin get submitterUserId (#591)', async () => {
       repo.findBySlug.mockResolvedValue(cardRow('PUBLISHED'));
 
       expect((await get('', {})).json()).not.toHaveProperty('submitterUserId');
-      expect((await get('', STRANGER)).json()).toHaveProperty('submitterUserId');
+      expect((await get('', STRANGER)).json()).not.toHaveProperty('submitterUserId');
+      for (const who of [SUBMITTER, REVIEWER, ADMIN]) {
+        expect((await get('', who)).json()).toHaveProperty('submitterUserId');
+      }
     });
 
     it.each(['DRAFT', 'SUBMITTED', 'WITHDRAWN'])(
