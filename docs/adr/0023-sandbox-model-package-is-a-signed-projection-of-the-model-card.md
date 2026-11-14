@@ -1,6 +1,6 @@
 # ADR-0023: The Sandbox model package is a signed projection of the model card
 
-- **Status:** accepted (2026-10-27)
+- **Status:** accepted (2026-10-27), amended 2026-11-14 (profile name and signature member, see D5 and D6)
 - **Date:** 2026-10-22
 - **Deciders:** Marc Lecoultre
 - **Tags:** `area:prediction` | `area:platform` | `package:PP` | `phase:C`
@@ -47,11 +47,12 @@ Nothing about a model is signed today. Datasets have a manifest hash, submission
 
 4. **Sovereignty is derived, not just declared.** Transfer limits are computed from the referenced datasets' BIOCroissant `crossBorderSharingPermitted` and `jurisdictionsEligible`, alongside the card's declared jurisdictions.
 
-5. **Serialisation: JSON with a JSON-LD context.** The Zod schema in `@oci/shared-types` is normative. It carries a `profile` field (`oci-sandbox-model-package/0.1`), and a generated JSON Schema is published for partners. The context maps to schema.org `SoftwareApplication` and references datasets by their Croissant `@id`.
+5. **Serialisation: JSON with a JSON-LD context.** The Zod schema in `@oci/shared-types` is normative. It carries a `profile` field (`aiforgood-sandbox-model-package/0.1`), and a generated JSON Schema is published for partners. The profile belongs to the Sandbox, not to OCI: every platform that issues packages uses the same name, starting with OCI and the AI for Good challenge platform (ADR-0025). It was first written here as `oci-sandbox-model-package/0.1`; no endpoint ever served it, and verifiers reject it. The context maps to schema.org `SoftwareApplication` and references datasets by their Croissant `@id`.
 
 6. **Signing: JWS (RFC 7515), ES256, over the RFC 8785 (JCS) canonical form** of the package without its `signature` member.
    - **The key** is the platform's asymmetric KMS signing key (P-256, the same key as receipts once [#584](https://github.com/FG-AI4H/oci-platform/issues/584) lands). Its public key is published with a `kid` in `/.well-known/jwks.json`.
    - **The signature covers** the image digest and every dataset manifest hash, so verifying the package also pins what it references.
+   - **The signature member** is `{ alg, kid, jws, jcs_sha256 }`: `jws` is a compact JWS whose payload is the canonical bytes, and `jcs_sha256` is the hex SHA-256 of the same bytes. A verifier selects the key by `kid` and fails when no key in the issuer's JWKS matches it, rather than trying every key.
    - **The package carries** `status` and `issuedAt`. A verifier treats a `WITHDRAWN` package as revoked, whatever its signature.
 
 7. **Register:** the transition to `PUBLISHED` writes an audit event (ADR-0014) holding the package's JCS hash. That way the audit chain proves which package was published, and when.
@@ -89,6 +90,7 @@ Nothing about a model is signed today. Datasets have a manifest hash, submission
 
 ## References
 
+- [#612](https://github.com/FG-AI4H/oci-platform/issues/612) challenge platform as curation step (ADR-0025), which issues packages in the same profile
 - [#585](https://github.com/FG-AI4H/oci-platform/issues/585) Sandbox compatibility epic · [#586](https://github.com/FG-AI4H/oci-platform/issues/586) · [#587](https://github.com/FG-AI4H/oci-platform/issues/587) · [#551](https://github.com/FG-AI4H/oci-platform/issues/551)
 - ITU AI for Good Lab, _AI for Good Sandbox_ deck, 2026-10-05 (architecture stack; package and API architecture)
 - ITU-T Y.3176 (ML marketplace integration), Y.3181 (ML sandbox)
