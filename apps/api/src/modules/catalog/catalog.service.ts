@@ -209,6 +209,7 @@ export class CatalogService {
         visibility: req.visibility,
         commercialUseTerms: req.commercialUseTerms,
         commercialClauses: req.commercialClauses ?? null,
+        accessTier: req.accessTier,
       });
     } catch (err: unknown) {
       if (
