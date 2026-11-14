@@ -378,6 +378,7 @@ export class CatalogRepository {
     visibility: DatasetVisibility;
     commercialUseTerms?: CommercialUseTerms;
     commercialClauses?: string | null;
+    accessTier?: AccessTier;
   }): Promise<DatasetRow> {
     return (await this.prisma.client.dataset.create({
       data: {
@@ -391,6 +392,7 @@ export class CatalogRepository {
         ...(data.commercialClauses !== undefined
           ? { commercialClauses: data.commercialClauses }
           : {}),
+        ...(data.accessTier ? { accessTier: data.accessTier } : {}),
       },
     })) as DatasetRow;
   }

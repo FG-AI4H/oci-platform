@@ -636,6 +636,12 @@ export const CreateDatasetRequestSchema = z.object({
   commercialUseTerms: CommercialUseTermsSchema.optional(),
   /** Optional commercial-clauses free-text (#119). Surfaced verbatim on the detail page. */
   commercialClauses: z.string().max(4000).nullable().optional(),
+  /**
+   * Catalogue access tier (ADR-0003 Decision 2): the identity level a
+   * requester needs. The host decides it, like visibility. Omitted → the
+   * DB default `OPEN`.
+   */
+  accessTier: AccessTierSchema.optional(),
 });
 export type CreateDatasetRequest = z.infer<typeof CreateDatasetRequestSchema>;
 

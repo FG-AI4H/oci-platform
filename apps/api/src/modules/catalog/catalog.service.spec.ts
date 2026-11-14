@@ -215,3 +215,35 @@ describe('CatalogService.publishVersion — bio-prov at the dataset row’s tier
     expect(repo.publishVersion).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('CatalogService.create — the host sets the access tier', () => {
+  it('passes the requested tier to the new dataset row, owned by the caller', async () => {
+    const create = vi.fn(async (_data: unknown) => undefined);
+    const svc2 = new CatalogService({ ...repo, create } as unknown as CatalogRepository);
+
+    await svc2.create(
+      { slug: SLUG, name: 'Restricted demo', visibility: 'RESTRICTED', accessTier: 'REGISTERED' },
+      user(HOST_SUB, 'host'),
+    );
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hostId: HOST_SUB,
+        visibility: 'RESTRICTED',
+        accessTier: 'REGISTERED',
+      }),
+    );
+  });
+
+  it('leaves the tier to the database default when the host does not choose one', async () => {
+    const create = vi.fn(async (_data: unknown) => undefined);
+    const svc2 = new CatalogService({ ...repo, create } as unknown as CatalogRepository);
+
+    await svc2.create(
+      { slug: SLUG, name: 'Open demo', visibility: 'PUBLIC' },
+      user(HOST_SUB, 'host'),
+    );
+
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ accessTier: undefined });
+  });
+});

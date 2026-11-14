@@ -1,0 +1,125 @@
+{
+  "methodName": "Lab demo baseline",
+  "predictions": [
+    {
+      "imageId": "IDRiD_001",
+      "grade": 4
+    },
+    {
+      "imageId": "IDRiD_002",
+      "grade": 4
+    },
+    {
+      "imageId": "IDRiD_003",
+      "grade": 4
+    },
+    {
+      "imageId": "IDRiD_004",
+      "grade": 4
+    },
+    {
+      "imageId": "IDRiD_005",
+      "grade": 4
+    },
+    {
+      "imageId": "IDRiD_006",
+      "grade": 2
+    },
+    {
+      "imageId": "IDRiD_007",
+      "grade": 3
+    },
+    {
+      "imageId": "IDRiD_008",
+      "grade": 2
+    },
+    {
+      "imageId": "IDRiD_009",
+      "grade": 2
+    },
+    {
+      "imageId": "IDRiD_010",
+      "grade": 2
+    },
+    {
+      "imageId": "IDRiD_011",
+      "grade": 2
+    },
+    {
+      "imageId": "IDRiD_012",
+      "grade": 2
+    },
+    {
+      "imageId": "IDRiD_013",
+      "grade": 3
+    },
+    {
+      "imageId": "IDRiD_014",
+      "grade": 3
+    },
+    {
+      "imageId": "IDRiD_015",
+      "grade": 3
+    },
+    {
+      "imageId": "IDRiD_016",
+      "grade": 3
+    },
+    {
+      "imageId": "IDRiD_018",
+      "grade": 3
+    },
+    {
+      "imageId": "IDRiD_029",
+      "grade": 0
+    },
+    {
+      "imageId": "IDRiD_030",
+      "grade": 0
+    },
+    {
+      "imageId": "IDRiD_032",
+      "grade": 3
+    },
+    {
+      "imageId": "IDRiD_037",
+      "grade": 0
+    },
+    {
+      "imageId": "IDRiD_038",
+      "grade": 0
+    },
+    {
+      "imageId": "IDRiD_039",
+      "grade": 0
+    },
+    {
+      "imageId": "IDRiD_041",
+      "grade": 0
+    },
+    {
+      "imageId": "IDRiD_043",
+      "grade": 0
+    },
+    {
+      "imageId": "IDRiD_063",
+      "grade": 0
+    },
+    {
+      "imageId": "IDRiD_073",
+      "grade": 1
+    },
+    {
+      "imageId": "IDRiD_074",
+      "grade": 1
+    },
+    {
+      "imageId": "IDRiD_085",
+      "grade": 1
+    },
+    {
+      "imageId": "IDRiD_101",
+      "grade": 1
+    }
+  ]
+}
