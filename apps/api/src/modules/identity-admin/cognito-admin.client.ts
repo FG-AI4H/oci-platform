@@ -106,6 +106,27 @@ export class CognitoAdminClient {
     }
   }
 
+  /**
+   * The user's e-mail if Cognito marks it verified, else null (#656). One
+   * `AdminGetUser` call; no group lookup. Local dev returns null: there the
+   * token's `sub` already is the e-mail.
+   */
+  async getVerifiedEmail(username: string): Promise<string | null> {
+    if (this.isLocal) return null;
+    if (!this.client) throw new Error('Cognito client not initialised');
+    try {
+      const detail = await this.client.send(
+        new AdminGetUserCommand({ UserPoolId: this.userPoolId, Username: username }),
+      );
+      const attributes = detail.UserAttributes ?? [];
+      if (pickAttribute(attributes, 'email_verified') !== 'true') return null;
+      return pickAttribute(attributes, 'email');
+    } catch (err) {
+      if (err instanceof Error && err.name === 'UserNotFoundException') return null;
+      throw err;
+    }
+  }
+
   async addUserToGroup(username: string, group: PlatformGroup): Promise<void> {
     if (this.isLocal) {
       this.addUserToGroupStub(username, group);

@@ -9,6 +9,8 @@ import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CatalogService } from '../catalog/catalog.service.js';
 import { AccessRequestRepository } from './access-request.repository.js';
 import { AccessRequestService } from './access-request.service.js';
+import { RequesterEmailResolver } from './requester-email.resolver.js';
+import type { CognitoAdminClient } from '../identity-admin/cognito-admin.client.js';
 
 // UUID-shaped subs short-circuit the UUIDv5 derivation, so use them
 // in fixtures so equality checks against `hostId` are predictable.
@@ -52,6 +54,7 @@ let catalog: CatalogMock;
 let certification: CertificationMock;
 let orcid: OrcidMock;
 let passport: PassportMock;
+let cognito: { getVerifiedEmail: ReturnType<typeof vi.fn> };
 let service: AccessRequestService;
 
 beforeEach(() => {
@@ -78,6 +81,8 @@ beforeEach(() => {
   orcid = { getMyLink: vi.fn().mockResolvedValue(null) };
   // Default: no Passport visas; tests that need them override per-test.
   passport = { listActiveVisaTypesForUser: vi.fn().mockResolvedValue([]) };
+  // Default: no verified e-mail in the user pool; tests that need one override per-test.
+  cognito = { getVerifiedEmail: vi.fn().mockResolvedValue(null) };
   service = new AccessRequestService(
     repo as unknown as AccessRequestRepository,
     catalog as unknown as CatalogService,
@@ -90,6 +95,7 @@ beforeEach(() => {
       materializeJwt: vi.fn(),
       listIssuedForUser: vi.fn(),
     } as unknown as import('../passport-issuer/passport-issuer.service.js').PassportIssuerService,
+    new RequesterEmailResolver(cognito as unknown as CognitoAdminClient),
   );
 });
 
@@ -254,6 +260,53 @@ describe('AccessRequestService.create', () => {
     // email lifts the score so REGISTERED tier matches.
     const out = await service.create('rsna', validBody, user('researcher@stanford.edu'));
     expect(out.matchStatus).toBe('MATCHED');
+    expect(out.requesterIdentityScore).toBe('EMAIL_DOMAIN_VERIFIED');
+  });
+
+  it('scores a deployed access token by the verified e-mail in the user pool (#656)', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: ['DUO_0000042'],
+      accessTier: 'REGISTERED', // requires EMAIL_DOMAIN_VERIFIED
+      emailDomainAllowlist: [],
+    });
+    repo.create.mockResolvedValue({ id: REQUEST_ID });
+    cognito.getVerifiedEmail.mockResolvedValue('researcher@stanford.edu');
+    // The shape a deployed Cognito access token has: UUID sub, a username,
+    // and no e-mail claim.
+    const deployed = {
+      sub: REQUESTER_SUB,
+      username: 'f3a1c2d4-requester',
+      token_use: 'access',
+      'cognito:groups': [],
+    } as unknown as CognitoAccessTokenPayload;
+
+    const out = await service.create('rsna', validBody, deployed);
+
+    expect(cognito.getVerifiedEmail).toHaveBeenCalledWith('f3a1c2d4-requester');
+    expect(out.matchStatus).toBe('MATCHED');
+    expect(out.requesterIdentityScore).toBe('EMAIL_DOMAIN_VERIFIED');
+  });
+
+  it('applies the dataset e-mail domain allowlist to a deployed access token (#656)', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      duoTerms: ['DUO_0000042'],
+      accessTier: 'REGISTERED',
+      emailDomainAllowlist: ['partner-lab.example'],
+    });
+    repo.create.mockResolvedValue({ id: REQUEST_ID });
+    cognito.getVerifiedEmail.mockResolvedValue('someone@partner-lab.example');
+    const deployed = {
+      sub: REQUESTER_SUB,
+      username: 'requester',
+      token_use: 'access',
+    } as unknown as CognitoAccessTokenPayload;
+
+    const out = await service.create('rsna', validBody, deployed);
+
     expect(out.requesterIdentityScore).toBe('EMAIL_DOMAIN_VERIFIED');
   });
 
