@@ -25,6 +25,7 @@ import { IdentityAdminService } from './identity-admin.service.js';
     IdentityAdminRepository,
     IdentityAdminService,
   ],
-  exports: [IdentityAdminService],
+  // CognitoAdminClient: access-request looks up the requester's verified e-mail (#656).
+  exports: [IdentityAdminService, CognitoAdminClient],
 })
 export class IdentityAdminModule {}
