@@ -1505,7 +1505,7 @@ model AuditEvent {
   payload        Json
   payloadHash    String   @map("payload_hash") /// sha256 of RFC 8785 canonical JSON of `payload`
   previousHash   String?  @map("previous_hash") /// recordHash of the row with the immediately preceding sequence_number; trigger-populated
-  recordHash     String   @map("record_hash") /// sha256 over the pipe-delimited canonical form; trigger-populated
+  recordHash     String   @default("") @map("record_hash") /// sha256 over the pipe-delimited canonical form; trigger-populated; `@default("")` mirrors the column DEFAULT so Prisma accepts the INSERT the trigger then overwrites (#628)
   retentionClass String   @default("standard-7y") @map("retention_class") /// 'short-1y' | 'standard-7y' | 'legal-hold'
 
   @@index([subjectType, subjectId, occurredAt])
