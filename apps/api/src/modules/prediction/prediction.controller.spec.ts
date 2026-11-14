@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CognitoJwtGuard } from '../../auth/cognito-jwt.guard.js';
+import { OptionalCognitoJwtGuard } from '../../auth/optional-cognito-jwt.guard.js';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { IntendedUseService } from '../intended-use/intended-use.service.js';
@@ -26,6 +27,14 @@ const stubJwt = {
     if (!sub) throw new UnauthorizedException();
     req.user = { sub, 'cognito:groups': (req.headers['x-test-groups'] ?? '').split(',') };
     return true;
+  },
+};
+
+/** The public reads (#591): no `x-test-user` means an anonymous caller, not a 401. */
+const stubOptionalJwt = {
+  canActivate(ctx: ExecutionContext) {
+    const req = ctx.switchToHttp().getRequest<{ headers: Record<string, string | undefined> }>();
+    return req.headers['x-test-user'] ? stubJwt.canActivate(ctx) : true;
   },
 };
 
@@ -92,6 +101,8 @@ describe('/v2/prediction/model-cards authorization', () => {
     })
       .overrideGuard(CognitoJwtGuard)
       .useValue(stubJwt)
+      .overrideGuard(OptionalCognitoJwtGuard)
+      .useValue(stubOptionalJwt)
       .compile();
     app = mod.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.enableVersioning({ type: VersioningType.URI, defaultVersion: '2' });
@@ -145,10 +156,39 @@ describe('/v2/prediction/model-cards authorization', () => {
       expect(md.body).toContain('**Status** WITHDRAWN');
     });
 
-    it.each(paths)('GET %s 401s without a token', async (path) => {
+    it.each(paths)('GET %s on a PUBLISHED card is open without a token (#591)', async (path) => {
       repo.findBySlug.mockResolvedValue(cardRow('PUBLISHED'));
 
-      expect((await get(path, {})).statusCode).toBe(401);
+      expect((await get(path, {})).statusCode).toBe(200);
+    });
+
+    it('only the submitter, reviewers and admin get submitterUserId (#591)', async () => {
+      repo.findBySlug.mockResolvedValue(cardRow('PUBLISHED'));
+
+      expect((await get('', {})).json()).not.toHaveProperty('submitterUserId');
+      expect((await get('', STRANGER)).json()).not.toHaveProperty('submitterUserId');
+      for (const who of [SUBMITTER, REVIEWER, ADMIN]) {
+        expect((await get('', who)).json()).toHaveProperty('submitterUserId');
+      }
+    });
+
+    it.each(['DRAFT', 'SUBMITTED', 'WITHDRAWN'])(
+      'a %s card 404s without a token on every read (#591)',
+      async (status) => {
+        repo.findBySlug.mockResolvedValue(cardRow(status));
+
+        for (const path of paths) {
+          const res = await get(path, {});
+          expect(res.statusCode).toBe(404);
+          expect(res.body).not.toContain('Acme');
+        }
+      },
+    );
+
+    it('status changes still 401 without a token', async () => {
+      repo.findBySlug.mockResolvedValue(cardRow('DRAFT'));
+
+      expect((await move('SUBMITTED', {})).statusCode).toBe(401);
     });
 
     it.each(['DRAFT', 'SUBMITTED'])(

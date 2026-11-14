@@ -67,6 +67,12 @@ The catalogue is also indexed by:
 
 A dataset published on the OCI is therefore findable from inside the OCI, from Google, and from any peer that federates with us. You don't have to choose one entry point.
 
+## Finding models
+
+Published models have their own list at `/models` ("Models" in the top navigation). No sign-in needed. Search by name, developer or intended use, then narrow by model class or jurisdiction. Jurisdiction matches either where the training data came from or where the model holds regulatory approval.
+
+Each model page shows the card's public fields and its **Model Facts label**, the WHO one-page summary of what the model is for, how it was validated and when to stop relying on it. Read the label's "Known gaps" box: it says what the label couldn't fill in yet (measured performance, for example), so a blank isn't mistaken for a good result. Drafts and submissions under review are not listed.
+
 ## Troubleshooting
 
 - **"I can't find a dataset I know is on the OCI."** Check the chip — if you're on `Local` and it's federated (or vice versa), it won't show. Try `All`.

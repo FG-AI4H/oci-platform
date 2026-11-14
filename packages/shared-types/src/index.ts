@@ -71,6 +71,10 @@ export {
   ModelCardResponseSchema,
   ModelCardStatusSchema,
   ChangeModelCardStatusRequestSchema,
+  PublicModelCardSchema,
+  ModelCardSlugSchema,
+  ListModelCardsQuerySchema,
+  ListModelCardsSortSchema,
   RegulatoryApprovalSchema,
   allowedTransitionsFrom,
   canTransition,
@@ -81,6 +85,12 @@ export type {
   ModelCardStatus,
   ChangeModelCardStatusRequest,
   RegulatoryApproval,
+  PublicModelCard,
+  ModelCardSlug,
+  ListModelCardsQuery,
+  ListModelCardsSort,
+  ModelCardSummary,
+  ListModelCardsResponse,
 } from './model-card.js';
 
 // EvaluationRoute — privacy-preserving evaluation solutions (WP5, #412, ADR-0018).

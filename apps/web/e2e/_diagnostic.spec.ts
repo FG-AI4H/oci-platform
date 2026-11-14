@@ -174,6 +174,26 @@ test.describe('ui/ux diagnostic', () => {
     sections.push({ label: 'catalog-detail-files', runs });
   });
 
+  test('models list (anonymous)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'models-list', async (page) => {
+      await page.goto('/models');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'models-list', runs });
+  });
+
+  // Targets the seeded demo card that fills every label section (#591):
+  // regulatory approval, biases and maintenance are all populated.
+  test('models detail + Model Facts label (anonymous)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'models-detail', async (page) => {
+      await page.goto('/models/demo-retina-dr-grader');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'models-detail', runs });
+  });
+
   test('evaluation tasks list (anonymous)', async ({ browser }) => {
     const runs = await runMatrix(browser, 'evaluation-list', async (page) => {
       await page.goto('/evaluation');

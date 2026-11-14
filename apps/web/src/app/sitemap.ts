@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import type { ListDatasetsResponse } from '@oci/shared-types';
+import type { ListDatasetsResponse, ListModelCardsResponse } from '@oci/shared-types';
 import { apiFetch } from '../lib/api';
 import { siteUrl } from '../lib/site-url';
 
@@ -24,6 +24,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [
     { url: `${base}/`, changeFrequency: 'weekly', priority: 1 },
     { url: `${base}/catalog`, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${base}/models`, changeFrequency: 'daily', priority: 0.8 },
     { url: `${base}/evaluation`, changeFrequency: 'daily', priority: 0.8 },
   ];
 
@@ -55,6 +56,32 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     if (!response.nextCursor) break;
     cursor = response.nextCursor;
+  }
+
+  // Published model cards (#591). The list endpoint is PUBLISHED-only and
+  // offset-paged, capped at 100 per page.
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    let models: ListModelCardsResponse | null;
+    try {
+      models = await apiFetch<ListModelCardsResponse>(
+        `/v2/prediction/model-cards?limit=100&page=${page}`,
+        { revalidate: 3600 },
+      );
+    } catch {
+      break;
+    }
+    if (!models) break;
+
+    for (const m of models.items) {
+      entries.push({
+        url: `${base}/models/${m.slug}`,
+        lastModified: new Date(m.updatedAt),
+        changeFrequency: 'weekly',
+        priority: 0.6,
+      });
+    }
+
+    if (page >= models.totalPages) break;
   }
 
   return entries;

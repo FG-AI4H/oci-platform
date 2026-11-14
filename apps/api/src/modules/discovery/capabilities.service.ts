@@ -80,6 +80,22 @@ export const CAPABILITY_GROUPS: OciCapabilitiesDocument['capabilities'] = {
         description: 'JSON-LD index of every public, published dataset, for Croissant harvesters.',
       },
       {
+        id: 'model.search',
+        method: 'GET',
+        path: '/v2/prediction/model-cards',
+        auth: 'none',
+        description:
+          'Search and filter published model cards by text, model class and jurisdiction.',
+      },
+      {
+        id: 'model.detail',
+        method: 'GET',
+        path: '/v2/prediction/model-cards/{slug}',
+        auth: 'none',
+        description:
+          'One published model card; its WHO Model Facts label is at {slug}/model-facts.',
+      },
+      {
         id: 'evaluation.task-list',
         method: 'GET',
         path: '/v2/evaluation/tasks',

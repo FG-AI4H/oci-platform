@@ -1,6 +1,10 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import type { AuditEmitter } from '@oci/audit';
-import type { CreateModelCardRequest, IntendedUseStatement } from '@oci/shared-types';
+import {
+  PublicModelCardSchema,
+  type CreateModelCardRequest,
+  type IntendedUseStatement,
+} from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
@@ -82,6 +86,7 @@ interface RepoMock {
   findBySlug: ReturnType<typeof vi.fn>;
   findById: ReturnType<typeof vi.fn>;
   updateStatus: ReturnType<typeof vi.fn>;
+  searchPublished: ReturnType<typeof vi.fn>;
 }
 
 let repo: RepoMock;
@@ -90,7 +95,13 @@ let audit: { emit: ReturnType<typeof vi.fn>; emitSync: ReturnType<typeof vi.fn> 
 let service: PredictionService;
 
 beforeEach(() => {
-  repo = { create: vi.fn(), findBySlug: vi.fn(), findById: vi.fn(), updateStatus: vi.fn() };
+  repo = {
+    create: vi.fn(),
+    findBySlug: vi.fn(),
+    findById: vi.fn(),
+    updateStatus: vi.fn(),
+    searchPublished: vi.fn(),
+  };
   intendedUse = { validate: vi.fn().mockReturnValue(IUS) };
   audit = { emit: vi.fn().mockResolvedValue(undefined), emitSync: vi.fn().mockResolvedValue({}) };
   service = new PredictionService(
@@ -264,5 +275,134 @@ describe('PredictionService.modelFactsLabel (#261)', () => {
     ]) {
       expect(md).toContain(heading);
     }
+  });
+});
+
+/** Fields kept off the public card (#591); given values so their absence is meaningful. */
+const PRIVATE_VALUES = {
+  securityPosture: 'Pen-tested quarterly; model weights encrypted at rest.',
+  trainingDataLineage: { source: 's3://internal-bucket/training' },
+  parentModelCardId: '22222222-2222-2222-2222-222222222222',
+  changeJustification: 'Internal: retrained after reviewer feedback.',
+};
+const PRIVATE_KEYS = ['submitterUserId', ...Object.keys(PRIVATE_VALUES)];
+const PUBLIC_KEYS = Object.keys(PublicModelCardSchema.shape).sort();
+
+function stranger(): CognitoAccessTokenPayload {
+  return {
+    sub: 'stranger-sub',
+    'cognito:groups': ['participant'],
+  } as unknown as CognitoAccessTokenPayload;
+}
+
+function reviewer(group: string): CognitoAccessTokenPayload {
+  return { sub: 'reviewer-sub', 'cognito:groups': [group] } as unknown as CognitoAccessTokenPayload;
+}
+
+describe('PredictionService — public reads (#591)', () => {
+  it('serves a PUBLISHED card anonymously as the public card', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED', ...PRIVATE_VALUES }));
+
+    const out = await service.getBySlug('acme-triage-v1');
+
+    expect(out.slug).toBe('acme-triage-v1');
+    expect(Object.keys(out).sort()).toEqual(PUBLIC_KEYS);
+  });
+
+  it('serves a signed-in stranger the public card too', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED', ...PRIVATE_VALUES }));
+
+    const out = await service.getBySlug('acme-triage-v1', stranger());
+
+    expect(Object.keys(out).sort()).toEqual(PUBLIC_KEYS);
+    for (const key of PRIVATE_KEYS) expect(out).not.toHaveProperty(key);
+    // The CHAI developer-contact disclosure is meant to be published.
+    expect(out).toHaveProperty('developerContact', 'regulatory@acme.example');
+  });
+
+  it.each([
+    ['submitter', () => actor()],
+    ['evaluation-reviewer', () => reviewer('evaluation-reviewer')],
+    ['admin', () => reviewer('admin')],
+  ])('serves the %s the full card', async (_who, who) => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED', ...PRIVATE_VALUES }));
+
+    const out = await service.getBySlug('acme-triage-v1', who());
+
+    expect(out).toMatchObject({
+      submitterUserId: cognitoSubAsUuid(actor().sub),
+      ...PRIVATE_VALUES,
+    });
+  });
+
+  it.each(['DRAFT', 'SUBMITTED', 'WITHDRAWN'])(
+    '404s an anonymous read of a %s card, same as an unknown slug',
+    async (status) => {
+      repo.findBySlug.mockResolvedValue(dbRow({ status }));
+
+      await expect(service.getBySlug('acme-triage-v1')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.modelFactsLabel('acme-triage-v1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      await expect(service.modelFactsMarkdown('acme-triage-v1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    },
+  );
+
+  it('keeps the signed-in rules: the submitter sees their own DRAFT, with submitterUserId', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'DRAFT' }));
+
+    const out = await service.getBySlug('acme-triage-v1', actor());
+
+    expect(out).toHaveProperty('submitterUserId', cognitoSubAsUuid(actor().sub));
+  });
+
+  it('renders the Model Facts Label anonymously for a PUBLISHED card', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
+
+    const label = await service.modelFactsLabel('acme-triage-v1');
+
+    expect(label.modelCardSlug).toBe('acme-triage-v1');
+  });
+});
+
+describe('PredictionService.listPublished (#591)', () => {
+  it('passes the filters through and turns page/limit into an offset', async () => {
+    repo.searchPublished.mockResolvedValue({ rows: [], total: 0 });
+
+    await service.listPublished({
+      q: 'retina',
+      modelClass: 'classical',
+      jurisdiction: 'CH',
+      sort: 'name',
+      page: 3,
+      limit: 10,
+    });
+
+    expect(repo.searchPublished).toHaveBeenCalledWith({
+      q: 'retina',
+      modelClass: 'classical',
+      jurisdiction: 'CH',
+      sort: 'name',
+      offset: 20,
+      limit: 10,
+    });
+  });
+
+  it('reports page metadata from the total', async () => {
+    repo.searchPublished.mockResolvedValue({ rows: [], total: 51 });
+
+    const out = await service.listPublished({ sort: 'recent', page: 2, limit: 25 });
+
+    expect(out).toEqual({ items: [], total: 51, page: 2, pageSize: 25, totalPages: 3 });
+  });
+
+  it('reports one page, not zero, when nothing matches', async () => {
+    repo.searchPublished.mockResolvedValue({ rows: [], total: 0 });
+
+    const out = await service.listPublished({ sort: 'recent', page: 1, limit: 25 });
+
+    expect(out.totalPages).toBe(1);
   });
 });

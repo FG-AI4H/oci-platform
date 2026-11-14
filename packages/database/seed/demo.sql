@@ -765,3 +765,49 @@ FROM "annotation"."annotation_campaigns" c,
      ) AS r(sample_ref)
 WHERE c.slug = 'idrid-dr-grading'
 ON CONFLICT (campaign_id, sample_ref) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- Section 7 — Model cards for the public model catalogue (#591).
+--
+-- Three PUBLISHED cards spread across model classes and jurisdictions so
+-- /models has something to search and filter, plus one DRAFT card that
+-- must never appear anonymously -- the e2e spec asserts its absence.
+--
+-- Fictional developers on the reserved `.example` domain; these are demo
+-- rows, not real submissions. The IUS JSON follows IntendedUseStatementSchema
+-- (@oci/shared-types) -- this file bypasses the API, so keep it valid by hand.
+-- ----------------------------------------------------------------------------
+
+INSERT INTO "prediction"."model_cards"
+    (id, slug, intended_use, model_class, architecture_summary, version_major_minor_patch,
+     training_data_jurisdictions, generative_ai, status, model_developer, developer_contact,
+     clinical_summary, regulatory_approval, known_biases_or_ethical_considerations,
+     ongoing_maintenance, updated_at)
+VALUES
+    (gen_random_uuid(), 'demo-retina-dr-grader',
+     '{"v":1,"medicalPurpose":"screening","bodySystemOrSite":"Retina","intendedUserRole":["specialist"],"operatingEnvironment":["primary-care"],"intendedClinicalPathway":"screening-before-specialist","foreseeableMisuse":"Grading images from non-mydriatic cameras outside the validated device list.","contraindications":"Not validated for paediatric patients.","riskTier":"II"}'::jsonb,
+     'classical', 'Gradient-boosted ensemble over handcrafted fundus lesion features.', '1.2.0',
+     ARRAY['CH', 'EU'], false, 'PUBLISHED', 'Demo Retina Labs', 'regulatory@retina-labs.example',
+     'Grades diabetic retinopathy on colour fundus photographs to prioritise referral to an ophthalmologist.',
+     '{"pathway":"EU_MDR_CLASS_IIA","status":"pending","jurisdictions":["EU"]}'::jsonb,
+     'Training images skew towards patients of European ancestry.',
+     'Quarterly drift review against new screening-programme data.', now()),
+    (gen_random_uuid(), 'demo-chest-xray-triage',
+     '{"v":1,"medicalPurpose":"triage","bodySystemOrSite":"Chest","intendedUserRole":["radiologist"],"operatingEnvironment":["emergency","hospital-inpatient"],"intendedClinicalPathway":"triage-before-clinician","foreseeableMisuse":"Using the triage flag as a diagnosis without radiologist review.","contraindications":"Portable supine films are out of scope.","riskTier":"III"}'::jsonb,
+     'foundation', 'Vision transformer fine-tuned from a chest X-ray foundation model.', '2.0.1',
+     ARRAY['US'], false, 'PUBLISHED', 'Demo Imaging Inc.', 'safety@imaging.example',
+     'Flags chest radiographs with suspected pneumothorax for priority reading.',
+     '{"pathway":"FDA_510K","status":"granted","jurisdictions":["US"],"identifier":"K000000"}'::jsonb,
+     NULL, 'Post-market performance monitoring on a 5% audit sample.', now()),
+    (gen_random_uuid(), 'demo-clinical-notes-summariser',
+     '{"v":1,"medicalPurpose":"administrative","intendedUserRole":["general-clinician"],"operatingEnvironment":["hospital-outpatient"],"foreseeableMisuse":"Relying on the summary for medication reconciliation.","contraindications":"","riskTier":"I"}'::jsonb,
+     'lmm', 'Instruction-tuned decoder language model, 8B parameters.', '0.9.0',
+     ARRAY['GB'], true, 'PUBLISHED', 'Demo Notes Ltd', 'contact@notes.example',
+     'Drafts discharge-letter summaries from outpatient clinic notes for clinician editing.',
+     NULL, 'May omit negated findings; outputs must be reviewed before filing.', NULL, now()),
+    (gen_random_uuid(), 'demo-sepsis-early-warning-draft',
+     '{"v":1,"medicalPurpose":"monitoring","foreseeableMisuse":"Unreviewed alerting in paediatric wards.","contraindications":"","riskTier":"III"}'::jsonb,
+     'time-series', 'Recurrent network over vital-sign streams.', '0.1.0',
+     ARRAY['CH'], false, 'DRAFT', 'Demo Sepsis AG', 'dev@sepsis.example',
+     NULL, NULL, NULL, NULL, now())
+ON CONFLICT (slug) DO NOTHING;

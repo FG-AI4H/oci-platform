@@ -3,11 +3,17 @@ import type { ModelCard, Prisma } from '@oci/database';
 import type {
   IntendedUseStatement,
   ModelCardResponse,
+  ModelCardSummary,
   ModelCardStatus,
   ModelClass,
+  PublicModelCard,
   RegulatoryApproval,
 } from '@oci/shared-types';
 import { PrismaService } from '../../prisma.service.js';
+import {
+  searchPublishedModelCards,
+  type SearchPublishedModelCardsArgs,
+} from './repositories/model-card-search.raw.js';
 
 /** Map a DB row to the API response. Json columns are cast back to their
  * validated shapes (the write path guarantees they parsed on the way in). */
@@ -38,6 +44,37 @@ export function toModelCardResponse(row: ModelCard): ModelCardResponse {
     securityPosture: row.securityPosture,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * The public card (#591): named fields only, matching the allowlist in
+ * `PublicModelCardSchema`. Built field by field rather than by deleting from the
+ * full card, so a field added to `ModelCardResponse` later is not published by
+ * default.
+ */
+export function toPublicModelCard(card: ModelCardResponse): PublicModelCard {
+  return {
+    id: card.id,
+    slug: card.slug,
+    intendedUse: card.intendedUse,
+    modelClass: card.modelClass,
+    architectureSummary: card.architectureSummary,
+    versionMajorMinorPatch: card.versionMajorMinorPatch,
+    materialChange: card.materialChange,
+    trainingDataJurisdictions: card.trainingDataJurisdictions,
+    generativeAi: card.generativeAi,
+    lmmSpecificLimitations: card.lmmSpecificLimitations,
+    status: card.status,
+    modelDeveloper: card.modelDeveloper,
+    developerContact: card.developerContact,
+    clinicalSummary: card.clinicalSummary,
+    regulatoryApproval: card.regulatoryApproval,
+    knownBiasesOrEthicalConsiderations: card.knownBiasesOrEthicalConsiderations,
+    biasMitigationApproaches: card.biasMitigationApproaches,
+    ongoingMaintenance: card.ongoingMaintenance,
+    createdAt: card.createdAt,
+    updatedAt: card.updatedAt,
   };
 }
 
@@ -112,6 +149,13 @@ export class PredictionRepository {
 
   async findById(id: string): Promise<ModelCard | null> {
     return this.prisma.client.modelCard.findUnique({ where: { id } });
+  }
+
+  /** Public catalogue search (#591) — PUBLISHED only; see the raw query. */
+  async searchPublished(
+    args: SearchPublishedModelCardsArgs,
+  ): Promise<{ rows: ModelCardSummary[]; total: number }> {
+    return searchPublishedModelCards(this.prisma.client, args);
   }
 
   async updateStatus(id: string, status: ModelCardStatus): Promise<ModelCard> {

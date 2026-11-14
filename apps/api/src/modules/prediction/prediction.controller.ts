@@ -1,13 +1,29 @@
-import { Body, Controller, Get, Header, Inject, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Inject,
+  Param,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   ChangeModelCardStatusRequestSchema,
   CreateModelCardRequestSchema,
+  ListModelCardsQuerySchema,
+  ModelCardSlugSchema,
   type ChangeModelCardStatusRequest,
   type CreateModelCardRequest,
+  type ListModelCardsQuery,
+  type ModelCardSlug,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
+import { OptionalCognitoJwtGuard } from '../../auth/optional-cognito-jwt.guard.js';
 import { PredictionService } from './prediction.service.js';
 import { ZodPipe } from './dto/zod-pipe.js';
 
@@ -15,15 +31,30 @@ import { ZodPipe } from './dto/zod-pipe.js';
  * `/v2/prediction` — AI-submission carrier (#260, ADR-0013/0015).
  *
  * A model card submission MUST embed an Intended-Use Statement (the IUS
- * attaches to the submission, never to a dataset). Authenticated via
- * Cognito JWT; the caller's `sub` is recorded as the submitter. Who may read
- * or move a card depends on its status and submitter, so that check lives in
- * the service rather than in a role guard.
+ * attaches to the submission, never to a dataset). Writes are authenticated
+ * via Cognito JWT; the caller's `sub` is recorded as the submitter. Who may
+ * read or move a card depends on its status and submitter, so that check
+ * lives in the service rather than in a role guard.
+ *
+ * Reads are anonymous-friendly (#591): the list is public and PUBLISHED-only;
+ * a card and its Model Facts Label are readable anonymously once PUBLISHED,
+ * and a token, when sent, gets the signed-in visibility rules.
  */
+interface RequestWithUser {
+  user?: CognitoAccessTokenPayload;
+}
+
 @ApiTags('prediction')
 @Controller({ path: 'prediction/model-cards', version: '2' })
 export class PredictionController {
   constructor(@Inject(PredictionService) private readonly prediction: PredictionService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'List / search published model cards (public)' })
+  @ApiOkResponse({ description: 'Page of model card summaries.' })
+  list(@Query(new ZodPipe(ListModelCardsQuerySchema)) query: ListModelCardsQuery) {
+    return this.prediction.listPublished(query);
+  }
 
   @Post()
   @ApiBearerAuth()
@@ -53,10 +84,16 @@ export class PredictionController {
   @Get(':slug/model-facts')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'WHO Fig. 7 Model Facts Label for a model card (structured)' })
-  @ApiOkResponse({ description: 'The rendered label. 409 while the card is DRAFT.' })
-  @UseGuards(CognitoJwtGuard)
-  modelFacts(@Param('slug') slug: string, @CurrentUser() user: CognitoAccessTokenPayload) {
-    return this.prediction.modelFactsLabel(slug, user);
+  @ApiOkResponse({
+    description:
+      'The rendered label. 409 while the card is DRAFT; 404 anonymously unless PUBLISHED.',
+  })
+  @UseGuards(OptionalCognitoJwtGuard)
+  modelFacts(
+    @Param('slug', new ZodPipe(ModelCardSlugSchema)) slug: ModelCardSlug,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.prediction.modelFactsLabel(slug, req.user);
   }
 
   @Get(':slug/model-facts.md')
@@ -64,17 +101,23 @@ export class PredictionController {
   @ApiOperation({ summary: 'WHO Fig. 7 Model Facts Label as Markdown' })
   @ApiOkResponse({ description: 'Markdown rendering of the label.' })
   @Header('Content-Type', 'text/markdown; charset=utf-8')
-  @UseGuards(CognitoJwtGuard)
-  modelFactsMarkdown(@Param('slug') slug: string, @CurrentUser() user: CognitoAccessTokenPayload) {
-    return this.prediction.modelFactsMarkdown(slug, user);
+  @UseGuards(OptionalCognitoJwtGuard)
+  modelFactsMarkdown(
+    @Param('slug', new ZodPipe(ModelCardSlugSchema)) slug: ModelCardSlug,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.prediction.modelFactsMarkdown(slug, req.user);
   }
 
   @Get(':slug')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Fetch a model card by slug' })
-  @ApiOkResponse({ description: 'The model card.' })
-  @UseGuards(CognitoJwtGuard)
-  get(@Param('slug') slug: string, @CurrentUser() user: CognitoAccessTokenPayload) {
-    return this.prediction.getBySlug(slug, user);
+  @ApiOkResponse({ description: 'The model card. 404 anonymously unless PUBLISHED.' })
+  @UseGuards(OptionalCognitoJwtGuard)
+  get(
+    @Param('slug', new ZodPipe(ModelCardSlugSchema)) slug: ModelCardSlug,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.prediction.getBySlug(slug, req.user);
   }
 }
