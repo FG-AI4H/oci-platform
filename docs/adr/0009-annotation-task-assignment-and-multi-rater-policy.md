@@ -144,6 +144,7 @@ This ADR amends:
 ## Amendments to this ADR
 
 - **2026-05-16 — Extended by [ADR-0010](./0010-annotation-metadata-exposure-and-blinding.md).** Decision 1 step 5 (class-balance check) extends to **any declared stratification key** — `metadata.hospital_id`, `metadata.scanner_make`, bucketed demographics, etc. The 1.5× soft cap applies per-key, evaluated independently. Stratification keys can be in any visibility bucket (including `hidden`) — the router uses the value, the annotator may never see it.
+- **2026-11-14 — Decision 1 step 4 counts readings, not samples ([#647](https://github.com/FG-AI4H/oci-platform/issues/647)).** With N readers per sample, the campaign needs `total_samples × N` independent readings, and when N equals the number of annotators each of them must read every sample, so a cap on samples can never be met. The cap is `⌈Σ nAnnotatorsRequired / n_active_annotators⌉ × 1.5` independent readings per annotator, counted at the independent gate only; arbitration and expert review are single-reader gates outside the cap. Expired assignments still don't count.
 
 ## References
 

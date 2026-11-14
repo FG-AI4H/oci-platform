@@ -31,6 +31,7 @@ import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { CampaignRepository } from './campaign.repository.js';
 import { evaluateGate1Predicate } from './gate-irr-predicate.js';
 import { lookupGateTransition } from './gate-state-machine.js';
+import { TaskAbandonmentService } from './task-abandonment.service.js';
 import { TaskRepository } from './task.repository.js';
 
 /**
@@ -57,6 +58,7 @@ export class TaskService {
   constructor(
     @Inject(CampaignRepository) private readonly campaigns: CampaignRepository,
     @Inject(TaskRepository) private readonly tasks: TaskRepository,
+    @Inject(TaskAbandonmentService) private readonly abandonment: TaskAbandonmentService,
   ) {}
 
   // --- Seed --------------------------------------------------------------
@@ -185,55 +187,66 @@ export class TaskService {
     const assigneeRole = roleForGate(gate);
     const assigneeUserId = cognitoSubAsUuid(args.user.sub);
 
-    // Re-issue an in-flight assignment if one exists. Returns the
-    // same row idempotently so a reload of the annotator UI doesn't
-    // start counting double work.
-    const existing = await this.tasks.findActiveAssignmentForUser({
-      campaignId: campaign.id,
-      gate,
-      assigneeUserId,
-    });
-    if (existing) {
-      return { assignment: toAssignmentSummary(existing, existing.task) };
-    }
+    // Expiry, the cap check, the pick and the new assignment share one
+    // transaction (#647). Expiring here, rather than only in the
+    // BullMQ sweep, frees abandoned slots on environments that run
+    // without Redis, and a slot freed by this pull is visible to it.
+    return this.tasks.inTransaction(async (tasks, tx) => {
+      await this.abandonment.expireStaleForCampaign({ campaign, tasks, tx });
 
-    // Bias-prevention 1.5× cap (ADR-0009 Decision 1 Predicate 4).
-    // The router refuses to give this caller another task if doing
-    // so would push their per-campaign share above the soft
-    // ceiling. EXPIRED rows are excluded (abandonment doesn't
-    // burden the cap per ADR-0009 + #229). When the cap binds the
-    // task stays in the queue for another annotator to pick up.
-    if (
-      !this.callerWithinBiasCap(
-        await this.tasks.biasCapInputs({
-          campaignId: campaign.id,
-          callerUserId: assigneeUserId,
-        }),
-      )
-    ) {
+      // Re-issue an in-flight assignment if one exists. Returns the
+      // same row idempotently so a reload of the annotator UI doesn't
+      // start counting double work.
+      const existing = await tasks.findActiveAssignmentForUser({
+        campaignId: campaign.id,
+        gate,
+        assigneeUserId,
+      });
+      if (existing) {
+        return { assignment: toAssignmentSummary(existing, existing.task) };
+      }
+
+      // Bias-prevention 1.5× cap (ADR-0009 Decision 1 Predicate 4).
+      // The router refuses to give this caller another independent
+      // reading if doing so would push their per-campaign share above
+      // the soft ceiling. EXPIRED rows are excluded (abandonment
+      // doesn't burden the cap per ADR-0009 + #229). When the cap
+      // binds the task stays in the queue for another annotator. The
+      // cap shares out independent readings only; arbitration and
+      // expert review are single-reader gates it doesn't govern.
+      if (
+        gate === 'INDEPENDENT' &&
+        !this.callerWithinBiasCap(
+          await tasks.biasCapInputs({
+            campaignId: campaign.id,
+            callerUserId: assigneeUserId,
+          }),
+        )
+      ) {
+        this.logger.log(
+          `pullNext: caller ${assigneeUserId} at the bias-prevention cap in campaign ${campaign.slug} — returning null`,
+        );
+        return { assignment: null };
+      }
+
+      const nextTask = await tasks.findNextEligibleTask({
+        campaignId: campaign.id,
+        gate,
+        assigneeUserId,
+      });
+      if (!nextTask) return { assignment: null };
+
+      const assignment = await tasks.createAssignment({
+        taskId: nextTask.id,
+        assigneeUserId,
+        assigneeRole,
+        gateAtAssignment: gate,
+      });
       this.logger.log(
-        `pullNext: caller ${assigneeUserId} at the bias-prevention cap in campaign ${campaign.slug} — returning null`,
+        `pullNext: campaign=${campaign.slug} task=${nextTask.id} gate=${gate} assignee=${assigneeUserId}`,
       );
-      return { assignment: null };
-    }
-
-    const nextTask = await this.tasks.findNextEligibleTask({
-      campaignId: campaign.id,
-      gate,
-      assigneeUserId,
+      return { assignment: toAssignmentSummary(assignment, nextTask) };
     });
-    if (!nextTask) return { assignment: null };
-
-    const assignment = await this.tasks.createAssignment({
-      taskId: nextTask.id,
-      assigneeUserId,
-      assigneeRole,
-      gateAtAssignment: gate,
-    });
-    this.logger.log(
-      `pullNext: campaign=${campaign.slug} task=${nextTask.id} gate=${gate} assignee=${assigneeUserId}`,
-    );
-    return { assignment: toAssignmentSummary(assignment, nextTask) };
   }
 
   // --- Submit ------------------------------------------------------------
@@ -445,7 +458,11 @@ export class TaskService {
    * Bias-prevention soft ceiling per ADR-0009 Decision 1
    * Predicate 4:
    *
-   *   cap = ceil(totalTasks / max(1, nActiveAnnotators)) * 1.5
+   *   cap = ceil(totalSlots / max(1, nActiveAnnotators)) * 1.5
+   *
+   * `totalSlots` counts independent readings (tasks × readers per
+   * task), so with N readers per task the annotators can between them
+   * reach every reading the campaign needs (#647).
    *
    * Returns false when assigning the next task to this caller would
    * push their share past the cap; the router then refuses + the
@@ -454,12 +471,12 @@ export class TaskService {
    * cap can possibly bind).
    */
   private callerWithinBiasCap(inputs: {
-    totalTasks: number;
+    totalSlots: number;
     nActiveAnnotators: number;
     callerShare: number;
   }): boolean {
     const n = Math.max(1, inputs.nActiveAnnotators);
-    const cap = Math.ceil(inputs.totalTasks / n) * 1.5;
+    const cap = Math.ceil(inputs.totalSlots / n) * 1.5;
     return inputs.callerShare + 1 <= cap;
   }
 

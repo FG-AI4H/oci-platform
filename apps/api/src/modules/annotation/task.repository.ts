@@ -4,6 +4,7 @@ import type {
   AnnotationGateState,
   AnnotationTask,
   AnnotationTaskAssignment,
+  Prisma,
 } from '@oci/database';
 import { PrismaService } from '../../prisma.service.js';
 
@@ -15,6 +16,21 @@ import { PrismaService } from '../../prisma.service.js';
 @Injectable()
 export class TaskRepository {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  /**
+   * Run `fn` in one interactive transaction. `fn` receives a
+   * repository bound to the transaction and the raw transaction client
+   * (for callers that write elsewhere in the same transaction, e.g. the
+   * audit trail). The bound repository must not open a nested
+   * transaction: none of its methods do.
+   */
+  async inTransaction<T>(
+    fn: (tasks: TaskRepository, tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.client.$transaction(async (tx: Prisma.TransactionClient) =>
+      fn(new TaskRepository({ client: tx } as unknown as PrismaService), tx),
+    );
+  }
 
   // --- AnnotationTask ----------------------------------------------------
 
@@ -273,8 +289,12 @@ export class TaskRepository {
       ).length;
       const slotsLeft = task.nAnnotatorsRequired - submitted - inFlight;
       if (slotsLeft <= 0) continue;
+      // An EXPIRED assignment never produced a reading, so it doesn't
+      // bar the caller from the task. Otherwise a campaign with as many
+      // readers per task as annotators could never finish a task that
+      // one of them abandoned (#647).
       const callerAlreadyOnTask = task.assignments.some(
-        (a) => a.assigneeUserId === args.assigneeUserId,
+        (a) => a.assigneeUserId === args.assigneeUserId && a.status !== 'EXPIRED',
       );
       if (callerAlreadyOnTask) continue;
       // Strip the included assignments — the caller wants a plain
@@ -288,29 +308,35 @@ export class TaskRepository {
 
   /**
    * Inputs to ADR-0009 Decision 1 predicate 4 (bias-prevention
-   * 1.5× cap). The router asks "would assigning the next task to
-   * this caller push their share above the soft ceiling?". The
-   * formula needs three integers:
+   * 1.5× cap) at the INDEPENDENT gate. The router asks "would
+   * assigning the next task to this caller push their share above the
+   * soft ceiling?". The formula needs three integers:
    *
-   *   cap = ceil(totalTasks / max(1, nActiveAnnotators)) * 1.5
+   *   cap = ceil(totalSlots / max(1, nActiveAnnotators)) * 1.5
    *
-   * `nActiveAnnotators` excludes EXPIRED rows — abandonment doesn't
-   * count toward task-share per #229 + ADR-0009. `taskShareOf`
-   * counts the caller's PENDING + IN_PROGRESS + SUBMITTED rows in
-   * the same way.
+   * `totalSlots` is the number of independent readings the campaign
+   * needs — the sum of each task's `nAnnotatorsRequired` — not the
+   * number of tasks: 30 tasks read by 3 people each is 90 readings
+   * (#647). Only INDEPENDENT-gate assignments count; arbitration and
+   * expert review are separate work and must not eat into the share.
    *
-   * One round-trip via `groupBy` is cheaper than four counts.
+   * `nActiveAnnotators` and `callerShare` exclude EXPIRED rows —
+   * abandonment doesn't count toward task-share per #229 + ADR-0009.
    */
   async biasCapInputs(args: {
     campaignId: string;
     callerUserId: string;
-  }): Promise<{ totalTasks: number; nActiveAnnotators: number; callerShare: number }> {
-    const [totalTasks, groups] = await Promise.all([
-      this.prisma.client.annotationTask.count({ where: { campaignId: args.campaignId } }),
+  }): Promise<{ totalSlots: number; nActiveAnnotators: number; callerShare: number }> {
+    const [slots, groups] = await Promise.all([
+      this.prisma.client.annotationTask.aggregate({
+        where: { campaignId: args.campaignId },
+        _sum: { nAnnotatorsRequired: true },
+      }),
       this.prisma.client.annotationTaskAssignment.groupBy({
         by: ['assigneeUserId'],
         where: {
           task: { campaignId: args.campaignId },
+          gateAtAssignment: 'INDEPENDENT',
           status: { in: ['PENDING', 'IN_PROGRESS', 'SUBMITTED'] },
         },
         _count: { _all: true },
@@ -319,7 +345,11 @@ export class TaskRepository {
     const nActiveAnnotators = groups.length;
     const callerGroup = groups.find((g) => g.assigneeUserId === args.callerUserId);
     const callerShare = callerGroup?._count._all ?? 0;
-    return { totalTasks, nActiveAnnotators, callerShare };
+    return {
+      totalSlots: slots._sum.nAnnotatorsRequired ?? 0,
+      nActiveAnnotators,
+      callerShare,
+    };
   }
 
   async createAssignment(args: {
@@ -434,6 +464,29 @@ export class TaskRepository {
           campaign: camp,
         },
       };
+    });
+  }
+
+  /**
+   * One campaign's PENDING / IN_PROGRESS assignments assigned before
+   * `olderThan`. Feeds the expiry that runs inside pull-next (#647),
+   * which knows the campaign's timeout and so needs no wider scan.
+   * `limit` bounds the work one pull does; the oldest rows go first.
+   */
+  async findStaleAssignmentsForCampaign(args: {
+    campaignId: string;
+    olderThan: Date;
+    limit: number;
+  }): Promise<Array<AnnotationTaskAssignment & { task: AnnotationTask }>> {
+    return this.prisma.client.annotationTaskAssignment.findMany({
+      where: {
+        status: { in: ['PENDING', 'IN_PROGRESS'] },
+        assignedAt: { lt: args.olderThan },
+        task: { campaignId: args.campaignId },
+      },
+      include: { task: true },
+      orderBy: { assignedAt: 'asc' },
+      take: args.limit,
     });
   }
 

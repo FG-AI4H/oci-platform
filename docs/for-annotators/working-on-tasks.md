@@ -87,16 +87,16 @@ Use plain text — there's no fixed taxonomy yet.
 
 ## Abandonment (you walked away)
 
-If you claim a task and don't submit it within the campaign's abandonment timeout (default: 4 hours; configurable per campaign):
+If you claim a task and don't submit it within the campaign's abandonment timeout (default: 24 hours; configurable per campaign from 1 hour to 7 days):
 
 - The platform sets your assignment to `EXPIRED`.
 - The task returns to the queue at its original gate.
 - The router will hand it to someone else (or to you again, after FIFO has cycled past).
 - **No penalty** is recorded against you — abandonment is treated as a normal lifecycle event, not a quality signal.
 
-The abandonment sweeper runs every minute. If you come back within the timeout, your assignment is still IN_PROGRESS and you can submit normally.
+Timed-out assignments are released whenever anyone in the campaign asks for their next task, so a task you abandoned goes back into the queue without waiting for a background job. If you come back within the timeout, your assignment is still IN_PROGRESS and you can submit normally. If you come back after it, your submission is refused; ask for the next task to pick it up again.
 
-This was [#229](https://github.com/FG-AI4H/oci-platform/issues/229).
+This was [#229](https://github.com/FG-AI4H/oci-platform/issues/229), and [#647](https://github.com/FG-AI4H/oci-platform/issues/647) for the release on pull.
 
 ## Calibration & IRR
 

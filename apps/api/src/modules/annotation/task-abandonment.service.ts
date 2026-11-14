@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { AuditEmitter } from '@oci/audit';
+import type { AuditEmitter, AuditPrismaPort } from '@oci/audit';
+import type { AnnotationTask, AnnotationTaskAssignment, Prisma } from '@oci/database';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { TaskRepository } from './task.repository.js';
 
@@ -21,6 +22,13 @@ import { TaskRepository } from './task.repository.js';
  *     separate UI work; the data is on the row already
  *     (`status = EXPIRED`, `expiredAt`).
  *
+ * Two paths expire assignments:
+ *   - `expireStaleForCampaign` runs inside every pull-next (#647), in
+ *     the pull's transaction. It is the path that works everywhere:
+ *     no deployed environment runs Redis, so the scheduler is off there.
+ *   - `runOnce` is the BullMQ sweep, active only when `REDIS_URL` is
+ *     set. It still frees slots in campaigns nobody is pulling from.
+ *
  * Audit emission: each expiry emits
  * `annotation.task.assignment.expired` synchronously so the
  * regulator-grade trail captures the abandonment.
@@ -33,6 +41,56 @@ export class TaskAbandonmentService {
     @Inject(TaskRepository) private readonly tasks: TaskRepository,
     @Inject(AUDIT_EMITTER) private readonly audit: AuditEmitter,
   ) {}
+
+  /**
+   * Expire one campaign's assignments that are past its
+   * `taskTimeoutHours`, inside the caller's transaction. Each expiry's
+   * audit row is written in the same transaction, so an audit failure
+   * rolls the expiry back with the rest of the pull rather than leaving
+   * an unaudited state change. Returns the number expired.
+   *
+   * At most `PULL_EXPIRY_LIMIT` rows per pull. Every audit insert takes
+   * the audit chain's transaction-scoped advisory lock, so a large
+   * backlog (a whole cohort walking away over a weekend) expired in one
+   * pull would hold that lock platform-wide and could run the pull past
+   * Prisma's interactive-transaction timeout, failing every retry the
+   * same way. Later pulls clear the rest.
+   */
+  async expireStaleForCampaign(args: {
+    campaign: { id: string; slug: string; workflowConfig: unknown };
+    tasks: TaskRepository;
+    tx: Prisma.TransactionClient;
+    nowMs?: number;
+  }): Promise<number> {
+    const now = args.nowMs ?? Date.now();
+    const timeoutHours = readTaskTimeoutHours(args.campaign.workflowConfig);
+    const rows = await args.tasks.findStaleAssignmentsForCampaign({
+      campaignId: args.campaign.id,
+      olderThan: new Date(now - timeoutHours * HOUR_MS),
+      limit: PULL_EXPIRY_LIMIT,
+    });
+    let expired = 0;
+    for (const row of rows) {
+      // Conditional: a concurrent pull or submit may have moved the
+      // row since the read. Count 0 means someone else handled it.
+      if (!(await args.tasks.markAssignmentExpired(row.id))) continue;
+      expired += 1;
+      await this.audit.emitSync(
+        {
+          module: 'annotation',
+          action: 'task.assignment.expired',
+          subjectType: 'annotation-task-assignment',
+          subjectId: row.id,
+          payload: expiredPayload(row, args.campaign.slug, timeoutHours),
+        },
+        args.tx as unknown as AuditPrismaPort,
+      );
+    }
+    if (expired > 0) {
+      this.logger.log(`pull-next expiry — campaign=${args.campaign.slug} expired=${expired}`);
+    }
+    return expired;
+  }
 
   /**
    * One sweep pass. Pulls a bounded batch of stale-looking rows,
@@ -56,7 +114,7 @@ export class TaskAbandonmentService {
     // expired depending on its campaign's setting. Filter to that
     // floor on the DB side; the service then applies the per-campaign
     // value precisely.
-    const widest = new Date(now - 60 * 60 * 1000);
+    const widest = new Date(now - HOUR_MS);
     const rows = await this.tasks.findAbandonmentCandidates({
       olderThan: widest,
       limit,
@@ -66,7 +124,7 @@ export class TaskAbandonmentService {
     let skipped = 0;
     for (const row of rows) {
       const timeoutHours = readTaskTimeoutHours(row.task.campaign.workflowConfig);
-      const horizon = row.assignedAt.getTime() + timeoutHours * 60 * 60 * 1000;
+      const horizon = row.assignedAt.getTime() + timeoutHours * HOUR_MS;
       if (horizon > now) {
         // Still within its campaign's window — leave it alone.
         skipped += 1;
@@ -86,16 +144,7 @@ export class TaskAbandonmentService {
           action: 'task.assignment.expired',
           subjectType: 'annotation-task-assignment',
           subjectId: row.id,
-          payload: {
-            taskId: row.taskId,
-            campaignSlug: row.task.campaign.slug,
-            sampleRef: row.task.sampleRef,
-            gateAtAssignment: row.gateAtAssignment,
-            assigneeRole: row.assigneeRole,
-            assignedAt: row.assignedAt.toISOString(),
-            timeoutHours,
-            previousStatus: row.status,
-          },
+          payload: expiredPayload(row, row.task.campaign.slug, timeoutHours),
         });
       } catch (err) {
         // Audit failures are logged + swallowed so a transient audit
@@ -114,6 +163,28 @@ export class TaskAbandonmentService {
     }
     return { scanned: rows.length, expired, skipped };
   }
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+const PULL_EXPIRY_LIMIT = 20;
+
+// Call sites keep the `{ module, action, … }` literal so the
+// ADR-0014 audit-coverage grep can see them; only the payload is shared.
+function expiredPayload(
+  row: AnnotationTaskAssignment & { task: AnnotationTask },
+  campaignSlug: string,
+  timeoutHours: number,
+): Record<string, unknown> {
+  return {
+    taskId: row.taskId,
+    campaignSlug,
+    sampleRef: row.task.sampleRef,
+    gateAtAssignment: row.gateAtAssignment,
+    assigneeRole: row.assigneeRole,
+    assignedAt: row.assignedAt.toISOString(),
+    timeoutHours,
+    previousStatus: row.status,
+  };
 }
 
 function readTaskTimeoutHours(workflowConfig: unknown): number {
