@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Badge, Button } from '@oci/ui';
-import { auth, signOut } from '../auth';
+import { redirect } from 'next/navigation';
+import { auth, isLocal, signOut } from '../auth';
+import { cognitoLogoutUrl } from '../lib/cognito-logout';
 import { isAdmin, isHost } from '../lib/groups';
 import { BrandLockup } from './brand-mark';
 
@@ -69,7 +71,21 @@ export async function SiteHeader() {
               <form
                 action={async () => {
                   'use server';
-                  await signOut({ redirectTo: '/' });
+                  // End the Cognito hosted-UI session too, or the next
+                  // "Sign in" silently returns the same user (#663).
+                  const logoutUrl = isLocal
+                    ? null
+                    : await cognitoLogoutUrl({
+                        issuer: process.env.AUTH_COGNITO_ISSUER,
+                        clientId: process.env.AUTH_COGNITO_ID,
+                        returnTo: `${(process.env.AUTH_URL ?? '').replace(/\/+$/, '')}/`,
+                      });
+                  if (logoutUrl === null) {
+                    await signOut({ redirectTo: '/' });
+                    return;
+                  }
+                  await signOut({ redirect: false });
+                  redirect(logoutUrl);
                 }}
               >
                 <Button type="submit" variant="ghost" size="sm">

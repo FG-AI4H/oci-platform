@@ -218,13 +218,16 @@ async function seed(): Promise<void> {
   const token = requireToken('HOLDER_TOKEN');
   console.log(`Seeding ${SLUG} on ${apiBase} as the holder…`);
 
-  const existing = await call('GET', `/v2/catalog/datasets/${SLUG}`, token);
-  const versions = (existing.json as { versions?: unknown[] } | null)?.versions ?? [];
-  if (existing.status === 200 && versions.length > 0) {
-    console.log(`✓ ${SLUG} already has a published version; nothing to do.`);
-    return;
-  }
+  const files = [
+    'sample-001.png',
+    'sample-002.png',
+    'sample-003.png',
+    'sample-004.png',
+    'sample-005.png',
+  ];
 
+  const existing = await call('GET', `/v2/catalog/datasets/${SLUG}`, token);
+  let detail: { versions?: unknown[]; distributions?: { filename: string | null }[] } = {};
   if (existing.status === 404) {
     const created = await call('POST', '/v2/catalog/datasets', token, {
       slug: SLUG,
@@ -243,34 +246,58 @@ async function seed(): Promise<void> {
   } else if (existing.status !== 200) {
     fail('read dataset', existing);
   } else {
-    console.log('  · dataset exists without a version (earlier run stopped); uploading files');
+    detail = existing.json as typeof detail;
   }
 
-  const files = [
-    'sample-001.png',
-    'sample-002.png',
-    'sample-003.png',
-    'sample-004.png',
-    'sample-005.png',
-  ];
-  const distribution: Json[] = [];
-  for (const f of files) distribution.push(await uploadFile(token, f));
-
-  const manifest = buildManifest(distribution);
-  const report = validate(manifest, { accessTier: 'REGISTERED' });
-  const errors = report.issues.filter((i) => i.level === 'error');
-  if (errors.length > 0) {
-    console.error(`✗ manifest invalid:\n${JSON.stringify(errors, null, 2)}`);
-    exit(1);
+  // The API attaches an upload to the latest published version, so the
+  // manifest is published first. It describes each file by name, size
+  // and hash; the per-file download links come from the uploads below.
+  if ((detail.versions ?? []).length === 0) {
+    const manifest = buildManifest(files.map(describeFile));
+    const report = validate(manifest, { accessTier: 'REGISTERED' });
+    const errors = report.issues.filter((i) => i.level === 'error');
+    if (errors.length > 0) {
+      console.error(`✗ manifest invalid:\n${JSON.stringify(errors, null, 2)}`);
+      exit(1);
+    }
+    const published = await call('POST', `/v2/catalog/datasets/${SLUG}/versions`, token, {
+      version: VERSION,
+      croissant: manifest,
+      notes: 'Seeded for the AI for Good Lab walk-through (#639).',
+    });
+    if (published.status !== 201 && published.status !== 200) fail('publish version', published);
+    console.log(`  ✓ published ${SLUG} ${VERSION}`);
+  } else {
+    console.log(`  · ${SLUG} already has a published version`);
   }
 
-  const published = await call('POST', `/v2/catalog/datasets/${SLUG}/versions`, token, {
-    version: VERSION,
-    croissant: manifest,
-    notes: 'Seeded for the AI for Good Lab walk-through (#639).',
-  });
-  if (published.status !== 201 && published.status !== 200) fail('publish version', published);
-  console.log(`✓ published ${SLUG} ${VERSION}: ${apiBase}/catalog/${SLUG}`);
+  const have = new Set((detail.distributions ?? []).map((d) => d.filename));
+  let uploaded = 0;
+  for (const f of files) {
+    if (have.has(f)) continue;
+    await uploadFile(token, f);
+    uploaded += 1;
+  }
+  if (uploaded === 0) {
+    console.log(`✓ ${SLUG}: all ${files.length} files already uploaded; nothing to do.`);
+  } else {
+    console.log(`✓ ${SLUG} ready (${uploaded} file(s) uploaded): ${apiBase}/catalog/${SLUG}`);
+  }
+}
+
+/** The manifest entry for a fixture file, written before the file is uploaded. */
+function describeFile(filename: string): Json {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename -- bundled fixture, fixed directory
+  const bytes = readFileSync(path.join(IMAGES_DIR, filename));
+  return {
+    '@id': filename,
+    '@type': 'cr:FileObject',
+    name: filename,
+    encodingFormat: 'image/png',
+    contentUrl: `/v2/catalog/datasets/${SLUG}/distributions`,
+    contentSize: `${bytes.length} B`,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  };
 }
 
 // --- submit (as the researcher) ----------------------------------------------

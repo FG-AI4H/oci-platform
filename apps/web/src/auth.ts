@@ -20,7 +20,8 @@ declare module 'next-auth/jwt' {
   }
 }
 
-const isLocal = process.env.OCI_ENV === 'local' || process.env.NEXT_PUBLIC_OCI_ENV === 'local';
+export const isLocal =
+  process.env.OCI_ENV === 'local' || process.env.NEXT_PUBLIC_OCI_ENV === 'local';
 
 /**
  * NextAuth.js v5 server-side singleton — exports `handlers`, `signIn`,
