@@ -5,6 +5,7 @@ import {
   AlertDescription,
   AlertTitle,
   ArrowLeftIcon,
+  Button,
   Badge,
   Card,
   CardContent,
@@ -24,6 +25,7 @@ import type {
   AccessTier,
   CommercialUseTerms,
   DatasetDetail,
+  DatasetStatus,
   DatasetVisibility,
 } from '@oci/shared-types';
 import { lookupDuoTerm } from '@oci/croissant';
@@ -57,6 +59,14 @@ const visibilityCopy: Record<DatasetVisibility, string> = {
   PUBLIC: 'Listed and crawlable',
   RESTRICTED: 'Access on request',
   PRIVATE: 'Hosts and admins only',
+};
+
+/** What the visibility means while the row is not PUBLISHED: nothing yet. */
+const statusCopy: Record<DatasetStatus, string | null> = {
+  DRAFT: 'Draft: not listed and not crawlable until a version is published',
+  REVIEW: 'In review: not listed until a version is published',
+  PUBLISHED: null,
+  ARCHIVED: 'Archived: no longer listed',
 };
 
 /**
@@ -225,6 +235,9 @@ export default async function DatasetDetailPage({
               ) : null}
             </div>
             <div className="flex flex-row flex-wrap items-start gap-2 lg:flex-col lg:items-end">
+              {detail.status !== 'PUBLISHED' ? (
+                <Badge tone="neutral">{detail.status.toLowerCase()}</Badge>
+              ) : null}
               <Badge tone={visibilityTone[detail.visibility]}>
                 {detail.visibility.toLowerCase()}
               </Badge>
@@ -251,8 +264,17 @@ export default async function DatasetDetailPage({
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <p className="inline-flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
               <ShieldIcon size={12} />
-              <span>{visibilityCopy[detail.visibility]}</span>
+              <span>{statusCopy[detail.status] ?? visibilityCopy[detail.visibility]}</span>
             </p>
+            {/* The host's way back into the publish flow. A draft has no
+                version yet, so the wording says what is missing. */}
+            {isAdmin(session) || isHostOfDataset(session, detail.hostId) ? (
+              <Button asChild size="sm" variant={detail.latestVersion ? 'outline' : 'primary'}>
+                <Link href={`/catalog/${detail.slug}/publish`}>
+                  {detail.latestVersion ? 'Publish a new version' : 'Publish the first version'}
+                </Link>
+              </Button>
+            ) : null}
           </div>
 
           {/*
