@@ -185,7 +185,7 @@ export function ProvenanceStep({
 
   return (
     <fieldset className="space-y-6">
-      <legend className="text-sm font-medium">Provenance</legend>
+      <legend className="sr-only">Provenance</legend>
       <p className="text-xs text-[var(--color-muted-foreground)]">
         Where the data came from, what was done to it, under what authority, and how the labels were
         produced (bio-prov v0.2). Markers follow the obligations for a <strong>{accessTier}</strong>{' '}
