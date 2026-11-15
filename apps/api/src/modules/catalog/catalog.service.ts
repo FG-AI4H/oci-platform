@@ -15,6 +15,7 @@ import type {
   CreateDatasetRequest,
   DatasetDetail,
   DatasetSlug,
+  DatasetStatus,
   ListDatasetsQuery,
   ListDatasetsResponse,
   PublishDatasetVersionRequest,
@@ -66,6 +67,7 @@ export class CatalogService {
   ): Promise<ListDatasetsResponse> {
     const groups = (user?.['cognito:groups'] ?? []) as string[];
     const visibilities = visibilitiesFor(groups);
+    const statuses = statusesFor(groups, query, user);
 
     // PR E.2 federation filter:
     //   - source=local      → only local rows (default; backwards-compat with PRs C/D)
@@ -106,7 +108,7 @@ export class CatalogService {
     const { rows: localRows, totalEstimate: localTotal } = await this.repo.search({
       q: query.q,
       visibilities,
-      statuses: query.status ? [query.status] : undefined,
+      statuses,
       hostId: query.hostId,
       after,
       modality: toArray(query.modality),
@@ -437,6 +439,34 @@ function visibilitiesFor(groups: string[]): Array<'PRIVATE' | 'RESTRICTED' | 'PU
   }
   if (groups.length > 0) return ['RESTRICTED', 'PUBLIC'];
   return ['PUBLIC'];
+}
+
+/**
+ * Which lifecycle statuses the list may return. The same rule as
+ * `canSee` on the detail: a dataset that is not PUBLISHED exists only for
+ * admins, regulators, supervisors, and for the host who owns it. The
+ * list used to apply the visibility rule alone, so an abandoned PUBLIC
+ * draft (no version yet) was listed to anonymous visitors while its
+ * detail answered 404.
+ *
+ * A host sees their own drafts by asking for their own rows
+ * (`hostId` = the caller); any `status` filter is honoured inside that
+ * scope. Everyone else gets PUBLISHED rows whatever they asked for.
+ */
+function statusesFor(
+  groups: string[],
+  query: Pick<ListDatasetsQuery, 'status' | 'hostId'>,
+  user: CognitoAccessTokenPayload | undefined,
+): DatasetStatus[] | undefined {
+  const privileged =
+    groups.includes('admin') || groups.includes('regulator') || groups.includes('supervisor');
+  const ownRows =
+    query.hostId !== undefined &&
+    user?.sub !== undefined &&
+    groups.includes('host') &&
+    query.hostId === cognitoSubAsUuid(user.sub);
+  if (privileged || ownRows) return query.status ? [query.status] : undefined;
+  return ['PUBLISHED'];
 }
 
 function canSee(

@@ -26,6 +26,7 @@ import type {
 import { DUO_REGISTRY, lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../auth';
 import { isHost } from '../../lib/groups';
+import { viewerUuid } from '../../lib/identity';
 import { apiFetch } from '../../lib/api';
 import {
   ANONYMIZATION_OPTIONS,
@@ -72,6 +73,8 @@ interface SearchParams {
   duoTerms?: string | string[];
   /** Commercial-use facet (#119). Single-value enum. */
   commercialUseTerms?: string;
+  /** `1` = only the signed-in host's own datasets, drafts included. */
+  mine?: string;
 }
 
 const SOURCE_OPTIONS: ReadonlyArray<{ value: DatasetSource; label: string; hint: string }> = [
@@ -162,6 +165,8 @@ interface FilterState {
   duoTerms: string[];
   /** Commercial-use facet (#119). `null` = no filter. */
   commercialUseTerms: 'OK' | 'NON_COMMERCIAL_ONLY' | 'CASE_BY_CASE' | null;
+  /** The host's own rows, every status. Ignored for viewers who are not hosts. */
+  mine: boolean;
   page: number;
 }
 
@@ -177,6 +182,7 @@ function parseFilters(params: SearchParams): FilterState {
     license: toArray(params.license),
     duoTerms: toArray(params.duoTerms),
     commercialUseTerms: normaliseCommercial(params.commercialUseTerms),
+    mine: params.mine === '1',
     page: Math.max(1, Number(params.page ?? '1') || 1),
   };
 }
@@ -207,6 +213,7 @@ function buildUrl(state: FilterState, overrides: Partial<FilterState>): string {
   for (const v of merged.license) qs.append('license', v);
   for (const v of merged.duoTerms) qs.append('duoTerms', v);
   if (merged.commercialUseTerms) qs.set('commercialUseTerms', merged.commercialUseTerms);
+  if (merged.mine) qs.set('mine', '1');
   if (merged.page > 1) qs.set('page', String(merged.page));
   const s = qs.toString();
   return s.length > 0 ? `/catalog?${s}` : '/catalog';
@@ -235,6 +242,10 @@ export default async function CatalogPage({
   const session = await auth();
   const canCreateDataset = isHost(session);
   const filters = parseFilters(params);
+  // "My datasets": the API returns every status for a host's own rows,
+  // so an abandoned draft can be found and finished. Nobody else can
+  // list drafts; see the catalogue service's status rule.
+  const ownerId = canCreateDataset && filters.mine ? viewerUuid(session) : null;
 
   const apiQs = new URLSearchParams();
   if (filters.q) apiQs.set('q', filters.q);
@@ -249,6 +260,7 @@ export default async function CatalogPage({
   for (const v of filters.license) apiQs.append('license', v);
   for (const v of filters.duoTerms) apiQs.append('duoTerms', v);
   if (filters.commercialUseTerms) apiQs.set('commercialUseTerms', filters.commercialUseTerms);
+  if (ownerId) apiQs.set('hostId', ownerId);
 
   let response: ListDatasetsResponse | null = null;
   let error: string | null = null;
@@ -288,9 +300,19 @@ export default async function CatalogPage({
                 </p>
               ) : null}
               {canCreateDataset ? (
-                <Button asChild size="sm">
-                  <Link href="/catalog/new">New dataset</Link>
-                </Button>
+                <>
+                  <Button asChild size="sm" variant={filters.mine ? 'primary' : 'outline'}>
+                    <Link
+                      href={buildUrl(filters, { mine: !filters.mine, page: 1 })}
+                      aria-pressed={filters.mine}
+                    >
+                      My datasets
+                    </Link>
+                  </Button>
+                  <Button asChild size="sm">
+                    <Link href="/catalog/new">New dataset</Link>
+                  </Button>
+                </>
               ) : null}
             </div>
           </div>
@@ -818,6 +840,8 @@ function DatasetCard({ d }: { d: DatasetSummary }) {
             </CardTitle>
             {isFederated ? (
               <Badge tone="accent">federated</Badge>
+            ) : d.status !== 'PUBLISHED' ? (
+              <Badge tone="neutral">{d.status.toLowerCase()}</Badge>
             ) : (
               <Badge tone={visibilityTone[d.visibility]}>{visibilityLabel[d.visibility]}</Badge>
             )}

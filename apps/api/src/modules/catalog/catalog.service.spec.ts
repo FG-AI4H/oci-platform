@@ -247,3 +247,45 @@ describe('CatalogService.create — the host sets the access tier', () => {
     expect(create.mock.calls[0]?.[0]).toMatchObject({ accessTier: undefined });
   });
 });
+
+describe('CatalogService.list — a dataset that is not PUBLISHED is listed only to those who may see it', () => {
+  const OTHER_HOST = '00000000-0000-4000-8000-000000000402';
+  const base = { limit: 24, source: 'local', sort: 'recent' } as unknown as Parameters<
+    CatalogService['list']
+  >[0];
+
+  function listWith(query: Partial<typeof base>, caller?: CognitoAccessTokenPayload) {
+    const search = vi.fn(async (_args: unknown) => ({ rows: [], totalEstimate: 0 }));
+    const svc2 = new CatalogService({ ...repo, search } as unknown as CatalogRepository);
+    return svc2.list({ ...base, ...query }, caller).then(() => search.mock.calls[0]?.[0]);
+  }
+
+  it('anonymous visitors get PUBLISHED rows only, whatever status they ask for', async () => {
+    expect(await listWith({})).toMatchObject({ statuses: ['PUBLISHED'] });
+    expect(await listWith({ status: 'DRAFT' })).toMatchObject({ statuses: ['PUBLISHED'] });
+  });
+
+  it('a signed-in host browsing the catalogue sees PUBLISHED rows only', async () => {
+    expect(await listWith({}, user(HOST_SUB, 'host'))).toMatchObject({ statuses: ['PUBLISHED'] });
+  });
+
+  it('a host asking for their own rows sees every status, and may narrow it', async () => {
+    expect(await listWith({ hostId: HOST_SUB }, user(HOST_SUB, 'host'))).toMatchObject({
+      statuses: undefined,
+      hostId: HOST_SUB,
+    });
+    expect(
+      await listWith({ hostId: HOST_SUB, status: 'DRAFT' }, user(HOST_SUB, 'host')),
+    ).toMatchObject({ statuses: ['DRAFT'] });
+  });
+
+  it("a host asking for another host's rows gets PUBLISHED only", async () => {
+    expect(await listWith({ hostId: OTHER_HOST }, user(HOST_SUB, 'host'))).toMatchObject({
+      statuses: ['PUBLISHED'],
+    });
+  });
+
+  it('admins see every status', async () => {
+    expect(await listWith({}, user(HOST_SUB, 'admin'))).toMatchObject({ statuses: undefined });
+  });
+});

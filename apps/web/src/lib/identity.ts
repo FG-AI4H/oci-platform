@@ -44,3 +44,16 @@ export function isHostOfDataset(
   if (!userGroups(session).includes('host')) return false;
   return subToUuid(sub).toLowerCase() === datasetHostId.toLowerCase();
 }
+
+/**
+ * The viewer's identity as the API serialises it (`hostId` on dataset
+ * rows), or `null` when nobody is signed in. Lets a page ask the API for
+ * "my rows" (`hostId=<this>`), which is how a host lists their own drafts.
+ */
+export function viewerUuid(session: Session | null | undefined): string | null {
+  if (!session?.user) return null;
+  const sub =
+    (session.user as { id?: string; sub?: string }).id ??
+    (session.user as { id?: string; sub?: string }).sub;
+  return sub ? subToUuid(sub) : null;
+}
