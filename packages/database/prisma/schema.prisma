@@ -1375,6 +1375,8 @@ model AnnotationTaskAssignment {
   @@index([taskId, status])
   @@index([assigneeUserId, status])
   @@index([taskId, gateAtAssignment, status])
+  /// Abandonment scans: open rows handed out before a cut-off (#647).
+  @@index([status, assignedAt])
   @@map("annotation_task_assignments")
   @@schema("annotation")
 }

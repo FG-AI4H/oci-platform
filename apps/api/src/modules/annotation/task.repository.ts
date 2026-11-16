@@ -320,34 +320,55 @@ export class TaskRepository {
    * (#647). Only INDEPENDENT-gate assignments count; arbitration and
    * expert review are separate work and must not eat into the share.
    *
-   * `nActiveAnnotators` and `callerShare` exclude EXPIRED rows —
-   * abandonment doesn't count toward task-share per #229 + ADR-0009.
+   * `callerShare` counts the caller's independent assignments that are
+   * not EXPIRED — abandonment doesn't count toward task-share per #229
+   * + ADR-0009.
+   *
+   * `nActiveAnnotators` counts only annotators who are still working:
+   * an independent assignment handed out, or a reading submitted, at or
+   * after `activeSince`. Counting everyone who ever took a task would
+   * keep annotators who left in the denominator and stall a shrinking
+   * cohort at the cap (#669 review). The caller is always counted: they
+   * are pulling now.
    */
   async biasCapInputs(args: {
     campaignId: string;
     callerUserId: string;
+    activeSince: Date;
   }): Promise<{ totalSlots: number; nActiveAnnotators: number; callerShare: number }> {
-    const [slots, groups] = await Promise.all([
+    const independent = {
+      task: { campaignId: args.campaignId },
+      gateAtAssignment: 'INDEPENDENT' as const,
+    };
+    const [slots, active, callerShare] = await Promise.all([
       this.prisma.client.annotationTask.aggregate({
         where: { campaignId: args.campaignId },
         _sum: { nAnnotatorsRequired: true },
       }),
-      this.prisma.client.annotationTaskAssignment.groupBy({
-        by: ['assigneeUserId'],
+      this.prisma.client.annotationTaskAssignment.findMany({
         where: {
-          task: { campaignId: args.campaignId },
-          gateAtAssignment: 'INDEPENDENT',
+          ...independent,
+          OR: [
+            { status: { in: ['PENDING', 'IN_PROGRESS'] }, assignedAt: { gte: args.activeSince } },
+            { status: 'SUBMITTED', submittedAt: { gte: args.activeSince } },
+          ],
+        },
+        distinct: ['assigneeUserId'],
+        select: { assigneeUserId: true },
+      }),
+      this.prisma.client.annotationTaskAssignment.count({
+        where: {
+          ...independent,
+          assigneeUserId: args.callerUserId,
           status: { in: ['PENDING', 'IN_PROGRESS', 'SUBMITTED'] },
         },
-        _count: { _all: true },
       }),
     ]);
-    const nActiveAnnotators = groups.length;
-    const callerGroup = groups.find((g) => g.assigneeUserId === args.callerUserId);
-    const callerShare = callerGroup?._count._all ?? 0;
+    const activeUsers = new Set(active.map((a) => a.assigneeUserId));
+    activeUsers.add(args.callerUserId);
     return {
       totalSlots: slots._sum.nAnnotatorsRequired ?? 0,
-      nActiveAnnotators,
+      nActiveAnnotators: activeUsers.size,
       callerShare,
     };
   }
@@ -378,13 +399,20 @@ export class TaskRepository {
     });
   }
 
+  /**
+   * Conditional submit. The `status` filter matches the one in
+   * `markAssignmentExpired`: if another pull expired the row (and
+   * audited that) after the caller's checks, the row stays EXPIRED and
+   * this returns false, so an expired reading can never also count as
+   * a submitted one (#669 review).
+   */
   async markAssignmentSubmitted(args: {
     assignmentId: string;
     submission: Record<string, unknown>;
     acknowledgedInstructionsVersion?: string | null;
-  }): Promise<AnnotationTaskAssignment> {
-    return this.prisma.client.annotationTaskAssignment.update({
-      where: { id: args.assignmentId },
+  }): Promise<boolean> {
+    const result = await this.prisma.client.annotationTaskAssignment.updateMany({
+      where: { id: args.assignmentId, status: { in: ['PENDING', 'IN_PROGRESS'] } },
       data: {
         status: 'SUBMITTED',
         // Cast through unknown because Prisma 7's `InputJsonValue` is a
@@ -398,6 +426,7 @@ export class TaskRepository {
           : {}),
       },
     });
+    return result.count > 0;
   }
 
   async setAssignmentStatus(

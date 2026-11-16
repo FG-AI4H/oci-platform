@@ -94,7 +94,7 @@ If you claim a task and don't submit it within the campaign's abandonment timeou
 - The router will hand it to someone else (or to you again, after FIFO has cycled past).
 - **No penalty** is recorded against you — abandonment is treated as a normal lifecycle event, not a quality signal.
 
-Timed-out assignments are released whenever anyone in the campaign asks for their next task, so a task you abandoned goes back into the queue without waiting for a background job. If you come back within the timeout, your assignment is still IN_PROGRESS and you can submit normally. If you come back after it, your submission is refused; ask for the next task to pick it up again.
+Timed-out assignments are released whenever anyone in the campaign asks for a new task, so a task you abandoned goes back into the queue without waiting for a background job. Passing the timeout does not by itself release your assignment: until someone in the campaign (you included) asks for a new task, it stays open and you can still submit. Once it has been released, your submission is refused; ask for the next task to pick it up again. Reloading the page within the timeout gives you back the same task.
 
 This was [#229](https://github.com/FG-AI4H/oci-platform/issues/229), and [#647](https://github.com/FG-AI4H/oci-platform/issues/647) for the release on pull.
 
