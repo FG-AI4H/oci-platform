@@ -355,6 +355,23 @@ export interface RequesterIdentityContext {
  * or trailing hyphen, no consecutive hyphens. Identical to the rule
  * NPM applies to package names so URLs share that ergonomic shape.
  */
+/**
+ * A user identity as the API serialises it: `identity.users.id`, derived
+ * from the Cognito subject by `cognitoSubAsUuid` (an 8-4-4-4-12 hex
+ * string passes through, anything else is hashed to a v5 UUID). Cognito
+ * subjects are not RFC 9562 UUIDs: the variant nibble is whatever the
+ * pool mints (`e3b418e2-f0a1-70fd-524a-8a6c453745c2` has a `5` where the
+ * RFC wants 8–b), so `z.uuid()` rejects real accounts. Validate the
+ * shape, not the version bits.
+ */
+export const UserIdSchema = z
+  .string()
+  .regex(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    'expected a user id (8-4-4-4-12 hex)',
+  );
+export type UserId = z.infer<typeof UserIdSchema>;
+
 export const DatasetSlugSchema = z
   .string()
   .min(3)
@@ -486,7 +503,7 @@ export const DatasetDetailSchema = DatasetSummarySchema.extend({
    * gate from PR L.3 which had to fall back to admin-only). Soft FK
    * onto `identity.users.id`.
    */
-  hostId: z.string().uuid(),
+  hostId: UserIdSchema,
   /**
    * Optional host-specified commercial-use clauses (#119). Surfaced on
    * the detail page when commercial terms need nuance (e.g. "OK with
@@ -562,7 +579,7 @@ export const ListDatasetsQuerySchema = z.object({
   q: z.string().min(1).max(200).optional(),
   visibility: DatasetVisibilitySchema.optional(),
   status: DatasetStatusSchema.optional(),
-  hostId: z.string().uuid().optional(),
+  hostId: UserIdSchema.optional(),
   source: DatasetSourceSchema.default('local'),
 
   // Faceted filters — case-insensitive substring match against the
@@ -2704,7 +2721,7 @@ export function evaluateCalibrationFlags(
 export const CalibrationFlagSchema = z.object({
   id: z.string().uuid(),
   campaignId: z.string().uuid(),
-  annotatorUserId: z.string().uuid(),
+  annotatorUserId: UserIdSchema,
   flagType: CalibrationFlagTypeSchema,
   metric: CalibrationMetricKindSchema,
   score: z.number(),
@@ -2779,7 +2796,7 @@ export const CampaignDetailSchema = CampaignSummarySchema.extend({
   /** Joined tool-integration summary for display. */
   toolIntegration: AnnotationToolIntegrationSummarySchema,
   /** Manager id (FK identity.users.id). The user who created the campaign. */
-  createdById: z.string().uuid(),
+  createdById: UserIdSchema,
   /**
    * Pointer to the currently-published instructions version (#230).
    * Null when no instructions are attached yet.
@@ -3164,7 +3181,7 @@ export type SeedTasksResponse = z.infer<typeof SeedTasksResponseSchema>;
  * is the slice-3 follow-up under #292.
  */
 export const AnnotatorQualitySummarySchema = z.object({
-  annotatorUserId: z.string().uuid(),
+  annotatorUserId: UserIdSchema,
   /** Number of gold samples this annotator has submitted on. */
   goldSamplesScored: z.number().int().nonnegative(),
   /** Total gold samples in the campaign (not yet attempted ≤ total). */
@@ -3302,7 +3319,7 @@ export const CampaignInstructionsSchema = z.object({
   version: z.string().min(1).max(64),
   markdownBody: z.string(),
   mediaUrls: z.array(InstructionsMediaRefSchema),
-  createdById: z.string().uuid(),
+  createdById: UserIdSchema,
   createdAt: z.string().datetime(),
   /** True when this row's version matches the campaign's pointer. */
   isCurrent: z.boolean(),
