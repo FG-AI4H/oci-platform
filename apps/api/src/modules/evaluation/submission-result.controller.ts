@@ -1,5 +1,11 @@
 import { Body, Controller, HttpCode, Inject, Param, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiExcludeEndpoint,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { SealedRunResultSchema, type SealedRunResult } from '@oci/shared-types';
 import { z } from 'zod';
 import { ZodPipe } from './dto/zod-pipe.js';
@@ -22,6 +28,9 @@ const SubmissionIdSchema = z.string().uuid();
  * already-applied result is a 200 no-op, and answering 201 on the first
  * delivery and 200 on a replay would make the two distinguishable by status
  * code for no benefit.
+ *
+ * `@ApiExcludeEndpoint()` keeps it out of the published OpenAPI document
+ * (#590): partners can't call it, so listing it only advertises surface.
  */
 @ApiTags('evaluation')
 @Controller({ path: 'submissions', version: '2' })
@@ -31,6 +40,7 @@ export class SubmissionResultController {
   constructor(@Inject(SubmissionResultService) private readonly results: SubmissionResultService) {}
 
   @Post(':id/result')
+  @ApiExcludeEndpoint()
   @ApiBearerAuth()
   @HttpCode(200)
   @ApiOperation({

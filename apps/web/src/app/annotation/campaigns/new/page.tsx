@@ -11,7 +11,11 @@ import {
   Container,
   Section,
 } from '@oci/ui';
-import type { AnnotationToolIntegrationSummary, DatasetDetail } from '@oci/shared-types';
+import type {
+  AnnotationToolIntegrationSummary,
+  DatasetDetail,
+  UserPreferences,
+} from '@oci/shared-types';
 import { auth } from '../../../../auth';
 import { apiFetch } from '../../../../lib/api';
 import { requireCampaignManager } from '../../../../lib/groups';
@@ -21,6 +25,24 @@ export const metadata = {
   title: 'New campaign — OCI Annotation',
   robots: { index: false, follow: false },
 };
+
+/** Matches the rest of the app when the user has no locale preference. */
+const DEFAULT_NUMBER_LOCALE = 'en-GB';
+
+/**
+ * Locale for the cost-estimate numbers (#582): the user's preference
+ * (#144) when `Intl` knows it, otherwise the app default. Resolved here
+ * rather than from the browser so the server and client renders agree.
+ */
+function numberLocaleFor(preferred: string | null | undefined): string {
+  if (!preferred) return DEFAULT_NUMBER_LOCALE;
+  try {
+    return Intl.NumberFormat.supportedLocalesOf([preferred])[0] ?? DEFAULT_NUMBER_LOCALE;
+  } catch {
+    // Matches LocaleSchema's loose shape but isn't a valid BCP-47 tag.
+    return DEFAULT_NUMBER_LOCALE;
+  }
+}
 
 interface NewCampaignPageProps {
   /**
@@ -65,11 +87,16 @@ export default async function NewCampaignPage({ searchParams }: NewCampaignPageP
     preselected = null;
   }
 
-  const tools =
-    (await apiFetch<AnnotationToolIntegrationSummary[]>('/v2/annotation/tool-integrations', {
+  const [toolsResponse, preferences] = await Promise.all([
+    apiFetch<AnnotationToolIntegrationSummary[]>('/v2/annotation/tool-integrations', {
       session,
       revalidate: 0,
-    })) ?? [];
+    }),
+    // Only formats numbers: a preferences outage falls back to the
+    // default locale instead of failing the form.
+    apiFetch<UserPreferences>('/v2/preferences/me', { session, revalidate: 0 }).catch(() => null),
+  ]);
+  const tools = toolsResponse ?? [];
 
   return (
     <Container size="md">
@@ -105,7 +132,11 @@ export default async function NewCampaignPage({ searchParams }: NewCampaignPageP
             <CardTitle>Draft details</CardTitle>
           </CardHeader>
           <CardContent>
-            <NewCampaignForm toolIntegrations={tools} preselectedDataset={preselected} />
+            <NewCampaignForm
+              toolIntegrations={tools}
+              preselectedDataset={preselected}
+              numberLocale={numberLocaleFor(preferences?.locale)}
+            />
           </CardContent>
         </Card>
       </Section>

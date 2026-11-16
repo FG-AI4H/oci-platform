@@ -26,7 +26,13 @@ import type {
 import { DUO_REGISTRY, lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../auth';
 import { isHost } from '../../lib/groups';
+import { viewerUuid } from '../../lib/identity';
 import { apiFetch } from '../../lib/api';
+import {
+  ANONYMIZATION_OPTIONS,
+  anonymizationLabel,
+  normaliseAnonymizationLevel,
+} from '../../lib/catalog-filters';
 
 /**
  * Catalog list (PR L.1, #91 — major rewrite from PR C/D's "search +
@@ -67,6 +73,8 @@ interface SearchParams {
   duoTerms?: string | string[];
   /** Commercial-use facet (#119). Single-value enum. */
   commercialUseTerms?: string;
+  /** `1` = only the signed-in host's own datasets, drafts included. */
+  mine?: string;
 }
 
 const SOURCE_OPTIONS: ReadonlyArray<{ value: DatasetSource; label: string; hint: string }> = [
@@ -105,11 +113,7 @@ const LICENSE_OPTIONS = [
   { label: 'MIT', value: 'MIT' },
   { label: 'Apache 2.0', value: 'Apache' },
 ];
-const ANON_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: 'ANONYMIZED', label: 'Anonymised' },
-  { value: 'PSEUDONYMIZED', label: 'Pseudonymised' },
-  { value: 'IDENTIFIED', label: 'Identified' },
-];
+const ANON_OPTIONS = ANONYMIZATION_OPTIONS;
 
 function normaliseSource(value: string | undefined): DatasetSource {
   return value === 'federated' || value === 'all' ? value : 'local';
@@ -161,6 +165,8 @@ interface FilterState {
   duoTerms: string[];
   /** Commercial-use facet (#119). `null` = no filter. */
   commercialUseTerms: 'OK' | 'NON_COMMERCIAL_ONLY' | 'CASE_BY_CASE' | null;
+  /** The host's own rows, every status. Ignored for viewers who are not hosts. */
+  mine: boolean;
   page: number;
 }
 
@@ -172,10 +178,11 @@ function parseFilters(params: SearchParams): FilterState {
     modality: toArray(params.modality),
     bodyRegion: toArray(params.bodyRegion),
     condition: toArray(params.condition),
-    anonymizationLevel: params.anonymizationLevel ?? null,
+    anonymizationLevel: normaliseAnonymizationLevel(params.anonymizationLevel),
     license: toArray(params.license),
     duoTerms: toArray(params.duoTerms),
     commercialUseTerms: normaliseCommercial(params.commercialUseTerms),
+    mine: params.mine === '1',
     page: Math.max(1, Number(params.page ?? '1') || 1),
   };
 }
@@ -206,6 +213,7 @@ function buildUrl(state: FilterState, overrides: Partial<FilterState>): string {
   for (const v of merged.license) qs.append('license', v);
   for (const v of merged.duoTerms) qs.append('duoTerms', v);
   if (merged.commercialUseTerms) qs.set('commercialUseTerms', merged.commercialUseTerms);
+  if (merged.mine) qs.set('mine', '1');
   if (merged.page > 1) qs.set('page', String(merged.page));
   const s = qs.toString();
   return s.length > 0 ? `/catalog?${s}` : '/catalog';
@@ -234,6 +242,10 @@ export default async function CatalogPage({
   const session = await auth();
   const canCreateDataset = isHost(session);
   const filters = parseFilters(params);
+  // "My datasets": the API returns every status for a host's own rows,
+  // so an abandoned draft can be found and finished. Nobody else can
+  // list drafts; see the catalogue service's status rule.
+  const ownerId = canCreateDataset && filters.mine ? viewerUuid(session) : null;
 
   const apiQs = new URLSearchParams();
   if (filters.q) apiQs.set('q', filters.q);
@@ -248,6 +260,7 @@ export default async function CatalogPage({
   for (const v of filters.license) apiQs.append('license', v);
   for (const v of filters.duoTerms) apiQs.append('duoTerms', v);
   if (filters.commercialUseTerms) apiQs.set('commercialUseTerms', filters.commercialUseTerms);
+  if (ownerId) apiQs.set('hostId', ownerId);
 
   let response: ListDatasetsResponse | null = null;
   let error: string | null = null;
@@ -261,7 +274,7 @@ export default async function CatalogPage({
   }
 
   return (
-    <Container>
+    <Container size="wide">
       <Section spacing="md">
         <header className="mb-6 flex flex-col gap-3">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
@@ -287,9 +300,19 @@ export default async function CatalogPage({
                 </p>
               ) : null}
               {canCreateDataset ? (
-                <Button asChild size="sm">
-                  <Link href="/catalog/new">New dataset</Link>
-                </Button>
+                <>
+                  <Button asChild size="sm" variant={filters.mine ? 'primary' : 'outline'}>
+                    <Link
+                      href={buildUrl(filters, { mine: !filters.mine, page: 1 })}
+                      aria-pressed={filters.mine}
+                    >
+                      My datasets
+                    </Link>
+                  </Button>
+                  <Button asChild size="sm">
+                    <Link href="/catalog/new">New dataset</Link>
+                  </Button>
+                </>
               ) : null}
             </div>
           </div>
@@ -310,7 +333,7 @@ export default async function CatalogPage({
             defaultValue={filters.q ?? ''}
             placeholder="Search by name, slug, or description"
             leadingIcon={<SearchIcon size={16} />}
-            className="min-w-0 flex-1 sm:flex-1"
+            wrapperClassName="min-w-0 flex-1"
           />
           <input type="hidden" name="source" value={filters.source} />
           {filters.sort !== 'recent' ? (
@@ -344,8 +367,32 @@ export default async function CatalogPage({
 
         <AppliedFilters filters={filters} />
 
-        <div className="grid gap-6 lg:grid-cols-[16rem_1fr]">
-          <FilterPanel filters={filters} />
+        <div className="grid gap-6 lg:grid-cols-[16rem_1fr] lg:gap-8">
+          <div className="min-w-0">
+            {/* Below lg the facets would push every result under ~30 links, so
+                they collapse behind a native disclosure (no JS). At lg+ the
+                rail is always visible and scrolls with the page. */}
+            <details className="group rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] lg:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-4 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] [&::-webkit-details-marker]:hidden">
+                Filters
+                {activeFilterCount(filters) > 0 ? (
+                  <Badge tone="primary">{activeFilterCount(filters)} active</Badge>
+                ) : null}
+                <span
+                  aria-hidden="true"
+                  className="ms-auto text-[var(--color-muted-foreground)] motion-safe:transition-transform group-open:rotate-180"
+                >
+                  ▾
+                </span>
+              </summary>
+              <div className="border-t border-[var(--color-border)] p-4">
+                <FilterPanel filters={filters} />
+              </div>
+            </details>
+            <div className="hidden lg:block">
+              <FilterPanel filters={filters} />
+            </div>
+          </div>
           <div className="min-w-0">
             <SortToolbar filters={filters} response={response} />
             {error ? (
@@ -361,7 +408,7 @@ export default async function CatalogPage({
               <EmptyState filters={filters} />
             ) : (
               <>
-                <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                   {response.items.map((d) => (
                     <li key={d.id}>
                       <DatasetCard d={d} />
@@ -378,12 +425,23 @@ export default async function CatalogPage({
   );
 }
 
-function FilterPanel({ filters }: { filters: FilterState }) {
+function activeFilterCount(filters: FilterState): number {
   return (
-    <aside
-      aria-label="Filters"
-      className="space-y-5 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-auto"
-    >
+    filters.modality.length +
+    filters.bodyRegion.length +
+    filters.condition.length +
+    filters.license.length +
+    filters.duoTerms.length +
+    (filters.anonymizationLevel ? 1 : 0) +
+    (filters.commercialUseTerms ? 1 : 0)
+  );
+}
+
+function FilterPanel({ filters }: { filters: FilterState }) {
+  // No sticky / max-height / inner overflow: seven facet groups are taller
+  // than any viewport, so a sticky rail always grew its own scrollbars (#597).
+  return (
+    <aside aria-label="Filters" className="space-y-5">
       <FacetSection
         title="Imaging modality"
         options={MODALITY_OPTIONS.map((v) => ({ label: v, value: v }))}
@@ -466,7 +524,9 @@ function FacetSection({
   toggleHref: (value: string) => string;
 }) {
   return (
-    <fieldset className="space-y-2">
+    // `min-w-0`: fieldsets default to `min-inline-size: min-content`, which
+    // let long DUO / anonymisation labels widen the rail instead of truncating.
+    <fieldset className="min-w-0 space-y-2">
       <legend className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
         {title}
       </legend>
@@ -483,7 +543,7 @@ function FacetSection({
                 // sr-only suffix makes the toggle affordance explicit for AT.
                 aria-current={isSelected ? 'true' : undefined}
                 className={
-                  'flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
+                  'flex min-w-0 items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
                   (isSelected
                     ? 'bg-[var(--color-primary-soft)] text-[var(--color-foreground)] font-medium'
                     : 'text-[var(--color-muted-foreground)] hover:bg-[var(--color-subtle)] hover:text-[var(--color-foreground)]')
@@ -525,7 +585,7 @@ function AppliedFilters({ filters }: { filters: FilterState }) {
   }
   if (filters.anonymizationLevel) {
     chips.push({
-      label: `Anonymisation: ${filters.anonymizationLevel.toLowerCase()}`,
+      label: `Anonymisation: ${anonymizationLabel(filters.anonymizationLevel)}`,
       href: buildUrl(filters, { anonymizationLevel: null, page: 1 }),
     });
   }
@@ -780,6 +840,8 @@ function DatasetCard({ d }: { d: DatasetSummary }) {
             </CardTitle>
             {isFederated ? (
               <Badge tone="accent">federated</Badge>
+            ) : d.status !== 'PUBLISHED' ? (
+              <Badge tone="neutral">{d.status.toLowerCase()}</Badge>
             ) : (
               <Badge tone={visibilityTone[d.visibility]}>{visibilityLabel[d.visibility]}</Badge>
             )}

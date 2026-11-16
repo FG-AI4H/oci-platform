@@ -35,6 +35,14 @@ CVE-2026-28390
 # HIGH gate was blocking all deploys. Remove when distroless ships the patch —
 # the scheduled suppression audit will flag it.
 CVE-2026-45447
+# Added 2026-11-05: CVE-2026-84782 (libssl3 HIGH) — information disclosure via
+# DTLS handshake retransmission. DTLS is TLS over UDP; the API speaks no DTLS at
+# all (inbound HTTP behind the ALB, outbound TLS over TCP to AWS endpoints), so
+# the vulnerable path is unreachable. Fix 3.0.22-1~deb12u2 is not in the
+# distroless base (still 3.0.18-1~deb12u2, digest sha256:14d42e25…, checked
+# 2026-11-05), and the HIGH gate was blocking every deploy. Remove when
+# distroless ships the patch; the scheduled suppression audit will flag it.
+CVE-2026-84782
 
 # -----------------------------------------------------------------------------
 # undici (npm) — image scan only (build-images), not the CI filesystem scan.

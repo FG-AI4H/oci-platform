@@ -8,6 +8,7 @@ import type {
   DatasetSlug,
   DatasetVisibility,
   DatasetStatus,
+  AnonymizationLevel,
 } from '@oci/shared-types';
 import { PrismaService } from '../../prisma.service.js';
 import { deriveDistributionFilename } from './distribution-filename.js';
@@ -112,7 +113,7 @@ export class CatalogRepository {
     modality?: string[];
     bodyRegion?: string[];
     condition?: string[];
-    anonymizationLevel?: 'ANONYMIZED' | 'PSEUDONYMIZED' | 'IDENTIFIED';
+    anonymizationLevel?: AnonymizationLevel;
     license?: string[];
     duoTerms?: string[];
     /** Commercial-use facet (#119). Single-value enum. */
@@ -377,6 +378,7 @@ export class CatalogRepository {
     visibility: DatasetVisibility;
     commercialUseTerms?: CommercialUseTerms;
     commercialClauses?: string | null;
+    accessTier?: AccessTier;
   }): Promise<DatasetRow> {
     return (await this.prisma.client.dataset.create({
       data: {
@@ -390,6 +392,7 @@ export class CatalogRepository {
         ...(data.commercialClauses !== undefined
           ? { commercialClauses: data.commercialClauses }
           : {}),
+        ...(data.accessTier ? { accessTier: data.accessTier } : {}),
       },
     })) as DatasetRow;
   }

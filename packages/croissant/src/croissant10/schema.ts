@@ -53,9 +53,15 @@ const License = z.union([
   z.object({ '@type': z.string().optional(), name: z.string().optional() }).passthrough(),
 ]);
 
+// The spec defines FileObject / FileSet in the `cr:` namespace; manifests in
+// the wild also spell them `sc:` (older examples) or bare (via @vocab).
 const FileObject = z
   .object({
-    '@type': z.union([z.literal('sc:FileObject'), z.literal('FileObject')]),
+    '@type': z.union([
+      z.literal('cr:FileObject'),
+      z.literal('sc:FileObject'),
+      z.literal('FileObject'),
+    ]),
     '@id': NonEmptyString,
     name: NonEmptyString,
     contentUrl: Url.optional(),
@@ -69,7 +75,7 @@ const FileObject = z
 
 const FileSet = z
   .object({
-    '@type': z.union([z.literal('sc:FileSet'), z.literal('FileSet')]),
+    '@type': z.union([z.literal('cr:FileSet'), z.literal('sc:FileSet'), z.literal('FileSet')]),
     '@id': NonEmptyString,
     containedIn: z.union([Reference, z.array(Reference)]).optional(),
     includes: z.union([NonEmptyString, z.array(NonEmptyString)]).optional(),
@@ -132,14 +138,30 @@ const RecordSet = z
   })
   .passthrough();
 
+const CroissantConformanceIri = z.union([
+  z.literal('http://mlcommons.org/croissant/1.0'),
+  z.literal('http://mlcommons.org/croissant/1.1'),
+]);
+
 export const Croissant10Schema = z
   .object({
     '@context': z.union([NonEmptyString, z.array(z.unknown()), z.record(z.string(), z.unknown())]),
     '@type': z.union([z.literal('sc:Dataset'), z.literal('Dataset')]),
-    /** `dct:conformsTo` — at this layer must point at one of the supported Croissant IRIs. */
+    /**
+     * `dct:conformsTo` — at this layer must point at one of the supported
+     * Croissant IRIs, either as a bare string or as one element of an
+     * array. The array form is how a manifest declares a profile target
+     * next to the Croissant one (`bio-prov` v0.2 section 2; the same
+     * pattern the Croissant RAI specification and GeoCroissant use).
+     */
     conformsTo: z.union([
-      z.literal('http://mlcommons.org/croissant/1.0'),
-      z.literal('http://mlcommons.org/croissant/1.1'),
+      CroissantConformanceIri,
+      z
+        .array(z.string())
+        .refine(
+          (targets) => targets.some((t) => CroissantConformanceIri.safeParse(t).success),
+          'expected a supported Croissant conformance IRI among the dct:conformsTo targets',
+        ),
     ]),
 
     // Required by 1.0 spec

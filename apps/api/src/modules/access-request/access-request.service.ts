@@ -25,7 +25,8 @@ import { PassportIssuerService } from '../passport-issuer/passport-issuer.servic
 import { PassportService } from '../passport/passport.service.js';
 import { AccessRequestRepository } from './access-request.repository.js';
 import { matchDuoIntent } from './duo-matcher.js';
-import { buildRequesterIdentityContext, extractRequesterEmail } from './identity-context.js';
+import { buildRequesterIdentityContext } from './identity-context.js';
+import { RequesterEmailResolver } from './requester-email.resolver.js';
 
 /**
  * Access-request lifecycle (PR F).
@@ -57,6 +58,7 @@ export class AccessRequestService {
     @Inject(OrcidLinkService) private readonly orcid: OrcidLinkService,
     @Inject(PassportService) private readonly passport: PassportService,
     @Inject(PassportIssuerService) private readonly passportIssuer: PassportIssuerService,
+    @Inject(RequesterEmailResolver) private readonly requesterEmail: RequesterEmailResolver,
   ) {}
 
   async create(
@@ -113,7 +115,7 @@ export class AccessRequestService {
       // swallow; conservative default already in place
     }
     const identityContext = buildRequesterIdentityContext({
-      email: extractRequesterEmail(user as unknown as { sub?: string; email?: string }),
+      email: await this.requesterEmail.resolve(user),
       datasetEmailDomainAllowlist: target.emailDomainAllowlist,
       hasActiveCertification,
       hasActiveOrcidLink,

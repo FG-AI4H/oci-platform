@@ -12,13 +12,13 @@ OCI storage to demonstrate the catalogue → gated download → evaluation flow 
 
 ## Contents
 
-| File                     | What it is                                                                                                                                                    |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `IDRiD_*.jpg`            | 30 downsampled fundus images — the hosted distributions (uploaded to S3 by `apps/migrate/upload-fixtures.mjs`).                                               |
-| `manifest.json`          | Croissant 1.1 + BIOCroissant manifest; `FileObject` distributions point at OCI `/download` URLs.                                                              |
-| `test-labels.hidden.csv` | Ground truth (`Image,dr_grade,dme_risk`) for the **evaluation service**. Deliberately **not** listed in `distribution[]`, so the uploader never publishes it. |
-| `seed.generated.sql`     | The `demo.sql` section (dataset + version + distribution rows). Already merged into `packages/database/seed/demo.sql`.                                        |
-| `generate.mjs`           | Reproducible generator (Node-only, per CLAUDE.md rule 9).                                                                                                     |
+| File                     | What it is                                                                                                                                                                                                                                                                              |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `IDRiD_*.jpg`            | 30 downsampled fundus images — the hosted distributions (uploaded to S3 by `apps/migrate/upload-fixtures.mjs`).                                                                                                                                                                         |
+| `manifest.json`          | Croissant 1.1 + BIOCroissant manifest with dataset-level PROV-O, ODRL offer, DUO consent code and the `bio-prov/0.1` block (marker, `rai:dataCollectionTimeframe`, `bio:labelProtocol`); conformant at `OPEN` in strict mode. `FileObject` distributions point at OCI `/download` URLs. |
+| `test-labels.hidden.csv` | Ground truth (`Image,dr_grade,dme_risk`) for the **evaluation service**. Deliberately **not** listed in `distribution[]`, so the uploader never publishes it.                                                                                                                           |
+| `seed.generated.sql`     | The `demo.sql` section (dataset + version + distribution rows). Already merged into `packages/database/seed/demo.sql`.                                                                                                                                                                  |
+| `generate.mjs`           | Reproducible generator (Node-only, per CLAUDE.md rule 9).                                                                                                                                                                                                                               |
 
 > **Note on "hidden" labels:** IDRiD grades are public (CC BY 4.0), so committing them
 > here is fine. For a _real_ sealed dataset (e.g. a partner hospital's data), the ground

@@ -98,6 +98,8 @@ is straightforward; the reverse is lossy and unverifiable.
 
 ## References
 
+- Amended by [ADR-0023](./0023-sandbox-model-package-is-a-signed-projection-of-the-model-card.md) (Sandbox model package: typed fields + signed projection)
+
 - CHAI Applied Model Card — <https://registry.chai.org/applied-model-card> · schema <https://github.com/coalition-for-health-ai/mc-schema> (v0.2 XSD)
 - [ADR-0002](./0002-metadata-conformance.md) (conform to external standards) · [ADR-0013](./0013-intended-use-statement-and-risk-tier.md) · [ADR-0014](./0014-evidence-audit-trail-and-regulator-export.md) · [ADR-0015](./0015-lmm-extensibility-door-openers.md)
 - WHO 2021 _Ethics & Governance of AI for Health_, ch. 4 + Fig. 7

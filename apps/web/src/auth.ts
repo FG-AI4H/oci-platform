@@ -20,7 +20,8 @@ declare module 'next-auth/jwt' {
   }
 }
 
-const isLocal = process.env.OCI_ENV === 'local' || process.env.NEXT_PUBLIC_OCI_ENV === 'local';
+export const isLocal =
+  process.env.OCI_ENV === 'local' || process.env.NEXT_PUBLIC_OCI_ENV === 'local';
 
 /**
  * NextAuth.js v5 server-side singleton — exports `handlers`, `signIn`,
@@ -113,6 +114,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     session({ session, token }) {
       session.accessToken = token.accessToken as string | undefined;
       session.idToken = token.idToken as string | undefined;
+      // The subject (Cognito `sub`, or the local-dev user) is what the API
+      // derives `hostId` from. Without it on the session, "is this viewer
+      // the host?" and "my datasets" cannot be answered on the web side.
+      if (typeof token.sub === 'string') session.user.id = token.sub;
       return session;
     },
   },

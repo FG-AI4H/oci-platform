@@ -3,12 +3,14 @@ import { AuthModule } from '../../auth/auth.module.js';
 import { PrismaService } from '../../prisma.service.js';
 import { CatalogModule } from '../catalog/catalog.module.js';
 import { CertificationModule } from '../certification/certification.module.js';
+import { IdentityAdminModule } from '../identity-admin/identity-admin.module.js';
 import { OrcidLinkModule } from '../orcid-link/orcid-link.module.js';
 import { PassportIssuerModule } from '../passport-issuer/passport-issuer.module.js';
 import { PassportModule } from '../passport/passport.module.js';
 import { AccessRequestController } from './access-request.controller.js';
 import { AccessRequestRepository } from './access-request.repository.js';
 import { AccessRequestService } from './access-request.service.js';
+import { RequesterEmailResolver } from './requester-email.resolver.js';
 
 /**
  * Access requests for RESTRICTED datasets (PR F, #75).
@@ -26,12 +28,13 @@ import { AccessRequestService } from './access-request.service.js';
     AuthModule,
     CatalogModule,
     CertificationModule,
+    IdentityAdminModule,
     OrcidLinkModule,
     PassportModule,
     PassportIssuerModule,
   ],
   controllers: [AccessRequestController],
-  providers: [PrismaService, AccessRequestService, AccessRequestRepository],
+  providers: [PrismaService, AccessRequestService, AccessRequestRepository, RequesterEmailResolver],
   exports: [AccessRequestService],
 })
 export class AccessRequestModule {}

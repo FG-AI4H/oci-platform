@@ -54,15 +54,54 @@ January 2027. Not presenting at Hangzhou costs you nothing in the challenge itse
 | January 2027                    | Phase 1 results published                                    |
 | 2027                            | Phase 2 — AI model benchmarking                              |
 
+## Which tracks are open, and why does only one have a date?
+
+Phase 1 is deliberately approach-agnostic: a solution may use sealed execution, homomorphic
+encryption, confidential computing, federated evaluation, or something not on that list. The tracks
+are a scheduling device, not a taxonomy you have to fit into.
+
+**Sealed execution is open, and has been since August.** A reference implementation exists so you
+have something concrete to work against and to disagree with. Most of Phase 1 is this track, and
+nothing is waiting on us for you to enter it.
+
+**Encrypted computation opens on 1 November 2026**, as a bounded demonstration against a reference
+task rather than an open submission route. Two things gate that date. The platform needs an adapter
+for evaluation over ciphertext, which is ours to build and is not built yet; and the track is scoped
+to inference rather than training, because the cost of training under encryption at clinical scale is
+not something the published literature supports today. What the demonstration reports is feasibility,
+the accuracy gap against a plaintext baseline, and measured computational cost.
+
+That leaves seven weeks between 1 November and the close of Phase 1 on 18 December, which is narrow
+on purpose. If you intend to enter on this track, write now rather than in November: the declarations
+can be drafted and read informally before the track opens, and the run is the last step rather than
+the first. The [integration note for encrypted-computation routes](./encrypted-computation-integration.md)
+says where such a route meets the platform.
+
+**Confidential computing and federated evaluation are scoped for 2027**, not open. They are named
+here so that nobody builds against a door that is closed, and so that a solution using them knows it
+is early rather than unwelcome. If that is your approach, tell us now; it affects how Phase 2 is
+scoped.
+
 ## What is the Hangzhou session, and what do I need to send?
 
-Thirty minutes on Friday 18 September 2026, inside the WG-Data report at the third GI-AI4H meeting.
-Four minutes per team plus one minute of questions, **up to four teams** — slots are limited and are
-allocated on 9 September, the day after registration closes.
+Sixty minutes on the **afternoon of Friday 18 September 2026** — a session of its own at the third
+GI-AI4H meeting, on the meeting's last day. **Ten minutes per team**: eight to present and two for
+questions. Slots were allocated on 9 September, the day after registration closed. The meeting
+programme carries the exact clock time.
 
-Slides are due **Friday 11 September 2026, 23:59 UTC** — five content slides maximum, PDF or
+The same session also carries short use-case presentations from **data hosts**, the institutions
+contributing the clinical evaluation tasks. A data host's slot is arranged directly rather than
+through the 8 September solution registration, so write to `marc.lecoultre@itu.int` if you are
+contributing a task and want to present it.
+
+Slides are due **Friday 11 September 2026, 23:59 UTC** — eight content slides maximum, PDF or
 PowerPoint, 16:9, in English, to `marc.lecoultre@itu.int`. The session is public and may be recorded,
 so nothing confidential, embargoed or patient-level.
+
+The session's total length has changed twice as the programme was built: thirty minutes, then
+seventy-five, now sixty. **The per-team time has only ever gone up.** If you were told four minutes
+and five slides, that was the thirty-minute plan; ten minutes and eight slides is what holds. Nobody
+has less time than they were promised.
 
 It is a presentation session, not a results session: nobody is scored on the day, and scored results
 follow in January 2027. The slides map onto the three declarations every solution files, so preparing
@@ -71,10 +110,47 @@ for Hangzhou is preparing your entry rather than a detour from it.
 For participation arrangements — including whether you can present without travelling — contact the
 organizers before the 8 September registration deadline.
 
+## I am contributing a solution. What do I upload?
+
+**Nothing, and that is the answer rather than a gap.** The upload form on the challenge page asks for
+retinal-image predictions because it is the route for a **model developer** submitting predictions
+against the reference task. A solution provider does not use it, so none of the portal options will
+fit what you are contributing and there is nothing for Submit to do.
+
+A solution is registered by writing to `marc.lecoultre@itu.int` with the
+[three declarations](./conformance-specification.md) — threat model, disclosure profile, operational
+envelope — and a reference to a runnable implementation. Contributed routes are then integrated by us
+rather than self-served, because a route ends up executing other participants' models against a
+hospital's data, so it is onboarded deliberately. Section 9 of the conformance specification says the
+same.
+
+If you saw **"the participant team is not approved by host yet"**, ignore it. This challenge does not
+require host approval of participant teams; registering is enough.
+
+## When are solutions reviewed?
+
+**After Phase 1 closes, all together.** Everything is submitted by **18 December 2026, 23:59 UTC**:
+the three declarations and a runnable implementation. Until then you may change either as often as
+you like. When the window closes, the declarations are frozen and technical review and adversarial
+testing begin, for every route at once. Results are published in January 2027.
+
+Demonstration on the reference task is enough for Phase 1. A route does not need to have run against
+a data host's own task first.
+
+Sending the declarations earlier is still worth it. We will read a draft and tell you where it does
+not match the specification. That reading is informal and does not count as review.
+
 ## Where do I find the reference task's item identifiers?
 
-On the task page, and in `GET /v2/evaluation/tasks/{slug}`, which returns the full `itemIds` set and
-an `itemCount`. A predictions file is a map keyed on those identifiers.
+The reference task is `idrid-dr-grading`. Its identifiers are published in two places, and both are
+open — no account and no authentication:
+
+- the task page, <https://dev.oci.ai4h.net/evaluation/idrid-dr-grading>, which lists them; and
+- `GET https://dev.oci.ai4h.net/v2/evaluation/tasks/idrid-dr-grading`, which returns the full
+  `itemIds` set and an `itemCount` alongside the task's configuration.
+
+A predictions file is a map keyed on those identifiers. That host is the development environment,
+which is where the reference task runs today; when it moves, this answer moves with it.
 
 Read the set rather than generating it: identifiers are not guaranteed to be contiguous or densely
 numbered. A sealed container does not need the list in advance — it receives the same set at run time

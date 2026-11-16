@@ -13,6 +13,8 @@ participant-authored, and `failure.detail` reaches an operator log.
 from __future__ import annotations
 
 import json
+import os
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,22 +37,59 @@ class PredictionsError(Exception):
 def read_predictions(output_dir: Path, index: InputIndex, cap_bytes: int) -> dict[str, int]:
     """Read and validate `predictions.json` from the run's output directory."""
     path = output_dir / PREDICTIONS_FILENAME
-    if not path.is_file():
+    # The container owns this path, so every check has to happen on one
+    # descriptor rather than on the name. Reported by team NOFOM (#514):
+    # `is_file()` then `stat()` then `read_bytes()` is three lookups through a
+    # participant-controlled path, all of which follow symlinks. A container
+    # could point predictions.json at a host file and have the worker read it,
+    # and could grow the file between the size check and the read.
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError as err:
         raise PredictionsError(
             Code.NO_OUTPUT, f"no {PREDICTIONS_FILENAME} in /output after the run"
-        )
-    size = path.stat().st_size
-    if size > cap_bytes:
-        raise PredictionsError(
-            Code.OUTPUT_TOO_LARGE,
-            f"{PREDICTIONS_FILENAME} is {size} bytes, above the {cap_bytes}-byte cap",
-        )
-    try:
-        raw = path.read_bytes().decode("utf-8")
-    except (OSError, UnicodeDecodeError) as err:
-        raise PredictionsError(
-            Code.MALFORMED_OUTPUT, f"{PREDICTIONS_FILENAME} is not readable UTF-8 text"
         ) from err
+    except OSError as err:
+        # ELOOP from O_NOFOLLOW lands here: a symlink is not an absent file and
+        # not a malformed document, it is a containment failure.
+        raise PredictionsError(
+            Code.MALFORMED_OUTPUT,
+            f"{PREDICTIONS_FILENAME} must be a regular file, not a link or device",
+        ) from err
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise PredictionsError(
+                Code.MALFORMED_OUTPUT,
+                f"{PREDICTIONS_FILENAME} must be a single-link regular file",
+            )
+        if info.st_size > cap_bytes:
+            raise PredictionsError(
+                Code.OUTPUT_TOO_LARGE,
+                f"{PREDICTIONS_FILENAME} is {info.st_size} bytes, above the {cap_bytes}-byte cap",
+            )
+        try:
+            # cap_bytes + 1 so growth after the fstat is caught by the read
+            # itself rather than trusted from the earlier size.
+            with os.fdopen(fd, "rb", closefd=False) as handle:
+                data = handle.read(cap_bytes + 1)
+        except OSError as err:
+            raise PredictionsError(
+                Code.MALFORMED_OUTPUT, f"{PREDICTIONS_FILENAME} is not readable"
+            ) from err
+        if len(data) > cap_bytes:
+            raise PredictionsError(
+                Code.OUTPUT_TOO_LARGE,
+                f"{PREDICTIONS_FILENAME} is above the {cap_bytes}-byte cap",
+            )
+        try:
+            raw = data.decode("utf-8")
+        except UnicodeDecodeError as err:
+            raise PredictionsError(
+                Code.MALFORMED_OUTPUT, f"{PREDICTIONS_FILENAME} is not readable UTF-8 text"
+            ) from err
+    finally:
+        os.close(fd)
     return parse_predictions(raw, index)
 
 

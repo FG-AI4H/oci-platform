@@ -13,7 +13,7 @@ export function SiteFooter() {
 
   return (
     <footer className="mt-16 border-t border-[var(--color-border)] bg-[var(--color-subtle)]">
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-4 sm:px-6">
+      <div className="mx-auto grid max-w-(--breakpoint-2xl) gap-10 px-4 py-12 sm:grid-cols-4 sm:px-6">
         <div className="sm:col-span-2 space-y-3">
           <Link
             href="/"
@@ -42,6 +42,7 @@ export function SiteFooter() {
 
         <FooterColumn title="Platform">
           <FooterLink href="/catalog">Catalog</FooterLink>
+          <FooterLink href="/models">Models</FooterLink>
           <FooterLink href="/dashboard">Dashboard</FooterLink>
         </FooterColumn>
 
@@ -59,7 +60,7 @@ export function SiteFooter() {
       </div>
 
       <div className="border-t border-[var(--color-border)]">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-4 text-xs text-[var(--color-muted-foreground)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="mx-auto flex max-w-(--breakpoint-2xl) flex-col gap-2 px-4 py-4 text-xs text-[var(--color-muted-foreground)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <p>© {year} OCI Platform contributors. BSD-3-Clause licensed.</p>
           <p className="font-mono">
             env: <span className="text-[var(--color-foreground)]">{env}</span>

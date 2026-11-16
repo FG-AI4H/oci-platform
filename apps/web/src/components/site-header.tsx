@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Badge, Button } from '@oci/ui';
-import { auth, signOut } from '../auth';
+import { redirect } from 'next/navigation';
+import { auth, isLocal, signOut } from '../auth';
+import { cognitoLogoutUrl } from '../lib/cognito-logout';
 import { isAdmin, isHost } from '../lib/groups';
 import { BrandLockup } from './brand-mark';
 
@@ -28,7 +30,7 @@ export async function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-background)]/85 backdrop-blur supports-[backdrop-filter]:bg-[var(--color-background)]/70">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+      <div className="mx-auto flex h-14 max-w-(--breakpoint-2xl) items-center justify-between gap-4 px-4 sm:px-6">
         <div className="flex items-center gap-6 min-w-0">
           <Link
             href="/"
@@ -38,6 +40,8 @@ export async function SiteHeader() {
           </Link>
           <nav aria-label="Primary" className="hidden sm:flex items-center gap-5">
             <NavLink href="/catalog">Catalog</NavLink>
+            {/* Public like /catalog: PUBLISHED model cards only (#591). */}
+            <NavLink href="/models">Models</NavLink>
             {/* Public like /catalog: evaluation tasks and their scores are
                 readable by anyone (ADR-0017); ground truth never is. */}
             <NavLink href="/evaluation">Evaluation</NavLink>
@@ -67,7 +71,21 @@ export async function SiteHeader() {
               <form
                 action={async () => {
                   'use server';
-                  await signOut({ redirectTo: '/' });
+                  // End the Cognito hosted-UI session too, or the next
+                  // "Sign in" silently returns the same user (#663).
+                  const logoutUrl = isLocal
+                    ? null
+                    : await cognitoLogoutUrl({
+                        issuer: process.env.AUTH_COGNITO_ISSUER,
+                        clientId: process.env.AUTH_COGNITO_ID,
+                        returnTo: `${(process.env.AUTH_URL ?? '').replace(/\/+$/, '')}/`,
+                      });
+                  if (logoutUrl === null) {
+                    await signOut({ redirectTo: '/' });
+                    return;
+                  }
+                  await signOut({ redirect: false });
+                  redirect(logoutUrl);
                 }}
               >
                 <Button type="submit" variant="ghost" size="sm">

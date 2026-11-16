@@ -20,7 +20,7 @@
     "@oci/croissant": "workspace:*",
     "@oci/database": "workspace:*",
     "pino": "^9.5.0",
-    "zod": "^4.4.2"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

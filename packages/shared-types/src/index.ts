@@ -71,6 +71,10 @@ export {
   ModelCardResponseSchema,
   ModelCardStatusSchema,
   ChangeModelCardStatusRequestSchema,
+  PublicModelCardSchema,
+  ModelCardSlugSchema,
+  ListModelCardsQuerySchema,
+  ListModelCardsSortSchema,
   RegulatoryApprovalSchema,
   allowedTransitionsFrom,
   canTransition,
@@ -81,6 +85,12 @@ export type {
   ModelCardStatus,
   ChangeModelCardStatusRequest,
   RegulatoryApproval,
+  PublicModelCard,
+  ModelCardSlug,
+  ListModelCardsQuery,
+  ListModelCardsSort,
+  ModelCardSummary,
+  ListModelCardsResponse,
 } from './model-card.js';
 
 // EvaluationRoute — privacy-preserving evaluation solutions (WP5, #412, ADR-0018).
@@ -117,6 +127,25 @@ export type {
   ScoreAttribution,
 } from './evaluation-route.js';
 
+// Capability document (#590) — `/.well-known/oci-capabilities.json`, grouped
+// by the AI for Good Sandbox's Discover / Publish / Trust / Operate verbs.
+export {
+  CapabilityVerbSchema,
+  CapabilityAuthSchema,
+  CapabilityEntrySchema,
+  CapabilityGroupSchema,
+  CapabilityStandardSchema,
+  OciCapabilitiesDocumentSchema,
+} from './capabilities.js';
+export type {
+  CapabilityVerb,
+  CapabilityAuth,
+  CapabilityEntry,
+  CapabilityGroup,
+  CapabilityStandard,
+  OciCapabilitiesDocument,
+} from './capabilities.js';
+
 // Model Facts Label (#261) — a WHO Fig. 7 rendering of the canonical ModelCard.
 export { ModelFactsLabelSchema, ModelFactsPerformanceEntrySchema } from './model-facts-label.js';
 export type { ModelFactsLabel, ModelFactsPerformanceEntry } from './model-facts-label.js';
@@ -138,6 +167,7 @@ export const RoleSchema = z.enum([
   'participant',
   'annotator',
   'reviewer',
+  'evaluation-reviewer',
   'supervisor',
   'regulator',
 ]);
@@ -325,6 +355,23 @@ export interface RequesterIdentityContext {
  * or trailing hyphen, no consecutive hyphens. Identical to the rule
  * NPM applies to package names so URLs share that ergonomic shape.
  */
+/**
+ * A user identity as the API serialises it: `identity.users.id`, derived
+ * from the Cognito subject by `cognitoSubAsUuid` (an 8-4-4-4-12 hex
+ * string passes through, anything else is hashed to a v5 UUID). Cognito
+ * subjects are not RFC 9562 UUIDs: the variant nibble is whatever the
+ * pool mints (`e3b418e2-f0a1-70fd-524a-8a6c453745c2` has a `5` where the
+ * RFC wants 8–b), so `z.uuid()` rejects real accounts. Validate the
+ * shape, not the version bits.
+ */
+export const UserIdSchema = z
+  .string()
+  .regex(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    'expected a user id (8-4-4-4-12 hex)',
+  );
+export type UserId = z.infer<typeof UserIdSchema>;
+
 export const DatasetSlugSchema = z
   .string()
   .min(3)
@@ -456,7 +503,7 @@ export const DatasetDetailSchema = DatasetSummarySchema.extend({
    * gate from PR L.3 which had to fall back to admin-only). Soft FK
    * onto `identity.users.id`.
    */
-  hostId: z.string().uuid(),
+  hostId: UserIdSchema,
   /**
    * Optional host-specified commercial-use clauses (#119). Surfaced on
    * the detail page when commercial terms need nuance (e.g. "OK with
@@ -511,11 +558,28 @@ export type ListDatasetsSort = z.infer<typeof ListDatasetsSortSchema>;
  *     prefer cursor-based pagination at scale. Both are accepted;
  *     `cursor` wins when both are present.
  */
+/**
+ * Anonymisation level of a dataset — the four-level HIPAA-aligned scale
+ * BIOCroissant v0.1 uses for `bio:anonymizationLevel` (IDENTIFIED →
+ * LIMITED → DEIDENTIFIED → ANONYMIZED). Shared by the catalogue list
+ * filter, the publish wizard and the API so no surface can offer a value
+ * a valid manifest cannot carry (#509; the old three-value set had
+ * `PSEUDONYMIZED`, which the validator rejects — `DEIDENTIFIED` is the
+ * BIOCroissant spelling for pseudonymised data).
+ */
+export const AnonymizationLevelSchema = z.enum([
+  'IDENTIFIED',
+  'LIMITED',
+  'DEIDENTIFIED',
+  'ANONYMIZED',
+]);
+export type AnonymizationLevel = z.infer<typeof AnonymizationLevelSchema>;
+
 export const ListDatasetsQuerySchema = z.object({
   q: z.string().min(1).max(200).optional(),
   visibility: DatasetVisibilitySchema.optional(),
   status: DatasetStatusSchema.optional(),
-  hostId: z.string().uuid().optional(),
+  hostId: UserIdSchema.optional(),
   source: DatasetSourceSchema.default('local'),
 
   // Faceted filters — case-insensitive substring match against the
@@ -527,7 +591,7 @@ export const ListDatasetsQuerySchema = z.object({
   /**
    * Anonymisation level filter. `any` (default) drops the filter.
    */
-  anonymizationLevel: z.enum(['ANONYMIZED', 'PSEUDONYMIZED', 'IDENTIFIED']).optional(),
+  anonymizationLevel: AnonymizationLevelSchema.optional(),
   /**
    * License filter — substring match against `manifest.license`. The
    * web UI surfaces a small known-set picker; the API stays open
@@ -589,6 +653,12 @@ export const CreateDatasetRequestSchema = z.object({
   commercialUseTerms: CommercialUseTermsSchema.optional(),
   /** Optional commercial-clauses free-text (#119). Surfaced verbatim on the detail page. */
   commercialClauses: z.string().max(4000).nullable().optional(),
+  /**
+   * Catalogue access tier (ADR-0003 Decision 2): the identity level a
+   * requester needs. The host decides it, like visibility. Omitted → the
+   * DB default `OPEN`.
+   */
+  accessTier: AccessTierSchema.optional(),
 });
 export type CreateDatasetRequest = z.infer<typeof CreateDatasetRequestSchema>;
 
@@ -637,18 +707,138 @@ export const ManifestWizardCreatorSchema = z.object({
 export type ManifestWizardCreator = z.infer<typeof ManifestWizardCreatorSchema>;
 
 /**
- * Anonymisation level (BioCroissant). Mirrors the small canonical set
- * the validator recognises today; the wizard is intentionally narrower
- * than what a hand-written manifest can carry.
+ * Anonymisation level (BioCroissant). The four-level HIPAA-aligned scale
+ * the validator's `bio:anonymizationLevel` accepts — the same set the
+ * `bio-prov` de-identification activity's `resultingLevel` must equal
+ * (#496). The previous three-value set carried `PSEUDONYMIZED`, which
+ * the validator rejects; `DEIDENTIFIED` is the BIOCroissant spelling.
  */
-export const ManifestWizardAnonymizationLevelSchema = z.enum([
-  'ANONYMIZED',
-  'PSEUDONYMIZED',
-  'IDENTIFIED',
-]);
+export const ManifestWizardAnonymizationLevelSchema = AnonymizationLevelSchema;
 export type ManifestWizardAnonymizationLevel = z.infer<
   typeof ManifestWizardAnonymizationLevelSchema
 >;
+
+// ---- Provenance step (bio-prov v0.1, #496) ---------------------------------
+//
+// Dataset-level answers to the first four questions of the profile
+// (`docs/standards/bio-prov-v0.1.md`, section 1): where the data came
+// from, what was done to it, under what authority, how the ground truth
+// was produced. This schema checks *shape* only (lengths, date and
+// country formats, integer counts). Which blocks a dataset MUST fill
+// depends on its access tier and is decided by the `provenance`
+// validator layer of `@oci/croissant`, not here — so every field
+// accepts the empty string and the builder omits what is blank.
+
+const isoDateOrBlank = (v: string): boolean => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v);
+const countryOrBlank = (v: string): boolean => v === '' || /^[A-Z]{2}$/.test(v);
+
+/** A calendar date (`YYYY-MM-DD`) or blank. */
+const WizardDateSchema = z.string().max(10).refine(isoDateOrBlank, 'expected ISO date YYYY-MM-DD');
+
+/** H4 — the pass that produced the declared anonymisation level. */
+export const ManifestWizardDeidentificationMethodSchema = z.enum([
+  'SAFE_HARBOR',
+  'EXPERT_DETERMINATION',
+  'PSEUDONYMISATION',
+  'SYNTHETIC',
+  'NONE',
+]);
+export type ManifestWizardDeidentificationMethod = z.infer<
+  typeof ManifestWizardDeidentificationMethodSchema
+>;
+
+/** H1 — one contributing site. `country` is ISO 3166-1 alpha-2. */
+export const ManifestWizardSourceSiteSchema = z.object({
+  name: z.string().max(200),
+  country: z.string().max(2).refine(countryOrBlank, 'expected an ISO 3166-1 alpha-2 country code'),
+});
+export type ManifestWizardSourceSite = z.infer<typeof ManifestWizardSourceSiteSchema>;
+
+export const ManifestWizardProvenanceSchema = z.object({
+  /** P1 — `prov:wasAttributedTo` a `prov:Organization`. `id` is a ROR / GRID / institution URL. */
+  sourceOrganization: z.object({
+    name: z.string().max(200),
+    id: z.string().max(2000),
+  }),
+  /**
+   * P2 / P4 — the dated collection (or derivation) activity and the agent
+   * that ran it. A blank `agentName` falls back to the source organisation.
+   */
+  collection: z.object({
+    name: z.string().max(500),
+    startedAt: WizardDateSchema,
+    endedAt: WizardDateSchema,
+    agentName: z.string().max(200),
+    /** When true the agent is emitted as a `prov:SoftwareAgent` acting on behalf of the source organisation. */
+    agentIsSoftware: z.boolean(),
+  }),
+  /** P3 — IRI (a DOI is preferred) of the upstream dataset, when this one is derived. */
+  derivedFrom: z.string().max(2000),
+  /** H1 */
+  sites: z.array(ManifestWizardSourceSiteSchema).max(50),
+  /** H2 — `rai:dataCollectionTimeframe`, the human account of when data was collected. */
+  collectionTimeframe: z.string().max(500),
+  /** H3 — a device class term (DICOM modality, GMDN) and/or the acquisition equipment. */
+  deviceClass: z.string().max(200),
+  equipment: z.object({
+    manufacturer: z.string().max(200),
+    model: z.string().max(200),
+    softwareVersion: z.string().max(100),
+  }),
+  /** H4 — `resultingLevel` is kept equal to `anonymizationLevel` by the builder. */
+  deidentification: z.object({
+    method: z.union([ManifestWizardDeidentificationMethodSchema, z.literal('')]),
+    endedAt: WizardDateSchema,
+    /** `tool@version` of the de-identification software, when one ran. */
+    toolName: z.string().max(200),
+  }),
+  /** H5 — `bio:irbApproval`. */
+  ethics: z.object({
+    approvingBody: z.string().max(300),
+    approvalNumber: z.string().max(200),
+    approvalDate: WizardDateSchema,
+    /** Whether the approval covers evaluation of third-party AI models (spec H5). */
+    approvalScope: z.string().max(2000),
+  }),
+  /** H6 — `bio:labelProtocol`. */
+  labelProtocol: z.object({
+    version: z.string().max(200),
+    labelScale: z.string().max(500),
+    gradersPerItem: z.number().int().min(1).max(1000).optional(),
+    graderQualification: z.string().max(500),
+    adjudication: z.string().max(500),
+    interRaterAgreement: z.object({
+      metric: z.string().max(100),
+      value: z.number().optional(),
+    }),
+    perRaterLabelsRetained: z.boolean().optional(),
+  }),
+});
+export type ManifestWizardProvenance = z.infer<typeof ManifestWizardProvenanceSchema>;
+
+/** The provenance step's initial state: every field blank. */
+export function emptyManifestWizardProvenance(): ManifestWizardProvenance {
+  return {
+    sourceOrganization: { name: '', id: '' },
+    collection: { name: '', startedAt: '', endedAt: '', agentName: '', agentIsSoftware: false },
+    derivedFrom: '',
+    sites: [],
+    collectionTimeframe: '',
+    deviceClass: '',
+    equipment: { manufacturer: '', model: '', softwareVersion: '' },
+    deidentification: { method: '', endedAt: '', toolName: '' },
+    ethics: { approvingBody: '', approvalNumber: '', approvalDate: '', approvalScope: '' },
+    labelProtocol: {
+      version: '',
+      labelScale: '',
+      gradersPerItem: undefined,
+      graderQualification: '',
+      adjudication: '',
+      interRaterAgreement: { metric: '', value: undefined },
+      perRaterLabelsRetained: undefined,
+    },
+  };
+}
 
 /**
  * One distribution (a file) in the wizard's flat shape. The Croissant
@@ -708,12 +898,18 @@ export const ManifestWizardInputSchema = z.object({
   diseaseCondition: z.array(z.string().min(1).max(200)).max(20).default([]),
   anonymizationLevel: ManifestWizardAnonymizationLevelSchema.optional(),
 
-  // Step 4 — Data use (DUO) — required for non-PUBLIC datasets per
+  // Step 4 — Provenance (bio-prov v0.1, #496). Present whenever the host
+  // went through the guided flow; the builder then emits the profile
+  // marker and whichever blocks were filled. Absent for callers that
+  // predate the step.
+  provenance: ManifestWizardProvenanceSchema.optional(),
+
+  // Step 5 — Data use (DUO) — required for non-PUBLIC datasets per
   // publish-time fail-closed (J.1 decision #2). The wizard nudges the
   // host to pick at least one for every visibility level except PUBLIC.
   duoTerms: z.array(DuoTermIdSchema).max(20).default([]),
 
-  // Step 5 — Distributions
+  // Step 6 — Distributions
   distributions: z.array(ManifestWizardDistributionSchema).max(100).default([]),
 
   // Notes — pass-through to the publish action's `notes` field; not
@@ -1961,6 +2157,10 @@ export function outputLicenseAllowedForTerms(
   );
 }
 
+/** Bounds on `nAnnotators` (ADR-0009 Decision 2), shared with the campaign-create form. */
+export const N_ANNOTATORS_MIN = 1;
+export const N_ANNOTATORS_MAX = 12;
+
 /**
  * Workflow configuration (ADR-0009 Decisions 2 + 4). Phase B.A.1 only
  * surfaces `nAnnotators`; IRR thresholds + gate config + experience-
@@ -1973,7 +2173,7 @@ export const CampaignWorkflowConfigSchema = z.object({
    * justification (recorded on the campaign — UI-side enforcement
    * lands with #222).
    */
-  nAnnotators: z.number().int().min(1).max(12).default(3),
+  nAnnotators: z.number().int().min(N_ANNOTATORS_MIN).max(N_ANNOTATORS_MAX).default(3),
   /**
    * Per-campaign abandonment timeout (#229). An assignment that stays
    * PENDING / IN_PROGRESS past `assignedAt + taskTimeoutHours` is
@@ -1992,6 +2192,67 @@ export const CampaignWorkflowConfigSchema = z.object({
   completenessMode: CampaignCompletenessModeSchema.default('soft-warn'),
 });
 export type CampaignWorkflowConfig = z.infer<typeof CampaignWorkflowConfigSchema>;
+
+/**
+ * Smallest `nAnnotators` at which the campaign-create form shows the
+ * cost estimate (ADR-0009 Decision 2: "when N > 5"). Distinct from the
+ * 8–12 justification threshold (#222).
+ */
+export const COST_ESTIMATE_MIN_N = 6;
+
+/**
+ * Whether the campaign-create form shows the cost estimate for this N:
+ * a finite N inside [N_ANNOTATORS_MIN, N_ANNOTATORS_MAX] and at least
+ * COST_ESTIMATE_MIN_N. An out-of-range N shows the range error instead.
+ */
+export function shouldShowCostEstimate(n: number): boolean {
+  return (
+    Number.isFinite(n) && n >= N_ANNOTATORS_MIN && n <= N_ANNOTATORS_MAX && n >= COST_ESTIMATE_MIN_N
+  );
+}
+
+export interface CampaignEventsEstimateInput {
+  nAnnotators: number;
+  /** Expected number of samples. Not persisted; the form asks for it only to feed the estimate. */
+  sampleCount: number;
+}
+
+export interface CampaignEventsEstimate {
+  /** Exactly N × samples: every gate-1 annotator labels every sample. */
+  gate1Events: number;
+  /** At most one arbitration per sample (gate 2 runs only when gate 1 disagrees). */
+  maxArbitrationEvents: number;
+  /** At most one expert review per sample (gate 3 runs only when arbitration escalates). */
+  maxExpertEvents: number;
+  /** Worst case, every sample disagreeing: gate 1 plus the gate-2 and gate-3 maxima. */
+  totalProjectedEvents: number;
+}
+
+/**
+ * Projected annotation events for a campaign under the 3-gate SOP
+ * (#311, ADR-0009 Decision 2). Event counts, not money: OCI has no
+ * per-event rate. Gates 2 and 3 are upper bounds because there is no
+ * disagreement rate to project with; for N = 1 (single-rater shortcut)
+ * they never run. A missing, negative or non-finite sample count
+ * yields zero events.
+ */
+export function estimateCampaignEvents({
+  nAnnotators,
+  sampleCount,
+}: CampaignEventsEstimateInput): CampaignEventsEstimate {
+  const n = Number.isFinite(nAnnotators) ? Math.max(0, Math.trunc(nAnnotators)) : 0;
+  const samples = Number.isFinite(sampleCount) ? Math.max(0, Math.trunc(sampleCount)) : 0;
+  const gate1Events = n * samples;
+  const laterGatesRun = n > 1;
+  const maxArbitrationEvents = laterGatesRun ? samples : 0;
+  const maxExpertEvents = laterGatesRun ? samples : 0;
+  return {
+    gate1Events,
+    maxArbitrationEvents,
+    maxExpertEvents,
+    totalProjectedEvents: gate1Events + maxArbitrationEvents + maxExpertEvents,
+  };
+}
 
 /**
  * Per-task-kind completeness predicate (#231).
@@ -2460,7 +2721,7 @@ export function evaluateCalibrationFlags(
 export const CalibrationFlagSchema = z.object({
   id: z.string().uuid(),
   campaignId: z.string().uuid(),
-  annotatorUserId: z.string().uuid(),
+  annotatorUserId: UserIdSchema,
   flagType: CalibrationFlagTypeSchema,
   metric: CalibrationMetricKindSchema,
   score: z.number(),
@@ -2535,7 +2796,7 @@ export const CampaignDetailSchema = CampaignSummarySchema.extend({
   /** Joined tool-integration summary for display. */
   toolIntegration: AnnotationToolIntegrationSummarySchema,
   /** Manager id (FK identity.users.id). The user who created the campaign. */
-  createdById: z.string().uuid(),
+  createdById: UserIdSchema,
   /**
    * Pointer to the currently-published instructions version (#230).
    * Null when no instructions are attached yet.
@@ -2920,7 +3181,7 @@ export type SeedTasksResponse = z.infer<typeof SeedTasksResponseSchema>;
  * is the slice-3 follow-up under #292.
  */
 export const AnnotatorQualitySummarySchema = z.object({
-  annotatorUserId: z.string().uuid(),
+  annotatorUserId: UserIdSchema,
   /** Number of gold samples this annotator has submitted on. */
   goldSamplesScored: z.number().int().nonnegative(),
   /** Total gold samples in the campaign (not yet attempted ≤ total). */
@@ -3037,7 +3298,12 @@ export type GateTransitionAction = z.infer<typeof GateTransitionActionSchema>;
 
 /** Embedded media reference inside instructions markdown. */
 export const InstructionsMediaRefSchema = z.object({
-  url: z.string().url(),
+  /**
+   * https only. The web renders this straight into `<img src>` /
+   * `<video src>`, outside react-markdown's `urlTransform`, so
+   * `javascript:`, `data:`, `file:` and plain `http:` are refused here.
+   */
+  url: z.url({ protocol: /^https$/, error: 'Media URLs must start with https://' }),
   kind: z.enum(['image', 'video']),
   caption: z.string().max(200).optional(),
 });
@@ -3053,7 +3319,7 @@ export const CampaignInstructionsSchema = z.object({
   version: z.string().min(1).max(64),
   markdownBody: z.string(),
   mediaUrls: z.array(InstructionsMediaRefSchema),
-  createdById: z.string().uuid(),
+  createdById: UserIdSchema,
   createdAt: z.string().datetime(),
   /** True when this row's version matches the campaign's pointer. */
   isCurrent: z.boolean(),
@@ -3090,6 +3356,13 @@ export const PublishInstructionsRequestSchema = z.object({
       `markdownBody must be ≤ ${INSTRUCTIONS_MARKDOWN_MAX_BYTES} bytes`,
     ),
   mediaUrls: z.array(InstructionsMediaRefSchema).max(20).default([]),
+  /**
+   * The version the editor was based on (`null` when nothing was
+   * published yet). When sent, the API returns 409 if the campaign's
+   * current version has moved on since, so a stale editor can't
+   * silently replace someone else's publish. Omit to skip the check.
+   */
+  baseVersion: z.string().min(1).max(64).nullable().optional(),
 });
 export type PublishInstructionsRequest = z.infer<typeof PublishInstructionsRequestSchema>;
 
@@ -3149,6 +3422,7 @@ export const PlatformGroupSchema = z.enum([
   'reviewer',
   'arbitration-annotator',
   'expert-reviewer',
+  'evaluation-reviewer',
   'annotator',
   'supervisor',
   'regulator',

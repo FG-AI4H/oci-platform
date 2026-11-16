@@ -21,6 +21,11 @@ export function LocalSignInForm({ callbackUrl }: Props) {
   return (
     <form action={action} className="space-y-4" aria-busy={pending || undefined}>
       <input type="hidden" name="callbackUrl" value={callbackUrl} />
+      {/* NextAuth's signIn(provider, formData) redirects to `redirectTo`,
+          else the Referer (this page). Going back to /signin only worked
+          because it bounces a signed-in caller on, which it doesn't for
+          `reason=expired`. */}
+      <input type="hidden" name="redirectTo" value={callbackUrl} />
 
       {state.status === 'error' ? (
         <Alert tone="danger">

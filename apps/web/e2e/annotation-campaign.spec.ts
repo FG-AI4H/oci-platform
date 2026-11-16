@@ -1,4 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+import {
+  CampaignOutputLicenseSchema,
+  outputLicenseAllowedForTerms,
+  type CommercialUseTerms,
+} from '@oci/shared-types';
 
 /**
  * E2E coverage for the annotation-campaign create flow.
@@ -23,6 +29,9 @@ import { test, expect, type Page } from '@playwright/test';
 
 /** Seed-data slug — PUBLIC, visible to all roles. */
 const SEED_DATASET_SLUG = 'rsna-pneumonia-2018';
+
+/** Commercial-use terms of `SEED_DATASET_SLUG` in `seed/demo.sql` (#564). */
+const SEED_DATASET_TERMS: CommercialUseTerms = 'NON_COMMERCIAL_ONLY';
 
 /**
  * Text-only seed dataset (#247). Picking it must disable the spatial
@@ -53,6 +62,20 @@ async function selectToolByName(page: Page, namePrefix: string) {
   await select.selectOption(value);
 }
 
+/**
+ * Choose an output licence the dataset's terms allow (#564). The form
+ * defaults to CC-BY-4.0, which the API rejects for a
+ * NON_COMMERCIAL_ONLY dataset; asking the shared rule keeps the test
+ * from drifting when the rule changes.
+ */
+async function selectAllowedLicense(page: Page, terms: CommercialUseTerms) {
+  const license = CampaignOutputLicenseSchema.options.find(
+    (l) => outputLicenseAllowedForTerms(l, terms) === null,
+  );
+  if (!license) throw new Error(`No output license allowed for terms ${terms}`);
+  await page.getByLabel('Output license').selectOption(license);
+}
+
 /** Pick a dataset via the typeahead. */
 async function pickDataset(page: Page, query: string) {
   await page.getByLabel('Dataset').fill(query);
@@ -64,6 +87,15 @@ async function pickDataset(page: Page, query: string) {
   // row — assert that to confirm the hidden datasetId got set.
   await expect(page.getByRole('button', { name: /change dataset/i })).toBeVisible();
 }
+
+test.describe('annotation campaigns — anonymous visitor (#488)', () => {
+  test('signed-out visit redirects to sign-in with a callback, not a raw 401', async ({ page }) => {
+    await page.goto('/annotation/campaigns');
+    await expect(page).toHaveURL(/\/signin\?callbackUrl=(%2F|\/)annotation(%2F|\/)campaigns$/);
+    await expect(page.getByText(/missing bearer token/i)).toHaveCount(0);
+    await expect(page.getByText(/401 Unauthorized/i)).toHaveCount(0);
+  });
+});
 
 test.describe('annotation campaign — header + form', () => {
   test('primary nav no longer carries "New dataset" or "New campaign"', async ({ page }) => {
@@ -109,6 +141,7 @@ test.describe('annotation campaign — header + form', () => {
     await selectToolByName(page, 'MONAI Label');
 
     await page.getByLabel('Annotators per data point').fill('5');
+    await selectAllowedLicense(page, SEED_DATASET_TERMS);
 
     await page.getByRole('button', { name: /create draft/i }).click();
 
@@ -151,6 +184,7 @@ test.describe('annotation campaign — header + form', () => {
     await page.getByRole('radio', { name: 'Classification' }).check();
     await pickDataset(page, SEED_DATASET_SLUG);
     await selectToolByName(page, 'MONAI Label');
+    await selectAllowedLicense(page, SEED_DATASET_TERMS);
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page).toHaveURL(new RegExp(`/annotation/campaigns/${slug}$`));
 
@@ -161,6 +195,7 @@ test.describe('annotation campaign — header + form', () => {
     await page.getByRole('radio', { name: 'Classification' }).check();
     await pickDataset(page, SEED_DATASET_SLUG);
     await selectToolByName(page, 'MONAI Label');
+    await selectAllowedLicense(page, SEED_DATASET_TERMS);
     await page.getByRole('button', { name: /create draft/i }).click();
     await expect(page.getByText(/already taken/i)).toBeVisible();
   });
@@ -211,4 +246,91 @@ test.describe('annotation campaign — header + form', () => {
     // The summary text under the heading lists the dataset modality.
     await expect(page.getByText(/Filtered against the dataset modality/i)).toBeVisible();
   });
+});
+
+test.describe('annotation campaign — cost estimate when N > 5 (#311)', () => {
+  test('shows live event counts from N=6 and hides them at N=5', async ({ page }) => {
+    await signInAs(page, 'cm', 'campaign-manager');
+    await page.goto('/annotation/campaigns/new');
+
+    const estimate = page.getByTestId('cost-estimate');
+    // Default N=3 → no estimate.
+    await expect(estimate).toHaveCount(0);
+
+    await page.getByLabel('Annotators per data point').fill('6');
+    await expect(estimate).toBeVisible();
+    // No sample count yet → per-sample prompt, no totals.
+    await expect(estimate).toContainText('6 annotation events per sample');
+
+    await page.getByLabel('Expected number of samples').fill('1000');
+    await expect(page.getByTestId('cost-estimate-gate1')).toHaveText('6,000');
+    await expect(page.getByTestId('cost-estimate-later-gates')).toHaveText('2,000');
+    await expect(page.getByTestId('cost-estimate-total')).toHaveText('8,000');
+
+    // ADR-0009 worked example: N=7 × 1 000 samples → 7 000 gate-1 events.
+    await page.getByLabel('Annotators per data point').fill('7');
+    await expect(page.getByTestId('cost-estimate-gate1')).toHaveText('7,000');
+    await expect(page.getByTestId('cost-estimate-total')).toHaveText('9,000');
+
+    await page.getByLabel('Annotators per data point').fill('5');
+    await expect(estimate).toHaveCount(0);
+
+    // Informational only: submit stays available.
+    await expect(page.getByRole('button', { name: /create draft/i })).toBeEnabled();
+  });
+
+  test('formats the numbers in the locale saved in Settings (#582)', async ({ page }) => {
+    // A fresh user per run so the saved locale doesn't leak into the
+    // `cm` user the other tests format as en-GB.
+    await signInAs(page, `cm-locale-${Date.now()}`, 'campaign-manager');
+    await page.goto('/settings');
+    await page.getByLabel('Language').fill('fr-CH');
+    await page.getByRole('button', { name: /save preferences/i }).click();
+    await expect(page).toHaveURL(/\/settings\?saved=1/);
+
+    await page.goto('/annotation/campaigns/new');
+    await page.getByLabel('Annotators per data point').fill('7');
+    await page.getByLabel('Expected number of samples').fill('1000');
+    // fr-CH groups thousands with a (narrow) no-break space, not a comma.
+    await expect(page.getByTestId('cost-estimate-gate1')).toHaveText(/^7\s000$/);
+    await expect(page.getByTestId('cost-estimate-total')).toHaveText(/^9\s000$/);
+  });
+
+  test('flags N above 12 inline and drops the estimate', async ({ page }) => {
+    await signInAs(page, 'cm', 'campaign-manager');
+    await page.goto('/annotation/campaigns/new');
+    const nInput = page.getByLabel('Annotators per data point');
+
+    await nInput.fill('13');
+    await expect(page.locator('#field-n-annotators-err')).toHaveText(
+      'Annotators per data point must be between 1 and 12.',
+    );
+    await expect(nInput).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByTestId('cost-estimate')).toHaveCount(0);
+
+    await nInput.fill('12');
+    await expect(page.locator('#field-n-annotators-err')).toHaveCount(0);
+    await expect(page.getByTestId('cost-estimate')).toBeVisible();
+  });
+
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`estimate block has no axe violations (${colorScheme})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await signInAs(page, 'cm', 'campaign-manager');
+      await page.goto('/annotation/campaigns/new');
+      await page.getByLabel('Annotators per data point').fill('7');
+      await page.getByLabel('Expected number of samples').fill('1000');
+      await expect(page.getByTestId('cost-estimate')).toBeVisible();
+
+      const results = await new AxeBuilder({ page })
+        .include('#cost-estimate')
+        .include('#cost-estimate-note')
+        .include('#field-n-annotators')
+        .include('#field-expected-samples')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      const summary = results.violations.map((v) => `${v.impact}: ${v.id} (${v.nodes.length})`);
+      expect(summary, 'axe violations').toEqual([]);
+    });
+  }
 });

@@ -4,7 +4,11 @@
 -- This file is replayed against every non-prod environment on each
 -- deploy (apps/migrate runs it after `prisma migrate deploy` when
 -- `OCI_ENV != 'prod'`). Re-runs are safe — every INSERT uses ON
--- CONFLICT DO NOTHING.
+-- CONFLICT DO NOTHING, except the dataset + version rows of bundled
+-- fixture manifests (Sections 1b, 3 and 4), which refresh on conflict
+-- when the manifest content differs. A second run of the same file
+-- changes zero rows. The one deliberate failure: Section 5 aborts the
+-- seed when the stored evaluation answer key differs from this file.
 --
 -- New demo entities go here. Conventions:
 --
@@ -30,33 +34,21 @@
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- Section 1 — Datasets.
+-- Section 1 — Placeholder datasets (no manifest).
 --
--- Real Croissant manifests are loaded via the existing
--- `scripts/seed-catalog.ts` flow (operator-driven, HTTP-layer). The
--- rows here are minimal placeholders so the catalog list page on dev
--- always has something visible without depending on the operator.
+-- Minimal rows so the catalogue on dev always has a RESTRICTED and a
+-- PRIVATE dataset to exercise visibility filtering without depending
+-- on an operator. They carry no Croissant manifest; real manifests
+-- load via the operator-driven `scripts/seed-catalog.ts` flow.
 --
--- `rsna-pneumonia-2018` is the anchor dataset the demo campaigns
--- below attach to. Marked PUBLIC so unauthenticated callers can see
--- it; admins on dev still publish the real RSNA manifest via the
--- operator-driven flow when they want the full payload.
+-- The two datasets that used to sit here as hollow placeholders
+-- (`rsna-pneumonia-2018`, `demo-clinical-notes-2024`) now carry a
+-- bundled manifest — see Section 1b (#491).
 -- ----------------------------------------------------------------------------
 
 INSERT INTO "catalog"."datasets"
     (id, slug, name, description, host_id, visibility, status, access_tier, commercial_use_terms, modalities, updated_at)
 VALUES
-    (gen_random_uuid(),
-     'rsna-pneumonia-2018',
-     'RSNA Pneumonia Detection 2018 — OCI Mirror',
-     'Demo placeholder for the RSNA Pneumonia Detection 2018 chest-XR dataset. Real manifest loads via scripts/seed-catalog.ts.',
-     '00000000-0000-4000-8000-000000000099',
-     'PUBLIC',
-     'PUBLISHED',
-     'OPEN',
-     'OK',
-     ARRAY['X-ray'],
-     CURRENT_TIMESTAMP),
     (gen_random_uuid(),
      'isic-2019-melanoma',
      'ISIC 2019 Skin Lesion Classification — OCI Restricted Mirror',
@@ -78,22 +70,6 @@ VALUES
      'CONTROLLED',
      'CASE_BY_CASE',
      ARRAY['MRI'],
-     CURRENT_TIMESTAMP),
-    -- Text-only dataset (#247). The campaign-create form must disable
-    -- the spatial task-kind radios (DETECTION / SEGMENTATION /
-    -- LOCALIZATION) when this dataset is picked; CLASSIFICATION and
-    -- MULTI_MODAL stay enabled. E2E coverage in
-    -- apps/web/e2e/annotation-campaign.spec.ts.
-    (gen_random_uuid(),
-     'demo-clinical-notes-2024',
-     'Demo Clinical Notes 2024 — Text-Only Modality',
-     'Demo placeholder for a text-only clinical-notes dataset. Used to exercise the campaign-create modality → task-kind constraint (#247).',
-     '00000000-0000-4000-8000-000000000099',
-     'PUBLIC',
-     'PUBLISHED',
-     'OPEN',
-     'OK',
-     ARRAY['Text'],
      CURRENT_TIMESTAMP)
 ON CONFLICT (slug) DO NOTHING;
 
@@ -109,6 +85,114 @@ WHERE slug = 'isic-2019-melanoma' AND cardinality("modalities") = 0;
 UPDATE "catalog"."datasets"
 SET "modalities" = ARRAY['MRI']
 WHERE slug = 'uhz-cardiac-mri-2024' AND cardinality("modalities") = 0;
+
+-- ----------------------------------------------------------------------------
+-- Section 1b — Bundled manifests WITHOUT hosted bytes (#491).
+--
+-- Two datasets whose manifest ships in the repo under
+-- seed/fixtures/<slug>/manifest.json but which declare no
+-- distribution[]: the fixture uploader skips them ("manifest has no
+-- distribution[]") and no distribution rows are written.
+--
+--   - rsna-pneumonia-2018 describes the upstream RSNA Pneumonia
+--     Detection Challenge dataset (record set, labelling protocol,
+--     BIOCroissant terms, non-commercial challenge rules). OCI does not
+--     host the images. It is the anchor dataset of the Section 2 demo
+--     campaigns, so it must land before them.
+--   - demo-clinical-notes-2024 is a synthetic text-only placeholder
+--     with zero records; it exists for the campaign-create modality →
+--     task-kind constraint (#247), see
+--     apps/web/e2e/annotation-campaign.spec.ts.
+--
+-- Both rows already exist on dev as hollow placeholders with generated
+-- ids, so the dataset id is resolved by slug after the upsert instead
+-- of being pinned. Same refresh rule as Section 3: dataset + version
+-- rows update on conflict when the manifest content differs; the
+-- guarded columns (name, description, terms) ride along with it.
+--
+-- The compact payloads are JSON.stringify(manifest.json);
+-- packages/croissant/test/seed-fixtures.spec.ts pins them equal.
+-- ----------------------------------------------------------------------------
+
+DO $rsna_demo$
+DECLARE
+  ds_id   uuid;
+  payload jsonb := $manifest${"@context":{"@vocab":"https://schema.org/","sc":"https://schema.org/","cr":"http://mlcommons.org/croissant/","rai":"http://mlcommons.org/croissant/RAI/","prov":"http://www.w3.org/ns/prov#","dct":"http://purl.org/dc/terms/","bio":"https://oci.ai4h.net/biocroissant/v0.1#"},"@type":"sc:Dataset","dct:conformsTo":"http://mlcommons.org/croissant/1.1","name":"RSNA Pneumonia Detection Challenge 2018","description":"Catalogue record for the RSNA Pneumonia Detection Challenge (2018): about 30,000 de-identified frontal chest radiographs drawn from the NIH ChestX-ray14 collection, annotated by radiologists with bounding boxes around lung opacities suggestive of pneumonia. OCI does not host the images or labels; this record describes the upstream dataset and its labelling protocol so it can be cited, matched to an intended use and attached to annotation campaigns. Obtain the data from the Kaggle competition page under the challenge rules.","url":"https://www.rsna.org/rsnai/ai-image-challenge/rsna-pneumonia-detection-challenge-2018","sameAs":["https://www.kaggle.com/competitions/rsna-pneumonia-detection-challenge","https://doi.org/10.1148/ryai.2019180041"],"license":"https://www.kaggle.com/competitions/rsna-pneumonia-detection-challenge/rules","version":"1.0.0","datePublished":"2018-08-27","creator":[{"@type":"sc:Organization","name":"Radiological Society of North America (RSNA)"},{"@type":"sc:Organization","name":"Society of Thoracic Radiology (STR)"},{"@type":"sc:Organization","name":"MD.ai"}],"publisher":{"@type":"sc:Organization","name":"Radiological Society of North America (RSNA)","url":"https://www.rsna.org/"},"keywords":["chest x-ray","pneumonia","lung opacity","object detection","bounding box","radiology","challenge"],"citeAs":"@article{shih2019rsna, title={Augmenting the National Institutes of Health Chest Radiograph Dataset with Expert Annotations of Possible Pneumonia}, author={Shih, George and Wu, Carol C. and Halabi, Safwan S. and Kohli, Marc D. and Prevedello, Luciano M. and Cook, Tessa S. and Sharma, Arjun and Amorosa, Judith K. and Arteaga, Veronica and Galperin-Aizenberg, Maya and Gill, Ritu R. and Godoy, Myrna C. B. and Hobbs, Stephen and Jeudy, Jean and Laroia, Archana and Shah, Palmi N. and Vummidi, Dharshan and Yaddanapudi, Kavitha and Stein, Anouk}, journal={Radiology: Artificial Intelligence}, volume={1}, number={1}, pages={e180041}, year={2019}, doi={10.1148/ryai.2019180041}}","recordSet":[{"@type":"cr:RecordSet","@id":"stage-2-train-labels","name":"stage_2_train_labels","description":"One row per bounding box from the challenge's stage_2_train_labels.csv. Radiographs with no opacity have a single row with empty box columns and target = 0; radiographs with several opacities have one row per box.","key":"stage-2-train-labels/patientId","field":[{"@type":"cr:Field","@id":"stage-2-train-labels/patientId","name":"patientId","description":"Challenge-assigned identifier of the radiograph (matches the DICOM file name).","dataType":"sc:Text"},{"@type":"cr:Field","@id":"stage-2-train-labels/x","name":"x","description":"Left edge of the bounding box, in pixels of the 1024 x 1024 image. Empty when target = 0.","dataType":"sc:Float"},{"@type":"cr:Field","@id":"stage-2-train-labels/y","name":"y","description":"Top edge of the bounding box, in pixels. Empty when target = 0.","dataType":"sc:Float"},{"@type":"cr:Field","@id":"stage-2-train-labels/width","name":"width","description":"Width of the bounding box, in pixels. Empty when target = 0.","dataType":"sc:Float"},{"@type":"cr:Field","@id":"stage-2-train-labels/height","name":"height","description":"Height of the bounding box, in pixels. Empty when target = 0.","dataType":"sc:Float"},{"@type":"cr:Field","@id":"stage-2-train-labels/target","name":"target","description":"1 when the row is a lung opacity suggestive of pneumonia, 0 otherwise (source column header: Target).","dataType":["sc:Integer","cr:Label"]}]}],"bio:imagingModality":[{"@type":"sc:DefinedTerm","name":"Chest X-ray"}],"bio:bodyRegion":[{"@type":"sc:DefinedTerm","name":"Chest"}],"bio:diseaseCondition":[{"@type":"sc:DefinedTerm","name":"Pneumonia","termCode":"CA40","inDefinedTermSet":"https://icd.who.int/browse/2025-01/mms/en"}],"bio:anonymizationLevel":"DEIDENTIFIED","rai:dataCollection":"Frontal chest radiographs selected from the NIH Clinical Center ChestX-ray14 public release (Wang et al., 2017), redistributed by RSNA as de-identified DICOM files with challenge-assigned patient identifiers.","rai:dataAnnotationProtocol":"Volunteer radiologists from the Society of Thoracic Radiology and RSNA reviewed each radiograph on the MD.ai annotation platform and drew bounding boxes around lung opacities suggestive of pneumonia. Radiographs without such an opacity were labelled target = 0; the companion stage_2_detailed_class_info.csv further splits them into Normal and No Lung Opacity / Not Normal. Test-set radiographs were read by several radiologists and adjudicated before release.","rai:dataAnnotationPlatform":"MD.ai","rai:personalSensitiveInformation":"De-identified radiographs; the NIH release removed direct identifiers and RSNA replaced patient identifiers with challenge-assigned UUIDs. No images or labels are hosted by OCI.","rai:dataUseCases":"Training and benchmarking pneumonia-detection and lung-opacity localisation models under the challenge's non-commercial research terms.","prov:wasDerivedFrom":{"@type":"prov:Entity","@id":"https://doi.org/10.1109/CVPR.2017.369","name":"NIH ChestX-ray14 (ChestX-ray8), Wang et al., 2017"},"prov:wasAttributedTo":[{"@type":"prov:Organization","name":"Radiological Society of North America (RSNA)"},{"@type":"prov:Organization","name":"Society of Thoracic Radiology (STR)"},{"@type":"prov:Organization","name":"U.S. National Institutes of Health Clinical Center (source radiographs)"}],"cr:consentCode":[{"@type":"sc:DefinedTerm","@id":"http://purl.obolibrary.org/obo/DUO_0000046","termCode":"DUO_0000046","name":"non-commercial use only","inDefinedTermSet":"http://purl.obolibrary.org/obo/duo.owl"}]}$manifest$::jsonb;
+BEGIN
+  INSERT INTO "catalog"."datasets" (
+    id, slug, name, description, host_id, visibility, status,
+    access_tier, commercial_use_terms, modalities,
+    conformance_version, croissant, duo_terms, updated_at
+  ) VALUES (
+    gen_random_uuid(), 'rsna-pneumonia-2018',
+    'RSNA Pneumonia Detection Challenge 2018',
+    'Catalogue record for the RSNA Pneumonia Detection Challenge (2018): about 30,000 de-identified frontal chest radiographs with radiologist-drawn boxes around lung opacities suggestive of pneumonia. The images are not hosted by OCI; obtain them from Kaggle under the challenge rules (non-commercial research).',
+    '00000000-0000-4000-8000-000000000099', 'PUBLIC', 'PUBLISHED',
+    'OPEN', 'NON_COMMERCIAL_ONLY', ARRAY['X-ray'],
+    '1.1', payload, ARRAY['DUO_0000046']::text[], CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (slug) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    croissant = EXCLUDED.croissant,
+    conformance_version = EXCLUDED.conformance_version,
+    commercial_use_terms = EXCLUDED.commercial_use_terms,
+    duo_terms = EXCLUDED.duo_terms,
+    updated_at = CURRENT_TIMESTAMP
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
+
+  SELECT id INTO STRICT ds_id FROM "catalog"."datasets" WHERE slug = 'rsna-pneumonia-2018';
+
+  INSERT INTO "catalog"."dataset_versions" (
+    id, dataset_id, version, croissant, published_by_id, published_at
+  ) VALUES (
+    '00000000-0000-4000-8000-000000491a01', ds_id, '1.0.0', payload,
+    '00000000-0000-4000-8000-000000000099', CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (dataset_id, version) DO UPDATE SET
+    croissant = EXCLUDED.croissant
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
+END
+$rsna_demo$;
+
+DO $notes_demo$
+DECLARE
+  ds_id   uuid;
+  payload jsonb := $manifest${"@context":{"@vocab":"https://schema.org/","sc":"https://schema.org/","cr":"http://mlcommons.org/croissant/","rai":"http://mlcommons.org/croissant/RAI/","prov":"http://www.w3.org/ns/prov#","dct":"http://purl.org/dc/terms/","bio":"https://oci.ai4h.net/biocroissant/v0.1#"},"@type":"sc:Dataset","dct:conformsTo":"http://mlcommons.org/croissant/1.1","name":"Demo Clinical Notes 2024 — Text-Only Modality","description":"Synthetic placeholder for a text-only clinical-notes dataset. It contains no records and no files: it exists so the campaign-create form can exercise the modality → task-kind constraint for a text dataset (spatial task kinds disabled, classification and multi-modal allowed). The record set below documents the shape such a dataset would have.","url":"https://oci.ai4h.net/catalog/demo-clinical-notes-2024","license":"https://creativecommons.org/publicdomain/zero/1.0/","version":"1.0.0","datePublished":"2026-09-04","creator":[{"@type":"sc:Organization","name":"OCI Platform (ITU/WHO/WIPO GI-AI4H)"}],"publisher":{"@type":"sc:Organization","name":"OCI Platform","url":"https://oci.ai4h.net/"},"keywords":["synthetic","clinical notes","text","demo","placeholder"],"recordSet":[{"@type":"cr:RecordSet","@id":"notes","name":"notes","description":"One row per de-identified clinical note. Empty in this placeholder: zero records are published.","key":"notes/noteId","field":[{"@type":"cr:Field","@id":"notes/noteId","name":"noteId","description":"Stable identifier of the note.","dataType":"sc:Text"},{"@type":"cr:Field","@id":"notes/text","name":"text","description":"Free-text body of the note.","dataType":"sc:Text"},{"@type":"cr:Field","@id":"notes/label","name":"label","description":"Whole-note classification label (the target of a CLASSIFICATION campaign).","dataType":["sc:Text","cr:Label"]}]}],"bio:dataModality":[{"@type":"sc:DefinedTerm","name":"Text"}],"bio:anonymizationLevel":"ANONYMIZED","bio:synthetic":true,"bio:intendedUse":"platform smoke testing of the text-modality campaign constraint","rai:dataCollection":"None. Synthetic placeholder seeded by packages/database/seed/demo.sql; no notes were collected.","rai:personalSensitiveInformation":"None. The dataset holds zero records.","cr:consentCode":[{"@type":"sc:DefinedTerm","@id":"http://purl.obolibrary.org/obo/DUO_0000004","termCode":"DUO_0000004","name":"no restriction","inDefinedTermSet":"http://purl.obolibrary.org/obo/duo.owl"}]}$manifest$::jsonb;
+BEGIN
+  INSERT INTO "catalog"."datasets" (
+    id, slug, name, description, host_id, visibility, status,
+    access_tier, commercial_use_terms, modalities,
+    conformance_version, croissant, duo_terms, updated_at
+  ) VALUES (
+    gen_random_uuid(), 'demo-clinical-notes-2024',
+    'Demo Clinical Notes 2024 — Text-Only Modality',
+    'Synthetic text-only placeholder with zero records. Exists to exercise the campaign-create modality → task-kind constraint (#247); the manifest documents the shape such a dataset would have.',
+    '00000000-0000-4000-8000-000000000099', 'PUBLIC', 'PUBLISHED',
+    'OPEN', 'OK', ARRAY['Text'],
+    '1.1', payload, ARRAY['DUO_0000004']::text[], CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (slug) DO UPDATE SET
+    description = EXCLUDED.description,
+    croissant = EXCLUDED.croissant,
+    conformance_version = EXCLUDED.conformance_version,
+    duo_terms = EXCLUDED.duo_terms,
+    updated_at = CURRENT_TIMESTAMP
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
+
+  SELECT id INTO STRICT ds_id FROM "catalog"."datasets" WHERE slug = 'demo-clinical-notes-2024';
+
+  INSERT INTO "catalog"."dataset_versions" (
+    id, dataset_id, version, croissant, published_by_id, published_at
+  ) VALUES (
+    '00000000-0000-4000-8000-000000491b01', ds_id, '1.0.0', payload,
+    '00000000-0000-4000-8000-000000000099', CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (dataset_id, version) DO UPDATE SET
+    croissant = EXCLUDED.croissant
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
+END
+$notes_demo$;
 
 -- ----------------------------------------------------------------------------
 -- Section 2 — Annotation campaigns.
@@ -217,8 +301,21 @@ ON CONFLICT (campaign_id, sample_ref) DO NOTHING;
 -- a short-lived presigned URL.
 --
 -- All UUIDs in this section are stable so the section is idempotent
--- (`ON CONFLICT (slug|id|...) DO NOTHING`) and the manifest's
--- contentUrl paths match the distribution row ids.
+-- and the manifest's contentUrl paths match the distribution row ids.
+-- The repo is the authority for a bundled fixture's manifest: the
+-- dataset + version rows refresh on conflict when the manifest content
+-- differs (`DO UPDATE ... WHERE croissant IS DISTINCT FROM EXCLUDED`),
+-- so an edited manifest.json reaches an already-seeded environment on
+-- the next deploy. Distributions stay `DO NOTHING`.
+--
+-- Access governance demo (#492): the dataset is RESTRICTED at the
+-- REGISTERED identity tier, non-commercial only, with DUO terms
+-- DUO_0000007 (disease specific research) + DUO_0000046 (non-commercial
+-- use only) mirrored from the manifest's cr:consentCode. Visibility is
+-- what gates the bytes and surfaces the "Request access" CTA; the tier
+-- and the terms are what the matcher scores a request against. The
+-- images stay synthetic — the terms exist so the request → verdict →
+-- host-inbox walk can be shown on dev without touching the database.
 --
 -- The `s3_bucket` column is parameterised via a Postgres GUC the
 -- entrypoint sets before invoking this file:
@@ -232,63 +329,40 @@ DECLARE
   ds_id     uuid := '00000000-0000-4000-8000-deadbeef0d00';
   ver_id    uuid := '00000000-0000-4000-8000-deadbeef0d01';
   bucket    text := COALESCE(current_setting('app.datasets_bucket', true), 'oci-datasets-local');
-  payload   jsonb := $manifest$
-{
-  "@context": {
-    "@vocab": "https://schema.org/",
-    "sc": "https://schema.org/",
-    "cr": "http://mlcommons.org/croissant/",
-    "rai": "http://mlcommons.org/croissant/RAI/",
-    "prov": "http://www.w3.org/ns/prov#",
-    "dct": "http://purl.org/dc/terms/",
-    "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
-  },
-  "@type": "sc:Dataset",
-  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
-  "name": "OCI Demo: Synthetic Chest XR",
-  "description": "OCI-curated demo dataset comprising five 256x256 grayscale chest-XR-style synthetic images. Generated procedurally for platform smoke testing - NOT diagnostic content and NOT representative of real patient data.",
-  "url": "https://oci.ai4h.net/catalog/oci-demo-chest-xr",
-  "creator": [{ "@type": "sc:Organization", "name": "OCI Platform (ITU/WHO/WIPO GI-AI4H)" }],
-  "publisher": { "@type": "sc:Organization", "name": "OCI Platform", "url": "https://oci.ai4h.net/" },
-  "datePublished": "2026-05-16",
-  "version": "1.0.0",
-  "license": "https://creativecommons.org/licenses/by/4.0/",
-  "keywords": ["synthetic", "chest x-ray", "demo", "smoke test"],
-  "bio:modality": [{ "@id": "bio:modality/X-ray", "name": "X-ray" }],
-  "bio:bodyRegion": [{ "@id": "bio:bodyRegion/Chest", "name": "Chest" }],
-  "bio:synthetic": true,
-  "bio:intendedUse": "platform smoke testing",
-  "rai:personalSensitiveInformation": "None. All images are synthetic.",
-  "distribution": [
-    { "@id": "00000000-0000-4000-8000-deadbeef0001", "@type": "cr:FileObject", "name": "sample-001.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0001/download", "contentSize": "43281 B", "sha256": "6b7f2715baa0e978bf87622767891df18b05e93d57331b10da758b89d816b538" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0002", "@type": "cr:FileObject", "name": "sample-002.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0002/download", "contentSize": "43352 B", "sha256": "f60d9f613946419a4ed038f678e2765443237475ca8155c94cab2b58a244c1da" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0003", "@type": "cr:FileObject", "name": "sample-003.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0003/download", "contentSize": "43358 B", "sha256": "917b7533b46b029f6620cf5d4d44f1940fac4c8710e9ce4ad865964b9712a19c" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0004", "@type": "cr:FileObject", "name": "sample-004.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0004/download", "contentSize": "43432 B", "sha256": "a6e7c135b89cded45a7c98c063c52a0f537958d47e6705d88d889900fcfe441c" },
-    { "@id": "00000000-0000-4000-8000-deadbeef0005", "@type": "cr:FileObject", "name": "sample-005.png", "encodingFormat": "image/png", "contentUrl": "/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0005/download", "contentSize": "43436 B", "sha256": "6a92c82cea79a878adb82c6af46b88235a9cb21509a9ae0892b7b92629d0fa7b" }
-  ]
-}
-$manifest$::jsonb;
+  payload   jsonb := $manifest${"@context":{"@vocab":"https://schema.org/","sc":"https://schema.org/","cr":"http://mlcommons.org/croissant/","rai":"http://mlcommons.org/croissant/RAI/","prov":"http://www.w3.org/ns/prov#","dct":"http://purl.org/dc/terms/","bio":"https://oci.ai4h.net/biocroissant/v0.1#"},"@type":"sc:Dataset","dct:conformsTo":"http://mlcommons.org/croissant/1.1","name":"OCI Demo: Synthetic Chest XR","description":"OCI-curated demo dataset comprising five 256×256 grayscale chest-XR-style synthetic images. Generated procedurally for platform smoke testing (S3 hosting, presigned download, manifest viewer, annotation campaign attachment) — NOT diagnostic content and NOT representative of real patient data. License: CC-BY-4.0. Refresh the underlying bytes by re-running packages/database/seed/fixtures/oci-demo-chest-xr/generate.mjs.","url":"https://oci.ai4h.net/catalog/oci-demo-chest-xr","creator":[{"@type":"sc:Organization","name":"OCI Platform (ITU/WHO/WIPO GI-AI4H)"}],"publisher":{"@type":"sc:Organization","name":"OCI Platform","url":"https://oci.ai4h.net/"},"datePublished":"2026-05-16","version":"1.0.0","license":"https://creativecommons.org/licenses/by/4.0/","keywords":["synthetic","chest x-ray","demo","smoke test"],"bio:imagingModality":[{"@type":"sc:DefinedTerm","name":"X-ray"}],"bio:bodyRegion":[{"@type":"sc:DefinedTerm","name":"Chest"}],"bio:synthetic":true,"bio:intendedUse":"platform smoke testing","rai:dataCollection":"Programmatic generation. See packages/database/seed/fixtures/oci-demo-chest-xr/generate.mjs in the OCI Platform repo.","rai:dataAnnotationProtocol":"None — no annotations are attached to this dataset. It exists to exercise the catalog + storage paths.","rai:dataAnnotationAnalysis":"Not applicable.","rai:personalSensitiveInformation":"None. All images are synthetic.","bio:consentNotes":"Demo governance terms. The images are synthetic, so no real consent exists; the DUO terms below (DS: disease specific research, qualified as pneumonia and other lung opacities, ICD-11 CA40; NCU: non-commercial use only) are declared so the tiered access model, the DUO matcher and the host inbox can be demonstrated on dev. Access tier: REGISTERED.","cr:consentCode":[{"@type":"sc:DefinedTerm","@id":"http://purl.obolibrary.org/obo/DUO_0000007","termCode":"DUO_0000007","name":"disease specific research","inDefinedTermSet":"http://purl.obolibrary.org/obo/duo.owl"},{"@type":"sc:DefinedTerm","@id":"http://purl.obolibrary.org/obo/DUO_0000046","termCode":"DUO_0000046","name":"non-commercial use only","inDefinedTermSet":"http://purl.obolibrary.org/obo/duo.owl"}],"distribution":[{"@id":"00000000-0000-4000-8000-deadbeef0001","@type":"cr:FileObject","name":"sample-001.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0001/download","contentSize":"43281 B","sha256":"6b7f2715baa0e978bf87622767891df18b05e93d57331b10da758b89d816b538"},{"@id":"00000000-0000-4000-8000-deadbeef0002","@type":"cr:FileObject","name":"sample-002.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0002/download","contentSize":"43352 B","sha256":"f60d9f613946419a4ed038f678e2765443237475ca8155c94cab2b58a244c1da"},{"@id":"00000000-0000-4000-8000-deadbeef0003","@type":"cr:FileObject","name":"sample-003.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0003/download","contentSize":"43358 B","sha256":"917b7533b46b029f6620cf5d4d44f1940fac4c8710e9ce4ad865964b9712a19c"},{"@id":"00000000-0000-4000-8000-deadbeef0004","@type":"cr:FileObject","name":"sample-004.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0004/download","contentSize":"43432 B","sha256":"a6e7c135b89cded45a7c98c063c52a0f537958d47e6705d88d889900fcfe441c"},{"@id":"00000000-0000-4000-8000-deadbeef0005","@type":"cr:FileObject","name":"sample-005.png","encodingFormat":"image/png","contentUrl":"/v2/catalog/datasets/oci-demo-chest-xr/distributions/00000000-0000-4000-8000-deadbeef0005/download","contentSize":"43436 B","sha256":"6a92c82cea79a878adb82c6af46b88235a9cb21509a9ae0892b7b92629d0fa7b"}]}$manifest$::jsonb;
 BEGIN
   -- Dataset row.
   INSERT INTO "catalog"."datasets" (
     id, slug, name, description, host_id, visibility, status,
-    access_tier, commercial_use_terms,
-    conformance_version, croissant, updated_at
+    access_tier, commercial_use_terms, modalities,
+    conformance_version, croissant, duo_terms, updated_at
   ) VALUES (
     ds_id,
     'oci-demo-chest-xr',
     'OCI Demo: Synthetic Chest XR',
-    'OCI-curated demo dataset. Five synthetic 256x256 grayscale chest-XR-style images generated procedurally for platform smoke testing. NOT diagnostic content.',
+    'OCI-curated demo dataset. Five synthetic 256x256 grayscale chest-XR-style images generated procedurally for platform smoke testing. NOT diagnostic content. Gated (RESTRICTED, REGISTERED tier, non-commercial DUO terms) so the access-request flow can be demonstrated.',
     '00000000-0000-4000-8000-000000000099',
-    'PUBLIC',
+    'RESTRICTED',
     'PUBLISHED',
-    'OPEN',
-    'OK',
+    'REGISTERED',
+    'NON_COMMERCIAL_ONLY',
+    ARRAY['X-ray'],
     '1.1',
     payload,
+    ARRAY['DUO_0000007', 'DUO_0000046']::text[],
     CURRENT_TIMESTAMP
   )
-  ON CONFLICT (slug) DO NOTHING;
+  ON CONFLICT (slug) DO UPDATE SET
+    croissant = EXCLUDED.croissant,
+    description = EXCLUDED.description,
+    conformance_version = EXCLUDED.conformance_version,
+    visibility = EXCLUDED.visibility,
+    access_tier = EXCLUDED.access_tier,
+    commercial_use_terms = EXCLUDED.commercial_use_terms,
+    duo_terms = EXCLUDED.duo_terms,
+    modalities = EXCLUDED.modalities,
+    updated_at = CURRENT_TIMESTAMP
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
 
   -- Version 1.0.0 row carrying the same manifest.
   INSERT INTO "catalog"."dataset_versions" (
@@ -298,7 +372,9 @@ BEGIN
     '00000000-0000-4000-8000-000000000099',
     CURRENT_TIMESTAMP
   )
-  ON CONFLICT (dataset_id, version) DO NOTHING;
+  ON CONFLICT (dataset_id, version) DO UPDATE SET
+    croissant = EXCLUDED.croissant
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
 
   -- Five distribution rows. Their ids match the manifest's @id values
   -- so the contentUrl paths resolve. Stamped READY because the
@@ -363,6 +439,8 @@ $oci_demo$;
 -- 30-image CC BY 4.0 slice; bytes uploaded by upload-fixtures.mjs before this
 -- runs. Generated by fixtures/idrid-grading-demo/generate.mjs. Ground truth is
 -- held by the evaluation service and is NOT seeded here.
+-- Fixture manifest: dataset + version rows refresh on conflict when the
+-- manifest content differs (see Section 3); distributions stay DO NOTHING.
 -- ----------------------------------------------------------------------------
 
 DO $idrid_demo$
@@ -370,22 +448,31 @@ DECLARE
   ds_id   uuid := 'a4cbf01a-993d-5879-849a-075706a9a8d1';
   ver_id  uuid := '0c5626ec-d6f0-5f53-9954-83ca17c619e8';
   bucket  text := COALESCE(current_setting('app.datasets_bucket', true), 'oci-datasets-local');
-  payload jsonb := $manifest${"@context":{"@vocab":"https://schema.org/","sc":"https://schema.org/","cr":"http://mlcommons.org/croissant/","rai":"http://mlcommons.org/croissant/RAI/","prov":"http://www.w3.org/ns/prov#","dct":"http://purl.org/dc/terms/","bio":"https://oci.ai4h.net/biocroissant/v0.1#"},"@type":"sc:Dataset","dct:conformsTo":"http://mlcommons.org/croissant/1.1","name":"IDRiD — DR Grading (OCI demo slice)","description":"A 30-image, downsampled (512px) class-stratified slice of the IDRiD \"Disease Grading\" testing set, hosted in OCI storage to demonstrate the catalogue → gated download → evaluation flow end to end. Ground-truth grades are held by the evaluation service and are never published as a distribution. Derived from IDRiD (CC BY 4.0); see citeAs.","url":"https://idrid.grand-challenge.org/","sameAs":"https://doi.org/10.3390/data3030025","license":"https://creativecommons.org/licenses/by/4.0/","version":"1.0.0","datePublished":"2018-04-24","creator":[{"@type":"sc:Person","name":"Prasanna Porwal"},{"@type":"sc:Person","name":"Samiksha Pachade"},{"@type":"sc:Person","name":"Fabrice Meriaudeau"}],"publisher":{"@type":"sc:Organization","name":"OCI Platform (GI-AI4H) — demo slice of IDRiD"},"keywords":["diabetic retinopathy","fundus photography","disease grading","ophthalmology","demo"],"citeAs":"@article{porwal2018idrid, title={Indian Diabetic Retinopathy Image Dataset (IDRiD)...}, author={Porwal, Prasanna and others}, journal={Data}, volume={3}, number={3}, pages={25}, year={2018}, publisher={MDPI}}","distribution":[{"@id":"03e84220-36b6-548f-8a92-8b070a1f0ad4","@type":"cr:FileObject","name":"IDRiD_001.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/03e84220-36b6-548f-8a92-8b070a1f0ad4/download","contentSize":"16987 B","sha256":"501ba3f2874875e5d4ff33dd3f6b954d47a82c547bf53472efdef61f97e566d9"},{"@id":"2682fef1-21ba-5291-9991-a5476e8e582a","@type":"cr:FileObject","name":"IDRiD_002.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/2682fef1-21ba-5291-9991-a5476e8e582a/download","contentSize":"20530 B","sha256":"b095e0c6cbab4158b241447ada5574d71fec094a2a02972212acae2aa16a186b"},{"@id":"efa3cc6e-372a-54bd-8273-8db3db4f584e","@type":"cr:FileObject","name":"IDRiD_003.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/efa3cc6e-372a-54bd-8273-8db3db4f584e/download","contentSize":"20239 B","sha256":"6729d7ec7daa5304a7a3196f8e31ba126c00f93ad053c3de45932161c7f06b74"},{"@id":"ca381619-0af2-568a-9306-2464ed9d474d","@type":"cr:FileObject","name":"IDRiD_004.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/ca381619-0af2-568a-9306-2464ed9d474d/download","contentSize":"25271 B","sha256":"ff520a0741c7aed4ce6d79da9f98c6a43c4c660c8f9c97d21138ca7574e464c9"},{"@id":"d96cf95d-564e-5972-9956-fde3ebaa6e47","@type":"cr:FileObject","name":"IDRiD_005.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/d96cf95d-564e-5972-9956-fde3ebaa6e47/download","contentSize":"19464 B","sha256":"cb9bd9c344c5572a554da47240e98a2292137eb4feda15e79c487d54f0219a59"},{"@id":"620c5f0a-a00d-55a9-8111-225be9b53233","@type":"cr:FileObject","name":"IDRiD_006.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/620c5f0a-a00d-55a9-8111-225be9b53233/download","contentSize":"24672 B","sha256":"f04e7ebc4860703e151208f7629c4fa62768299cc0b76bc141b774174df8d627"},{"@id":"0a6a540b-9f4a-597e-99fc-b62b447bfaaf","@type":"cr:FileObject","name":"IDRiD_007.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/0a6a540b-9f4a-597e-99fc-b62b447bfaaf/download","contentSize":"22241 B","sha256":"aefcc482fd5fa5f225696a89c57148ecce7bafe5c0fc0b421a990a3de39b05ce"},{"@id":"71c63d39-cf30-5027-a41c-b8dbb7577cbf","@type":"cr:FileObject","name":"IDRiD_008.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/71c63d39-cf30-5027-a41c-b8dbb7577cbf/download","contentSize":"23144 B","sha256":"c7ff2559ef9c528b33c927eed692ec97ff7d5a23c465b9f122ee53c2439d5f29"},{"@id":"98bd2612-ded1-57c5-85f5-3f89511bb39a","@type":"cr:FileObject","name":"IDRiD_009.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/98bd2612-ded1-57c5-85f5-3f89511bb39a/download","contentSize":"22857 B","sha256":"f4c2c449a7c9b8eb594b9cbb399cd353860e59f920b79603520b063b51ab5d74"},{"@id":"4aa85e18-ae88-590d-a680-1e1b3da30bc8","@type":"cr:FileObject","name":"IDRiD_010.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/4aa85e18-ae88-590d-a680-1e1b3da30bc8/download","contentSize":"23742 B","sha256":"33f25841e7a12ae34a31e5429fa41b6ff2b20e0d5cf3d9b0e2796ca8a2886ad0"},{"@id":"a5261cbc-58f5-5869-85c3-96c33c29484b","@type":"cr:FileObject","name":"IDRiD_011.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/a5261cbc-58f5-5869-85c3-96c33c29484b/download","contentSize":"21234 B","sha256":"8c9c6316c0f90faacbe055bc339935c11da3b4232576c79a1126091edd715138"},{"@id":"4539d879-fcbf-5fa7-8e93-0bf3e201dbfc","@type":"cr:FileObject","name":"IDRiD_012.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/4539d879-fcbf-5fa7-8e93-0bf3e201dbfc/download","contentSize":"26673 B","sha256":"a02d567d1b61f88e5441ccafabcfaa94a474e2f350ee9eef0da509650f0c9c88"},{"@id":"afa1e9ec-52d4-5e51-92be-885099943e03","@type":"cr:FileObject","name":"IDRiD_013.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/afa1e9ec-52d4-5e51-92be-885099943e03/download","contentSize":"25643 B","sha256":"fb35245861b17cd168020d550195d68dcfbac4b679f0b83af2fa671045559130"},{"@id":"34eb7aae-6b59-59b8-b969-4f370940775d","@type":"cr:FileObject","name":"IDRiD_014.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/34eb7aae-6b59-59b8-b969-4f370940775d/download","contentSize":"25423 B","sha256":"cb445cb3503d1ecfdcba969fe85bbe6274bb0094a15ed10e6068baa60cb76855"},{"@id":"9b57c473-1608-50d2-a365-29b8815c28b3","@type":"cr:FileObject","name":"IDRiD_015.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/9b57c473-1608-50d2-a365-29b8815c28b3/download","contentSize":"20963 B","sha256":"015ba18d5a65de555f77e83ac932b551c62f9a352e7f1b278a250f2ec62a4136"},{"@id":"d7733038-2d3a-5355-88d2-6bfe58d714ec","@type":"cr:FileObject","name":"IDRiD_016.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/d7733038-2d3a-5355-88d2-6bfe58d714ec/download","contentSize":"21513 B","sha256":"cdfbb9b3b39305d59a6a4e5aa1223d88c75a6f9251105aa11831a46ba9103538"},{"@id":"f5ddeed6-b4fb-5319-a85c-411871da087f","@type":"cr:FileObject","name":"IDRiD_018.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/f5ddeed6-b4fb-5319-a85c-411871da087f/download","contentSize":"28893 B","sha256":"7dbee8de2378d5f81a0edbeb8ad8c73cfdb2b3675c0876b3a9ee431646184632"},{"@id":"1dd39ddb-5757-5558-b526-c718dd2b26ca","@type":"cr:FileObject","name":"IDRiD_029.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/1dd39ddb-5757-5558-b526-c718dd2b26ca/download","contentSize":"24918 B","sha256":"e273628ec184ff1bc610ed612dad8ec6ff7531ae1278dfa8be4ea01f1a74650e"},{"@id":"8b025587-dfcc-53fd-916d-9610479d0f8c","@type":"cr:FileObject","name":"IDRiD_030.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/8b025587-dfcc-53fd-916d-9610479d0f8c/download","contentSize":"25448 B","sha256":"29d98c6da3a4a7810e84c782aa2a841606b32eac1aaa2aaffa4dd67ba66e54c4"},{"@id":"eb22e984-1a21-5a3c-b073-e455ab253876","@type":"cr:FileObject","name":"IDRiD_032.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/eb22e984-1a21-5a3c-b073-e455ab253876/download","contentSize":"23164 B","sha256":"30064dbb85a7200b2b37e8f13d3e564941abd122057006967d1bee540cb11e3a"},{"@id":"bd44bfce-3b12-51b2-a4ca-2d0cac242d6e","@type":"cr:FileObject","name":"IDRiD_037.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/bd44bfce-3b12-51b2-a4ca-2d0cac242d6e/download","contentSize":"25665 B","sha256":"03f5ea7410d119d7256c7251396ed3dc617ff2a997bf33627a898fdbcd6ef571"},{"@id":"67515753-a762-5d08-aa58-d367f9802680","@type":"cr:FileObject","name":"IDRiD_038.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/67515753-a762-5d08-aa58-d367f9802680/download","contentSize":"23450 B","sha256":"a4106ed78b71f848e7fd62279fdf37e55bedfe241abf7264d173b43bbc01ba47"},{"@id":"26dfdb73-3e38-5fdf-be01-6b97fcaf22b7","@type":"cr:FileObject","name":"IDRiD_039.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/26dfdb73-3e38-5fdf-be01-6b97fcaf22b7/download","contentSize":"22911 B","sha256":"8d3ae89bb1f429e1ba69a294da769396897b40f898339c17604b3e3ea7e90ce5"},{"@id":"1145566c-daaa-56de-8add-408616bea564","@type":"cr:FileObject","name":"IDRiD_041.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/1145566c-daaa-56de-8add-408616bea564/download","contentSize":"26568 B","sha256":"d993def49faec44ace249c1cae95d8019c36936aec66a647bcd0cc60015e62ea"},{"@id":"e1c59632-afd7-50b4-a1e3-d9946fd185ce","@type":"cr:FileObject","name":"IDRiD_043.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/e1c59632-afd7-50b4-a1e3-d9946fd185ce/download","contentSize":"25375 B","sha256":"36e6e20344f882a42620fff5e3d154cb8536def6327bef55fe0754fa14c0f7bf"},{"@id":"93b00fd1-3f87-5d9c-892b-33430782b66e","@type":"cr:FileObject","name":"IDRiD_063.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/93b00fd1-3f87-5d9c-892b-33430782b66e/download","contentSize":"27398 B","sha256":"bd5f3458c3cd1d2a502d116a079151400c5ff0da2c92a6ecd98a7fb70785aa9f"},{"@id":"f37fb275-4732-5691-9ffa-b44355c14e9c","@type":"cr:FileObject","name":"IDRiD_073.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/f37fb275-4732-5691-9ffa-b44355c14e9c/download","contentSize":"22903 B","sha256":"36c3435e8a0a857e9ed20e2ca8aaa6d9d3f06ae54574436e1b38466be50f7f1e"},{"@id":"bd48d48e-9568-5519-a3a1-78771859accd","@type":"cr:FileObject","name":"IDRiD_074.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/bd48d48e-9568-5519-a3a1-78771859accd/download","contentSize":"25601 B","sha256":"25c152f10a94887af3d3a7a45039dfa1c18baf75c7b5d6340f0e0a28ce94f524"},{"@id":"5ed6fb1c-2639-55d3-9ba9-47810ea54950","@type":"cr:FileObject","name":"IDRiD_085.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/5ed6fb1c-2639-55d3-9ba9-47810ea54950/download","contentSize":"23223 B","sha256":"f6a4d6ed5e6aa425db337241b2383463d8798ef2df4872b909ad235bddfb979c"},{"@id":"1adb23a5-543b-5fb9-a195-f27eb31bc3e2","@type":"cr:FileObject","name":"IDRiD_101.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/1adb23a5-543b-5fb9-a195-f27eb31bc3e2/download","contentSize":"22354 B","sha256":"07eb061a5ac11628f627a8247344e2b385c53ae39f6d62b23f638827cfd0df01"}],"recordSet":[{"@type":"cr:RecordSet","@id":"disease-grading-labels","name":"Disease grading labels (held by the evaluation service)","description":"Per-image DR severity (0-4) and DME risk (0-2). VALUES ARE NOT PUBLISHED — they are the hidden ground truth the evaluation service scores against.","field":[{"@type":"cr:Field","@id":"labels/image_id","name":"image_id","dataType":"sc:Text"},{"@type":"cr:Field","@id":"labels/dr_grade","name":"dr_grade","description":"ICDR scale: 0 No DR; 1 Mild NPDR; 2 Moderate NPDR; 3 Severe NPDR; 4 Proliferative DR. Referable = grade >= 2.","dataType":["sc:Integer","cr:Label"]},{"@type":"cr:Field","@id":"labels/dme_risk","name":"dme_risk","dataType":["sc:Integer","cr:Label"]}]}],"bio:imagingModality":{"@type":"sc:DefinedTerm","name":"Colour fundus photography"},"bio:bodyRegion":{"@type":"sc:DefinedTerm","name":"Retina"},"bio:diseaseCondition":[{"@type":"sc:DefinedTerm","name":"Diabetic retinopathy","termCode":"9B71.0"}],"rai:dataAnnotationProtocol":"Two ophthalmologists (>25 yrs) graded independently; a third adjudicated disagreements (from source IDRiD).","bio:anonymizationLevel":"ANONYMIZED"}$manifest$::jsonb;
+  payload jsonb := $manifest${"@context":{"@vocab":"https://schema.org/","sc":"https://schema.org/","cr":"http://mlcommons.org/croissant/","rai":"http://mlcommons.org/croissant/RAI/","prov":"http://www.w3.org/ns/prov#","odrl":"http://www.w3.org/ns/odrl/2/","dct":"http://purl.org/dc/terms/","bio":"https://oci.ai4h.net/biocroissant/v0.1#"},"@type":"sc:Dataset","dct:conformsTo":["http://mlcommons.org/croissant/1.1","https://oci.ai4h.net/biocroissant/bio-prov/0.2"],"name":"IDRiD — DR Grading (OCI demo slice)","description":"A 30-image, downsampled (512px) class-stratified slice of the IDRiD \"Disease Grading\" testing set, hosted in OCI storage to demonstrate the catalogue → gated download → evaluation flow end to end. Ground-truth grades are held by the evaluation service and are never published as a distribution. Derived from IDRiD (CC BY 4.0); see citeAs.","url":"https://idrid.grand-challenge.org/","sameAs":"https://doi.org/10.3390/data3030025","license":"https://creativecommons.org/licenses/by/4.0/","version":"1.0.0","datePublished":"2018-04-24","creator":[{"@type":"sc:Person","name":"Prasanna Porwal"},{"@type":"sc:Person","name":"Samiksha Pachade"},{"@type":"sc:Person","name":"Fabrice Meriaudeau"}],"publisher":{"@type":"sc:Organization","name":"OCI Platform (GI-AI4H) — demo slice of IDRiD"},"keywords":["diabetic retinopathy","fundus photography","disease grading","ophthalmology","demo"],"citeAs":"@article{porwal2018idrid, title={Indian Diabetic Retinopathy Image Dataset (IDRiD)...}, author={Porwal, Prasanna and others}, journal={Data}, volume={3}, number={3}, pages={25}, year={2018}, publisher={MDPI}}","distribution":[{"@id":"03e84220-36b6-548f-8a92-8b070a1f0ad4","@type":"cr:FileObject","name":"IDRiD_001.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/03e84220-36b6-548f-8a92-8b070a1f0ad4/download","contentSize":"16987 B","sha256":"501ba3f2874875e5d4ff33dd3f6b954d47a82c547bf53472efdef61f97e566d9"},{"@id":"2682fef1-21ba-5291-9991-a5476e8e582a","@type":"cr:FileObject","name":"IDRiD_002.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/2682fef1-21ba-5291-9991-a5476e8e582a/download","contentSize":"20530 B","sha256":"b095e0c6cbab4158b241447ada5574d71fec094a2a02972212acae2aa16a186b"},{"@id":"efa3cc6e-372a-54bd-8273-8db3db4f584e","@type":"cr:FileObject","name":"IDRiD_003.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/efa3cc6e-372a-54bd-8273-8db3db4f584e/download","contentSize":"20239 B","sha256":"6729d7ec7daa5304a7a3196f8e31ba126c00f93ad053c3de45932161c7f06b74"},{"@id":"ca381619-0af2-568a-9306-2464ed9d474d","@type":"cr:FileObject","name":"IDRiD_004.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/ca381619-0af2-568a-9306-2464ed9d474d/download","contentSize":"25271 B","sha256":"ff520a0741c7aed4ce6d79da9f98c6a43c4c660c8f9c97d21138ca7574e464c9"},{"@id":"d96cf95d-564e-5972-9956-fde3ebaa6e47","@type":"cr:FileObject","name":"IDRiD_005.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/d96cf95d-564e-5972-9956-fde3ebaa6e47/download","contentSize":"19464 B","sha256":"cb9bd9c344c5572a554da47240e98a2292137eb4feda15e79c487d54f0219a59"},{"@id":"620c5f0a-a00d-55a9-8111-225be9b53233","@type":"cr:FileObject","name":"IDRiD_006.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/620c5f0a-a00d-55a9-8111-225be9b53233/download","contentSize":"24672 B","sha256":"f04e7ebc4860703e151208f7629c4fa62768299cc0b76bc141b774174df8d627"},{"@id":"0a6a540b-9f4a-597e-99fc-b62b447bfaaf","@type":"cr:FileObject","name":"IDRiD_007.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/0a6a540b-9f4a-597e-99fc-b62b447bfaaf/download","contentSize":"22241 B","sha256":"aefcc482fd5fa5f225696a89c57148ecce7bafe5c0fc0b421a990a3de39b05ce"},{"@id":"71c63d39-cf30-5027-a41c-b8dbb7577cbf","@type":"cr:FileObject","name":"IDRiD_008.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/71c63d39-cf30-5027-a41c-b8dbb7577cbf/download","contentSize":"23144 B","sha256":"c7ff2559ef9c528b33c927eed692ec97ff7d5a23c465b9f122ee53c2439d5f29"},{"@id":"98bd2612-ded1-57c5-85f5-3f89511bb39a","@type":"cr:FileObject","name":"IDRiD_009.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/98bd2612-ded1-57c5-85f5-3f89511bb39a/download","contentSize":"22857 B","sha256":"f4c2c449a7c9b8eb594b9cbb399cd353860e59f920b79603520b063b51ab5d74"},{"@id":"4aa85e18-ae88-590d-a680-1e1b3da30bc8","@type":"cr:FileObject","name":"IDRiD_010.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/4aa85e18-ae88-590d-a680-1e1b3da30bc8/download","contentSize":"23742 B","sha256":"33f25841e7a12ae34a31e5429fa41b6ff2b20e0d5cf3d9b0e2796ca8a2886ad0"},{"@id":"a5261cbc-58f5-5869-85c3-96c33c29484b","@type":"cr:FileObject","name":"IDRiD_011.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/a5261cbc-58f5-5869-85c3-96c33c29484b/download","contentSize":"21234 B","sha256":"8c9c6316c0f90faacbe055bc339935c11da3b4232576c79a1126091edd715138"},{"@id":"4539d879-fcbf-5fa7-8e93-0bf3e201dbfc","@type":"cr:FileObject","name":"IDRiD_012.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/4539d879-fcbf-5fa7-8e93-0bf3e201dbfc/download","contentSize":"26673 B","sha256":"a02d567d1b61f88e5441ccafabcfaa94a474e2f350ee9eef0da509650f0c9c88"},{"@id":"afa1e9ec-52d4-5e51-92be-885099943e03","@type":"cr:FileObject","name":"IDRiD_013.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/afa1e9ec-52d4-5e51-92be-885099943e03/download","contentSize":"25643 B","sha256":"fb35245861b17cd168020d550195d68dcfbac4b679f0b83af2fa671045559130"},{"@id":"34eb7aae-6b59-59b8-b969-4f370940775d","@type":"cr:FileObject","name":"IDRiD_014.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/34eb7aae-6b59-59b8-b969-4f370940775d/download","contentSize":"25423 B","sha256":"cb445cb3503d1ecfdcba969fe85bbe6274bb0094a15ed10e6068baa60cb76855"},{"@id":"9b57c473-1608-50d2-a365-29b8815c28b3","@type":"cr:FileObject","name":"IDRiD_015.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/9b57c473-1608-50d2-a365-29b8815c28b3/download","contentSize":"20963 B","sha256":"015ba18d5a65de555f77e83ac932b551c62f9a352e7f1b278a250f2ec62a4136"},{"@id":"d7733038-2d3a-5355-88d2-6bfe58d714ec","@type":"cr:FileObject","name":"IDRiD_016.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/d7733038-2d3a-5355-88d2-6bfe58d714ec/download","contentSize":"21513 B","sha256":"cdfbb9b3b39305d59a6a4e5aa1223d88c75a6f9251105aa11831a46ba9103538"},{"@id":"f5ddeed6-b4fb-5319-a85c-411871da087f","@type":"cr:FileObject","name":"IDRiD_018.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/f5ddeed6-b4fb-5319-a85c-411871da087f/download","contentSize":"28893 B","sha256":"7dbee8de2378d5f81a0edbeb8ad8c73cfdb2b3675c0876b3a9ee431646184632"},{"@id":"1dd39ddb-5757-5558-b526-c718dd2b26ca","@type":"cr:FileObject","name":"IDRiD_029.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/1dd39ddb-5757-5558-b526-c718dd2b26ca/download","contentSize":"24918 B","sha256":"e273628ec184ff1bc610ed612dad8ec6ff7531ae1278dfa8be4ea01f1a74650e"},{"@id":"8b025587-dfcc-53fd-916d-9610479d0f8c","@type":"cr:FileObject","name":"IDRiD_030.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/8b025587-dfcc-53fd-916d-9610479d0f8c/download","contentSize":"25448 B","sha256":"29d98c6da3a4a7810e84c782aa2a841606b32eac1aaa2aaffa4dd67ba66e54c4"},{"@id":"eb22e984-1a21-5a3c-b073-e455ab253876","@type":"cr:FileObject","name":"IDRiD_032.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/eb22e984-1a21-5a3c-b073-e455ab253876/download","contentSize":"23164 B","sha256":"30064dbb85a7200b2b37e8f13d3e564941abd122057006967d1bee540cb11e3a"},{"@id":"bd44bfce-3b12-51b2-a4ca-2d0cac242d6e","@type":"cr:FileObject","name":"IDRiD_037.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/bd44bfce-3b12-51b2-a4ca-2d0cac242d6e/download","contentSize":"25665 B","sha256":"03f5ea7410d119d7256c7251396ed3dc617ff2a997bf33627a898fdbcd6ef571"},{"@id":"67515753-a762-5d08-aa58-d367f9802680","@type":"cr:FileObject","name":"IDRiD_038.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/67515753-a762-5d08-aa58-d367f9802680/download","contentSize":"23450 B","sha256":"a4106ed78b71f848e7fd62279fdf37e55bedfe241abf7264d173b43bbc01ba47"},{"@id":"26dfdb73-3e38-5fdf-be01-6b97fcaf22b7","@type":"cr:FileObject","name":"IDRiD_039.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/26dfdb73-3e38-5fdf-be01-6b97fcaf22b7/download","contentSize":"22911 B","sha256":"8d3ae89bb1f429e1ba69a294da769396897b40f898339c17604b3e3ea7e90ce5"},{"@id":"1145566c-daaa-56de-8add-408616bea564","@type":"cr:FileObject","name":"IDRiD_041.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/1145566c-daaa-56de-8add-408616bea564/download","contentSize":"26568 B","sha256":"d993def49faec44ace249c1cae95d8019c36936aec66a647bcd0cc60015e62ea"},{"@id":"e1c59632-afd7-50b4-a1e3-d9946fd185ce","@type":"cr:FileObject","name":"IDRiD_043.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/e1c59632-afd7-50b4-a1e3-d9946fd185ce/download","contentSize":"25375 B","sha256":"36e6e20344f882a42620fff5e3d154cb8536def6327bef55fe0754fa14c0f7bf"},{"@id":"93b00fd1-3f87-5d9c-892b-33430782b66e","@type":"cr:FileObject","name":"IDRiD_063.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/93b00fd1-3f87-5d9c-892b-33430782b66e/download","contentSize":"27398 B","sha256":"bd5f3458c3cd1d2a502d116a079151400c5ff0da2c92a6ecd98a7fb70785aa9f"},{"@id":"f37fb275-4732-5691-9ffa-b44355c14e9c","@type":"cr:FileObject","name":"IDRiD_073.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/f37fb275-4732-5691-9ffa-b44355c14e9c/download","contentSize":"22903 B","sha256":"36c3435e8a0a857e9ed20e2ca8aaa6d9d3f06ae54574436e1b38466be50f7f1e"},{"@id":"bd48d48e-9568-5519-a3a1-78771859accd","@type":"cr:FileObject","name":"IDRiD_074.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/bd48d48e-9568-5519-a3a1-78771859accd/download","contentSize":"25601 B","sha256":"25c152f10a94887af3d3a7a45039dfa1c18baf75c7b5d6340f0e0a28ce94f524"},{"@id":"5ed6fb1c-2639-55d3-9ba9-47810ea54950","@type":"cr:FileObject","name":"IDRiD_085.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/5ed6fb1c-2639-55d3-9ba9-47810ea54950/download","contentSize":"23223 B","sha256":"f6a4d6ed5e6aa425db337241b2383463d8798ef2df4872b909ad235bddfb979c"},{"@id":"1adb23a5-543b-5fb9-a195-f27eb31bc3e2","@type":"cr:FileObject","name":"IDRiD_101.jpg","encodingFormat":"image/jpeg","contentUrl":"/v2/catalog/datasets/idrid-grading-demo/distributions/1adb23a5-543b-5fb9-a195-f27eb31bc3e2/download","contentSize":"22354 B","sha256":"07eb061a5ac11628f627a8247344e2b385c53ae39f6d62b23f638827cfd0df01"}],"recordSet":[{"@type":"cr:RecordSet","@id":"disease-grading-labels","name":"Disease grading labels (held by the evaluation service)","description":"Per-image DR severity (0-4) and DME risk (0-2). VALUES ARE NOT PUBLISHED — they are the hidden ground truth the evaluation service scores against.","field":[{"@type":"cr:Field","@id":"labels/image_id","name":"image_id","dataType":"sc:Text"},{"@type":"cr:Field","@id":"labels/dr_grade","name":"dr_grade","description":"ICDR scale: 0 No DR; 1 Mild NPDR; 2 Moderate NPDR; 3 Severe NPDR; 4 Proliferative DR. Referable = grade >= 2.","dataType":["sc:Integer","cr:Label"]},{"@type":"cr:Field","@id":"labels/dme_risk","name":"dme_risk","dataType":["sc:Integer","cr:Label"]}]}],"bio:imagingModality":{"@type":"sc:DefinedTerm","name":"Colour fundus photography"},"bio:bodyRegion":{"@type":"sc:DefinedTerm","name":"Retina"},"bio:diseaseCondition":[{"@type":"sc:DefinedTerm","name":"Diabetic retinopathy","termCode":"9B71.0"}],"rai:dataAnnotationProtocol":"Two ophthalmologists (>25 yrs) graded independently; a third adjudicated disagreements (from source IDRiD).","bio:anonymizationLevel":"ANONYMIZED","rai:dataCollectionTimeframe":"IDRiD source collection published 2018; OCI demo slice prepared 30 July 2026","bio:labelProtocol":{"version":"IDRiD 2018 disease-grading protocol","labelScale":"ICDR 0–4; referable ≥ 2","gradersPerItem":2,"graderQualification":"ophthalmologist, >25 years experience","adjudication":"third grader adjudicated disagreements","perRaterLabelsRetained":false},"prov:wasDerivedFrom":{"@type":"prov:Entity","@id":"https://doi.org/10.3390/data3030025","name":"IDRiD — Indian Diabetic Retinopathy Image Dataset, B. Disease Grading (testing set)"},"prov:wasGeneratedBy":[{"@type":["prov:Activity","https://w3id.org/dpv/ai#DataCollection"],"@id":"#activity-oci-demo-slice-v1","name":"Class-stratified 30-image slice of the IDRiD disease-grading testing set, downsampled to 512 px","prov:startedAtTime":"2026-07-30T00:00:00Z","prov:endedAtTime":"2026-07-30T00:00:00Z","prov:used":"https://doi.org/10.3390/data3030025","prov:wasAssociatedWith":{"@type":"prov:SoftwareAgent","name":"oci-platform idrid-grading-demo generate.mjs","prov:actedOnBehalfOf":{"@type":"prov:Organization","name":"OCI Platform (GI-AI4H)"}}},{"@type":["prov:Activity","https://w3id.org/dpv/ai#DataLabelling"],"@id":"#activity-idrid-disease-grading","name":"Independent disease grading of the source IDRiD images, with adjudication","prov:used":{"@type":"prov:Entity","@id":"#guideline-idrid-2018-disease-grading","name":"IDRiD 2018 disease-grading protocol","version":"2018"},"prov:wasAssociatedWith":[{"@type":"prov:Person","prov:hadRole":"Annotator"},{"@type":"prov:Person","prov:hadRole":"Adjudicator"}]}],"prov:wasAttributedTo":[{"@type":"prov:Organization","name":"IDRiD consortium (Porwal et al., 2018) — source images captured at an eye clinic in Nanded, Maharashtra, India"},{"@type":"prov:Organization","name":"OCI Platform (GI-AI4H) — re-publisher of the demo slice"}],"odrl:hasOffer":{"@type":"odrl:Offer","@id":"#offer-cc-by-4.0","odrl:permission":[{"odrl:action":["odrl:use","odrl:distribute","odrl:derive"],"odrl:target":"idrid-grading-demo","odrl:duty":[{"odrl:action":"odrl:attribute"}]}]},"cr:consentCode":[{"@type":"sc:DefinedTerm","@id":"http://purl.obolibrary.org/obo/DUO_0000004","termCode":"DUO_0000004","name":"no restriction","inDefinedTermSet":"http://purl.obolibrary.org/obo/duo.owl"}]}$manifest$::jsonb;
 BEGIN
   INSERT INTO "catalog"."datasets" (
     id, slug, name, description, host_id, visibility, status,
-    access_tier, commercial_use_terms, conformance_version, croissant, updated_at
+    access_tier, commercial_use_terms, conformance_version, croissant, duo_terms, updated_at
   ) VALUES (
     ds_id, 'idrid-grading-demo', 'IDRiD — DR Grading (OCI demo slice)',
     'Downsampled 30-image slice of the IDRiD DR-grading testing set, hosted in OCI storage for the Phase C evaluation demo. Ground truth held by the evaluation service.',
-    '00000000-0000-4000-8000-000000000099', 'PUBLIC', 'PUBLISHED', 'OPEN', 'OK', '1.1', payload, CURRENT_TIMESTAMP
-  ) ON CONFLICT (slug) DO NOTHING;
+    '00000000-0000-4000-8000-000000000099', 'PUBLIC', 'PUBLISHED', 'OPEN', 'OK', '1.1', payload,
+    ARRAY['DUO_0000004']::text[], CURRENT_TIMESTAMP
+  ) ON CONFLICT (slug) DO UPDATE SET
+    croissant = EXCLUDED.croissant,
+    description = EXCLUDED.description,
+    conformance_version = EXCLUDED.conformance_version,
+    duo_terms = EXCLUDED.duo_terms,
+    updated_at = CURRENT_TIMESTAMP
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
 
   INSERT INTO "catalog"."dataset_versions" (
     id, dataset_id, version, croissant, published_by_id, published_at
   ) VALUES (
     ver_id, ds_id, '1.0.0', payload, '00000000-0000-4000-8000-000000000099', CURRENT_TIMESTAMP
-  ) ON CONFLICT (dataset_id, version) DO NOTHING;
+  ) ON CONFLICT (dataset_id, version) DO UPDATE SET
+    croissant = EXCLUDED.croissant
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
 
   INSERT INTO "catalog"."distributions" (
     id, dataset_version_id, croissant_id, content_url, content_type,
@@ -522,24 +609,63 @@ END $idrid_demo$;
 -- Seeded here rather than via POST /v2/evaluation/tasks so the demo is
 -- reproducible on any non-prod environment without an operator token.
 -- Ground truth is never exposed by a read endpoint or a distribution.
+--
+-- The insert stays ON CONFLICT DO NOTHING, but unlike the demo fixtures
+-- the repo is the authority for an answer key: a stored value that
+-- differs from the one below is a correctness fault, not a local edit
+-- to preserve. So after the insert the stored key is compared (as jsonb,
+-- so key order and whitespace don't matter) and the seed fails on any
+-- divergence, which fails the migrate task and the deploy. No data is
+-- changed; correcting a drifted key stays a deliberate, reviewed act
+-- (#464). The error names the differing item ids only, never grades:
+-- migrate logs are printed in the deploy output.
 -- ----------------------------------------------------------------------------
 
-INSERT INTO "evaluation"."evaluation_tasks"
-    (id, slug, name, dataset_slug, task_kind, num_classes, referable_threshold,
-     ground_truth, created_at, updated_at)
-VALUES (
-    'cc3bc9ea-9506-54da-a571-7459684bbbdf'::uuid,
-    'idrid-dr-grading',
-    'IDRiD — diabetic retinopathy severity grading (demo)',
-    'idrid-grading-demo',
-    'GRADING'::"evaluation"."EvaluationTaskKind",
-    5,
-    2,
-    '{"IDRiD_001":4,"IDRiD_002":4,"IDRiD_003":4,"IDRiD_004":4,"IDRiD_005":4,"IDRiD_006":3,"IDRiD_007":3,"IDRiD_008":2,"IDRiD_009":2,"IDRiD_010":2,"IDRiD_011":2,"IDRiD_012":2,"IDRiD_013":3,"IDRiD_014":3,"IDRiD_015":2,"IDRiD_016":3,"IDRiD_018":3,"IDRiD_029":0,"IDRiD_030":0,"IDRiD_032":4,"IDRiD_037":0,"IDRiD_038":0,"IDRiD_039":0,"IDRiD_041":0,"IDRiD_043":0,"IDRiD_063":1,"IDRiD_073":1,"IDRiD_074":1,"IDRiD_085":1,"IDRiD_101":1}'::jsonb,
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
-)
-ON CONFLICT (slug) DO NOTHING;
+DO $idrid_gt$
+DECLARE
+  expected_gt CONSTANT jsonb := '{"IDRiD_001":4,"IDRiD_002":4,"IDRiD_003":4,"IDRiD_004":4,"IDRiD_005":4,"IDRiD_006":3,"IDRiD_007":3,"IDRiD_008":2,"IDRiD_009":2,"IDRiD_010":2,"IDRiD_011":2,"IDRiD_012":2,"IDRiD_013":3,"IDRiD_014":3,"IDRiD_015":2,"IDRiD_016":3,"IDRiD_018":3,"IDRiD_029":0,"IDRiD_030":0,"IDRiD_032":4,"IDRiD_037":0,"IDRiD_038":0,"IDRiD_039":0,"IDRiD_041":0,"IDRiD_043":0,"IDRiD_063":1,"IDRiD_073":1,"IDRiD_074":1,"IDRiD_085":1,"IDRiD_101":1}'::jsonb;
+  stored_gt jsonb;
+  drifted_ids text;
+BEGIN
+  INSERT INTO "evaluation"."evaluation_tasks"
+      (id, slug, name, dataset_slug, task_kind, num_classes, referable_threshold,
+       ground_truth, created_at, updated_at)
+  VALUES (
+      'cc3bc9ea-9506-54da-a571-7459684bbbdf'::uuid,
+      'idrid-dr-grading',
+      'IDRiD — diabetic retinopathy severity grading (demo)',
+      'idrid-grading-demo',
+      'GRADING'::"evaluation"."EvaluationTaskKind",
+      5,
+      2,
+      expected_gt,
+      CURRENT_TIMESTAMP,
+      CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (slug) DO NOTHING;
+
+  SELECT ground_truth INTO stored_gt
+  FROM "evaluation"."evaluation_tasks"
+  WHERE slug = 'idrid-dr-grading';
+
+  IF stored_gt IS DISTINCT FROM expected_gt THEN
+    IF jsonb_typeof(stored_gt) IS DISTINCT FROM 'object' THEN
+      RAISE EXCEPTION 'evaluation task %: stored ground_truth is not a JSON object (got %), expected the answer key from seed/demo.sql',
+        'idrid-dr-grading', coalesce(jsonb_typeof(stored_gt), 'NULL');
+    END IF;
+
+    SELECT string_agg(item_id, ', ' ORDER BY item_id) INTO drifted_ids
+    FROM (
+      SELECT coalesce(s.key, e.key) AS item_id
+      FROM jsonb_each(stored_gt) AS s
+      FULL OUTER JOIN jsonb_each(expected_gt) AS e ON s.key = e.key
+      WHERE s.value IS DISTINCT FROM e.value
+    ) AS diff;
+
+    RAISE EXCEPTION 'evaluation task %: stored ground_truth differs from seed/demo.sql for item ids [%]. Not overwriting; see #464.',
+      'idrid-dr-grading', drifted_ids;
+  END IF;
+END $idrid_gt$;
 
 -- ----------------------------------------------------------------------------
 -- Section 6 — IDRiD annotation campaign (Phase B; ADR-0006 / 0009 / 0010).
@@ -639,3 +765,49 @@ FROM "annotation"."annotation_campaigns" c,
      ) AS r(sample_ref)
 WHERE c.slug = 'idrid-dr-grading'
 ON CONFLICT (campaign_id, sample_ref) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- Section 7 — Model cards for the public model catalogue (#591).
+--
+-- Three PUBLISHED cards spread across model classes and jurisdictions so
+-- /models has something to search and filter, plus one DRAFT card that
+-- must never appear anonymously -- the e2e spec asserts its absence.
+--
+-- Fictional developers on the reserved `.example` domain; these are demo
+-- rows, not real submissions. The IUS JSON follows IntendedUseStatementSchema
+-- (@oci/shared-types) -- this file bypasses the API, so keep it valid by hand.
+-- ----------------------------------------------------------------------------
+
+INSERT INTO "prediction"."model_cards"
+    (id, slug, intended_use, model_class, architecture_summary, version_major_minor_patch,
+     training_data_jurisdictions, generative_ai, status, model_developer, developer_contact,
+     clinical_summary, regulatory_approval, known_biases_or_ethical_considerations,
+     ongoing_maintenance, updated_at)
+VALUES
+    (gen_random_uuid(), 'demo-retina-dr-grader',
+     '{"v":1,"medicalPurpose":"screening","bodySystemOrSite":"Retina","intendedUserRole":["specialist"],"operatingEnvironment":["primary-care"],"intendedClinicalPathway":"screening-before-specialist","foreseeableMisuse":"Grading images from non-mydriatic cameras outside the validated device list.","contraindications":"Not validated for paediatric patients.","riskTier":"II"}'::jsonb,
+     'classical', 'Gradient-boosted ensemble over handcrafted fundus lesion features.', '1.2.0',
+     ARRAY['CH', 'EU'], false, 'PUBLISHED', 'Demo Retina Labs', 'regulatory@retina-labs.example',
+     'Grades diabetic retinopathy on colour fundus photographs to prioritise referral to an ophthalmologist.',
+     '{"pathway":"EU_MDR_CLASS_IIA","status":"pending","jurisdictions":["EU"]}'::jsonb,
+     'Training images skew towards patients of European ancestry.',
+     'Quarterly drift review against new screening-programme data.', now()),
+    (gen_random_uuid(), 'demo-chest-xray-triage',
+     '{"v":1,"medicalPurpose":"triage","bodySystemOrSite":"Chest","intendedUserRole":["radiologist"],"operatingEnvironment":["emergency","hospital-inpatient"],"intendedClinicalPathway":"triage-before-clinician","foreseeableMisuse":"Using the triage flag as a diagnosis without radiologist review.","contraindications":"Portable supine films are out of scope.","riskTier":"III"}'::jsonb,
+     'foundation', 'Vision transformer fine-tuned from a chest X-ray foundation model.', '2.0.1',
+     ARRAY['US'], false, 'PUBLISHED', 'Demo Imaging Inc.', 'safety@imaging.example',
+     'Flags chest radiographs with suspected pneumothorax for priority reading.',
+     '{"pathway":"FDA_510K","status":"granted","jurisdictions":["US"],"identifier":"K000000"}'::jsonb,
+     NULL, 'Post-market performance monitoring on a 5% audit sample.', now()),
+    (gen_random_uuid(), 'demo-clinical-notes-summariser',
+     '{"v":1,"medicalPurpose":"administrative","intendedUserRole":["general-clinician"],"operatingEnvironment":["hospital-outpatient"],"foreseeableMisuse":"Relying on the summary for medication reconciliation.","contraindications":"","riskTier":"I"}'::jsonb,
+     'lmm', 'Instruction-tuned decoder language model, 8B parameters.', '0.9.0',
+     ARRAY['GB'], true, 'PUBLISHED', 'Demo Notes Ltd', 'contact@notes.example',
+     'Drafts discharge-letter summaries from outpatient clinic notes for clinician editing.',
+     NULL, 'May omit negated findings; outputs must be reviewed before filing.', NULL, now()),
+    (gen_random_uuid(), 'demo-sepsis-early-warning-draft',
+     '{"v":1,"medicalPurpose":"monitoring","foreseeableMisuse":"Unreviewed alerting in paediatric wards.","contraindications":"","riskTier":"III"}'::jsonb,
+     'time-series', 'Recurrent network over vital-sign streams.', '0.1.0',
+     ARRAY['CH'], false, 'DRAFT', 'Demo Sepsis AG', 'dev@sepsis.example',
+     NULL, NULL, NULL, NULL, now())
+ON CONFLICT (slug) DO NOTHING;

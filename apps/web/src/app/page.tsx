@@ -64,10 +64,11 @@ const PHASES: PhaseCard[] = [
     id: 'C',
     title: 'Evaluation',
     description:
-      'Benchmark health AI models against open challenges in a sandboxed runner. Reports are reproducible and signed.',
-    status: 'planned',
+      'Evaluate health AI models against benchmarking tasks without publishing the reference labels: predictions scoring, sealed-container execution, and a reviewed registry of evaluation methods.',
+    status: 'in-progress',
     icon: ChartIcon,
     accent: 'phase-c',
+    href: '/evaluation',
   },
   {
     id: 'D',
