@@ -119,6 +119,31 @@ def test_startup_failure_is_classified(settings: Settings) -> None:
     assert "exec format error" not in excinfo.value.detail
 
 
+def test_image_declared_volumes_are_refused_and_the_image_is_pruned(settings: Settings) -> None:
+    """An image declaring its own VOLUMEs gets anonymous docker volumes mounted
+    at those paths, displacing the read-only root and the size-capped tmpfs at
+    /output — so the declared output cap stops applying to a path the
+    participant chose. Reported by team NOFOM (#514)."""
+    docker = FakeDocker(image=FakeImage([f"{IMAGE_REPO}@{DIGEST_A}"], volumes={"/output": {}}))
+    with pytest.raises(SandboxError) as excinfo:
+        execute(docker, settings, make_message(), settings.input_root, _output_dir(settings))
+    assert excinfo.value.code is Code.STARTUP_FAILED
+    assert "volume" in excinfo.value.detail
+    # Refused before anything ran, and not left in the host image cache.
+    assert docker.containers.calls == []
+    assert docker.images.removed == [f"{IMAGE_REPO}@{DIGEST_A}"]
+
+
+def test_an_image_that_fails_to_start_is_still_pruned(settings: Settings) -> None:
+    """The prune in the run loop's `finally` is only reached once a container
+    exists, so an image that pulled but failed to start was being left in the
+    host image cache. Reported by team NOFOM (#514)."""
+    docker = FakeDocker(run_error=RuntimeError("exec format error"))
+    with pytest.raises(SandboxError):
+        execute(docker, settings, make_message(), settings.input_root, _output_dir(settings))
+    assert docker.images.removed == [f"{IMAGE_REPO}@{DIGEST_A}"]
+
+
 # ---------------------------------------------------------------------------
 # The run itself
 # ---------------------------------------------------------------------------

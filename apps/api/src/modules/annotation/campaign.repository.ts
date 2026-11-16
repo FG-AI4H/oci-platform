@@ -190,6 +190,12 @@ export class CampaignRepository {
    * new, then advance the campaign's `currentInstructionsVersion`
    * pointer. Returns the persisted row and a `created` flag so the
    * caller can distinguish a fresh publish from a no-op republish.
+   *
+   * With `baseVersion` set (null included), the pointer only moves if
+   * it still equals `baseVersion`; otherwise nothing is written and the
+   * current pointer is returned as `staleCurrentVersion`. The guarded
+   * UPDATE re-checks its WHERE after any concurrent commit, so two
+   * editors racing from the same base can't both win.
    */
   async publishInstructions(args: {
     campaignId: string;
@@ -197,8 +203,25 @@ export class CampaignRepository {
     markdownBody: string;
     mediaUrls: unknown;
     createdById: string;
-  }): Promise<{ row: AnnotationCampaignInstructions; created: boolean }> {
+    baseVersion?: string | null;
+  }): Promise<
+    | { row: AnnotationCampaignInstructions; created: boolean }
+    | { staleCurrentVersion: string | null }
+  > {
     return this.prisma.client.$transaction(async (tx) => {
+      if (args.baseVersion !== undefined) {
+        const moved = await tx.annotationCampaign.updateMany({
+          where: { id: args.campaignId, currentInstructionsVersion: args.baseVersion },
+          data: { currentInstructionsVersion: args.version },
+        });
+        if (moved.count === 0) {
+          const now = await tx.annotationCampaign.findUnique({
+            where: { id: args.campaignId },
+            select: { currentInstructionsVersion: true },
+          });
+          return { staleCurrentVersion: now?.currentInstructionsVersion ?? null };
+        }
+      }
       const existing = await tx.annotationCampaignInstructions.findUnique({
         where: { campaignId_version: { campaignId: args.campaignId, version: args.version } },
       });
@@ -217,10 +240,12 @@ export class CampaignRepository {
           },
         });
       }
-      await tx.annotationCampaign.update({
-        where: { id: args.campaignId },
-        data: { currentInstructionsVersion: args.version },
-      });
+      if (args.baseVersion === undefined) {
+        await tx.annotationCampaign.update({
+          where: { id: args.campaignId },
+          data: { currentInstructionsVersion: args.version },
+        });
+      }
       return { row: row!, created };
     });
   }

@@ -35,6 +35,7 @@ const GROUP_TONE: Partial<
   host: 'primary',
   reviewer: 'primary',
   'expert-reviewer': 'primary',
+  'evaluation-reviewer': 'primary',
   'arbitration-annotator': 'info',
   annotator: 'info',
   participant: 'neutral',
@@ -101,7 +102,7 @@ export default async function AdminUsersPage({
             defaultValue={params.q ?? ''}
             placeholder="Username or email prefix (e.g. alice, bob@)"
             leadingIcon={<SearchIcon size={16} />}
-            className="min-w-0 flex-1"
+            wrapperClassName="min-w-0 flex-1"
           />
         </form>
 

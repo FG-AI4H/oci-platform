@@ -39,6 +39,7 @@ const GROUP_HINT: Record<PlatformGroup, string> = {
   reviewer: 'Performs gate-2 review during annotation.',
   'arbitration-annotator': 'Resolves disagreements during arbitration (ADR-0009).',
   'expert-reviewer': 'Gate-3 expert review (ADR-0006).',
+  'evaluation-reviewer': 'Reviews evaluation routes and publishes model cards.',
   annotator: 'Performs gate-1 annotation work.',
   supervisor: 'Regulatory supervisor — read-only audit access.',
   regulator: 'Regulator portal access (Phase D).',

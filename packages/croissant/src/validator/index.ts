@@ -1,9 +1,12 @@
 import { z } from 'zod';
+import type { AccessTier } from '@oci/shared-types';
 import { CONFORMS_TO } from '../namespaces/index.js';
 import { Croissant10Schema, type Croissant10 } from '../croissant10/schema.js';
 import { Croissant11DeltasSchema } from '../croissant11/schema.js';
 import { RaiExtensionSchema, RAI_PROPERTIES } from '../rai/schema.js';
 import { BioCroissantSchema, BIOCROISSANT_PROPERTIES } from '../biocroissant/schema.js';
+import { PROVENANCE_CONFORMANCE_TARGET, optsIntoProvenanceProfile } from '../provenance/schema.js';
+import { validateProvenance } from '../provenance/index.js';
 import { normalize } from './normalize.js';
 
 export type ValidationLevel = 'error' | 'warning';
@@ -19,6 +22,8 @@ export interface ValidationIssue {
    *   `croissant11.invalid.<field>`
    *   `rai.invalid.<field>`
    *   `biocroissant.invalid.<field>`
+   *   `provenance.missing.<id>` / `provenance.invalid.<id>[.<field>]` /
+   *   `provenance.mismatch.<id>.<field>` / `provenance.deprecated.<what>`
    *   `validator.unsupported.conformance`
    */
   code: string;
@@ -32,20 +37,51 @@ export interface ValidationResult {
   conformance: Conformance;
   hasRai: boolean;
   hasBioCroissant: boolean;
+  /**
+   * The manifest opted into `bio-prov` — the `provenance` layer ran
+   * (ADR-0022). Opt-in is the v0.2 conformance target in `dct:conformsTo`,
+   * or v0.1's deprecated `bio:provenanceProfile` marker.
+   */
+  hasProvenanceProfile: boolean;
   issues: ValidationIssue[];
   /** The normalised manifest if base parsing succeeded. */
   data?: Croissant10;
+}
+
+export interface ValidateOptions {
+  /**
+   * The dataset's catalogue access tier (ADR-0003). Drives the
+   * `bio-prov` obligations (spec section 3). Defaults to `OPEN`.
+   */
+  accessTier?: AccessTier;
+  /**
+   * Apply the `bio-prov` obligation table as written (spec section 3):
+   * MUST → error, SHOULD → warning, MAY never reported; a present but
+   * malformed value is an error at every tier. Defaults to `true`
+   * (#504). Pass `false` for the permissive reading, one level down:
+   * MUST → warning, SHOULD omitted, malformed → warning. Only consulted
+   * when the manifest opts into the profile.
+   */
+  strictProvenance?: boolean;
 }
 
 /**
  * Validate a Croissant manifest in any prefix flavour.
  *
  * Layered: detects `dct:conformsTo` to pick base schema (1.0 or 1.1+),
- * then runs RAI and BIOCroissant deltas as optional layers. Issues from
- * each layer are tagged with stable codes so callers (UI, audit log,
- * CI gating) can treat them differently.
+ * then runs RAI, BIOCroissant and `bio-prov` provenance deltas as
+ * optional layers. Issues from each layer are tagged with stable codes so
+ * callers (UI, audit log, CI gating) can treat them differently.
+ *
+ * The `bio-prov` layer runs only when the manifest opts in — the v0.2
+ * conformance target in `dct:conformsTo`, or v0.1's deprecated
+ * `bio:provenanceProfile` marker — at the obligations of `options.accessTier`
+ * (`OPEN` when none is given) and strict by default. Callers that
+ * validate for publish must pass the dataset's catalogue tier: the
+ * obligations differ per tier, and a manifest that is conformant at
+ * `OPEN` can be rejected at `SENSITIVE`.
  */
-export function validate(input: unknown): ValidationResult {
+export function validate(input: unknown, options: ValidateOptions = {}): ValidationResult {
   const issues: ValidationIssue[] = [];
 
   if (input == null || typeof input !== 'object' || Array.isArray(input)) {
@@ -54,6 +90,7 @@ export function validate(input: unknown): ValidationResult {
       conformance: 'unknown',
       hasRai: false,
       hasBioCroissant: false,
+      hasProvenanceProfile: false,
       issues: [
         {
           path: '',
@@ -73,7 +110,7 @@ export function validate(input: unknown): ValidationResult {
       path: '/dct:conformsTo',
       level: 'error',
       code: 'validator.unsupported.conformance',
-      message: `dct:conformsTo missing or unsupported. Expected "${CONFORMS_TO.croissant10}" or "${CONFORMS_TO.croissant11}".`,
+      message: `dct:conformsTo missing or unsupported. Expected "${CONFORMS_TO.croissant10}" or "${CONFORMS_TO.croissant11}", alone or in an array (e.g. alongside "${PROVENANCE_CONFORMANCE_TARGET}").`,
     });
   }
 
@@ -105,6 +142,17 @@ export function validate(input: unknown): ValidationResult {
     if (!bioResult.success) issues.push(...zodIssues(bioResult.error, 'biocroissant'));
   }
 
+  // bio-prov — only when the manifest opts in (spec section 2).
+  const hasProvenanceProfile = optsIntoProvenanceProfile(normalized);
+  if (hasProvenanceProfile) {
+    issues.push(
+      ...validateProvenance(normalized, {
+        accessTier: options.accessTier ?? 'OPEN',
+        strict: options.strictProvenance ?? true,
+      }),
+    );
+  }
+
   const ok = issues.every((i) => i.level !== 'error');
 
   return {
@@ -112,16 +160,25 @@ export function validate(input: unknown): ValidationResult {
     conformance,
     hasRai,
     hasBioCroissant,
+    hasProvenanceProfile,
     issues,
     data: baseResult.success ? baseResult.data : undefined,
   };
 }
 
+/**
+ * The base conformance target. `dct:conformsTo` may be a single IRI or an
+ * array — a manifest that also conforms to a profile declares both, e.g.
+ * `["http://mlcommons.org/croissant/1.1", PROVENANCE_CONFORMANCE_TARGET]`
+ * (bio-prov v0.2 section 2, the GeoCroissant pattern). Targets other than
+ * the Croissant ones are ignored here; the layers key on their own.
+ */
 function detectConformance(normalized: Record<string, unknown>): Conformance {
   // After normalization, `dct:conformsTo` becomes `conformsTo`.
-  const value = normalized['conformsTo'];
-  if (value === CONFORMS_TO.croissant10) return 'croissant-1.0';
-  if (value === CONFORMS_TO.croissant11) return 'croissant-1.1';
+  const raw = normalized['conformsTo'];
+  const targets = Array.isArray(raw) ? raw : [raw];
+  if (targets.includes(CONFORMS_TO.croissant11)) return 'croissant-1.1';
+  if (targets.includes(CONFORMS_TO.croissant10)) return 'croissant-1.0';
   return 'unknown';
 }
 

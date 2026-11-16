@@ -12,6 +12,8 @@ import {
   CardHeader,
   CardTitle,
   Container,
+  DefinitionItem,
+  DefinitionList,
   Section,
 } from '@oci/ui';
 import type { DatasetDetail } from '@oci/shared-types';
@@ -65,9 +67,9 @@ export default async function PublishVersionPage({ params }: PageProps) {
   const nextVersion = bumpPatch(detail.latestVersion ?? '0.1.0');
 
   return (
-    <Container size="lg">
+    <Container size="wide">
       <Section spacing="md">
-        <header className="mb-6 space-y-3">
+        <header className="mb-8 space-y-3">
           <Link
             href={`/catalog/${detail.slug}`}
             className="inline-flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
@@ -82,88 +84,72 @@ export default async function PublishVersionPage({ params }: PageProps) {
             Publish a new version
           </h1>
           <p className="max-w-prose text-[var(--color-muted-foreground)]">
-            Paste or upload a Croissant&nbsp;1.1 manifest. We&apos;ll validate it against Croissant
-            + RAI + BIOCroissant before mirroring its distributions to the catalog.
+            Describe the dataset once in the guided form, or paste a Croissant&nbsp;1.1 manifest you
+            already have. Either way the platform validates it against Croissant, RAI, BIOCroissant
+            and the bio-prov provenance profile before it goes into the catalogue.
           </p>
+          {/*
+           * The dataset facts this version attaches to. One row under the
+           * heading, where the host reads it once, instead of a sticky
+           * sidebar that took an 18rem column from the form on every step.
+           */}
+          <DefinitionList
+            aria-label="Dataset"
+            className="flex flex-wrap gap-x-8 gap-y-2 border-t border-[var(--color-border)] pt-4 text-sm"
+          >
+            <DefinitionItem term="Slug" mono>
+              {detail.slug}
+            </DefinitionItem>
+            <DefinitionItem term="Visibility">
+              <Badge tone="neutral">{detail.visibility}</Badge>
+            </DefinitionItem>
+            <DefinitionItem term="Access tier">
+              <Badge tone="neutral">{detail.accessTier}</Badge>
+            </DefinitionItem>
+            {detail.latestVersion ? (
+              <DefinitionItem term="Latest">
+                <Badge tone="primary">v{detail.latestVersion}</Badge>
+              </DefinitionItem>
+            ) : null}
+            <DefinitionItem term="Next">
+              <Badge tone="accent">v{nextVersion}</Badge>
+            </DefinitionItem>
+          </DefinitionList>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_18rem]">
-          <div className="space-y-6">
-            <Card>
+        <div className="space-y-10">
+          <PublishMode
+            slug={detail.slug}
+            suggestedVersion={nextVersion}
+            visibility={detail.visibility}
+            accessTier={detail.accessTier}
+          />
+
+          {/*
+           * Self-hosted uploads (PR I, #87). Only meaningful once a
+           * version exists — multipart-complete attaches each file
+           * to the latest published version. Surfaced after the
+           * publish form so the host's flow is "publish manifest →
+           * upload files → paste contentUrls → publish next version".
+           * For datasets that already use external URLs, this
+           * section is just ignored.
+           */}
+          {detail.latestVersion && session?.accessToken ? (
+            <Card className="max-w-3xl">
               <CardHeader>
-                <CardTitle>New version</CardTitle>
+                <CardTitle>Upload files</CardTitle>
                 <CardDescription>
-                  Use the wizard for a guided form, or switch to the paste form if you already have
-                  a Croissant manifest. Both produce the same machine-readable output.
+                  Optional. Host the data on this platform instead of pointing the manifest at an
+                  upstream URL. Each upload yields a stable{' '}
+                  <code className="font-mono text-xs">contentUrl</code> for the next version&apos;s
+                  manifest.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <PublishMode
-                  slug={detail.slug}
-                  suggestedVersion={nextVersion}
-                  visibility={detail.visibility}
-                />
+                <FileUploader slug={detail.slug} accessToken={session.accessToken} />
               </CardContent>
             </Card>
-
-            {/*
-             * Self-hosted uploads (PR I, #87). Only meaningful once a
-             * version exists — multipart-complete attaches each file
-             * to the latest published version. Surfaced after the
-             * publish form so the host's flow is "publish manifest →
-             * upload files → paste contentUrls → publish next version".
-             * For datasets that already use external URLs, this
-             * section is just ignored.
-             */}
-            {detail.latestVersion && session?.accessToken ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Upload files</CardTitle>
-                  <CardDescription>
-                    Optional. Host the data on this platform instead of pointing the manifest at an
-                    upstream URL. Each upload yields a stable{' '}
-                    <code className="font-mono text-xs">contentUrl</code> for the next
-                    version&apos;s manifest.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <FileUploader slug={detail.slug} accessToken={session.accessToken} />
-                </CardContent>
-              </Card>
-            ) : null}
-          </div>
-
-          <Card tone="subtle" className="h-fit lg:sticky lg:top-20">
-            <CardHeader>
-              <CardTitle>Current state</CardTitle>
-              <CardDescription>The dataset row this version will attach to.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[var(--color-muted-foreground)]">Slug</span>
-                <span className="font-mono text-xs">{detail.slug}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[var(--color-muted-foreground)]">Status</span>
-                <Badge tone="neutral">{detail.status}</Badge>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[var(--color-muted-foreground)]">Visibility</span>
-                <Badge tone="neutral">{detail.visibility}</Badge>
-              </div>
-              {detail.latestVersion ? (
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[var(--color-muted-foreground)]">Latest</span>
-                  <Badge tone="primary">v{detail.latestVersion}</Badge>
-                </div>
-              ) : null}
-              <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-3">
-                <span className="text-[var(--color-muted-foreground)]">Suggested next</span>
-                <Badge tone="accent">v{nextVersion}</Badge>
-              </div>
-            </CardContent>
-          </Card>
-          {/* end grid columns */}
+          ) : null}
         </div>
       </Section>
     </Container>

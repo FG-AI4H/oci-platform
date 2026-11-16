@@ -33,10 +33,19 @@ export const RaiExtensionSchema = z
     dataAnnotationPlatform: z.string().optional(),
     dataAnnotationAnalysis: z.string().optional(),
 
+    /**
+     * Both spellings of the last two properties exist because the
+     * Croissant Responsible AI specification renamed them:
+     * `dataReleaseMaintenancePlan` → `dataMaintenancePlan` and
+     * `dataSocialImpact` → `socialImpact`. Manifests in the wild carry
+     * either, so the layer recognises both and prefers neither.
+     */
     dataReleaseMaintenancePlan: z.string().optional(),
+    dataMaintenancePlan: z.string().optional(),
 
     personalSensitiveInformation: z.string().optional(),
     dataSocialImpact: z.string().optional(),
+    socialImpact: z.string().optional(),
     dataBiases: z.string().optional(),
     dataLimitations: z.string().optional(),
     dataUseCases: z.string().optional(),
@@ -67,8 +76,11 @@ export const RAI_PROPERTIES = [
   'dataAnnotationPlatform',
   'dataAnnotationAnalysis',
   'dataReleaseMaintenancePlan',
+  // Renamed by the Croissant RAI specification; both spellings count.
+  'dataMaintenancePlan',
   'personalSensitiveInformation',
   'dataSocialImpact',
+  'socialImpact',
   'dataBiases',
   'dataLimitations',
   'dataUseCases',

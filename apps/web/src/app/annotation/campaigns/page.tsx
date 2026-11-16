@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import {
   Alert,
   AlertDescription,
@@ -55,6 +56,12 @@ const TASK_KIND_LABEL: Record<CampaignTaskKind, string> = {
 
 export default async function AnnotationCampaignsPage() {
   const session = await auth();
+  // Campaigns are a signed-in surface: the API rejects anonymous callers
+  // with 401, and rendering that verbatim reads as a broken page (#488).
+  // Same pattern as /certification and the catalog publish flow.
+  if (!session?.accessToken) {
+    redirect('/signin?callbackUrl=/annotation/campaigns');
+  }
   const canCreate = isCampaignManager(session);
   const canAnnotate = isAnnotationWorker(session);
 
@@ -104,9 +111,15 @@ export default async function AnnotationCampaignsPage() {
 
         {error ? (
           <Alert tone="danger">
-            <AlertTitle>Campaigns unavailable</AlertTitle>
+            <AlertTitle>The annotation service did not respond</AlertTitle>
             <AlertDescription>
-              <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
+              <p>Try again in a moment.</p>
+              <details className="mt-2">
+                <summary className="cursor-pointer text-sm font-medium">Technical details</summary>
+                <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">
+                  {error}
+                </pre>
+              </details>
             </AlertDescription>
           </Alert>
         ) : !response || response.items.length === 0 ? (

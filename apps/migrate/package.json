@@ -9,6 +9,7 @@
     "prisma": "^7.8.0"
   },
   "overrides": {
+    "mysql2": "^3.24.3",
     "picomatch": "^4.0.4",
     "deepmerge-ts": "^8.0.0"
   }

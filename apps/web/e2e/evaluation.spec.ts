@@ -82,7 +82,7 @@ test.describe('evaluation surface (ADR-0017)', () => {
     // Results card renders either the leaderboard or its own empty state.
     await expect(page.getByRole('heading', { level: 2, name: 'Results' })).toBeVisible();
     const submissions = page
-      .getByRole('list', { name: 'Submissions, best QWK first' })
+      .getByRole('list', { name: 'Submissions, best first' })
       .getByRole('listitem');
     if ((await submissions.count()) === 0) {
       await expect(page.getByText('No submissions scored yet.', { exact: false })).toBeVisible();
@@ -94,7 +94,30 @@ test.describe('evaluation surface (ADR-0017)', () => {
       await expect(first.getByText('Referable sensitivity', { exact: true })).toBeVisible();
       await expect(first.getByText('Referable specificity', { exact: true })).toBeVisible();
       await expect(first.getByText('Coverage', { exact: true })).toBeVisible();
+
+      // #486 — every SCORED row carries its attribution, as a badge whose
+      // text (not colour) names the state. The seeded `demo-baseline-v1` on
+      // dev predates the route registry, so when it is present it must read
+      // as legacy and carry no rank number.
+      const rowCount = await submissions.count();
+      for (let i = 0; i < rowCount; i += 1) {
+        const row = submissions.nth(i);
+        if ((await row.getByText('scored', { exact: true }).count()) === 0) continue;
+        await expect(
+          row.getByText(/^(published|provisional|withdrawn|retracted|legacy)$/),
+        ).toBeVisible();
+      }
+      const legacyBaseline = submissions.filter({
+        has: page.getByRole('heading', { level: 3, name: /demo-baseline-v1/ }),
+      });
+      if ((await legacyBaseline.count()) > 0) {
+        await expect(legacyBaseline.getByText('legacy', { exact: true })).toBeVisible();
+        await expect(legacyBaseline.getByRole('heading', { level: 3 })).not.toContainText('#');
+      }
     }
+
+    // Footer reports published results separately from scored ones.
+    await expect(page.getByText(/\d+ of \d+ submissions scored · \d+ published/)).toBeVisible();
   });
 
   test('unknown task slug renders the 404 page', async ({ page }) => {

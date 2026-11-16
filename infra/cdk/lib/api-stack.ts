@@ -6,6 +6,7 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -136,6 +137,22 @@ export class ApiStack extends cdk.Stack {
       enableFargateCapacityProviders: true,
     });
 
+    // GA4GH Passport issuer key (#620). Asymmetric RSA_2048 for
+    // RSASSA_PKCS1_V1_5_SHA_256 (RS256): the API signs visas with
+    // `kms:Sign` and publishes the public half in /.well-known/jwks.json,
+    // seeding its key row from `kms:GetPublicKey` at boot. The private key
+    // never leaves KMS. Asymmetric keys don't support automatic rotation;
+    // rotation is a new key plus a RETIRED row, so issued visas stay
+    // verifiable. RETAIN outside dev for the same reason.
+    const passportIssuerKey = new kms.Key(this, 'PassportIssuerKey', {
+      alias: `alias/oci-${props.cfg.envName}-passport-issuer`,
+      description: `OCI ${props.cfg.envName}: GA4GH Passport visa signing (RS256)`,
+      keySpec: kms.KeySpec.RSA_2048,
+      keyUsage: kms.KeyUsage.SIGN_VERIFY,
+      removalPolicy:
+        props.cfg.envName === 'dev' ? cdk.RemovalPolicy.DESTROY : cdk.RemovalPolicy.RETAIN,
+    });
+
     const fargate = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'ApiService', {
       cluster: this.cluster,
       cpu: props.cfg.fargate.cpu,
@@ -198,6 +215,10 @@ export class ApiStack extends cdk.Stack {
           // outbox `callbackUrl` from it; without it the CONTAINER path
           // refuses with 503 rather than enqueueing an unanswerable run.
           OCI_API_URL: `https://${props.cfg.domainName}`,
+          // Passport issuer (#620): visas carry `iss` = this origin, and a
+          // verifier fetches `${iss}/.well-known/jwks.json` to check them.
+          OCI_PASSPORT_ISSUER_URL: `https://${props.cfg.domainName}`,
+          OCI_PASSPORT_ISSUER_KMS_KEY_ARN: passportIssuerKey.keyArn,
           // The run cap dispatched in every queue message. Pinned to the same
           // per-env envelope the queue's visibility timeout is derived from
           // (eval-stack: visibility = maxRunSeconds + pull + outbox), so the
@@ -287,10 +308,18 @@ export class ApiStack extends cdk.Stack {
     // construct sets the listener default to api TG, but WebStack adds a
     // catch-all rule at priority 100 (`/*` → web TG) which would otherwise
     // also match API paths. Priority 50 wins for API URLs.
+    //
+    // `/docs*` covers `/docs`, `/docs/*` and `/docs-json` (the OpenAPI
+    // document, published in every environment — #590). `/.well-known/*`
+    // carries the root discovery documents the API owns: the Passport
+    // issuer JWKS and the capability document. ALB allows five values per
+    // condition, so the patterns are kept to four.
     new elbv2.ApplicationListenerRule(this, 'ApiRoutes', {
       listener: fargate.listener,
       priority: 50,
-      conditions: [elbv2.ListenerCondition.pathPatterns(['/v2/*', '/health', '/docs', '/docs/*'])],
+      conditions: [
+        elbv2.ListenerCondition.pathPatterns(['/v2/*', '/health', '/docs*', '/.well-known/*']),
+      ],
       action: elbv2.ListenerAction.forward([fargate.targetGroup]),
     });
 
@@ -346,6 +375,10 @@ export class ApiStack extends cdk.Stack {
         resources: [props.datasetsBucket.bucketArn, `${props.datasetsBucket.bucketArn}/*`],
       }),
     );
+
+    // Passport issuer (#620): sign visas and read the public key. No
+    // decrypt, no key management: the task role can't export or delete it.
+    passportIssuerKey.grant(fargate.taskDefinition.taskRole, 'kms:Sign', 'kms:GetPublicKey');
 
     // Sealed-execution dispatch (WP2 / ADR-0018 Mode 2). Send-only: the API
     // publishes a submission message and never receives or deletes — the

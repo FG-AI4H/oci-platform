@@ -192,12 +192,19 @@ is possible, the remediation status is published alongside the finding. Acceptin
 of entry, and it applies to the reference implementation on exactly the same terms as to every other
 route ([ADR-0021](../adr/0021-failed-review-is-published-with-its-reason.md)).
 
-**Where this stands today (20 August 2026).** Review and the route lifecycle above
-are the process every solution is held to, and they govern the first published
-results in January 2027. The lifecycle is not yet enforced by the platform in
-code: no result has been published, and none will be until it is. Said plainly
-because a specification that quietly describes a control it does not yet have is
-the thing this challenge exists to argue against.
+**Where this stands today (21 August 2026).** The review gate is enforced: every
+result carries the route and route version that produced it, and a result from a
+version whose review status is not `APPROVED` is marked provisional and excluded
+from published reporting. Retraction is not yet enforced — the record carries a
+retraction field, but withdrawing the results of a version later `REJECTED` or
+`WITHDRAWN` remains a commitment rather than a mechanism. No Phase 1 result has
+been published; the first are due January 2027, by which point both halves must
+hold.
+
+Stated plainly in both directions, because a specification that describes a
+control it does not have is the thing this challenge exists to argue against —
+and one that undersells a control it does have is no more use to somebody
+deciding whether to enter.
 
 ## 7 How results are reported
 

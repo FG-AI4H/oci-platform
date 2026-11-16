@@ -16,6 +16,14 @@
 FROM node:24-alpine
 WORKDIR /app
 
+# Patch the base image's OpenSSL before anything else. node:24-alpine ships
+# alpine 3.24.1 with libcrypto3/libssl3 3.5.7-r0, which carries
+# CVE-2026-14456 (HIGH) and fails the deploy image scan. The fix (3.5.8-r0)
+# is in the alpine repo ahead of the node base-image rebuild, so upgrade the
+# two packages rather than suppress the finding. Drop this once node:24-alpine
+# ships 3.5.8-r0 or later.
+RUN apk --no-cache upgrade libcrypto3 libssl3
+
 # Bring just enough to run prisma migrate deploy:
 #   - schema.prisma          (declares the datasource + previewFeatures)
 #   - prisma/migrations/     (the SQL to apply, lock file)

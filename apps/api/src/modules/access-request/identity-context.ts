@@ -178,8 +178,9 @@ function scoreFromCategory(category: EmailDomainCategory): RequesterIdentityScor
  * Production tokens carry the email only in the *id* token, which we
  * don't currently forward; in local-dev the `sub` field is itself the
  * email-shaped value the dev guard stamped. This helper hides that
- * branch from callers and keeps the production-path null until the
- * separate ID-token / User-table-lookup work lands.
+ * branch from callers. In production it returns null; the
+ * `RequesterEmailResolver` then looks the verified address up in the
+ * user pool (#656).
  */
 export function extractRequesterEmail(
   user: { sub?: string; email?: string } | undefined,

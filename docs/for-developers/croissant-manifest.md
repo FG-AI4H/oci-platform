@@ -9,10 +9,11 @@ This page covers what the OCI's validator accepts, how it differs from a vanilla
 The validator runs in layers (`packages/croissant/src/validator/`):
 
 1. **Croissant 1.0 base** (locked since March 2024) — the schema.org `Dataset` shape, RecordSet, Field, FileObject / FileSet, top-level identification fields.
-2. **Croissant 1.1 deltas** (Feb 2026) — PROV-O provenance (`wasDerivedFrom`, `wasGeneratedBy`, `wasAttributedTo`), ODRL usage policies (`hasOffer`), DUO consent codes (`consentCode`), the vocabulary framework.
+2. **Croissant 1.1 deltas** (Feb 2026) — PROV-O provenance (`wasDerivedFrom`, `wasGeneratedBy`, `wasAttributedTo`, activity times as an instant or a period, agent roles), ODRL usage policies (`usageInfo`, preferred, or `hasOffer`), DUO consent codes (`consentCode`), the vocabulary framework.
 3. **RAI extension** — Responsible AI properties (~20 fields: bias, sensitivity, etc.).
 4. **BioCroissant draft** _(OCI proposal, namespace `https://oci.ai4h.net/biocroissant/v0.1#`)_ — imaging modality, body region, disease condition, anonymisation level, IRB attestations, cohort characteristics.
-5. **OCI publish-time checks** — application-level rules, e.g. fail-closed for non-PUBLIC datasets without DUO terms.
+5. **`bio-prov` provenance profile** _(v0.2, [`docs/standards/bio-prov-v0.2.md`](../standards/bio-prov-v0.2.md))_ — health-dataset provenance obligations per access tier. Runs only when the manifest declares `https://oci.ai4h.net/biocroissant/bio-prov/0.2` in `dct:conformsTo` (or still carries the deprecated `bio:provenanceProfile` marker, which warns).
+6. **OCI publish-time checks** — application-level rules, e.g. fail-closed for non-PUBLIC datasets without DUO terms.
 
 Layers run in order; failure at any layer aborts and returns the issues. The web publish form renders them under "Manifest validation failed (croissant-1.1)".
 

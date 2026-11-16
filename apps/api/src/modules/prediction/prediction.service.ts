@@ -1,25 +1,34 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type { AuditEmitter } from '@oci/audit';
+import type { ModelCard } from '@oci/database';
 import type { ModelFactsLabel } from '@oci/shared-types';
 import {
   allowedTransitionsFrom,
   canTransition,
   type ChangeModelCardStatusRequest,
   type CreateModelCardRequest,
+  type ListModelCardsQuery,
+  type ListModelCardsResponse,
   type ModelCardResponse,
+  type PublicModelCard,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { IntendedUseService } from '../intended-use/intended-use.service.js';
-import { PredictionRepository, toModelCardResponse } from './prediction.repository.js';
+import {
+  PredictionRepository,
+  toModelCardResponse,
+  toPublicModelCard,
+} from './prediction.repository.js';
 import { buildModelFactsLabel } from './renderers/model-facts-label.js';
 import { renderModelFactsMarkdown } from './renderers/render-model-facts-markdown.js';
 
@@ -119,8 +128,7 @@ export class PredictionService {
     body: ChangeModelCardStatusRequest,
     user: CognitoAccessTokenPayload,
   ): Promise<ModelCardResponse> {
-    const existing = await this.repo.findBySlug(slug);
-    if (!existing) throw new NotFoundException(`Model card '${slug}' not found`);
+    const existing = await this.findVisible(slug, user);
 
     const from = existing.status;
     const to = body.status;
@@ -137,8 +145,30 @@ export class PredictionService {
       );
     }
 
-    const updated = await this.repo.updateStatus(existing.id, to);
+    // Submitting is the submitter's act; publishing is a reviewer's, and review
+    // is in pairs, so the submitter may not publish their own card, admin
+    // included. Returning a submission to DRAFT or withdrawing a published card
+    // is open to either: neither approves anything.
     const actorUserId = cognitoSubAsUuid(user.sub);
+    const isSubmitter = existing.submitterUserId === actorUserId;
+    const isReviewer = isModelCardReviewer(user);
+    const permitted =
+      to === 'SUBMITTED'
+        ? isSubmitter
+        : to === 'PUBLISHED'
+          ? isReviewer && !isSubmitter
+          : isSubmitter || isReviewer;
+    if (!permitted) {
+      throw new ForbiddenException(
+        to === 'SUBMITTED'
+          ? `Only the submitter may submit model card '${slug}'`
+          : isSubmitter
+            ? `You submitted model card '${slug}' and cannot publish it`
+            : `Moving model card '${slug}' to ${to} requires evaluation-reviewer or admin`,
+      );
+    }
+
+    const updated = await this.repo.updateStatus(existing.id, to);
     await this.audit.emitSync({
       module: 'prediction',
       action: 'modelcard.status.changed',
@@ -165,9 +195,8 @@ export class PredictionService {
    * absence in `gaps` rather than rendering a blank table as if it were a
    * finding of no effect.
    */
-  async modelFactsLabel(slug: string): Promise<ModelFactsLabel> {
-    const row = await this.repo.findBySlug(slug);
-    if (!row) throw new NotFoundException(`Model card '${slug}' not found`);
+  async modelFactsLabel(slug: string, user?: CognitoAccessTokenPayload): Promise<ModelFactsLabel> {
+    const row = await this.findVisible(slug, user);
     if (row.status === 'DRAFT') {
       throw new ConflictException(
         `Model card '${slug}' is DRAFT — a Model Facts Label is only rendered once it is submitted or published`,
@@ -180,13 +209,73 @@ export class PredictionService {
     });
   }
 
-  async modelFactsMarkdown(slug: string): Promise<string> {
-    return renderModelFactsMarkdown(await this.modelFactsLabel(slug));
+  async modelFactsMarkdown(slug: string, user?: CognitoAccessTokenPayload): Promise<string> {
+    return renderModelFactsMarkdown(await this.modelFactsLabel(slug, user));
   }
 
-  async getBySlug(slug: string): Promise<ModelCardResponse> {
-    const row = await this.repo.findBySlug(slug);
-    if (!row) throw new NotFoundException(`Model card '${slug}' not found`);
-    return toModelCardResponse(row);
+  /**
+   * Fetch one card. The submitter, reviewers and admin get the full card;
+   * everyone else, signed in or not, gets the public card (#591). Signing in
+   * doesn't make a field any less public: anyone can register an account and
+   * read a PUBLISHED card.
+   */
+  async getBySlug(
+    slug: string,
+    user?: CognitoAccessTokenPayload,
+  ): Promise<ModelCardResponse | PublicModelCard> {
+    const row = await this.findVisible(slug, user);
+    const card = toModelCardResponse(row);
+    const privileged =
+      user !== undefined &&
+      (row.submitterUserId === cognitoSubAsUuid(user.sub) || isModelCardReviewer(user));
+    return privileged ? card : toPublicModelCard(card);
   }
+
+  /**
+   * Public model catalogue (#591, Y.3176 Discover). PUBLISHED cards only,
+   * for every caller — the list is a discovery surface, not a workspace.
+   */
+  async listPublished(query: ListModelCardsQuery): Promise<ListModelCardsResponse> {
+    const { rows, total } = await this.repo.searchPublished({
+      q: query.q,
+      modelClass: query.modelClass,
+      jurisdiction: query.jurisdiction,
+      sort: query.sort,
+      offset: (query.page - 1) * query.limit,
+      limit: query.limit,
+    });
+    return {
+      items: rows,
+      total,
+      page: query.page,
+      pageSize: query.limit,
+      totalPages: Math.max(1, Math.ceil(total / query.limit)),
+    };
+  }
+
+  /**
+   * An anonymous caller sees PUBLISHED cards only (#591). A PUBLISHED or
+   * WITHDRAWN card is readable by anyone signed in: a card that was once
+   * public stays on the record, with its status saying it was withdrawn.
+   * DRAFT and SUBMITTED cards are readable only by the submitter and
+   * reviewers. Everyone else gets the same 404 as a missing slug, so an
+   * unpublished card's existence doesn't leak.
+   */
+  private async findVisible(slug: string, user?: CognitoAccessTokenPayload): Promise<ModelCard> {
+    const row = await this.repo.findBySlug(slug);
+    const visible =
+      row !== null &&
+      (row.status === 'PUBLISHED' ||
+        (user !== undefined &&
+          (row.status === 'WITHDRAWN' ||
+            row.submitterUserId === cognitoSubAsUuid(user.sub) ||
+            isModelCardReviewer(user))));
+    if (!row || !visible) throw new NotFoundException(`Model card '${slug}' not found`);
+    return row;
+  }
+}
+
+function isModelCardReviewer(user: CognitoAccessTokenPayload): boolean {
+  const groups = (user['cognito:groups'] ?? []) as string[];
+  return groups.includes('evaluation-reviewer') || groups.includes('admin');
 }

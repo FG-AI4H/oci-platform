@@ -1,0 +1,73 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "sc": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "dct": "http://purl.org/dc/terms/",
+    "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
+  },
+  "@type": "sc:Dataset",
+  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
+  "name": "Demo Clinical Notes 2024 — Text-Only Modality",
+  "description": "Synthetic placeholder for a text-only clinical-notes dataset. It contains no records and no files: it exists so the campaign-create form can exercise the modality → task-kind constraint for a text dataset (spatial task kinds disabled, classification and multi-modal allowed). The record set below documents the shape such a dataset would have.",
+  "url": "https://oci.ai4h.net/catalog/demo-clinical-notes-2024",
+  "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "version": "1.0.0",
+  "datePublished": "2026-09-04",
+  "creator": [{ "@type": "sc:Organization", "name": "OCI Platform (ITU/WHO/WIPO GI-AI4H)" }],
+  "publisher": {
+    "@type": "sc:Organization",
+    "name": "OCI Platform",
+    "url": "https://oci.ai4h.net/"
+  },
+  "keywords": ["synthetic", "clinical notes", "text", "demo", "placeholder"],
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "notes",
+      "name": "notes",
+      "description": "One row per de-identified clinical note. Empty in this placeholder: zero records are published.",
+      "key": "notes/noteId",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "notes/noteId",
+          "name": "noteId",
+          "description": "Stable identifier of the note.",
+          "dataType": "sc:Text"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "notes/text",
+          "name": "text",
+          "description": "Free-text body of the note.",
+          "dataType": "sc:Text"
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "notes/label",
+          "name": "label",
+          "description": "Whole-note classification label (the target of a CLASSIFICATION campaign).",
+          "dataType": ["sc:Text", "cr:Label"]
+        }
+      ]
+    }
+  ],
+  "bio:dataModality": [{ "@type": "sc:DefinedTerm", "name": "Text" }],
+  "bio:anonymizationLevel": "ANONYMIZED",
+  "bio:synthetic": true,
+  "bio:intendedUse": "platform smoke testing of the text-modality campaign constraint",
+  "rai:dataCollection": "None. Synthetic placeholder seeded by packages/database/seed/demo.sql; no notes were collected.",
+  "rai:personalSensitiveInformation": "None. The dataset holds zero records.",
+  "cr:consentCode": [
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000004",
+      "termCode": "DUO_0000004",
+      "name": "no restriction",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    }
+  ]
+}

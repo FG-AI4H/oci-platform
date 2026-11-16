@@ -1,73 +1,79 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 /**
- * E2E for the OCI-curated demo dataset (#251). Verifies the end-to-
- * end S3 path works against the live local stack:
+ * E2E for the OCI-curated demo dataset as the access-governance demo
+ * (#492). The seed publishes `oci-demo-chest-xr` as RESTRICTED at the
+ * REGISTERED identity tier, non-commercial only, with DUO terms
+ * DUO_0000007 (disease specific research) + DUO_0000046
+ * (non-commercial use only), so that on dev:
  *
- *   anonymous viewer → /catalog/oci-demo-chest-xr
- *     → "Files" card lists 5 hosted distributions
- *     → click the first download link
- *     → API 302s to a presigned S3 URL
- *     → bytes arrive with content-type image/png
+ *   anonymous viewer → /catalog/oci-demo-chest-xr → not found
+ *     (RESTRICTED rows are only listed for authenticated callers)
+ *   signed-in participant → detail page shows the "restricted" badge,
+ *     the tier badge, the two DUO terms and the "Request access" CTA
+ *     → /catalog/oci-demo-chest-xr/request-access renders the
+ *     structured intended-use form
  *
- * Pre-conditions:
+ * The anonymous hosted-download path that used to live in this file
+ * now runs against `idrid-grading-demo` — see
+ * `idrid-hosted-download.spec.ts`.
+ *
+ * Pre-conditions (same as the rest of the suite):
  *   - docker compose -f infra/local/docker-compose.yml up -d
  *   - pnpm --filter @oci/database db:migrate:deploy
- *   - apps/migrate/upload-fixtures.mjs has been run once
- *     (uploads the bundled PNGs to oci-datasets-local in MinIO)
  *   - pnpm --filter @oci/database db:seed:demo
- *     (inserts the dataset + distribution rows)
  *   - pnpm --filter @oci/api dev    (API on :3000)
  *   - pnpm --filter @oci/web dev    (web on :3001)
  *
- * The deployed environments (dev / int) get all of this automatically
- * via the migrate ECS task on every deploy.
+ * The spec only reads; it files no access request, so it leaves no
+ * rows behind and stays repeatable against a shared dev database.
  */
 
 const SLUG = 'oci-demo-chest-xr';
 
-test.describe('OCI demo dataset — hosted file download', () => {
-  test('anonymous: detail page lists 5 hosted files', async ({ page }) => {
+// UUID-shaped sub short-circuits the UUIDv5 derivation; distinct from
+// the seed's host id so the CTA is not hidden as "own dataset".
+const PARTICIPANT = '00000000-0000-4f00-8000-000000000492';
+
+async function signInAs(page: Page, user: string, roles: string) {
+  await page.goto('/signin?callbackUrl=%2Fdashboard');
+  await page.getByLabel('User').fill(user);
+  await page.getByLabel('Roles').fill(roles);
+  await page.getByRole('button', { name: /sign in.*local dev/i }).click();
+  await expect(page).toHaveURL(/\/(dashboard)?$/);
+}
+
+test.describe('OCI demo dataset — gated for the access-governance demo', () => {
+  test('anonymous: the RESTRICTED dataset is not served', async ({ page }) => {
+    const res = await page.goto(`/catalog/${SLUG}`);
+    expect(res?.status()).toBe(404);
+  });
+
+  test('participant: detail page shows the gate and the DUO terms', async ({ page }) => {
+    await signInAs(page, PARTICIPANT, 'participant');
     await page.goto(`/catalog/${SLUG}`);
     await expect(
       page.getByRole('heading', { name: /OCI Demo: Synthetic Chest XR/i }),
     ).toBeVisible();
 
-    // The "Files" card title was softened from "Distributions" by #250.
-    await expect(page.getByRole('heading', { name: /^Files$/ })).toBeVisible();
+    // Visibility + identity-tier badges in the hero.
+    await expect(page.getByText('restricted', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Registered', { exact: true }).first()).toBeVisible();
 
-    // Each row carries a "hosted" badge (rendered when the
-    // distribution is platform-hosted and the bytes are READY).
-    const hostedBadges = page.getByText('hosted', { exact: true });
-    await expect(hostedBadges).toHaveCount(5);
+    // The denormalised duo_terms drive the "Permitted use (DUO)" block.
+    await expect(page.getByText(/Disease specific research/i).first()).toBeVisible();
+    await expect(page.getByText(/Non-commercial use only/i).first()).toBeVisible();
 
-    // Five distinct download links, one per distribution.
-    const downloadLinks = page.locator(`a[href*="/distributions/"][href$="/download"]`);
-    await expect(downloadLinks).toHaveCount(5);
+    // Gated → the primary CTA is "Request access", linking to the form.
+    const cta = page.getByRole('link', { name: 'Request access' });
+    await expect(cta).toBeVisible();
+    await expect(cta).toHaveAttribute('href', `/catalog/${SLUG}/request-access`);
   });
 
-  test('anonymous: clicking the first download yields image/png bytes', async ({ page }) => {
-    await page.goto(`/catalog/${SLUG}`);
-
-    // Grab the first hosted download link. The detail page emits a
-    // web-side proxy URL (`/catalog/<slug>/distributions/<id>/
-    // download`) — the proxy attaches the caller's bearer to the API
-    // call and 302s to the presigned S3 URL.
-    const firstLink = page.locator(`a[href*="/distributions/"][href$="/download"]`).first();
-    const relativeHref = await firstLink.getAttribute('href');
-    expect(relativeHref).toMatch(/^\/catalog\/oci-demo-chest-xr\/distributions\/[^/]+\/download$/);
-
-    // Fetch via Playwright's request context — auto-follows the
-    // proxy → API → S3 chain.
-    const res = await page.request.get(relativeHref!);
-
-    expect(res.status()).toBe(200);
-    expect(res.headers()['content-type']).toMatch(/image\/png/);
-
-    const body = await res.body();
-    // PNG signature.
-    expect(body.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
-    // Size matches what the manifest declares for sample-001.png.
-    expect(body.length).toBe(43281);
+  test('participant: the request-access page renders the intended-use form', async ({ page }) => {
+    await signInAs(page, PARTICIPANT, 'participant');
+    await page.goto(`/catalog/${SLUG}/request-access`);
+    await expect(page.getByRole('heading', { name: 'Request access' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Request details' })).toBeVisible();
   });
 });

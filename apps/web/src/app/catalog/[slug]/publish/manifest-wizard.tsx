@@ -13,18 +13,27 @@ import {
 } from '@oci/ui';
 import {
   ManifestWizardInputSchema,
+  emptyManifestWizardProvenance,
+  type AccessTier,
   type ManifestWizardInput,
   type ManifestWizardCreator,
   type ManifestWizardDistribution,
   type DuoTermId,
 } from '@oci/shared-types';
 import { manifestWizardInputToCroissant, DUO_REGISTRY, lookupDuoTerm } from '@oci/croissant';
-import { publishVersionAction, type PublishVersionState } from './actions';
+import {
+  publishVersionAction,
+  type ManifestIssue,
+  type ProvenancePreflightState,
+  type PublishVersionState,
+} from './actions';
+import { describeProvenanceIssue, isProvenanceCode } from './provenance-issues';
+import { ProvenanceStep, summarisePreflight, useProvenancePreflight } from './provenance-step';
 
 /**
  * Croissant manifest wizard (PR K, #90).
  *
- * 5 input steps + a review step that submits to the same server
+ * 6 input steps + a review step that submits to the same server
  * action as the paste form. The state is one `ManifestWizardInput`
  * shaped object; per-step validation runs `ManifestWizardInputSchema`
  * with `.partial()`-style narrowing, surfacing only the issues for
@@ -46,12 +55,19 @@ interface Props {
    * fail-closed at publish if no consentCode is declared (J.1).
    */
   visibility: 'PUBLIC' | 'RESTRICTED' | 'PRIVATE';
+  /**
+   * The dataset's access tier (ADR-0003). Drives the Required /
+   * Recommended / Optional markers of the Provenance step and the
+   * pre-flight check against the bio-prov obligation table (#496).
+   */
+  accessTier: AccessTier;
 }
 
 type StepId =
   | 'identification'
   | 'creators'
   | 'biomedical'
+  | 'provenance'
   | 'data-use'
   | 'distributions'
   | 'review';
@@ -67,6 +83,11 @@ const STEPS: Array<{ id: StepId; label: string; subtitle: string }> = [
     id: 'biomedical',
     label: 'Biomedical context',
     subtitle: 'Modality, body region, condition, anonymisation (BioCroissant)',
+  },
+  {
+    id: 'provenance',
+    label: 'Provenance',
+    subtitle: 'Origin, processing, ethics approval, labelling protocol (bio-prov)',
   },
   { id: 'data-use', label: 'Data use', subtitle: 'GA4GH DUO consent codes' },
   { id: 'distributions', label: 'Distributions', subtitle: 'Files and download URLs' },
@@ -90,6 +111,7 @@ function defaultInput(suggestedVersion: string): ManifestWizardInput {
     bodyRegion: [],
     diseaseCondition: [],
     anonymizationLevel: undefined,
+    provenance: emptyManifestWizardProvenance(),
     duoTerms: [],
     distributions: [],
     notes: undefined,
@@ -113,6 +135,7 @@ const STEP_FIELDS: Record<StepId, Array<keyof ManifestWizardInput>> = {
   ],
   creators: ['creators'],
   biomedical: ['imagingModality', 'bodyRegion', 'diseaseCondition', 'anonymizationLevel'],
+  provenance: ['provenance'],
   'data-use': ['duoTerms'],
   distributions: ['distributions'],
   review: [],
@@ -144,9 +167,10 @@ function validateStep(input: ManifestWizardInput, step: StepId): StepIssues {
   return { byField, unscoped };
 }
 
-export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
+export function ManifestWizard({ slug, suggestedVersion, visibility, accessTier }: Props) {
   const [input, setInput] = useState<ManifestWizardInput>(() => defaultInput(suggestedVersion));
   const [stepId, setStepId] = useState<StepId>('identification');
+  const [reachedIndex, setReachedIndex] = useState(0);
   const [submitState, setSubmitState] = useState<PublishVersionState>({ status: 'idle' });
   const [submitting, setSubmitting] = useState(false);
 
@@ -155,6 +179,15 @@ export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
 
   // Live JSON-LD preview. Recomputed on every input change — cheap.
   const generatedManifest = useMemo(() => manifestWizardInputToCroissant(input), [input]);
+  const manifestJson = useMemo(() => JSON.stringify(generatedManifest), [generatedManifest]);
+
+  // bio-prov pre-flight (#496): runs while the host is on the Provenance
+  // or Review step, debounced; the verdict is advisory (see the step).
+  const preflight = useProvenancePreflight(
+    manifestJson,
+    accessTier,
+    stepId === 'provenance' || stepId === 'review',
+  );
 
   function patch<K extends keyof ManifestWizardInput>(field: K, value: ManifestWizardInput[K]) {
     setInput((prev) => ({ ...prev, [field]: value }));
@@ -162,7 +195,15 @@ export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
 
   function nextStep() {
     const next = STEPS[stepIndex + 1];
-    if (next) setStepId(next.id);
+    if (!next) return;
+    setStepId(next.id);
+    setReachedIndex((r) => Math.max(r, stepIndex + 1));
+  }
+  function goToStep(index: number) {
+    const target = STEPS.at(index);
+    // Only steps the host has already reached; later ones stay behind the
+    // per-step validation gate on "Next".
+    if (target && index <= reachedIndex) setStepId(target.id);
   }
   function prevStep() {
     const prev = STEPS[stepIndex - 1];
@@ -185,7 +226,7 @@ export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
     data.set('slug', slug);
     data.set('version', input.version);
     if (input.notes) data.set('notes', input.notes);
-    data.set('manifest', JSON.stringify(generatedManifest));
+    data.set('manifest', manifestJson);
     const res = await publishVersionAction({ status: 'idle' }, data);
     setSubmitState(res);
     setSubmitting(false);
@@ -194,10 +235,20 @@ export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
     // is already on its way. No further action needed.
   }
 
+  const step = STEPS.at(stepIndex);
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-      <div className="space-y-5">
-        <StepIndicator stepIndex={stepIndex} />
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[17rem_minmax(0,1fr)]">
+      <StepRail stepIndex={stepIndex} reachedIndex={reachedIndex} onSelect={goToStep} />
+
+      <div className="min-w-0 max-w-3xl space-y-6">
+        <div className="space-y-1">
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
+            Step {stepIndex + 1} of {STEPS.length}
+          </p>
+          <h2 className="text-2xl font-semibold tracking-tight">{step?.label}</h2>
+          <p className="text-sm text-[var(--color-muted-foreground)]">{step?.subtitle}</p>
+        </div>
 
         {submitState.status === 'invalid-manifest' ? (
           <Alert tone="danger">
@@ -207,8 +258,7 @@ export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
               <ul className="ms-4 list-disc space-y-1 text-xs">
                 {submitState.issues.map((issue, i) => (
                   <li key={i}>
-                    {issue.path ? <span className="font-mono">{issue.path}: </span> : null}
-                    {issue.message}
+                    <SubmitIssue issue={issue} accessTier={accessTier} />
                   </li>
                 ))}
               </ul>
@@ -231,15 +281,45 @@ export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
         {stepId === 'biomedical' ? (
           <BiomedicalStep input={input} issues={issues} patch={patch} />
         ) : null}
+        {stepId === 'provenance' ? (
+          <ProvenanceStep
+            provenance={input.provenance ?? emptyManifestWizardProvenance()}
+            anonymizationLevel={input.anonymizationLevel}
+            accessTier={accessTier}
+            manifest={generatedManifest}
+            byField={issues.byField}
+            preflight={preflight}
+            onChange={(next) => patch('provenance', next)}
+          />
+        ) : null}
         {stepId === 'data-use' ? (
           <DataUseStep input={input} issues={issues} patch={patch} visibility={visibility} />
         ) : null}
         {stepId === 'distributions' ? (
           <DistributionsStep input={input} issues={issues} patch={patch} />
         ) : null}
-        {stepId === 'review' ? <ReviewStep input={input} manifest={generatedManifest} /> : null}
+        {stepId === 'review' ? (
+          <ReviewStep
+            input={input}
+            manifest={generatedManifest}
+            accessTier={accessTier}
+            preflight={preflight}
+          />
+        ) : null}
 
-        <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-4">
+        {/* The review step carries its own manifest view. */}
+        {stepId === 'review' ? null : (
+          <details className="group rounded-md border border-[var(--color-border)]">
+            <summary className="cursor-pointer select-none px-3 py-2 text-sm text-[var(--color-muted-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]">
+              Show the JSON-LD generated so far
+            </summary>
+            <div className="border-t border-[var(--color-border)]">
+              <PreviewPane manifest={generatedManifest} />
+            </div>
+          </details>
+        )}
+
+        <div className="flex items-center justify-between gap-3 border-t border-[var(--color-border)] pt-5">
           <Button
             type="button"
             variant="outline"
@@ -249,42 +329,95 @@ export function ManifestWizard({ slug, suggestedVersion, visibility }: Props) {
             Back
           </Button>
           {stepId !== 'review' ? (
-            <Button type="button" onClick={nextStep} disabled={!canAdvance}>
+            <Button type="button" size="lg" onClick={nextStep} disabled={!canAdvance}>
               Next: {STEPS[stepIndex + 1]?.label}
             </Button>
           ) : (
-            <Button type="button" onClick={handleSubmit} disabled={submitting}>
+            <Button type="button" size="lg" onClick={handleSubmit} disabled={submitting}>
               {submitting ? 'Publishing…' : 'Publish version'}
             </Button>
           )}
         </div>
       </div>
-
-      <PreviewPane manifest={generatedManifest} />
     </div>
   );
 }
 
-function StepIndicator({ stepIndex }: { stepIndex: number }) {
+/**
+ * The seven steps as a rail: a vertical list beside the form from `lg`
+ * up, a horizontally scrolling row of chips below that. Steps the host
+ * has already reached are buttons (the form keeps its state, so going
+ * back costs nothing); later steps are plain text until "Next" validates
+ * the way there.
+ */
+function StepRail({
+  stepIndex,
+  reachedIndex,
+  onSelect,
+}: {
+  stepIndex: number;
+  reachedIndex: number;
+  onSelect: (index: number) => void;
+}) {
   return (
-    <ol className="flex flex-wrap gap-2 text-xs" aria-label="Wizard steps">
-      {STEPS.map((s, i) => (
-        <li
-          key={s.id}
-          className={
-            'flex items-center gap-1.5 rounded-md border px-2 py-1 ' +
-            (i === stepIndex
-              ? 'border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary)] font-medium'
-              : i < stepIndex
-                ? 'border-[var(--color-border)] text-[var(--color-muted-foreground)]'
-                : 'border-dashed border-[var(--color-border)] text-[var(--color-muted-foreground)]')
-          }
-        >
-          <span className="font-mono">{i + 1}</span>
-          <span>{s.label}</span>
-        </li>
-      ))}
-    </ol>
+    <nav aria-label="Wizard steps" className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+      <ol className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0 lg:pb-0">
+        {STEPS.map((s, i) => {
+          const state = i === stepIndex ? 'current' : i <= reachedIndex ? 'done' : 'todo';
+          const number = (
+            <span
+              aria-hidden="true"
+              className={
+                'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-xs ' +
+                (state === 'current'
+                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
+                  : state === 'done'
+                    ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+                    : 'border-[var(--color-border-strong)] text-[var(--color-muted-foreground)]')
+              }
+            >
+              {i + 1}
+            </span>
+          );
+          const labels = (
+            <span className="min-w-0">
+              <span className="block text-sm font-medium">{s.label}</span>
+              <span className="hidden text-xs text-[var(--color-muted-foreground)] lg:block">
+                {s.subtitle}
+              </span>
+            </span>
+          );
+          const base =
+            'flex w-full items-start gap-3 whitespace-nowrap rounded-md px-3 py-2 text-start lg:whitespace-normal ';
+          return (
+            <li key={s.id} className="shrink-0 lg:shrink">
+              {state === 'todo' ? (
+                <span className={base + 'text-[var(--color-muted-foreground)]'}>
+                  {number}
+                  {labels}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onSelect(i)}
+                  aria-current={state === 'current' ? 'step' : undefined}
+                  className={
+                    base +
+                    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
+                    (state === 'current'
+                      ? 'bg-[var(--color-primary-soft)] text-[var(--color-foreground)]'
+                      : 'text-[var(--color-foreground)] hover:bg-[var(--color-subtle)]')
+                  }
+                >
+                  {number}
+                  {labels}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -299,7 +432,7 @@ interface StepProps {
 function IdentificationStep({ input, issues, patch }: StepProps) {
   return (
     <fieldset className="space-y-4">
-      <legend className="text-sm font-medium">Identification</legend>
+      <legend className="sr-only">Identification</legend>
       <Field label="Dataset name" htmlFor="wiz-name" required error={issues.byField.get('name')}>
         <Input
           id="wiz-name"
@@ -417,7 +550,7 @@ function CreatorsStep({ input, issues, patch }: StepProps) {
   }
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-medium">Creators</legend>
+      <legend className="sr-only">Creators</legend>
       <p className="text-xs text-[var(--color-muted-foreground)]">
         Authors and contributing organisations. At least one is required.
       </p>
@@ -428,7 +561,7 @@ function CreatorsStep({ input, issues, patch }: StepProps) {
         {input.creators.map((c, i) => (
           <li
             key={i}
-            className="grid gap-2 rounded-md border border-[var(--color-border)] p-3 sm:grid-cols-[10rem_1fr_auto] sm:items-end"
+            className="grid gap-3 rounded-md border border-[var(--color-border)] p-4 sm:grid-cols-[11rem_minmax(0,1fr)_auto] sm:items-start"
           >
             <Field label={`Type ${i + 1}`} htmlFor={`wiz-creator-${i}-type`}>
               <select
@@ -454,16 +587,18 @@ function CreatorsStep({ input, issues, patch }: StepProps) {
                 onChange={(e) => update(i, { name: e.target.value })}
               />
             </Field>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => remove(i)}
-              disabled={input.creators.length === 1}
-              aria-label={`Remove creator ${i + 1}`}
-            >
-              Remove
-            </Button>
+            <div className="sm:pt-7">
+              <Button
+                type="button"
+                variant="outline"
+                size="md"
+                onClick={() => remove(i)}
+                disabled={input.creators.length === 1}
+                aria-label={`Remove creator ${i + 1}`}
+              >
+                Remove
+              </Button>
+            </div>
           </li>
         ))}
       </ul>
@@ -477,7 +612,7 @@ function CreatorsStep({ input, issues, patch }: StepProps) {
 function BiomedicalStep({ input, issues, patch }: StepProps) {
   return (
     <fieldset className="space-y-4">
-      <legend className="text-sm font-medium">Biomedical context (optional)</legend>
+      <legend className="sr-only">Biomedical context (optional)</legend>
       <p className="text-xs text-[var(--color-muted-foreground)]">
         BioCroissant fields. Helps researchers find datasets matching their study population, and
         improves search relevance. Skip the ones that don't apply.
@@ -506,7 +641,7 @@ function BiomedicalStep({ input, issues, patch }: StepProps) {
       <Field
         label="Anonymisation level"
         htmlFor="wiz-anon"
-        hint="How identifiable individuals in this dataset are."
+        hint="How identifiable individuals in this dataset are. The Provenance step asks what was done to reach this level."
       >
         <select
           id="wiz-anon"
@@ -521,7 +656,8 @@ function BiomedicalStep({ input, issues, patch }: StepProps) {
         >
           <option value="">— not declared —</option>
           <option value="ANONYMIZED">ANONYMIZED — not re-identifiable</option>
-          <option value="PSEUDONYMIZED">PSEUDONYMIZED — re-identifiable via key</option>
+          <option value="DEIDENTIFIED">DEIDENTIFIED — direct identifiers removed</option>
+          <option value="LIMITED">LIMITED — limited data set (dates, locations kept)</option>
           <option value="IDENTIFIED">IDENTIFIED — direct identifiers present</option>
         </select>
       </Field>
@@ -543,7 +679,7 @@ function DataUseStep({
   }
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-medium">Data use (DUO)</legend>
+      <legend className="sr-only">Data use (DUO)</legend>
       <p className="text-xs text-[var(--color-muted-foreground)]">
         GA4GH Data Use Ontology terms. Pick a permission (one) and any restrictions / modifiers that
         apply. Hosts of {visibility !== 'PUBLIC' ? <strong>RESTRICTED / PRIVATE</strong> : 'PUBLIC'}{' '}
@@ -640,7 +776,7 @@ function DistributionsStep({ input, issues, patch }: StepProps) {
   }
   return (
     <fieldset className="space-y-3">
-      <legend className="text-sm font-medium">Distributions</legend>
+      <legend className="sr-only">Distributions</legend>
       <p className="text-xs text-[var(--color-muted-foreground)]">
         Files in this version. Each entry becomes a Croissant <code>FileObject</code>. For
         platform-hosted bytes, publish a first version, upload the file via the Upload card on the
@@ -731,18 +867,23 @@ function DistributionsStep({ input, issues, patch }: StepProps) {
 function ReviewStep({
   input,
   manifest,
+  accessTier,
+  preflight,
 }: {
   input: ManifestWizardInput;
   manifest: Record<string, unknown>;
+  accessTier: AccessTier;
+  preflight: ProvenancePreflightState;
 }) {
+  const { errors, warnings } = summarisePreflight(preflight);
   return (
     <div className="space-y-4">
       <Alert>
         <AlertTitle as="h2">Ready to publish?</AlertTitle>
         <AlertDescription>
           The platform validates the manifest below against Croissant 1.1 + RAI + BioCroissant + the
-          OCI publish-time checks (e.g. DUO required for non-PUBLIC). The right pane shows the
-          generated JSON-LD; you can copy it and use the paste form for further edits if needed.
+          OCI publish-time checks (e.g. DUO required for non-PUBLIC). The generated JSON-LD is
+          below; you can copy it and use the paste form for further edits if needed.
         </AlertDescription>
       </Alert>
       <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">
@@ -773,10 +914,27 @@ function ReviewStep({
         </dd>
         <dt className="text-[var(--color-muted-foreground)]">Distributions</dt>
         <dd>{input.distributions.length}</dd>
+        <dt className="text-[var(--color-muted-foreground)]">Provenance</dt>
+        <dd>
+          {preflight.status !== 'checked' ? (
+            <span className="text-[var(--color-muted-foreground)]">checking…</span>
+          ) : errors === 0 && warnings === 0 ? (
+            <Badge tone="success">complete for {accessTier}</Badge>
+          ) : (
+            <span className="flex flex-wrap gap-1">
+              {errors > 0 ? <Badge tone="danger">{errors} required missing</Badge> : null}
+              {warnings > 0 ? <Badge tone="warning">{warnings} recommended missing</Badge> : null}
+            </span>
+          )}
+        </dd>
       </dl>
       <details className="rounded-md border border-[var(--color-border)] p-3">
         <summary className="cursor-pointer text-sm font-medium">Show generated JSON-LD</summary>
-        <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-[var(--color-subtle)] p-3 font-mono text-xs">
+        <pre
+          tabIndex={0}
+          aria-label="Generated JSON-LD"
+          className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-[var(--color-subtle)] p-3 font-mono text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+        >
           {JSON.stringify(manifest, null, 2)}
         </pre>
       </details>
@@ -784,17 +942,55 @@ function ReviewStep({
   );
 }
 
+/**
+ * One issue from the publish endpoint's 400. `provenance.*` codes get the
+ * requirement-id headline the Provenance step uses ("H5 · Ethics approval
+ * (IRB, institutional review board) is required for a SENSITIVE dataset");
+ * everything else is the path + message, as before.
+ */
+function SubmitIssue({ issue, accessTier }: { issue: ManifestIssue; accessTier: AccessTier }) {
+  if (isProvenanceCode(issue.code)) {
+    const shaped = describeProvenanceIssue(
+      {
+        code: issue.code,
+        path: issue.path,
+        message: issue.message,
+        level: issue.severity === 'warning' ? 'warning' : 'error',
+      },
+      accessTier,
+    );
+    return (
+      <>
+        <span className="font-medium">{shaped.headline}</span>
+        <span className="block text-[var(--color-muted-foreground)]">{shaped.detail}</span>
+      </>
+    );
+  }
+  return (
+    <>
+      {issue.path ? <span className="font-mono">{issue.path}: </span> : null}
+      {issue.message}
+    </>
+  );
+}
+
 function PreviewPane({ manifest }: { manifest: Record<string, unknown> }) {
   return (
-    <aside className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-auto">
-      <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)]">
+    <aside aria-label="Generated manifest">
+      <div className="rounded-md bg-[var(--color-card)]">
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
-          <span className="text-xs font-medium">Live JSON-LD preview</span>
+          <span className="text-xs font-medium">Generated JSON-LD</span>
           <Badge tone="neutral" className="font-mono">
             Croissant 1.1
           </Badge>
         </header>
-        <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap break-all p-3 font-mono text-xs leading-relaxed">
+        {/* tabIndex: the region scrolls, so it must be reachable from the
+            keyboard (axe scrollable-region-focusable). */}
+        <pre
+          tabIndex={0}
+          aria-label="Generated JSON-LD"
+          className="max-h-[28rem] overflow-auto whitespace-pre-wrap break-all p-3 font-mono text-xs leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+        >
           {JSON.stringify(manifest, null, 2)}
         </pre>
       </div>
