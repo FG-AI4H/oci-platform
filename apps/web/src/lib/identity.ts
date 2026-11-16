@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Session } from 'next-auth';
-import { userGroups } from './groups';
+import { userGroups, userSub } from './groups';
 
 /**
  * Mirror of the API's `subToUuid` — the deterministic UUIDv5 derivation
@@ -36,13 +36,23 @@ export function isHostOfDataset(
   session: Session | null | undefined,
   datasetHostId: string,
 ): boolean {
-  if (!session?.user) return false;
-  const sub =
-    (session.user as { id?: string; sub?: string }).id ??
-    (session.user as { id?: string; sub?: string }).sub;
+  const sub = viewerSub(session);
   if (!sub) return false;
   if (!userGroups(session).includes('host')) return false;
   return subToUuid(sub).toLowerCase() === datasetHostId.toLowerCase();
+}
+
+/**
+ * The viewer's subject, read from the access token first: that is the
+ * claim the API derives `hostId` from, whatever NextAuth puts on
+ * `session.user`. The session's `id` is the fallback.
+ */
+function viewerSub(session: Session | null | undefined): string | null {
+  const fromToken = userSub(session);
+  if (fromToken) return fromToken;
+  if (!session?.user) return null;
+  const u = session.user as { id?: string; sub?: string };
+  return u.id ?? u.sub ?? null;
 }
 
 /**
@@ -51,9 +61,6 @@ export function isHostOfDataset(
  * "my rows" (`hostId=<this>`), which is how a host lists their own drafts.
  */
 export function viewerUuid(session: Session | null | undefined): string | null {
-  if (!session?.user) return null;
-  const sub =
-    (session.user as { id?: string; sub?: string }).id ??
-    (session.user as { id?: string; sub?: string }).sub;
+  const sub = viewerSub(session);
   return sub ? subToUuid(sub) : null;
 }
