@@ -16,6 +16,7 @@ import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { CampaignRepository } from './campaign.repository.js';
+import { TaskAbandonmentService } from './task-abandonment.service.js';
 import { TaskRepository } from './task.repository.js';
 import { TaskService } from './task.service.js';
 
@@ -109,6 +110,7 @@ interface CampaignsMock {
 }
 
 interface TasksMock {
+  inTransaction: ReturnType<typeof vi.fn>;
   seedTasks: ReturnType<typeof vi.fn>;
   listTasksForCampaign: ReturnType<typeof vi.fn>;
   submittedCountsForCampaign: ReturnType<typeof vi.fn>;
@@ -127,8 +129,11 @@ interface TasksMock {
   countGoldSamplesInCampaign: ReturnType<typeof vi.fn>;
 }
 
+const TX = { tx: true };
+
 let campaigns: CampaignsMock;
 let tasks: TasksMock;
+let abandonment: { expireStaleForCampaign: ReturnType<typeof vi.fn> };
 let service: TaskService;
 
 beforeEach(() => {
@@ -145,20 +150,23 @@ beforeEach(() => {
     }),
   };
   tasks = {
+    // Pass-through: the transaction-bound repository is this mock.
+    inTransaction: vi.fn((fn: (t: unknown, tx: unknown) => unknown) => fn(tasks, TX)),
     seedTasks: vi.fn(),
     listTasksForCampaign: vi.fn(),
     submittedCountsForCampaign: vi.fn().mockResolvedValue(new Map<string, number>()),
     findActiveAssignmentForUser: vi.fn(),
     findNextEligibleTask: vi.fn(),
-    // Default: cap doesn't bind (totalTasks=0 → cap=0 → callerShare+1>0
-    // would falsely bind, so seed with totalTasks=1 and callerShare=0
+    // Default: cap doesn't bind (totalSlots=0 → cap=0 → callerShare+1>0
+    // would falsely bind, so seed with totalSlots=1 and callerShare=0
     // → cap=⌈1/1⌉ × 1.5=1.5 → caller's first task slips under).
     biasCapInputs: vi
       .fn()
-      .mockResolvedValue({ totalTasks: 1, nActiveAnnotators: 1, callerShare: 0 }),
+      .mockResolvedValue({ totalSlots: 1, nActiveAnnotators: 1, callerShare: 0 }),
     createAssignment: vi.fn(),
     findAssignmentById: vi.fn(),
-    markAssignmentSubmitted: vi.fn(),
+    // True: the conditional update found the row still open.
+    markAssignmentSubmitted: vi.fn().mockResolvedValue(true),
     countSubmittedAssignmentsAtGate: vi.fn(),
     // Default: N submissions with DISAGREEING labels so the gate-1
     // predicate fails and the task escalates (preserves the
@@ -173,9 +181,11 @@ beforeEach(() => {
     annotatorGoldPairs: vi.fn().mockResolvedValue([]),
     countGoldSamplesInCampaign: vi.fn().mockResolvedValue(0),
   };
+  abandonment = { expireStaleForCampaign: vi.fn().mockResolvedValue(0) };
   service = new TaskService(
     campaigns as unknown as CampaignRepository,
     tasks as unknown as TaskRepository,
+    abandonment as unknown as TaskAbandonmentService,
   );
 });
 
@@ -360,7 +370,10 @@ describe('TaskService.pullNext', () => {
 
   it("re-issues the caller's in-flight assignment idempotently", async () => {
     const task = taskRow();
-    const existing = { ...assignmentRow(), task } as AnnotationTaskAssignment & {
+    const existing = {
+      ...assignmentRow({ assignedAt: new Date() }),
+      task,
+    } as AnnotationTaskAssignment & {
       task: AnnotationTask;
     };
     tasks.findActiveAssignmentForUser.mockResolvedValue(existing);
@@ -373,6 +386,9 @@ describe('TaskService.pullNext', () => {
 
     expect(tasks.createAssignment).not.toHaveBeenCalled();
     expect(result.assignment?.id).toBe('asn-1');
+    // A reload costs one read: no expiry scan, no transaction.
+    expect(abandonment.expireStaleForCampaign).not.toHaveBeenCalled();
+    expect(tasks.inTransaction).not.toHaveBeenCalled();
   });
 
   it('creates a new assignment when nothing is in flight (FIFO via repo ordering)', async () => {
@@ -438,10 +454,10 @@ describe('TaskService.pullNext', () => {
 
   it('refuses to assign when the caller would exceed the bias-prevention cap', async () => {
     tasks.findActiveAssignmentForUser.mockResolvedValue(null);
-    // 8 tasks, 2 active annotators → cap = ceil(8/2) × 1.5 = 6.
+    // 8 slots, 2 active annotators → cap = ceil(8/2) × 1.5 = 6.
     // Caller already at 6 → next assignment would be 7th → over cap.
     tasks.biasCapInputs.mockResolvedValueOnce({
-      totalTasks: 8,
+      totalSlots: 8,
       nActiveAnnotators: 2,
       callerShare: 6,
     });
@@ -460,9 +476,9 @@ describe('TaskService.pullNext', () => {
   it('lets a multi-role caller in when their share is still below the cap', async () => {
     const task = taskRow();
     tasks.findActiveAssignmentForUser.mockResolvedValue(null);
-    // 8 tasks, 2 active annotators → cap = 6. Caller at 5 → 6 just fits.
+    // 8 slots, 2 active annotators → cap = 6. Caller at 5 → 6 just fits.
     tasks.biasCapInputs.mockResolvedValueOnce({
-      totalTasks: 8,
+      totalSlots: 8,
       nActiveAnnotators: 2,
       callerShare: 5,
     });
@@ -481,10 +497,10 @@ describe('TaskService.pullNext', () => {
   it('does not bind when the caller is the only annotator and there is enough work', async () => {
     const task = taskRow();
     tasks.findActiveAssignmentForUser.mockResolvedValue(null);
-    // 8 tasks, only this annotator working (n=1) → cap = 8 × 1.5 = 12.
+    // 8 slots, only this annotator working (n=1) → cap = 8 × 1.5 = 12.
     // Caller already at 4 → 5 ≤ 12 → fine.
     tasks.biasCapInputs.mockResolvedValueOnce({
-      totalTasks: 8,
+      totalSlots: 8,
       nActiveAnnotators: 1,
       callerShare: 4,
     });
@@ -498,6 +514,93 @@ describe('TaskService.pullNext', () => {
     });
 
     expect(result.assignment).not.toBeNull();
+  });
+
+  it('does not apply the independent-reading cap at the arbitration gate', async () => {
+    tasks.findActiveAssignmentForUser.mockResolvedValue(null);
+    tasks.findNextEligibleTask.mockResolvedValue(taskRow({ gateState: 'AWAITING_ARBITRATION' }));
+    tasks.createAssignment.mockResolvedValue(
+      assignmentRow({ gateAtAssignment: 'AWAITING_ARBITRATION' }),
+    );
+
+    const result = await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['arbitration-annotator'],
+    });
+
+    expect(tasks.biasCapInputs).not.toHaveBeenCalled();
+    expect(result.assignment).not.toBeNull();
+  });
+
+  // --- expiry inside pull-next (#647) ---------------------------------------
+
+  it("expires the campaign's stale assignments before, and outside, the pull transaction", async () => {
+    const order: string[] = [];
+    abandonment.expireStaleForCampaign.mockImplementation(async () => {
+      order.push('expire');
+      return 1;
+    });
+    tasks.inTransaction.mockImplementation((fn: (t: unknown, tx: unknown) => unknown) => {
+      order.push('pull-tx');
+      return fn(tasks, TX);
+    });
+    tasks.findActiveAssignmentForUser.mockResolvedValue(null);
+    tasks.findNextEligibleTask.mockResolvedValue(taskRow());
+    tasks.createAssignment.mockResolvedValue(assignmentRow());
+
+    await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(abandonment.expireStaleForCampaign).toHaveBeenCalledWith(
+      expect.objectContaining({ campaign: expect.objectContaining({ id: 'cmp-1' }) }),
+    );
+    expect(order).toEqual(['expire', 'pull-tx']);
+  });
+
+  it("does not re-issue the caller's own assignment once it is past the time limit", async () => {
+    const task = taskRow();
+    const stale = {
+      ...assignmentRow({ assignedAt: new Date(Date.now() - 25 * 60 * 60 * 1000) }),
+      task,
+    };
+    // Before expiry the stale row is still in flight; the expiry then
+    // releases it, so the re-check inside the transaction finds none.
+    tasks.findActiveAssignmentForUser.mockResolvedValueOnce(stale).mockResolvedValueOnce(null);
+    tasks.findNextEligibleTask.mockResolvedValue(task);
+    tasks.createAssignment.mockResolvedValue(assignmentRow({ id: 'asn-2' }));
+
+    const result = await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(abandonment.expireStaleForCampaign).toHaveBeenCalledTimes(1);
+    expect(result.assignment?.id).toBe('asn-2');
+  });
+
+  it('passes the activity window (2 × taskTimeoutHours) to the cap inputs', async () => {
+    const c = runningCampaign(1);
+    (c as { workflowConfig: unknown }).workflowConfig = { nAnnotators: 1, taskTimeoutHours: 6 };
+    campaigns.findBySlug.mockResolvedValue(c);
+    tasks.findActiveAssignmentForUser.mockResolvedValue(null);
+    tasks.findNextEligibleTask.mockResolvedValue(null);
+    const before = Date.now();
+
+    await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    const { activeSince } = tasks.biasCapInputs.mock.calls[0]![0] as { activeSince: Date };
+    const windowMs = before - activeSince.getTime();
+    expect(windowMs).toBeGreaterThanOrEqual(12 * 60 * 60 * 1000 - 1000);
+    expect(windowMs).toBeLessThanOrEqual(12 * 60 * 60 * 1000 + 1000);
   });
 });
 
@@ -532,7 +635,7 @@ describe('TaskService.submit', () => {
   it('N=3: first independent submission does not advance the gate yet', async () => {
     const task = taskRow({ nAnnotatorsRequired: 3 });
     tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
-    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
 
     const result = await service.submit({
@@ -548,7 +651,7 @@ describe('TaskService.submit', () => {
   it('N=3: third independent submission with DISAGREEING labels escalates to AWAITING_ARBITRATION', async () => {
     const task = taskRow({ nAnnotatorsRequired: 3 });
     tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
-    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(3);
     // Default mock seeds three disagreeing labels — IRR < 0.6 → escalate.
     tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'AWAITING_ARBITRATION' }));
@@ -571,7 +674,7 @@ describe('TaskService.submit', () => {
   it('N=3: third independent submission with UNANIMOUS labels skips arbitration → COMPLETED', async () => {
     const task = taskRow({ nAnnotatorsRequired: 3 });
     tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
-    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(3);
     tasks.submissionPayloadsAtGate.mockResolvedValue([
       { label: 'pneumonia' },
@@ -599,7 +702,7 @@ describe('TaskService.submit', () => {
   it('N=3: SEGMENTATION campaign always escalates (predicate deferred until #214)', async () => {
     const task = taskRow({ nAnnotatorsRequired: 3 });
     tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
-    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(3);
     campaigns.findById.mockResolvedValueOnce({
       id: 'cmp-1',
@@ -635,7 +738,7 @@ describe('TaskService.submit', () => {
       }),
       task,
     });
-    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
     tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
 
@@ -705,6 +808,19 @@ describe('TaskService.submit', () => {
 
   // --- #231 completeness validation -----------------------------------------
 
+  it('409s when another pull expired the assignment after the status checks (#669 review)', async () => {
+    const task = taskRow({ nAnnotatorsRequired: 3 });
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
+    // The conditional update finds the row already EXPIRED.
+    tasks.markAssignmentSubmitted.mockResolvedValue(false);
+
+    await expect(
+      service.submit({ assignmentId: 'asn-1', submission: {}, user: userPayload(ANNOTATOR_SUB) }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tasks.countSubmittedAssignmentsAtGate).not.toHaveBeenCalled();
+    expect(tasks.updateGateState).not.toHaveBeenCalled();
+  });
+
   it('hard-block: 422 when submission is incomplete', async () => {
     const task = taskRow();
     tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
@@ -734,7 +850,7 @@ describe('TaskService.submit', () => {
       taskKind: 'CLASSIFICATION',
       workflowConfig: { nAnnotators: 1, completenessMode: 'hard-block' },
     });
-    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
     tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
 
@@ -756,7 +872,7 @@ describe('TaskService.submit', () => {
       taskKind: 'CLASSIFICATION',
       workflowConfig: { nAnnotators: 1, completenessMode: 'hard-block' },
     });
-    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
     tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
 
@@ -772,7 +888,7 @@ describe('TaskService.submit', () => {
     const task = taskRow({ nAnnotatorsRequired: 1 });
     tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
     // Default campaign mock has no completenessMode → soft-warn.
-    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
     tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
 
@@ -839,7 +955,7 @@ describe('TaskService.submit', () => {
       workflowConfig: { nAnnotators: 1 },
       currentInstructionsVersion: 'abc123',
     });
-    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
     tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
 
@@ -862,7 +978,7 @@ describe('TaskService.submit', () => {
     const task = taskRow({ nAnnotatorsRequired: 1 });
     tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task });
     // Default campaign mock has currentInstructionsVersion = undefined ≡ null.
-    tasks.markAssignmentSubmitted.mockResolvedValue(assignmentRow({ status: 'SUBMITTED' }));
+    tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
     tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
 

@@ -5,7 +5,9 @@ import { TaskAbandonmentService } from './task-abandonment.service.js';
 import { TaskRepository } from './task.repository.js';
 
 interface TasksMock {
+  inTransaction: ReturnType<typeof vi.fn>;
   findAbandonmentCandidates: ReturnType<typeof vi.fn>;
+  findStaleAssignmentsForCampaign: ReturnType<typeof vi.fn>;
   markAssignmentExpired: ReturnType<typeof vi.fn>;
 }
 
@@ -61,13 +63,18 @@ function candidate(args: {
 const HOUR_MS = 60 * 60 * 1000;
 const NOW = new Date('2026-05-17T20:00:00Z').getTime();
 
+const TX = { tx: true };
+
 let tasks: TasksMock;
 let audit: AuditMock;
 let service: TaskAbandonmentService;
 
 beforeEach(() => {
   tasks = {
+    // Pass-through: the transaction-bound repository is this mock.
+    inTransaction: vi.fn((fn: (t: unknown, tx: unknown) => unknown) => fn(tasks, TX)),
     findAbandonmentCandidates: vi.fn(),
+    findStaleAssignmentsForCampaign: vi.fn().mockResolvedValue([]),
     markAssignmentExpired: vi.fn().mockResolvedValue(true),
   };
   audit = {
@@ -147,5 +154,65 @@ describe('TaskAbandonmentService.runOnce', () => {
     const result = await service.runOnce({ nowMs: NOW });
     expect(result).toEqual({ scanned: 0, expired: 0, skipped: 0 });
     expect(audit.emitSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('TaskAbandonmentService.expireStaleForCampaign (#647)', () => {
+  const campaign = { id: 'cmp-1', slug: 'pilot', workflowConfig: { taskTimeoutHours: 4 } };
+
+  function run() {
+    return service.expireStaleForCampaign({ campaign, nowMs: NOW });
+  }
+
+  it("queries with the campaign's own timeout and audits each expiry in its own transaction", async () => {
+    tasks.findStaleAssignmentsForCampaign.mockResolvedValue([
+      candidate({ id: 'asn-old', assignedAtMs: NOW - 5 * HOUR_MS }),
+    ]);
+
+    expect(await run()).toBe(1);
+
+    expect(tasks.findStaleAssignmentsForCampaign).toHaveBeenCalledWith({
+      campaignId: 'cmp-1',
+      olderThan: new Date(NOW - 4 * HOUR_MS),
+      limit: 20,
+    });
+    expect(tasks.markAssignmentExpired).toHaveBeenCalledWith('asn-old');
+    expect(audit.emitSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'task.assignment.expired',
+        subjectId: 'asn-old',
+        payload: expect.objectContaining({ campaignSlug: 'pilot', timeoutHours: 4 }),
+      }),
+      TX,
+    );
+  });
+
+  it('opens one short transaction per expired row, not one for the batch', async () => {
+    tasks.findStaleAssignmentsForCampaign.mockResolvedValue([
+      candidate({ id: 'asn-a', assignedAtMs: NOW - 5 * HOUR_MS }),
+      candidate({ id: 'asn-b', assignedAtMs: NOW - 6 * HOUR_MS }),
+    ]);
+
+    expect(await run()).toBe(2);
+    expect(tasks.inTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips a row another writer already moved', async () => {
+    tasks.findStaleAssignmentsForCampaign.mockResolvedValue([
+      candidate({ id: 'asn-raced', assignedAtMs: NOW - 5 * HOUR_MS }),
+    ]);
+    tasks.markAssignmentExpired.mockResolvedValueOnce(false);
+
+    expect(await run()).toBe(0);
+    expect(audit.emitSync).not.toHaveBeenCalled();
+  });
+
+  it('lets an audit failure propagate so the transaction rolls the expiry back', async () => {
+    tasks.findStaleAssignmentsForCampaign.mockResolvedValue([
+      candidate({ id: 'asn-old', assignedAtMs: NOW - 5 * HOUR_MS }),
+    ]);
+    audit.emitSync.mockRejectedValueOnce(new Error('audit down'));
+
+    await expect(run()).rejects.toThrow('audit down');
   });
 });

@@ -31,6 +31,11 @@ import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { CampaignRepository } from './campaign.repository.js';
 import { evaluateGate1Predicate } from './gate-irr-predicate.js';
 import { lookupGateTransition } from './gate-state-machine.js';
+import {
+  HOUR_MS,
+  readTaskTimeoutHours,
+  TaskAbandonmentService,
+} from './task-abandonment.service.js';
 import { TaskRepository } from './task.repository.js';
 
 /**
@@ -57,6 +62,7 @@ export class TaskService {
   constructor(
     @Inject(CampaignRepository) private readonly campaigns: CampaignRepository,
     @Inject(TaskRepository) private readonly tasks: TaskRepository,
+    @Inject(TaskAbandonmentService) private readonly abandonment: TaskAbandonmentService,
   ) {}
 
   // --- Seed --------------------------------------------------------------
@@ -185,55 +191,83 @@ export class TaskService {
     const assigneeRole = roleForGate(gate);
     const assigneeUserId = cognitoSubAsUuid(args.user.sub);
 
-    // Re-issue an in-flight assignment if one exists. Returns the
-    // same row idempotently so a reload of the annotator UI doesn't
-    // start counting double work.
-    const existing = await this.tasks.findActiveAssignmentForUser({
-      campaignId: campaign.id,
-      gate,
-      assigneeUserId,
-    });
-    if (existing) {
-      return { assignment: toAssignmentSummary(existing, existing.task) };
+    const timeoutHours = readTaskTimeoutHours(campaign.workflowConfig);
+    const nowMs = Date.now();
+    const staleBefore = nowMs - timeoutHours * HOUR_MS;
+
+    // Re-issue an in-flight assignment if one exists. Returns the same
+    // row idempotently so a reload of the annotator UI doesn't start
+    // counting double work, and does it without the expiry scan or a
+    // transaction. An assignment past the time limit is not re-issued:
+    // the expiry below releases it and the caller gets a fresh one.
+    const activeArgs = { campaignId: campaign.id, gate, assigneeUserId };
+    const inFlight = await this.tasks.findActiveAssignmentForUser(activeArgs);
+    if (inFlight && inFlight.assignedAt.getTime() >= staleBefore) {
+      return { assignment: toAssignmentSummary(inFlight, inFlight.task) };
     }
 
-    // Bias-prevention 1.5× cap (ADR-0009 Decision 1 Predicate 4).
-    // The router refuses to give this caller another task if doing
-    // so would push their per-campaign share above the soft
-    // ceiling. EXPIRED rows are excluded (abandonment doesn't
-    // burden the cap per ADR-0009 + #229). When the cap binds the
-    // task stays in the queue for another annotator to pick up.
-    if (
-      !this.callerWithinBiasCap(
-        await this.tasks.biasCapInputs({
-          campaignId: campaign.id,
-          callerUserId: assigneeUserId,
-        }),
-      )
-    ) {
+    // The caller needs a new task, so free abandoned slots first
+    // (#647). Doing it here, rather than only in the BullMQ sweep,
+    // works on environments that run without Redis. Each expiry is
+    // its own short transaction (it holds the audit chain lock), kept
+    // out of the pull transaction below (#669 review).
+    await this.abandonment.expireStaleForCampaign({ campaign, nowMs });
+
+    // The cap check, the pick and the new assignment share one
+    // transaction, so the slot count the pick sees is the one it fills.
+    return this.tasks.inTransaction(async (tasks) => {
+      // A concurrent pull by the same caller may have assigned since
+      // the check above.
+      const existing = await tasks.findActiveAssignmentForUser(activeArgs);
+      if (existing) {
+        return { assignment: toAssignmentSummary(existing, existing.task) };
+      }
+
+      // Bias-prevention 1.5× cap (ADR-0009 Decision 1 Predicate 4).
+      // The router refuses to give this caller another independent
+      // reading if doing so would push their per-campaign share above
+      // the soft ceiling. EXPIRED rows are excluded (abandonment
+      // doesn't burden the cap per ADR-0009 + #229). When the cap
+      // binds the task stays in the queue for another annotator. The
+      // cap shares out independent readings only; arbitration and
+      // expert review are single-reader gates it doesn't govern.
+      // Annotators with no activity in the last
+      // ACTIVE_WINDOW_TIMEOUTS × taskTimeoutHours have left the
+      // campaign and no longer share the work.
+      if (
+        gate === 'INDEPENDENT' &&
+        !this.callerWithinBiasCap(
+          await tasks.biasCapInputs({
+            campaignId: campaign.id,
+            callerUserId: assigneeUserId,
+            activeSince: new Date(nowMs - ACTIVE_WINDOW_TIMEOUTS * timeoutHours * HOUR_MS),
+          }),
+        )
+      ) {
+        this.logger.log(
+          `pullNext: caller ${assigneeUserId} at the bias-prevention cap in campaign ${campaign.slug} — returning null`,
+        );
+        return { assignment: null };
+      }
+
+      const nextTask = await tasks.findNextEligibleTask({
+        campaignId: campaign.id,
+        gate,
+        assigneeUserId,
+      });
+      if (!nextTask) return { assignment: null };
+
+      const assignment = await tasks.createAssignment({
+        taskId: nextTask.id,
+        assigneeUserId,
+        assigneeRole,
+        gateAtAssignment: gate,
+      });
       this.logger.log(
-        `pullNext: caller ${assigneeUserId} at the bias-prevention cap in campaign ${campaign.slug} — returning null`,
+        `pullNext: campaign=${campaign.slug} task=${nextTask.id} gate=${gate} assignee=${assigneeUserId}`,
       );
-      return { assignment: null };
-    }
-
-    const nextTask = await this.tasks.findNextEligibleTask({
-      campaignId: campaign.id,
-      gate,
-      assigneeUserId,
+      return { assignment: toAssignmentSummary(assignment, nextTask) };
     });
-    if (!nextTask) return { assignment: null };
-
-    const assignment = await this.tasks.createAssignment({
-      taskId: nextTask.id,
-      assigneeUserId,
-      assigneeRole,
-      gateAtAssignment: gate,
-    });
-    this.logger.log(
-      `pullNext: campaign=${campaign.slug} task=${nextTask.id} gate=${gate} assignee=${assigneeUserId}`,
-    );
-    return { assignment: toAssignmentSummary(assignment, nextTask) };
   }
 
   // --- Submit ------------------------------------------------------------
@@ -314,11 +348,18 @@ export class TaskService {
       );
     }
 
-    await this.tasks.markAssignmentSubmitted({
+    const submitted = await this.tasks.markAssignmentSubmitted({
       assignmentId: assignment.id,
       submission: args.submission,
       acknowledgedInstructionsVersion: args.acknowledgedInstructionsVersion ?? null,
     });
+    if (!submitted) {
+      // Another pull expired the assignment, or a parallel submit
+      // landed, after the status checks above (#669 review).
+      throw new ConflictException(
+        'Assignment is no longer open (it expired or was already submitted); pull a new task',
+      );
+    }
 
     const submittedCount = await this.tasks.countSubmittedAssignmentsAtGate(
       assignment.task.id,
@@ -445,7 +486,11 @@ export class TaskService {
    * Bias-prevention soft ceiling per ADR-0009 Decision 1
    * Predicate 4:
    *
-   *   cap = ceil(totalTasks / max(1, nActiveAnnotators)) * 1.5
+   *   cap = ceil(totalSlots / max(1, nActiveAnnotators)) * 1.5
+   *
+   * `totalSlots` counts independent readings (tasks × readers per
+   * task), so with N readers per task the annotators can between them
+   * reach every reading the campaign needs (#647).
    *
    * Returns false when assigning the next task to this caller would
    * push their share past the cap; the router then refuses + the
@@ -454,12 +499,12 @@ export class TaskService {
    * cap can possibly bind).
    */
   private callerWithinBiasCap(inputs: {
-    totalTasks: number;
+    totalSlots: number;
     nActiveAnnotators: number;
     callerShare: number;
   }): boolean {
     const n = Math.max(1, inputs.nActiveAnnotators);
-    const cap = Math.ceil(inputs.totalTasks / n) * 1.5;
+    const cap = Math.ceil(inputs.totalSlots / n) * 1.5;
     return inputs.callerShare + 1 <= cap;
   }
 
@@ -470,6 +515,14 @@ export class TaskService {
     return null;
   }
 }
+
+/**
+ * How long, in multiples of the campaign's `taskTimeoutHours`, an
+ * annotator with no new assignment and no submission still counts as
+ * sharing the campaign's readings for the bias cap. With the 24 h
+ * default an annotator gone for two days stops holding others back.
+ */
+const ACTIVE_WINDOW_TIMEOUTS = 2;
 
 function gateActionForSubmittedRole(role: string): GateTransitionAction | null {
   if (role === 'annotator') return 'independent-submitted';

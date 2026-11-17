@@ -1,13 +1,12 @@
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { AuditEmitter, type AuditPrismaPort } from '@oci/audit';
-import { PrismaClient } from '@oci/database';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { getContainerRuntimeClient } from 'testcontainers';
+import type { PrismaClient } from '@oci/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  dockerAvailable as checkDocker,
+  type MigratedPostgres,
+  startMigratedPostgres,
+} from '../../test-support/migrated-postgres.js';
 
 /**
  * #628 — `emitSync` against a real Postgres with every migration
@@ -18,40 +17,21 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * Needs a Docker daemon. CI (`CI=true`) always has one and runs this
  * spec; a laptop without Docker skips it rather than failing `pnpm test`.
  */
-const dockerAvailable = await getContainerRuntimeClient().then(
-  () => true,
-  () => false,
-);
-if (!dockerAvailable && process.env.CI) {
-  throw new Error('audit-emitter.int.spec: no Docker daemon reachable in CI');
-}
-
-const DATABASE_PKG = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../../../../packages/database',
-);
+const dockerAvailable = await checkDocker('audit-emitter.int.spec');
 
 describe.skipIf(!dockerAvailable)('AuditEmitter.emitSync against Postgres (#628)', () => {
-  let container: StartedPostgreSqlContainer;
+  let db: MigratedPostgres;
   let prisma: PrismaClient;
   let emitter: AuditEmitter;
 
   beforeAll(async () => {
-    // Same major as infra/local/docker-compose.yml and Aurora.
-    container = await new PostgreSqlContainer('postgres:17-alpine').start();
-    const url = container.getConnectionUri();
-    execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'deploy'], {
-      cwd: DATABASE_PKG,
-      env: { ...process.env, DATABASE_URL: url },
-      stdio: 'pipe',
-    });
-    prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+    db = await startMigratedPostgres();
+    prisma = db.prisma;
     emitter = new AuditEmitter({ prisma: prisma as unknown as AuditPrismaPort });
   }, 180_000);
 
   afterAll(async () => {
-    await prisma?.$disconnect();
-    await container?.stop();
+    await db?.stop();
   });
 
   it('persists rows whose recordHash the trigger computed and whose previousHash links the chain', async () => {

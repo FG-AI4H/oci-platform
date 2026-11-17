@@ -29,6 +29,13 @@ export interface AuditPrismaPort {
 }
 
 /**
+ * What `emitSync` needs from a caller's transaction: only the insert.
+ * A Prisma interactive-transaction client has no `$transaction`, so
+ * asking for the whole port would force callers to cast.
+ */
+export type AuditTransactionPort = Pick<AuditPrismaPort, 'auditEvent'>;
+
+/**
  * Optional BullMQ-backed queue surface. The renewal cron pattern
  * (apps/api/src/modules/renewal/renewal.scheduler.ts) sets one up;
  * `apps/api/src/modules/audit/audit.module.ts` wires it through. When
@@ -104,7 +111,7 @@ export class AuditEmitter {
     }
   }
 
-  async emitSync(input: AuditEventInput, tx?: AuditPrismaPort): Promise<AuditEventRecord> {
+  async emitSync(input: AuditEventInput, tx?: AuditTransactionPort): Promise<AuditEventRecord> {
     const client = tx ?? this.opts.prisma;
     const hash = payloadHash(input.payload);
     const data: Parameters<AuditPrismaPort['auditEvent']['create']>[0]['data'] = {

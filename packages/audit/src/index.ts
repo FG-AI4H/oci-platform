@@ -4,6 +4,7 @@ export type {
   AuditLoggerPort,
   AuditPrismaPort,
   AuditQueuePort,
+  AuditTransactionPort,
 } from './emitter.js';
 export { canonicalize } from './canonicalize.js';
 export { payloadHash } from './hash.js';
