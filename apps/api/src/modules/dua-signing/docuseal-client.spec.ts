@@ -177,3 +177,39 @@ describe('DocusealClient.createSubmission', () => {
     await expect(client().createSubmission(INPUT)).rejects.toThrow(/422/);
   });
 });
+
+describe('DocusealClient.verifyWebhook', () => {
+  const c = client();
+
+  it('accepts the shared secret header the free edition sends', () => {
+    expect(
+      c.verifyWebhook({
+        rawBody: '{}',
+        secretHeader: 'webhook-secret-xyz',
+        signatureHeader: undefined,
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects a wrong or differently sized secret header, without falling back to HMAC', () => {
+    const body = '{"event_type":"submission.completed"}';
+    const hmac = createHmac('sha256', 'webhook-secret-xyz').update(body).digest('hex');
+    expect(
+      c.verifyWebhook({ rawBody: body, secretHeader: 'webhook-secret-xyw', signatureHeader: hmac }),
+    ).toBe(false);
+    expect(
+      c.verifyWebhook({ rawBody: body, secretHeader: 'short', signatureHeader: undefined }),
+    ).toBe(false);
+  });
+
+  it('falls back to the HMAC signature when no secret header is sent', () => {
+    const body = '{"event_type":"submission.completed"}';
+    const hmac = createHmac('sha256', 'webhook-secret-xyz').update(body).digest('hex');
+    expect(c.verifyWebhook({ rawBody: body, secretHeader: undefined, signatureHeader: hmac })).toBe(
+      true,
+    );
+    expect(
+      c.verifyWebhook({ rawBody: body, secretHeader: undefined, signatureHeader: undefined }),
+    ).toBe(false);
+  });
+});

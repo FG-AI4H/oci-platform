@@ -147,6 +147,27 @@ export class DocusealClient {
   }
 
   /**
+   * Authenticate a webhook call from DocuSeal. The free edition sends no
+   * body signature; its webhook settings take a fixed secret that it
+   * sends as a header, configured on dev as `X-OCI-Webhook-Secret` with
+   * the value of `OCI_DOCUSEAL_WEBHOOK_SECRET`. That header is accepted
+   * when it matches in constant time; otherwise the HMAC signature below
+   * is checked, for an edition or proxy that signs the body.
+   */
+  verifyWebhook(args: {
+    rawBody: string;
+    secretHeader: string | undefined;
+    signatureHeader: string | undefined;
+  }): boolean {
+    if (args.secretHeader) {
+      const given = Buffer.from(args.secretHeader.trim());
+      const expected = Buffer.from(this.cfg.webhookSecret);
+      return given.length === expected.length && timingSafeEqual(given, expected);
+    }
+    return this.verifyWebhookSignature(args.rawBody, args.signatureHeader);
+  }
+
+  /**
    * Verify the `X-Docuseal-Signature` header on a webhook payload.
    * DocuSeal signs the raw request body with HMAC-SHA256 using the
    * configured webhook secret; we recompute and compare in constant
