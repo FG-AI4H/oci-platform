@@ -55,6 +55,13 @@ export interface OciEnvConfig {
    * paces. The API falls back to these same defaults if the vars are unset.
    */
   scoredSubmissionQuota: { perWeek: number; perTask: number };
+  /**
+   * DocuSeal id of the DUA signature-page template (ADR-0003, amendment of
+   * 18 November 2026). The template is made once in the DocuSeal UI of
+   * each environment, so its id is environment data; `null` means not set
+   * up yet, and DUA signing answers 503 there.
+   */
+  docusealDuaTemplateId: number | null;
   /** Backups & retention */
   backupRetentionDays: number;
   /** Whether prod-grade monitoring (X-Ray, Container Insights, alarms) is on */
@@ -96,6 +103,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     // sub-2-ACU dev cluster is negligible (<$1/month for backup storage
     // beyond the cluster size).
     scoredSubmissionQuota: { perWeek: 3, perTask: 10 },
+    docusealDuaTemplateId: 3,
     backupRetentionDays: 7,
     enhancedMonitoring: false,
     enableWaf: false,
@@ -116,6 +124,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
       sandbox: { memoryMiB: 2048, cpus: 1, pidsLimit: 512, outputTmpfsMiB: 512 },
     },
     scoredSubmissionQuota: { perWeek: 3, perTask: 10 },
+    docusealDuaTemplateId: null,
     backupRetentionDays: 7,
     enhancedMonitoring: true,
     enableWaf: true,
@@ -139,6 +148,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
       sandbox: { memoryMiB: 6144, cpus: 2, pidsLimit: 1024, outputTmpfsMiB: 1024 },
     },
     scoredSubmissionQuota: { perWeek: 3, perTask: 10 },
+    docusealDuaTemplateId: null,
     backupRetentionDays: 35,
     enhancedMonitoring: true,
     enableWaf: true,

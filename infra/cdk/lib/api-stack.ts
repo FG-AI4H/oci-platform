@@ -242,6 +242,10 @@ export class ApiStack extends cdk.Stack {
                   this,
                   `/oci/${props.cfg.envName}/docuseal/base-url`,
                 ),
+                // Signature-page template (ADR-0003 amendment, 18 Nov 2026).
+                ...(props.cfg.docusealDuaTemplateId !== null
+                  ? { OCI_DOCUSEAL_DUA_TEMPLATE_ID: String(props.cfg.docusealDuaTemplateId) }
+                  : {}),
               }
             : {}),
         },
