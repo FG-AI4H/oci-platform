@@ -1,0 +1,42 @@
+[
+  {
+    "file": "explicit-le-001.header.dcm",
+    "headerBytes": 2414,
+    "originalBytes": 526702,
+    "transferSyntaxUid": "1.2.840.10008.1.2.1",
+    "instanceNumber": 31,
+    "position": "-133.699997\\-133\\-120"
+  },
+  {
+    "file": "explicit-le-025.header.dcm",
+    "headerBytes": 2412,
+    "originalBytes": 526700,
+    "transferSyntaxUid": "1.2.840.10008.1.2.1",
+    "instanceNumber": 18,
+    "position": "-133.699997\\-133\\-55"
+  },
+  {
+    "file": "explicit-le-049.header.dcm",
+    "headerBytes": 2412,
+    "originalBytes": 526700,
+    "transferSyntaxUid": "1.2.840.10008.1.2.1",
+    "instanceNumber": 19,
+    "position": "-133.699997\\-133\\-60"
+  },
+  {
+    "file": "jpeg-ls-001.header.dcm",
+    "headerBytes": 2368,
+    "originalBytes": 193820,
+    "transferSyntaxUid": "1.2.840.10008.1.2.4.80",
+    "instanceNumber": 31,
+    "position": "-133.699997\\-133\\-120"
+  },
+  {
+    "file": "jpeg-lossless-001.header.dcm",
+    "headerBytes": 2466,
+    "originalBytes": 235402,
+    "transferSyntaxUid": "1.2.840.10008.1.2.4.70",
+    "instanceNumber": 31,
+    "position": "-133.699997\\-133\\-120"
+  }
+]
