@@ -59,7 +59,7 @@ export class EvaluationController {
   @ApiOperation({
     summary: 'Submit predictions (Mode 1) or a sealed container (Mode 2)',
     description:
-      'Without `mode`, or with `mode: PREDICTIONS`: scores the predictions against the task’s hidden ground truth and records the result, returning the new submission id + its scores; a validation / scoring error records a FAILED submission and returns 400. With `mode: CONTAINER`: records a PENDING submission and enqueues a sealed run — nothing is scored in-process, and the result arrives later through the worker outbox. Returns 503 if sealed execution is not configured on this environment.',
+      'With `intent: VALIDATION` (either mode): checks the submission against the task interface and returns a report; nothing is scored, stored or counted against the quota, and no account is needed. Otherwise, without `mode`, or with `mode: PREDICTIONS`: scores the predictions against the task’s hidden ground truth and records the result, returning the new submission id + its scores; a validation / scoring error records a FAILED submission and returns 400. With `mode: CONTAINER`: records a PENDING submission and enqueues a sealed run — nothing is scored in-process, and the result arrives later through the worker outbox. Returns 503 if sealed execution is not configured on this environment.',
   })
   @ApiOkResponse({ description: 'Mode 1: submission id + computed scores. Mode 2: id + PENDING.' })
   @UseGuards(OptionalCognitoJwtGuard)
@@ -68,10 +68,19 @@ export class EvaluationController {
     @Body(SubmissionBodyPipe) body: SubmitRequestBody,
     @Req() req: FastifyLikeRequest,
   ) {
+    // `intent: VALIDATION` checks the interface and writes nothing: no row,
+    // no score, no quota, nothing on the leaderboard. The validation path
+    // takes no user on purpose, so it cannot consume quota. It existed
+    // since #437 but nothing routed to it, so every validation submission
+    // was scored and published.
     if (isContainerSubmission(body)) {
-      return this.evaluation.submitContainer(slug, body, req.user);
+      return body.intent === 'VALIDATION'
+        ? this.evaluation.validateContainer(slug, body)
+        : this.evaluation.submitContainer(slug, body, req.user);
     }
-    return this.evaluation.submitPredictions(slug, body, req.user);
+    return body.intent === 'VALIDATION'
+      ? this.evaluation.validatePredictions(slug, body)
+      : this.evaluation.submitPredictions(slug, body, req.user);
   }
 
   @Post('tasks')
