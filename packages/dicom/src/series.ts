@@ -5,15 +5,42 @@ type Orderable = Pick<
   'sopInstanceUid' | 'instanceNumber' | 'imagePositionPatient' | 'imageOrientationPatient'
 >;
 
-/** Distance of a slice from the origin along the normal of the stack. */
-function distanceAlongNormal(instance: Orderable, reference: Orderable): number | null {
-  const position = instance.imagePositionPatient;
-  const orientation = reference.imageOrientationPatient;
-  if (!position || !orientation) return null;
-  const [rx, ry, rz, cx, cy, cz] = orientation;
+type Orientation = NonNullable<DicomInstanceHeader['imageOrientationPatient']>;
+
+/** Direction cosines are written with six or so digits; this absorbs that. */
+const ORIENTATION_TOLERANCE = 1e-3;
+
+function sameOrientation(a: Orientation, b: Orientation): boolean {
+  return a.every((value, i) => Math.abs(value - (b.at(i) ?? Number.NaN)) <= ORIENTATION_TOLERANCE);
+}
+
+/**
+ * Distance of each slice from the origin along the normal of the
+ * stack, or null when the instances are not one stack: a position or an
+ * orientation is missing, or the orientations differ (a three-plane
+ * localiser). Requiring one shared orientation is also what makes the
+ * result independent of the order the instances arrive in.
+ */
+function stackDistances<T extends Orderable>(
+  instances: readonly T[],
+): Array<{ instance: T; distance: number }> | null {
+  const reference = instances[0]?.imageOrientationPatient;
+  if (!reference) return null;
+  const [rx, ry, rz, cx, cy, cz] = reference;
   // Normal = row direction × column direction.
   const normal = [ry * cz - rz * cy, rz * cx - rx * cz, rx * cy - ry * cx] as const;
-  return normal[0] * position[0] + normal[1] * position[1] + normal[2] * position[2];
+
+  const out: Array<{ instance: T; distance: number }> = [];
+  for (const instance of instances) {
+    const position = instance.imagePositionPatient;
+    const orientation = instance.imageOrientationPatient;
+    if (!position || !orientation || !sameOrientation(orientation, reference)) return null;
+    out.push({
+      instance,
+      distance: normal[0] * position[0] + normal[1] * position[1] + normal[2] * position[2],
+    });
+  }
+  return out;
 }
 
 function byInstanceNumber(a: Orderable, b: Orderable): number {
@@ -23,37 +50,46 @@ function byInstanceNumber(a: Orderable, b: Orderable): number {
 }
 
 /**
+ * +1 when instance numbers grow with distance along the normal, -1 when
+ * they shrink. Taken from every numbered slice (the sign of the
+ * covariance), not from the two ends, so one slice without a number or
+ * a series with repeated positions does not flip the stack.
+ */
+function scannerDirection(
+  entries: ReadonlyArray<{ instance: Orderable; distance: number }>,
+): 1 | -1 {
+  const numbered = entries.filter((entry) => entry.instance.instanceNumber !== null);
+  if (numbered.length < 2) return 1;
+  const meanDistance = numbered.reduce((sum, e) => sum + e.distance, 0) / numbered.length;
+  const meanNumber =
+    numbered.reduce((sum, e) => sum + (e.instance.instanceNumber ?? 0), 0) / numbered.length;
+  const covariance = numbered.reduce(
+    (sum, e) => sum + (e.distance - meanDistance) * ((e.instance.instanceNumber ?? 0) - meanNumber),
+    0,
+  );
+  return covariance < 0 ? -1 : 1;
+}
+
+/**
  * Order the instances of one series for a stack.
  *
- * Position along the slice normal decides when every instance has one:
- * instance numbers can repeat, be missing or follow the export order.
- * The direction is the scanner's own, taken from the instance numbers
- * when they agree with the geometry. Without positions, instance number
- * decides, then the SOP instance UID, so the result is deterministic.
+ * Position along the slice normal decides when the instances form one
+ * stack: instance numbers can repeat, be missing or follow the export
+ * order. The direction is the scanner's own, taken from the instance
+ * numbers. Slices at the same position, and series that are not one
+ * stack, are ordered by instance number, then by SOP instance UID, so
+ * the result never depends on the order of the input.
  */
 export function orderInstances<T extends Orderable>(instances: readonly T[]): T[] {
-  const reference = instances[0];
-  if (!reference) return [];
+  const entries = stackDistances(instances);
+  if (!entries) return [...instances].sort(byInstanceNumber);
 
-  const withDistance = instances.map((instance) => ({
-    instance,
-    distance: distanceAlongNormal(instance, reference),
-  }));
-  if (withDistance.some((entry) => entry.distance === null)) {
-    return [...instances].sort(byInstanceNumber);
-  }
-
-  const sorted = withDistance
+  const direction = scannerDirection(entries);
+  return entries
     .sort(
-      (a, b) =>
-        (a.distance as number) - (b.distance as number) || byInstanceNumber(a.instance, b.instance),
+      (a, b) => direction * (a.distance - b.distance) || byInstanceNumber(a.instance, b.instance),
     )
     .map((entry) => entry.instance);
-
-  const first = sorted[0]?.instanceNumber;
-  const last = sorted[sorted.length - 1]?.instanceNumber;
-  if (first != null && last != null && first > last) sorted.reverse();
-  return sorted;
 }
 
 export interface DicomSeries<T> {
@@ -83,13 +119,14 @@ export function groupIntoSeries<T extends DicomInstanceHeader>(
 
   return [...bySeries.entries()]
     .map(([seriesInstanceUid, members]) => {
-      const first = members[0];
+      const ordered = orderInstances(members);
+      const first = ordered[0];
       return {
         studyInstanceUid: first?.studyInstanceUid ?? null,
         seriesInstanceUid,
         modality: first?.modality ?? null,
         seriesNumber: first?.seriesNumber ?? null,
-        instances: orderInstances(members),
+        instances: ordered,
       };
     })
     .sort(

@@ -49,9 +49,14 @@ export type DicomObjectKind = 'single-frame-image' | 'multi-frame-image' | 'othe
  * must not store or log it; keep a keyed digest instead.
  */
 export interface DeidentificationFinding {
-  /** DICOM keyword, or `PrivateTags` / `BurnedInAnnotation`. */
+  /**
+   * DICOM keyword of the populated attribute, or one of the findings
+   * about the file as a whole: `PrivateTags`, `BurnedInAnnotation`,
+   * `SequenceDepthExceeded` (sequences nested deeper than the check
+   * goes) and `DataAfterPixelData` (content the check did not reach).
+   */
   attribute: string;
-  /** `ggggeeee`, lower-case hex; null for `PrivateTags`. */
+  /** `ggggeeee`, lower-case hex; null for findings about the whole file. */
   tag: string | null;
   value: string;
 }
@@ -61,11 +66,25 @@ export type ParseDicomHeaderResult =
   | { kind: 'not-dicom' }
   /** The bytes given stop before the header ends: read more and retry. */
   | { kind: 'truncated' }
-  /** Marked as DICOM but the header cannot be read. */
+  /**
+   * Marked as DICOM, and the header cannot be read or is not supported.
+   * The file was not checked, so a caller must treat it as held, not as
+   * clean.
+   */
   | { kind: 'unreadable'; reason: string }
   | {
       kind: 'ok';
       header: DicomInstanceHeader;
       objectKind: DicomObjectKind;
       findings: DeidentificationFinding[];
+      /**
+       * Where pixel data starts and how long it is; null when the object
+       * has none. `length` is null for encapsulated (compressed) pixel
+       * data, whose end is not written in the header. In that case the
+       * caller reads the last eight bytes of the file and, unless
+       * `endsWithSequenceDelimiter` is true, adds `DATA_AFTER_PIXEL_DATA`
+       * to the findings: something follows the pixel data and was not
+       * examined. For uncompressed pixel data this is already done.
+       */
+      pixelData: { offset: number; length: number | null } | null;
     };

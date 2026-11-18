@@ -1,4 +1,5 @@
 import type { DataSet } from 'dicom-parser';
+import { elementText } from './element-text.js';
 import type { DeidentificationFinding } from './types.js';
 
 /**
@@ -36,25 +37,38 @@ export const IDENTIFYING_ATTRIBUTES: ReadonlyArray<{ tag: string; attribute: str
 
 const BURNED_IN_ANNOTATION = '00280301';
 
-/** Sequences nest; a crafted file must not make the walk unbounded. */
-const MAX_SEQUENCE_DEPTH = 8;
+/**
+ * Sequences nest, and a crafted file must not make the walk unbounded.
+ * Past this depth the walk stops and says so with a finding: content
+ * that was not looked at must never pass as clean.
+ */
+export const MAX_SEQUENCE_DEPTH = 8;
 
-function text(dataSet: DataSet, tag: string): string | null {
-  const value = dataSet.string(`x${tag}`);
-  if (value === undefined) return null;
-  const trimmed = value.replace(/\0/g, '').trim();
-  return trimmed.length > 0 ? trimmed : null;
+/**
+ * Findings that are about the file's structure, not about one
+ * attribute: something in the file was not, or could not be, examined.
+ */
+export const SEQUENCE_DEPTH_EXCEEDED: DeidentificationFinding = {
+  attribute: 'SequenceDepthExceeded',
+  tag: null,
+  value: 'present',
+};
+export const DATA_AFTER_PIXEL_DATA: DeidentificationFinding = {
+  attribute: 'DataAfterPixelData',
+  tag: null,
+  value: 'present',
+};
+
+interface Walk {
+  found: Map<string, DeidentificationFinding>;
+  privateGroups: Set<string>;
+  depthExceeded: boolean;
 }
 
-function walk(
-  dataSet: DataSet,
-  depth: number,
-  found: Map<string, DeidentificationFinding>,
-  privateGroups: Set<string>,
-): void {
+function walk(dataSet: DataSet, depth: number, state: Walk): void {
   for (const { tag, attribute } of IDENTIFYING_ATTRIBUTES) {
-    const value = text(dataSet, tag);
-    if (value !== null) found.set(`${attribute}\u0000${value}`, { attribute, tag, value });
+    const value = elementText(dataSet, `x${tag}`);
+    if (value !== null) state.found.set(`${attribute}\u0000${value}`, { attribute, tag, value });
   }
 
   for (const [key, element] of Object.entries(dataSet.elements)) {
@@ -62,11 +76,13 @@ function walk(
     const group = key.slice(1, 5);
     const groupNumber = Number.parseInt(group, 16);
     if (Number.isFinite(groupNumber) && groupNumber % 2 === 1 && groupNumber > 0x0008) {
-      privateGroups.add(group);
+      state.privateGroups.add(group);
     }
-    if (depth >= MAX_SEQUENCE_DEPTH || !element.items) continue;
+    if (!element.items) continue;
     for (const item of element.items) {
-      if (item.dataSet) walk(item.dataSet, depth + 1, found, privateGroups);
+      if (!item.dataSet) continue;
+      if (depth >= MAX_SEQUENCE_DEPTH) state.depthExceeded = true;
+      else walk(item.dataSet, depth + 1, state);
     }
   }
 }
@@ -76,27 +92,28 @@ function walk(
  * result is sorted so that the same header always yields the same list.
  */
 export function collectFindings(dataSet: DataSet): DeidentificationFinding[] {
-  const found = new Map<string, DeidentificationFinding>();
-  const privateGroups = new Set<string>();
-  walk(dataSet, 0, found, privateGroups);
+  const state: Walk = { found: new Map(), privateGroups: new Set(), depthExceeded: false };
+  walk(dataSet, 0, state);
 
-  if (text(dataSet, BURNED_IN_ANNOTATION)?.toUpperCase() === 'YES') {
-    found.set('BurnedInAnnotation', {
-      attribute: 'BurnedInAnnotation',
-      tag: BURNED_IN_ANNOTATION,
-      value: 'YES',
-    });
+  const findings = [...state.found.values()];
+  if (elementText(dataSet, `x${BURNED_IN_ANNOTATION}`)?.toUpperCase() === 'YES') {
+    findings.push({ attribute: 'BurnedInAnnotation', tag: BURNED_IN_ANNOTATION, value: 'YES' });
   }
-  if (privateGroups.size > 0) {
-    found.set('PrivateTags', {
+  if (state.privateGroups.size > 0) {
+    findings.push({
       attribute: 'PrivateTags',
       tag: null,
       // The groups, not the content: enough to see that the set changed.
-      value: [...privateGroups].sort().join(','),
+      value: [...state.privateGroups].sort().join(','),
     });
   }
+  if (state.depthExceeded) findings.push(SEQUENCE_DEPTH_EXCEEDED);
 
-  return [...found.values()].sort(
+  return sortFindings(findings);
+}
+
+export function sortFindings(findings: DeidentificationFinding[]): DeidentificationFinding[] {
+  return [...findings].sort(
     (a, b) => a.attribute.localeCompare(b.attribute) || a.value.localeCompare(b.value),
   );
 }

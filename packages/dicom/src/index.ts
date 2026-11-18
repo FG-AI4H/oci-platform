@@ -1,5 +1,16 @@
-export { hasDicomMarker, parseDicomHeader } from './parse-header.js';
-export { IDENTIFYING_ATTRIBUTES, collectFindings } from './findings.js';
+export {
+  DEFAULT_MAX_HEADER_BYTES,
+  endsWithSequenceDelimiter,
+  hasDicomMarker,
+  parseDicomHeader,
+} from './parse-header.js';
+export {
+  DATA_AFTER_PIXEL_DATA,
+  IDENTIFYING_ATTRIBUTES,
+  MAX_SEQUENCE_DEPTH,
+  SEQUENCE_DEPTH_EXCEEDED,
+  sortFindings,
+} from './findings.js';
 export { groupIntoSeries, orderInstances } from './series.js';
 export type { DicomSeries } from './series.js';
 export type {
