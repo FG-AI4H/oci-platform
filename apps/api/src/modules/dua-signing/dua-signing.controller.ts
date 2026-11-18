@@ -67,6 +67,7 @@ export class DuaSigningController {
   async webhook(
     @Req() req: FastifyRequest,
     @Headers('x-docuseal-signature') signature: string | undefined,
+    @Headers('x-oci-webhook-secret') secretHeader: string | undefined,
   ): Promise<{ acknowledged: boolean }> {
     const client = DocusealClient.fromEnv();
     if (!client) {
@@ -77,7 +78,7 @@ export class DuaSigningController {
       throw new ServiceUnavailableException('DocuSeal webhook not configured on this deployment.');
     }
     const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
-    if (!client.verifyWebhookSignature(rawBody, signature)) {
+    if (!client.verifyWebhook({ rawBody, secretHeader, signatureHeader: signature })) {
       // Returning 200 + acknowledged=false is wrong here — a bad
       // signature is a security signal. 401 makes the misconfigured
       // deployment loud.
