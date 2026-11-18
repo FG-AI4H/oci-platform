@@ -324,7 +324,7 @@ async function sign(): Promise<void> {
   const signerName = env.SIGNER_NAME;
   if (!signerEmail || !signerName) {
     console.error(
-      'SIGNER_EMAIL and SIGNER_NAME are required: DocuSeal mails the signing link there.',
+      'SIGNER_EMAIL and SIGNER_NAME are required: they name the signer on the DocuSeal signature page.',
     );
     exit(2);
   }
@@ -349,8 +349,9 @@ async function sign(): Promise<void> {
   if (r.status !== 201) fail('create DUA signing request', r);
   const sig = (r.json as { signature?: Json } | null)?.signature ?? {};
   console.log(`✓ DUA sent for signature (status ${String(sig.status)}).`);
-  console.log(`  DocuSeal mails the link to ${signerEmail}.`);
-  if (sig.signerUrl) console.log(`  Or open it directly: ${String(sig.signerUrl)}`);
+  // DocuSeal sends no mail (send_email: false since #681): the signer opens
+  // the signature page from this link.
+  if (sig.signerUrl) console.log(`  Open the signature page: ${String(sig.signerUrl)}`);
 }
 
 // --- visas (as the researcher) -----------------------------------------------
