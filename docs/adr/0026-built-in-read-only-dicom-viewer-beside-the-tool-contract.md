@@ -1,6 +1,6 @@
 # ADR-0026: A built-in, read-only DICOM viewer sits beside the tool-integration contract
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-11-18
 - **Deciders:** Marc Lecoultre
 - **Tags:** `area:annotation` | `area:catalog` | `area:platform` | `phase:B`
