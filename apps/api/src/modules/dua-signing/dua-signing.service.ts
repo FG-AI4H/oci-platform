@@ -118,8 +118,13 @@ export class DuaSigningService {
     let signerUrl: string | null = null;
     try {
       const result = await this.client.createSubmission({
-        name: `DUA — ${ar.dataset.slug} — ${body.accessRequestId}`,
-        bodyMarkdown: preview.markdown,
+        agreement: `OCI Data Use Agreement, ${preview.templateId}${
+          preview.lmicAddendumIncluded ? ' with the LMIC addendum' : ''
+        }`,
+        accessRequestId: body.accessRequestId,
+        dataset: ar.dataset.slug,
+        documentSha256,
+        fullTextRef: `Stored with access request ${body.accessRequestId} on the OCI Platform`,
         signerEmail: body.signerEmail,
         signerName: body.signerName,
       });

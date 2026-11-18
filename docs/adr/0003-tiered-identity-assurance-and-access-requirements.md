@@ -153,6 +153,24 @@ The phased rollout is recorded below in _Consequences → Neutral_; this ADR com
 
 - **(Chosen) Two-axis tiered model + GA4GH Passport-native + pay-per-signature QTSPs.** Mirrors Synapse's proven architecture, scales cost with usage, federates with the field, lets us migrate forward without breaking existing approvals.
 
+## Amendment, 18 November 2026: DocuSeal free edition, signature page by reference
+
+Applies to Decision 5 (AdES via DocuSeal self-hosted). Tracked in [#678](https://github.com/FG-AI4H/oci-platform/issues/678).
+
+**What changed.** The platform runs DocuSeal's free edition. In that edition every API route that builds a document from content we send (`/api/submissions/html`, `/api/submissions/pdf`, `/api/templates/html`, `/api/templates/pdf`) answers "This feature is available in Pro Edition", and `/api/submissions` requires a `template_id`. The original client sent the rendered DUA as a document and stopped working once DocuSeal was updated under it (the image was `:latest`). No licence is bought for now.
+
+**Decision.** The signer signs a fixed **signature page**, one DocuSeal template made once per environment in the DocuSeal UI (dev: template 3). Its read-only fields name the agreement (template variant and any LMIC addendum), the access request, the dataset, the **SHA-256 of the rendered DUA text**, and where the full text is kept. The platform fills them when it creates the submission (`template_id` + `submitters[].values`) and stores the rendered text and its hash on the signature row, as before.
+
+**What this means for the evidence.** The signed PDF no longer contains the agreement text; it binds the signature to that text through the hash, and the platform keeps the text. Verifying a signature is: read the hash from the signed page, hash the stored text, compare. A change to the text produces a different hash and needs a new signature. Whether signature by reference is acceptable for each DUA audience (researcher, AI builder, LMIC) is a question for the legal review this ADR already requires before production use; until then the arrangement is for `dev`.
+
+**Also decided.**
+
+- The DocuSeal image is pinned by digest in `docuseal-stack.ts`; a bump comes with the client tests and a signing run on dev.
+- The template id is environment configuration (`docusealDuaTemplateId` in `environments.ts`), `null` where the template has not been made, in which case signing answers 503.
+- A page where the requester reads the full DUA text before signing is a follow-up; the signature page's "Full text" field points to the access request until it exists.
+
+**Rejected for now.** DocuSeal Pro (keeps the full text inside the signed PDF; licence decision deferred). Rendering the DUA into a static template per variant (the text carries per-request values, so it would still need the reference to be exact).
+
 ## References
 
 - Research synthesis: `docs/research/access-governance-2026-05-08.md` _(internal companion repo)_

@@ -57,12 +57,14 @@ beforeEach(() => {
   process.env.OCI_DOCUSEAL_BASE_URL = 'https://docuseal.example';
   process.env.OCI_DOCUSEAL_API_TOKEN = 'tok';
   process.env.OCI_DOCUSEAL_WEBHOOK_SECRET = 'secret';
+  process.env.OCI_DOCUSEAL_DUA_TEMPLATE_ID = '3';
+  // DocuSeal's answer: one entry per submitter; the envelope is submission_id.
   vi.stubGlobal(
     'fetch',
     vi.fn(
       async () =>
-        new Response(JSON.stringify([{ id: 42, submitters: [{ slug: 'sub-42' }] }]), {
-          status: 201,
+        new Response(JSON.stringify([{ id: 99, submission_id: 42, slug: 'sub-42' }]), {
+          status: 200,
         }),
     ),
   );
@@ -216,6 +218,16 @@ describe('DuaSigningService.createSigningRequest', () => {
     );
     const createCall = repo.create.mock.calls[0]?.[0] as { documentSha256: string };
     expect(createCall.documentSha256).toMatch(/^[0-9a-f]{64}$/);
+
+    // The signature page carries the same hash the row stores.
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    const sent = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string) as {
+      template_id: number;
+      submitters: Array<{ values: Record<string, string> }>;
+    };
+    expect(sent.template_id).toBe(3);
+    expect(sent.submitters[0]?.values['Text SHA-256']).toBe(createCall.documentSha256);
+    expect(sent.submitters[0]?.values['Access request']).toBe(AR_ID);
   });
 
   it('is idempotent — returns the existing PENDING row if one is already in flight', async () => {

@@ -4,32 +4,58 @@ import { Logger } from '@nestjs/common';
 /**
  * Thin DocuSeal REST client (#128).
  *
- * DocuSeal exposes:
- *   - `POST /submissions` — create an envelope for an HTML/PDF body
- *   - `GET /submissions/:id` — read state
- *   - Webhook to a configured URL on `form.completed` / `form.declined`
+ * The platform runs DocuSeal's free edition. Every API route that builds
+ * a document from our own content (`/api/submissions/html`, `/pdf`,
+ * `/api/templates/html`, `/pdf`) is reserved for the Pro edition, so the
+ * rendered DUA cannot travel to DocuSeal as a document. Instead the
+ * signer signs a fixed signature page, a template made once in the
+ * DocuSeal UI, whose read-only fields name the agreement, the access
+ * request, the dataset and the SHA-256 of the rendered DUA text the
+ * platform stores. ADR-0003, amendment of 18 November 2026.
  *
- * We don't model the full DocuSeal schema; just the request /
- * response fields the platform acts on.
+ *   - `POST /api/submissions` with `template_id` + `submitters[].values`
+ *   - Webhook to a configured URL on `submission.completed` and friends
  *
- * Activation: env `OCI_DOCUSEAL_BASE_URL` + `OCI_DOCUSEAL_API_TOKEN`
- * + `OCI_DOCUSEAL_WEBHOOK_SECRET` must all be set. When unset,
- * `fromEnv()` returns `null` and the signing endpoints return 503;
- * the rest of the platform (template preview, click-wrap) keeps
- * working without DocuSeal.
+ * Activation: env `OCI_DOCUSEAL_BASE_URL`, `OCI_DOCUSEAL_API_TOKEN`,
+ * `OCI_DOCUSEAL_WEBHOOK_SECRET` and `OCI_DOCUSEAL_DUA_TEMPLATE_ID` must
+ * all be set (`OCI_DOCUSEAL_DUA_ROLE` defaults to DocuSeal's "First
+ * Party"). When any is unset, `fromEnv()` returns `null` and the signing
+ * endpoints return 503; the rest of the platform keeps working.
  */
 
 interface DocusealConfig {
   baseUrl: string;
   apiToken: string;
   webhookSecret: string;
+  /** Id of the signature-page template in DocuSeal. */
+  duaTemplateId: number;
+  /** Signer role as named in that template. */
+  duaRole: string;
 }
 
+/**
+ * Field names on the signature-page template. They must match the
+ * template exactly: DocuSeal fills fields by name.
+ */
+export const DUA_PAGE_FIELDS = {
+  agreement: 'Agreement',
+  accessRequest: 'Access request',
+  dataset: 'Dataset',
+  textSha256: 'Text SHA-256',
+  fullText: 'Full text',
+} as const;
+
 export interface CreateSubmissionInput {
-  /** Display name for the envelope — surfaces in DocuSeal admin UI. */
-  name: string;
-  /** Markdown body of the DUA. DocuSeal renders it to PDF on its side. */
-  bodyMarkdown: string;
+  /** Which agreement, e.g. the template variant and any addendum. */
+  agreement: string;
+  /** Access request the DUA belongs to; also sent as DocuSeal's external id. */
+  accessRequestId: string;
+  /** Dataset slug. */
+  dataset: string;
+  /** SHA-256 (hex) of the rendered DUA text the platform stores. */
+  documentSha256: string;
+  /** Where the full text can be read. */
+  fullTextRef: string;
   /** Signer email (requester). */
   signerEmail: string;
   /** Signer display name. */
@@ -39,7 +65,7 @@ export interface CreateSubmissionInput {
 }
 
 export interface CreateSubmissionResult {
-  /** DocuSeal submission id. */
+  /** DocuSeal submission id (what the webhook reports as `data.id`). */
   id: string;
   /** Signer URL — where the requester goes to actually sign. */
   signerUrl: string;
@@ -53,8 +79,16 @@ export class DocusealClient {
     const baseUrl = process.env.OCI_DOCUSEAL_BASE_URL;
     const apiToken = process.env.OCI_DOCUSEAL_API_TOKEN;
     const webhookSecret = process.env.OCI_DOCUSEAL_WEBHOOK_SECRET;
+    const templateId = Number(process.env.OCI_DOCUSEAL_DUA_TEMPLATE_ID);
     if (!baseUrl || !apiToken || !webhookSecret) return null;
-    return new DocusealClient({ baseUrl, apiToken, webhookSecret });
+    if (!Number.isInteger(templateId) || templateId <= 0) return null;
+    return new DocusealClient({
+      baseUrl,
+      apiToken,
+      webhookSecret,
+      duaTemplateId: templateId,
+      duaRole: process.env.OCI_DOCUSEAL_DUA_ROLE || 'First Party',
+    });
   }
 
   constructor(private readonly cfg: DocusealConfig) {}
@@ -62,20 +96,22 @@ export class DocusealClient {
   async createSubmission(input: CreateSubmissionInput): Promise<CreateSubmissionResult> {
     const url = `${this.stripTrailingSlash(this.cfg.baseUrl)}/api/submissions`;
     const body = {
-      name: input.name,
+      template_id: this.cfg.duaTemplateId,
       send_email: false,
-      documents: [
-        {
-          name: 'Data Use Agreement.md',
-          content: Buffer.from(input.bodyMarkdown, 'utf8').toString('base64'),
-        },
-      ],
       submitters: [
         {
-          role: 'signer',
+          role: this.cfg.duaRole,
           email: input.signerEmail,
           name: input.signerName,
+          external_id: input.accessRequestId,
           ...(input.replyTo ? { reply_to: input.replyTo } : {}),
+          values: {
+            [DUA_PAGE_FIELDS.agreement]: input.agreement,
+            [DUA_PAGE_FIELDS.accessRequest]: input.accessRequestId,
+            [DUA_PAGE_FIELDS.dataset]: input.dataset,
+            [DUA_PAGE_FIELDS.textSha256]: input.documentSha256,
+            [DUA_PAGE_FIELDS.fullText]: input.fullTextRef,
+          },
         },
       ],
     };
@@ -93,24 +129,17 @@ export class DocusealClient {
       this.logger.warn(`DocuSeal submission failed ${res.status}: ${text.slice(0, 200)}`);
       throw new Error(`DocuSeal createSubmission returned ${res.status}`);
     }
-    const json = (await res.json()) as Array<{
-      id?: number | string;
-      slug?: string;
-      embed_src?: string;
-      submitters?: Array<{ id?: number | string; embed_src?: string; slug?: string }>;
-    }>;
-    // DocuSeal's create-submission returns an array (one entry per signer).
-    // We use the first; we only register one signer per envelope today.
-    const first = Array.isArray(json) ? json[0] : (json as unknown);
-    const submission = first as {
-      id?: number | string;
-      submitters?: Array<{ id?: number | string; embed_src?: string; slug?: string }>;
-    };
-    const id = submission.id;
-    const submitter = submission.submitters?.[0];
+    // DocuSeal answers with one entry per submitter; the envelope id is
+    // `submission_id` on each. `id` there is the submitter, not the
+    // submission the webhook will report.
+    const json = (await res.json()) as unknown;
+    const first = (Array.isArray(json) ? json[0] : json) as
+      | { submission_id?: number | string; embed_src?: string; slug?: string }
+      | undefined;
+    const id = first?.submission_id;
     const signerUrl =
-      submitter?.embed_src ??
-      (submitter?.slug ? `${this.stripTrailingSlash(this.cfg.baseUrl)}/s/${submitter.slug}` : null);
+      first?.embed_src ??
+      (first?.slug ? `${this.stripTrailingSlash(this.cfg.baseUrl)}/s/${first.slug}` : null);
     if (id === undefined || id === null || !signerUrl) {
       throw new Error('DocuSeal response missing submission id or signer URL');
     }

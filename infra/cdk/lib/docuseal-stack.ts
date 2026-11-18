@@ -273,15 +273,20 @@ export class DocusealStack extends cdk.Stack {
     );
 
     const container = taskDef.addContainer('docuseal', {
-      // Use docuseal/docuseal:latest — matches the upstream
-      // docker-compose.yml. The image's own ENTRYPOINT handles
+      // Pinned by digest (#678): `:latest` let DocuSeal change under the
+      // platform at the next task restart, which broke DUA signing. This
+      // is the image dev ran when the signature-page template was built
+      // and tested (18 November 2026). Bump it deliberately, with the
+      // client tests and a signing run on dev. The image's own ENTRYPOINT handles
       // WORKDIR, bundle exec, migrations, and the Rails 8.1
       // initialization sequence. Overriding entryPoint/command
       // bypassed all of that and surfaced spurious failures
       // (Gemfile not found, has_many_inversing= NoMethodError) —
       // see https://github.com/docusealco/docuseal/blob/master/docker-compose.yml
       // for the canonical shape this image was designed for.
-      image: ecs.ContainerImage.fromRegistry('docuseal/docuseal:latest'),
+      image: ecs.ContainerImage.fromRegistry(
+        'docuseal/docuseal@sha256:fa8d01c978fa9d2f51bc8250bfbbbb1ba843bcf198e94c84c62bf9f53f1beaaa',
+      ),
       environment: {
         FORCE_SSL: 'true',
         // DocuSeal Rails app uses HOST when constructing absolute URLs
