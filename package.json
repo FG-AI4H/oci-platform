@@ -19,7 +19,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,md,json,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,md,json,yml,yaml}\"",
     "lint:root": "eslint . --max-warnings=0",
-    "provision-users": "pnpm --filter @oci/scripts run provision-users",
+    "provision-users": "pnpm --silent --filter @oci/shared-types build && pnpm --filter @oci/scripts run provision-users",
     "prepare": "husky || true"
   },
   "devDependencies": {

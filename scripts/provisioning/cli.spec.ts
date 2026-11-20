@@ -204,6 +204,26 @@ describe('provision-users: creating accounts', () => {
     expect(cli.text()).toContain('1 created');
     expect(cli.text()).toContain('1 failed, 1 not attempted');
     expect(cli.text()).toContain('Stopped early: ExpiredTokenException');
+    expect(cli.text()).not.toContain('export-credentials');
+  });
+
+  it('says how to pass an open session when the profile asks for an MFA code', async () => {
+    const cli = command();
+    cli.directory.failOn(
+      'findByEmail',
+      'ada@example.org',
+      new DirectoryAccessError(
+        'CredentialsProviderError: Profile ops requires multi-factor authentication, but no MFA code callback was provided.',
+      ),
+    );
+
+    const code = await cli.run(writeRoster(), '--user-pool-id', POOL);
+
+    expect(code).toBe(EXIT_FAILED);
+    expect(cli.text()).toContain('cannot prompt for');
+    expect(cli.text()).toContain(
+      'aws configure export-credentials --profile <profile> --format env',
+    );
   });
 });
 
