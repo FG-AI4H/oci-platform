@@ -257,14 +257,16 @@ export class EvaluationService {
       throw err;
     }
 
-    // Attribute the reference route (WP5 invariant 1). A row created after the
-    // registry exists is not "legacy" — it just needs attributing, and leaving
-    // it null would make a fresh result read as pre-registry at the boundary.
-    const ref = await this.repo.findReferenceRouteVersionForMode('PREDICTIONS');
-    if (!ref) {
+    // Seam submissions are attributed to the reference route here, because the
+    // seam's response contract reports the route and whether its result counts
+    // as published. Direct participant submissions are left unattributed on
+    // purpose: pinning the route on every submission, in both modes and with a
+    // refusal when none resolves, is #583 and lands there.
+    const ref = seam ? await this.repo.findReferenceRouteVersionForMode('PREDICTIONS') : null;
+    if (seam && !ref) {
       this.logger.error(
-        'no reference PREDICTIONS route is seeded — scoring without attribution would ' +
-          'make a fresh result indistinguishable from a pre-registry one',
+        'no reference PREDICTIONS route is seeded — this seam submission is scored ' +
+          'without attribution and will read as a pre-registry result',
       );
     }
     const created = await this.repo.createSubmission({

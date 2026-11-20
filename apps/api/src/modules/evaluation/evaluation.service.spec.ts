@@ -66,8 +66,9 @@ let service: EvaluationService;
 beforeEach(() => {
   repo = {
     findScoringContext: vi.fn(),
-    // WP5 invariant 1: every new scored row is attributed to the reference
-    // route. DECLARED, matching the seed — nothing self-approves.
+    // The reference route a seam submission is attributed to. DECLARED,
+    // matching the seed — nothing self-approves. Direct submissions do not
+    // read it (#583 owns pinning the route on every submission).
     findReferenceRouteVersionForMode: vi.fn().mockResolvedValue({
       routeId: 'ref-route',
       routeSlug: 'oci-predictions-scoring',
@@ -238,6 +239,58 @@ describe('EvaluationService.submitPredictions (Mode 1 — unchanged)', () => {
     );
     // Mode 1 never enqueues.
     expect(queue.publish).not.toHaveBeenCalled();
+  });
+
+  const GRADING_BODY = {
+    methodName: 'baseline',
+    intent: 'SCORED' as const,
+    predictions: [
+      { imageId: 'idrid_01', grade: 0 },
+      { imageId: 'idrid_02', grade: 1 },
+      { imageId: 'idrid_03', grade: 3 },
+      { imageId: 'idrid_04', grade: 4 },
+    ],
+  };
+
+  it('leaves a direct participant submission unattributed (route pinning is #583)', async () => {
+    await service.submitPredictions('idrid-grading-demo', GRADING_BODY, PARTICIPANT);
+
+    expect(repo.findReferenceRouteVersionForMode).not.toHaveBeenCalled();
+    expect(repo.createSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({
+        routeId: null,
+        routeVersion: null,
+        routeVersionId: null,
+        externalSubmissionId: null,
+        externalChallengeId: null,
+      }),
+    );
+  });
+
+  it('attributes a seam submission to the reference route and to the entrant it names', async () => {
+    const seam = {
+      submittedBy: '22222222-2222-5222-8222-222222222222',
+      externalSubmissionId: '9001',
+      externalChallengeId: '493',
+    };
+
+    await service.submitPredictions('idrid-grading-demo', GRADING_BODY, undefined, seam);
+
+    expect(repo.findReferenceRouteVersionForMode).toHaveBeenCalledWith('PREDICTIONS');
+    expect(repo.createSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'SCORED',
+        routeId: 'ref-route',
+        routeVersion: '1.0.0',
+        routeVersionId: 'ref-version',
+        externalSubmissionId: '9001',
+        externalChallengeId: '493',
+      }),
+    );
+    // The quota is counted against the entrant the seam named, not a caller.
+    expect(repo.countScoredSubmissionsForParticipant).toHaveBeenCalledWith(
+      expect.objectContaining({ submittedBy: seam.submittedBy }),
+    );
   });
 
   it('404s on an unknown task without writing anything', async () => {
