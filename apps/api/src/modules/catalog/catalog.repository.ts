@@ -1,3 +1,4 @@
+import { DICOM_HELD_STATUSES } from '../../common/dicom-hold.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@oci/database';
 import type {
@@ -523,6 +524,34 @@ export class CatalogRepository {
 
       return v;
     })) as DatasetVersionRow;
+  }
+
+  /**
+   * Ids of the distributions of a dataset whose stored file is a held
+   * DICOM file (ADR-0026). The index is keyed by where the bytes live,
+   * so this matches on bucket and key. Two queries, and only one when
+   * nothing is held, which is the common case.
+   */
+  async findHeldDistributionIds(datasetId: string): Promise<Set<string>> {
+    const held = await this.prisma.client.dicomObject.findMany({
+      where: { datasetId, checkStatus: { in: [...DICOM_HELD_STATUSES] } },
+      select: { s3Bucket: true, s3Key: true },
+    });
+    if (held.length === 0) return new Set();
+    const heldKeys = new Set(
+      held.map((o: { s3Bucket: string; s3Key: string }) => `${o.s3Bucket}\n${o.s3Key}`),
+    );
+    const rows = await this.prisma.client.distribution.findMany({
+      where: { datasetVersion: { datasetId }, storageBackend: 'S3' },
+      select: { id: true, s3Bucket: true, s3Key: true },
+    });
+    return new Set(
+      rows
+        .filter((r: { s3Bucket: string | null; s3Key: string | null }) =>
+          heldKeys.has(`${r.s3Bucket}\n${r.s3Key}`),
+        )
+        .map((r: { id: string }) => r.id),
+    );
   }
 
   /**

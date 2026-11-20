@@ -565,6 +565,32 @@ enum DistributionUploadStatus {
   @@schema("catalog")
 }
 
+/// Outcome of the header check on a stored DICOM file (ADR-0026).
+/// Anything but CLEAR and RELEASED is held: the file is served to
+/// nobody but its host and platform operators.
+enum DicomCheckStatus {
+  /// No de-identification finding.
+  CLEAR
+  /// At least one finding that no operator decision covers.
+  HELD
+  /// Every finding is covered by an operator's recorded decision.
+  RELEASED
+  /// Marked as DICOM, but the header could not be read: not checked.
+  UNREADABLE
+
+  @@schema("catalog")
+}
+
+enum DicomObjectKind {
+  /// The only kind offered to the built-in viewer.
+  SINGLE_FRAME_IMAGE
+  MULTI_FRAME_IMAGE
+  /// Reports, presentation states, directory files, and the like.
+  OTHER
+
+  @@schema("catalog")
+}
+
 model Dataset {
   id                 String                   @id @default(uuid()) @db.Uuid
   /// URL-safe identifier, e.g. "rsna-pneumonia-2018-v1". Unique. Used in
@@ -647,8 +673,9 @@ model Dataset {
   accessRequests      AccessRequest[]
   annotationCampaigns AnnotationCampaign[]
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  dicomObjects DicomObject[]
 
   @@index([visibility, status])
   @@index([hostId])
@@ -720,6 +747,84 @@ model Distribution {
   @@unique([datasetVersionId, croissantId])
   @@index([storageBackend, uploadStatus])
   @@map("distributions")
+  @@schema("catalog")
+}
+
+/// One row per stored file the platform recognised as DICOM, keyed by
+/// where the bytes live (ADR-0026). Not keyed by Distribution: a new
+/// dataset version adopts the stored files of the previous one, so
+/// several Distribution rows can point at one file, and the index and
+/// the hold must follow the file. Join to `distributions` on
+/// (s3_bucket, s3_key).
+///
+/// Built from the header only; pixel data is never read. No free text
+/// and no header value that could identify a patient is stored here.
+model DicomObject {
+  id               String           @id @default(uuid()) @db.Uuid
+  datasetId        String           @map("dataset_id") @db.Uuid
+  s3Bucket         String           @map("s3_bucket")
+  s3Key            String           @map("s3_key")
+  checkStatus      DicomCheckStatus @map("check_status")
+  /// Parser's reason when checkStatus=UNREADABLE. Names a tag or a
+  /// position, never a value.
+  unreadableReason String?          @map("unreadable_reason")
+  /// Null when the header could not be read.
+  objectKind       DicomObjectKind? @map("object_kind")
+
+  sopClassUid               String? @map("sop_class_uid")
+  sopInstanceUid            String? @map("sop_instance_uid")
+  studyInstanceUid          String? @map("study_instance_uid")
+  seriesInstanceUid         String? @map("series_instance_uid")
+  frameOfReferenceUid       String? @map("frame_of_reference_uid")
+  transferSyntaxUid         String? @map("transfer_syntax_uid")
+  modality                  String?
+  seriesNumber              Int?    @map("series_number")
+  instanceNumber            Int?    @map("instance_number")
+  /// x, y, z in millimetres; empty when absent.
+  imagePositionPatient      Float[] @map("image_position_patient")
+  /// Row then column direction cosines; empty when absent.
+  imageOrientationPatient   Float[] @map("image_orientation_patient")
+  rows                      Int?
+  columns                   Int?
+  numberOfFrames            Int?    @map("number_of_frames")
+  bitsAllocated             Int?    @map("bits_allocated")
+  pixelRepresentation       Int?    @map("pixel_representation")
+  photometricInterpretation String? @map("photometric_interpretation")
+  sliceThickness            Float?  @map("slice_thickness")
+  /// Row then column spacing in millimetres; empty when absent.
+  pixelSpacing              Float[] @map("pixel_spacing")
+  windowCenter              Float?  @map("window_center")
+  windowWidth               Float?  @map("window_width")
+
+  indexedAt DateTime @default(now()) @map("indexed_at") @db.Timestamptz(6)
+
+  dataset  Dataset        @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  findings DicomFinding[]
+
+  @@unique([s3Bucket, s3Key])
+  @@index([datasetId, seriesInstanceUid])
+  @@index([datasetId, checkStatus])
+  @@map("dicom_objects")
+  @@schema("catalog")
+}
+
+/// A populated attribute that de-identification normally empties, on
+/// one stored DICOM file (ADR-0026). The value itself is never stored:
+/// `valueDigest` is a keyed digest (HMAC-SHA-256), enough to tell
+/// whether a later file carries a value an operator has already judged.
+model DicomFinding {
+  id            String @id @default(uuid()) @db.Uuid
+  dicomObjectId String @map("dicom_object_id") @db.Uuid
+  /// DICOM keyword, or a finding about the whole file (PrivateTags,
+  /// BurnedInAnnotation, DataAfterPixelData, SequenceDepthExceeded).
+  attribute     String
+  valueDigest   String @map("value_digest")
+
+  dicomObject DicomObject @relation(fields: [dicomObjectId], references: [id], onDelete: Cascade)
+
+  @@unique([dicomObjectId, attribute, valueDigest])
+  @@index([attribute, valueDigest])
+  @@map("dicom_findings")
   @@schema("catalog")
 }
 

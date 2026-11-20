@@ -183,6 +183,17 @@ export class CatalogService {
     if (!ownsRow && !canSee(ds.visibility, ds.status, groups)) {
       throw new NotFoundException(`dataset "${slug}" not found`); // do not leak existence
     }
+
+    // ADR-0026: a held DICOM file is listed for its host and for
+    // platform operators only. For anyone else it is absent from the
+    // file list, so neither its bytes nor its name are disclosed, and
+    // the counts the page derives from this list stay true.
+    if (!ownsRow && !groups.includes('admin') && ds.distributions.length > 0) {
+      const held = await this.repo.findHeldDistributionIds(ds.id);
+      if (held.size > 0) {
+        return { ...ds, distributions: ds.distributions.filter((d) => !held.has(d.id)) };
+      }
+    }
     return ds;
   }
 

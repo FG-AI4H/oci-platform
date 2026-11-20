@@ -25,6 +25,7 @@ import type {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CatalogService } from '../catalog/catalog.service.js';
 import { PrismaService } from '../../prisma.service.js';
+import { DicomIndexService } from './dicom-index.service.js';
 import { S3ClientProvider } from './s3-client.js';
 import { AccessRequestService } from '../access-request/access-request.service.js';
 
@@ -76,6 +77,7 @@ export class StorageService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(CatalogService) private readonly catalog: CatalogService,
     @Inject(AccessRequestService) private readonly accessRequests: AccessRequestService,
+    @Inject(DicomIndexService) private readonly dicomIndex: DicomIndexService,
   ) {}
 
   async initUpload(
@@ -151,6 +153,13 @@ export class StorageService {
   }): Promise<UploadedDistribution> {
     const target = await this.requireHost(args.slug, args.user);
 
+    // `initUpload` mints every key under the dataset's own prefix. The
+    // key comes back from the browser, so hold it to that: the DICOM
+    // index below records the file against this dataset (ADR-0026).
+    if (!args.key.startsWith(`${target.slug}/`)) {
+      throw new BadRequestException('upload key does not belong to this dataset');
+    }
+
     // S3 wants the parts sorted by partNumber and ETags surrounded by
     // double-quotes (the SDK is finicky about both). Defensive sort +
     // quote-add even though the browser usually gets this right.
@@ -183,6 +192,17 @@ export class StorageService {
         `dataset "${args.slug}" has no published version yet; publish a manifest first`,
       );
     }
+
+    // ADR-0026: read the header before the file is offered to anyone.
+    // A DICOM file with de-identification findings is recorded as held,
+    // and every path that serves bytes checks that. If the check itself
+    // cannot run this throws, no Distribution row is written, and the
+    // file is not reachable. Fail closed.
+    await this.dicomIndex.indexStoredObject({
+      datasetId: target.id,
+      s3Bucket: this.s3.bucket,
+      s3Key: args.key,
+    });
 
     const filename = args.body.croissantId ?? args.key.split('/').filter(Boolean).pop() ?? args.key;
 
@@ -277,11 +297,22 @@ export class StorageService {
       throw new NotFoundException('distribution upload is not complete');
     }
 
-    await this.authoriseDatasetBytes({
+    const dataset = await this.authoriseDatasetBytes({
       datasetId: ds.id,
       requiresAccess: dist.requiresAccess,
       user: args.user,
     });
+
+    // ADR-0026: a DICOM file with undecided de-identification findings
+    // is served to nobody but its host and platform operators, whatever
+    // the dataset's visibility. 404, not 403: the file is not listed for
+    // this caller either, so its existence is not confirmed.
+    if (
+      !this.isHostOrOperator(dataset.hostId, args.user) &&
+      (await this.dicomIndex.isHeld(dist.s3Bucket, dist.s3Key))
+    ) {
+      throw new NotFoundException('distribution not found');
+    }
 
     const cmd = new GetObjectCommand({ Bucket: dist.s3Bucket, Key: dist.s3Key });
     return this.presign(cmd, StorageService.DOWNLOAD_URL_TTL_S);
@@ -352,6 +383,17 @@ export class StorageService {
     // PUBLIC + !requiresAccess: anyone (incl. anonymous in a follow-up)
 
     return fullDataset;
+  }
+
+  /**
+   * Who may read a held DICOM file (ADR-0026): the dataset's host and
+   * platform operators. Until a separate operator role exists, an
+   * operator is a member of the `admin` group.
+   */
+  isHostOrOperator(hostId: string, user: CognitoAccessTokenPayload | undefined): boolean {
+    if (!user?.sub) return false;
+    const groups = (user['cognito:groups'] ?? []) as string[];
+    return groups.includes('admin') || subToUuid(user.sub) === hostId;
   }
 
   // ----- helpers ---------------------------------------------------

@@ -19,6 +19,8 @@ import {
 import { CatalogService } from '../catalog/catalog.service.js';
 import { PrismaService } from '../../prisma.service.js';
 import { S3ClientProvider } from './s3-client.js';
+import { objectKey } from './dicom-index.repository.js';
+import { DicomIndexService } from './dicom-index.service.js';
 import { StorageService } from './storage.service.js';
 
 /** One file that will end up in the archive. */
@@ -90,6 +92,7 @@ export class BulkDownloadService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(CatalogService) private readonly catalog: CatalogService,
     @Inject(StorageService) private readonly storage: StorageService,
+    @Inject(DicomIndexService) private readonly dicomIndex: DicomIndexService,
   ) {}
 
   /**
@@ -158,6 +161,13 @@ export class BulkDownloadService {
       contentSizeBytes: bigint | null;
     }>;
 
+    // ADR-0026: held DICOM files go into the archive of their host and
+    // of platform operators only. For anyone else they are left out, the
+    // same way they are left out of the dataset's file list.
+    const held = this.storage.isHostOrOperator(dataset.hostId, args.user)
+      ? new Set<string>()
+      : await this.dicomIndex.heldObjectKeys(owner.id);
+
     const taken = new Set<string>();
     const entries: BulkDownloadEntry[] = [];
     let totalBytes = 0;
@@ -168,6 +178,7 @@ export class BulkDownloadService {
       // guarantee both, but a half-written row must not become a
       // GetObject against `undefined`.
       if (!row.s3Bucket || !row.s3Key) continue;
+      if (held.has(objectKey(row.s3Bucket, row.s3Key))) continue;
 
       const derived =
         deriveDistributionFilename(row) ??

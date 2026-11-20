@@ -153,6 +153,30 @@ export class ApiStack extends cdk.Stack {
         props.cfg.envName === 'dev' ? cdk.RemovalPolicy.DESTROY : cdk.RemovalPolicy.RETAIN,
     });
 
+    // Key for the keyed digest of DICOM de-identification findings
+    // (#674, ADR-0026). The API stores a digest of each flagged header
+    // value, never the value; keying it means a short value such as a
+    // name cannot be recovered from the database or the audit trail by
+    // trying candidates. Generated here, read only by the API task.
+    //
+    // Not rotated, on purpose: an operator's decision covers findings by
+    // their digest, so a new key would make every recorded digest stop
+    // matching and re-hold every file. RETAIN outside dev for the same
+    // reason: losing the key orphans the decisions.
+    const dicomFindingDigestKey = new secretsmanager.Secret(this, 'DicomFindingDigestKey', {
+      description: `OCI ${props.cfg.envName}: key for the digest of DICOM de-identification findings (OCI_DICOM_FINDING_DIGEST_KEY). Do not rotate: recorded digests would stop matching.`,
+      generateSecretString: { passwordLength: 64, excludePunctuation: true },
+      removalPolicy:
+        props.cfg.envName === 'dev' ? cdk.RemovalPolicy.DESTROY : cdk.RemovalPolicy.RETAIN,
+    });
+    NagSuppressions.addResourceSuppressions(dicomFindingDigestKey, [
+      {
+        id: 'AwsSolutions-SMG4',
+        reason:
+          'Rotation would invalidate every stored finding digest and the operator decisions that refer to them (ADR-0026). The key protects digests, not access to any system.',
+      },
+    ]);
+
     const fargate = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'ApiService', {
       cluster: this.cluster,
       cpu: props.cfg.fargate.cpu,
@@ -256,6 +280,7 @@ export class ApiStack extends cdk.Stack {
         // to happen in Node at startup rather than in an entrypoint.sh
         // like the migrate task does.
         secrets: {
+          OCI_DICOM_FINDING_DIGEST_KEY: ecs.Secret.fromSecretsManager(dicomFindingDigestKey),
           DB_USERNAME: ecs.Secret.fromSecretsManager(props.database.secret!, 'username'),
           DB_PASSWORD: ecs.Secret.fromSecretsManager(props.database.secret!, 'password'),
           DB_HOST: ecs.Secret.fromSecretsManager(props.database.secret!, 'host'),

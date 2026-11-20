@@ -85,8 +85,30 @@ The "cancel" button per file aborts the in-flight `fetch` and the API issues `Ab
 | 50 GB – 1 TB  | CLI when [#88](https://github.com/FG-AI4H/oci-platform/issues/88) ships. Browser works but UX gets fragile around the 50 GB mark.                                  |
 | > 1 TB        | External S3 mount when [#89](https://github.com/FG-AI4H/oci-platform/issues/89) ships. Until then, bring your own S3 bucket and use upstream URLs in the manifest. |
 
+## DICOM files
+
+When an upload completes, the platform reads the header of the file. It never reads the pixel data. A file is treated as DICOM by its content, not by its name or the type you declared.
+
+**What it looks for.** Attributes that de-identification normally empties, removes or replaces: patient name and id, other patient ids, birth date, address and telephone; accession number; institution name and address; referring and performing physician, operator; study, series and acquisition dates; device serial number and station name. It also reports private tags, a burned-in annotation flag, and anything written after the pixel data. The decision is recorded in [ADR-0026](../adr/0026-built-in-read-only-dicom-viewer-beside-the-tool-contract.md).
+
+**What happens when it finds one.** The file is **held**: you and the platform's operators can still see and download it, and nobody else can. It does not appear in the dataset's file list or in the archive for other people, whatever the dataset's visibility. A finding is a warning, not a verdict. De-identified files normally keep a code in patient name and patient id and keep shifted dates, so expect most real files to be held at first.
+
+**What lifts the hold.** An operator reviews the findings and records a decision. The review screen is not available yet ([#674](https://github.com/FG-AI4H/oci-platform/issues/674)); until it is, a held file stays held.
+
+**What the platform does not do.**
+
+- It does not clean a file or rewrite a header. De-identify before you upload.
+- It does not look inside a ZIP or other archive, and it does not check a file you host elsewhere.
+- It does not delete a file you replace. Uploading a clean copy adds a new file; the earlier one stays in storage until an operator removes it.
+- It does not check the picture itself for text. Look at your images for burned-in names and dates.
+
+A file that is marked as DICOM but whose header cannot be read, or that uses the deflated transfer syntax, is held as well: it was not checked.
+
+Files uploaded before this check existed are not held and are not indexed.
+
 ## Troubleshooting
 
 - **"Failed to fetch" mid-upload.** Usually a CORS preflight failure — the browser can't reach MinIO/S3 directly. Check that the OCI instance is configured correctly (see [`docs/deployment.md`](../deployment.md)).
 - **"The specified bucket does not exist."** The OCI's S3 bucket env vars aren't wired up correctly on this deployment. Talk to your operator.
+- **A DICOM upload fails at the last step with a 503.** The deployment has no key for recording findings, so it refuses DICOM files that have any. Talk to your operator.
 - **Upload reaches 100% but stays "uploading".** Likely `complete` failed silently. The `cancel` button still works; cancel and retry. If it persists, check the API logs.

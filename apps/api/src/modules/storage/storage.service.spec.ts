@@ -4,6 +4,7 @@ import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CatalogService } from '../catalog/catalog.service.js';
 import { AccessRequestService } from '../access-request/access-request.service.js';
 import type { PrismaService } from '../../prisma.service.js';
+import type { DicomIndexService } from './dicom-index.service.js';
 import { S3ClientProvider } from './s3-client.js';
 import { StorageService } from './storage.service.js';
 
@@ -47,11 +48,16 @@ interface CatalogMock {
 interface AccessReqMock {
   listOwn: ReturnType<typeof vi.fn>;
 }
+interface DicomIndexMock {
+  indexStoredObject: ReturnType<typeof vi.fn>;
+  isHeld: ReturnType<typeof vi.fn>;
+}
 
 let s3: S3Mock;
 let prisma: PrismaMock;
 let catalog: CatalogMock;
 let accessReq: AccessReqMock;
+let dicomIndex: DicomIndexMock;
 let svc: StorageService;
 
 beforeEach(() => {
@@ -68,11 +74,17 @@ beforeEach(() => {
   };
   catalog = { findOwnerBySlug: vi.fn() };
   accessReq = { listOwn: vi.fn() };
+  // Default: nothing is DICOM, nothing is held.
+  dicomIndex = {
+    indexStoredObject: vi.fn().mockResolvedValue(null),
+    isHeld: vi.fn().mockResolvedValue(false),
+  };
   svc = new StorageService(
     s3 as unknown as S3ClientProvider,
     prisma as unknown as PrismaService,
     catalog as unknown as CatalogService,
     accessReq as unknown as AccessRequestService,
+    dicomIndex as unknown as DicomIndexService,
   );
 });
 
@@ -245,5 +257,139 @@ describe('StorageService.getDownloadUrl', () => {
         user: user(REQUESTER_SUB, 'participant'),
       }),
     ).rejects.toThrow(/platform-hosted/);
+  });
+});
+
+describe('StorageService.getDownloadUrl — held DICOM files (ADR-0026)', () => {
+  function publicDatasetWithHeldFile() {
+    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB });
+    prisma.client.distribution.findFirst.mockResolvedValue(readyDist());
+    // PUBLIC on purpose: the hold applies whatever the visibility.
+    prisma.client.dataset.findUnique.mockResolvedValue(dataset('PUBLIC'));
+    dicomIndex.isHeld.mockResolvedValue(true);
+  }
+  const download = (caller: CognitoAccessTokenPayload | undefined) =>
+    svc.getDownloadUrl({ slug: 'demo', distributionId: DISTRIBUTION_ID, user: caller });
+
+  it('404s for a signed-in caller who could otherwise download the file', async () => {
+    publicDatasetWithHeldFile();
+    await expect(download(user(STRANGER_SUB, 'participant'))).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(dicomIndex.isHeld).toHaveBeenCalledWith('test-bucket', 'slug/uuid/file.txt');
+  });
+
+  it('404s for an anonymous caller', async () => {
+    publicDatasetWithHeldFile();
+    await expect(download(undefined)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('404s for a requester with an APPROVED access request', async () => {
+    publicDatasetWithHeldFile();
+    prisma.client.dataset.findUnique.mockResolvedValue(dataset('RESTRICTED'));
+    accessReq.listOwn.mockResolvedValue([{ dataset: { id: DATASET_ID }, status: 'APPROVED' }]);
+    await expect(download(user(REQUESTER_SUB, 'participant'))).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+  });
+
+  it('serves the host, who has to be able to look at what was flagged', async () => {
+    publicDatasetWithHeldFile();
+    await expect(download(user(HOST_SUB, 'host'))).resolves.toMatch(/^https?:\/\//);
+    // Not asked: the host is allowed either way.
+    expect(dicomIndex.isHeld).not.toHaveBeenCalled();
+  });
+
+  it('serves an operator', async () => {
+    publicDatasetWithHeldFile();
+    await expect(download(user(ADMIN_SUB, 'admin'))).resolves.toMatch(/^https?:\/\//);
+  });
+
+  it('does not make a host of one dataset an operator of another', async () => {
+    publicDatasetWithHeldFile();
+    await expect(download(user(STRANGER_SUB, 'host'))).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('checks the hold only after the access rules, so a refusal stays a refusal', async () => {
+    publicDatasetWithHeldFile();
+    prisma.client.dataset.findUnique.mockResolvedValue(dataset('PRIVATE'));
+    await expect(download(user(STRANGER_SUB))).rejects.toBeInstanceOf(ForbiddenException);
+    expect(dicomIndex.isHeld).not.toHaveBeenCalled();
+  });
+});
+
+describe('StorageService.completeUpload — header check before the file exists (ADR-0026)', () => {
+  const VERSION_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+  const KEY = 'demo/11111111-1111-4111-8111-111111111111/slice.dcm';
+  let upsert: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    upsert = vi.fn().mockResolvedValue({
+      id: DISTRIBUTION_ID,
+      croissantId: 'slice.dcm',
+      contentType: 'application/octet-stream',
+      contentSizeBytes: 10n,
+      contentHash: null,
+    });
+    Object.assign(prisma.client, {
+      datasetVersion: { findFirst: vi.fn().mockResolvedValue({ id: VERSION_ID }) },
+    });
+    Object.assign(prisma.client.distribution, { upsert });
+    catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB });
+    s3.client.send.mockResolvedValue({});
+  });
+
+  const complete = (key = KEY) =>
+    svc.completeUpload({
+      slug: 'demo',
+      uploadId: 'upload-1',
+      key,
+      body: { parts: [{ partNumber: 1, etag: 'etag-1' }] },
+      user: user(HOST_SUB, 'host'),
+      // What the browser claims. The check never relies on it.
+      contentType: 'application/octet-stream',
+      contentSize: 10,
+      sha256: null,
+    });
+
+  it('checks the stored file, by its storage location, before writing the row', async () => {
+    const order: string[] = [];
+    dicomIndex.indexStoredObject.mockImplementation(async () => {
+      order.push('check');
+      return 'HELD';
+    });
+    upsert.mockImplementation(async () => {
+      order.push('row');
+      return {
+        id: DISTRIBUTION_ID,
+        croissantId: 'slice.dcm',
+        contentType: 'x',
+        contentSizeBytes: 10n,
+      };
+    });
+
+    await complete();
+
+    expect(dicomIndex.indexStoredObject).toHaveBeenCalledWith({
+      datasetId: DATASET_ID,
+      s3Bucket: 'test-bucket',
+      s3Key: KEY,
+    });
+    expect(order).toEqual(['check', 'row']);
+  });
+
+  it('writes no row when the check cannot run, so the file is not reachable', async () => {
+    dicomIndex.indexStoredObject.mockRejectedValue(new Error('storage unavailable'));
+
+    await expect(complete()).rejects.toThrow('storage unavailable');
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuses a key outside the dataset, before touching storage', async () => {
+    await expect(complete('other-dataset/1111/slice.dcm')).rejects.toMatchObject({ status: 400 });
+    // A prefix that merely starts with the slug is not the dataset's prefix.
+    await expect(complete('demo-evil/1111/slice.dcm')).rejects.toMatchObject({ status: 400 });
+    expect(s3.client.send).not.toHaveBeenCalled();
+    expect(dicomIndex.indexStoredObject).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,7 @@ COPY packages/audit/package.json packages/audit/
 COPY packages/auth/package.json packages/auth/
 COPY packages/croissant/package.json packages/croissant/
 COPY packages/database/package.json packages/database/
+COPY packages/dicom/package.json packages/dicom/
 COPY packages/shared-types/package.json packages/shared-types/
 COPY packages/ui/package.json packages/ui/
 COPY packages/eslint-config/package.json packages/eslint-config/
@@ -37,6 +38,7 @@ RUN pnpm --filter @oci/database build \
  && pnpm --filter @oci/croissant build \
  && pnpm --filter @oci/audit build \
  && pnpm --filter @oci/annotation-quality build \
+ && pnpm --filter @oci/dicom build \
  && pnpm --filter @oci/api build \
  # Deterministic prod isolate: the non-legacy (injected) deploy resolves from
  # the committed lockfile + pnpm.overrides, so the image ships the SAME patched

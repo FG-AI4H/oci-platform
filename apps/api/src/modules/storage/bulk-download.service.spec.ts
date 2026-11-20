@@ -10,6 +10,7 @@ import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import type { CatalogService } from '../catalog/catalog.service.js';
 import type { PrismaService } from '../../prisma.service.js';
 import type { S3ClientProvider } from './s3-client.js';
+import type { DicomIndexService } from './dicom-index.service.js';
 import type { StorageService } from './storage.service.js';
 import {
   BulkDownloadService,
@@ -42,12 +43,17 @@ interface CatalogMock {
 }
 interface StorageMock {
   authoriseDatasetBytes: ReturnType<typeof vi.fn>;
+  isHostOrOperator: ReturnType<typeof vi.fn>;
+}
+interface DicomIndexMock {
+  heldObjectKeys: ReturnType<typeof vi.fn>;
 }
 
 let s3: S3Mock;
 let prisma: PrismaMock;
 let catalog: CatalogMock;
 let storage: StorageMock;
+let dicomIndex: DicomIndexMock;
 let svc: BulkDownloadService;
 
 const CROISSANT = {
@@ -83,7 +89,8 @@ beforeEach(() => {
     },
   };
   catalog = { findOwnerBySlug: vi.fn() };
-  storage = { authoriseDatasetBytes: vi.fn() };
+  storage = { authoriseDatasetBytes: vi.fn(), isHostOrOperator: vi.fn().mockReturnValue(false) };
+  dicomIndex = { heldObjectKeys: vi.fn().mockResolvedValue(new Set<string>()) };
 
   // Happy-path defaults; individual tests override.
   catalog.findOwnerBySlug.mockResolvedValue({
@@ -109,6 +116,7 @@ beforeEach(() => {
     prisma as unknown as PrismaService,
     catalog as unknown as CatalogService,
     storage as unknown as StorageService,
+    dicomIndex as unknown as DicomIndexService,
   );
 });
 
@@ -162,6 +170,43 @@ describe('BulkDownloadService.plan — lookup + authz', () => {
     await expect(plan()).rejects.toBeInstanceOf(ForbiddenException);
     // No content disclosure — not even a count — to an unauthorised caller.
     expect(prisma.client.distribution.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('BulkDownloadService.plan — held DICOM files (ADR-0026)', () => {
+  const HELD_KEY = 'idrid/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/held.dcm';
+  const rows = () => [
+    row(),
+    row({ id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', croissantId: 'held.dcm', s3Key: HELD_KEY }),
+  ];
+
+  it('leaves a held file out of the archive of anyone but the host and operators', async () => {
+    prisma.client.distribution.findMany.mockResolvedValue(rows());
+    dicomIndex.heldObjectKeys.mockResolvedValue(new Set([`test-bucket\n${HELD_KEY}`]));
+
+    const result = await plan();
+
+    expect(dicomIndex.heldObjectKeys).toHaveBeenCalledWith(DATASET_ID);
+    expect(result.entries.map((e) => e.filename)).toEqual(['IDRiD_001.jpg']);
+  });
+
+  it('keeps it in the archive of the host or an operator, without asking the index', async () => {
+    prisma.client.distribution.findMany.mockResolvedValue(rows());
+    storage.isHostOrOperator.mockReturnValue(true);
+    dicomIndex.heldObjectKeys.mockResolvedValue(new Set([`test-bucket\n${HELD_KEY}`]));
+
+    const result = await plan();
+
+    expect(storage.isHostOrOperator).toHaveBeenCalledWith('host', expect.anything());
+    expect(dicomIndex.heldObjectKeys).not.toHaveBeenCalled();
+    expect(result.entries.map((e) => e.filename)).toEqual(['IDRiD_001.jpg', 'held.dcm']);
+  });
+
+  it('409s, like an empty dataset, when every eligible file is held', async () => {
+    prisma.client.distribution.findMany.mockResolvedValue([rows()[1]]);
+    dicomIndex.heldObjectKeys.mockResolvedValue(new Set([`test-bucket\n${HELD_KEY}`]));
+
+    await expect(plan()).rejects.toMatchObject({ status: 409 });
   });
 });
 
