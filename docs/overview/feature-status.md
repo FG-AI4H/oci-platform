@@ -42,14 +42,18 @@ Last update: **2026-09-04** (correction, #489 — sealed container execution dow
 
 ## Storage & distributions
 
-| Capability                                                                     | Status     | Shipped in                                                    |
-| ------------------------------------------------------------------------------ | ---------- | ------------------------------------------------------------- |
-| Upstream URL distributions (manifest references external host)                 | ✅ Live    | PR D                                                          |
-| Self-hosted distributions — multipart upload                                   | ✅ Live    | PR I ([#95](https://github.com/FG-AI4H/oci-platform/pull/95)) |
-| Self-hosted distributions — gated download (visibility + access-request aware) | ✅ Live    | PR I                                                          |
-| Manifest republish adopts platform-hosted contentUrls back into S3 metadata    | ✅ Live    | PR I                                                          |
-| CLI tool for TB-scale uploads                                                  | 🚧 Planned | [#88](https://github.com/FG-AI4H/oci-platform/issues/88)      |
-| External S3 mount for petabyte datasets                                        | 🚧 Planned | [#89](https://github.com/FG-AI4H/oci-platform/issues/89)      |
+| Capability                                                                                                                 | Status     | Shipped in                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Upstream URL distributions (manifest references external host)                                                             | ✅ Live    | PR D                                                                                                                                    |
+| Self-hosted distributions — multipart upload                                                                               | ✅ Live    | PR I ([#95](https://github.com/FG-AI4H/oci-platform/pull/95))                                                                           |
+| Self-hosted distributions — gated download (visibility + access-request aware)                                             | ✅ Live    | PR I                                                                                                                                    |
+| Manifest republish adopts platform-hosted contentUrls back into S3 metadata                                                | ✅ Live    | PR I                                                                                                                                    |
+| DICOM: header check on upload, series index, hold on files with de-identification findings                                 | ✅ Live    | PRs [#685](https://github.com/FG-AI4H/oci-platform/pull/685), [#716](https://github.com/FG-AI4H/oci-platform/pull/716) (#674, ADR-0026) |
+| DICOM: series read endpoints (series of a version; one series with short-lived storage addresses)                          | ✅ Live    | PRs [#719](https://github.com/FG-AI4H/oci-platform/pull/719), [#720](https://github.com/FG-AI4H/oci-platform/pull/720) (#674)           |
+| DICOM: built-in read-only viewer on the dataset page (scroll, window and presets, zoom, move, invert; single-frame series) | ✅ Live    | [#674](https://github.com/FG-AI4H/oci-platform/issues/674) (ADR-0026)                                                                   |
+| DICOM: operator review of held files; viewer in the annotation and arbitration screens                                     | 🚧 Planned | [#674](https://github.com/FG-AI4H/oci-platform/issues/674)                                                                              |
+| CLI tool for TB-scale uploads                                                                                              | 🚧 Planned | [#88](https://github.com/FG-AI4H/oci-platform/issues/88)                                                                                |
+| External S3 mount for petabyte datasets                                                                                    | 🚧 Planned | [#89](https://github.com/FG-AI4H/oci-platform/issues/89)                                                                                |
 
 ## Access governance
 
