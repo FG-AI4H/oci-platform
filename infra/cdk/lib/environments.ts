@@ -76,6 +76,16 @@ export interface OciEnvConfig {
    * identity, the identity stack fails to deploy and rolls back.
    */
   userPoolMailThroughSes: boolean;
+  /**
+   * Seed profiles the migrate task replays after the demo seed, by directory
+   * name under `packages/database/seed/profiles/` (#644). Empty everywhere by
+   * default: a profile is content for one occasion, switched on for one
+   * environment. Passed to the task as `OCI_SEED_PROFILES`, and only when the
+   * list is not empty, so an environment without profiles has the task
+   * definition it had before profiles existed. Never set on prod: the migrate
+   * task does not seed there, and `resolveEnvironment` refuses it.
+   */
+  seedProfiles: readonly string[];
   /** Backups & retention */
   backupRetentionDays: number;
   /** Whether prod-grade monitoring (X-Ray, Container Insights, alarms) is on */
@@ -119,6 +129,10 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     scoredSubmissionQuota: { perWeek: 3, perTask: 10 },
     docusealDuaTemplateId: 3,
     userPoolMailThroughSes: true,
+    // Off. `radiology-workshop` (#644) is listed here in the same change that
+    // commits the real image selection, after its files have been uploaded to
+    // the datasets bucket: see docs/for-operators/demo-seed.md.
+    seedProfiles: [],
     backupRetentionDays: 7,
     enhancedMonitoring: false,
     enableWaf: false,
@@ -143,6 +157,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     // Off until this environment's mail stack is deployed and its SES
     // identity verified; see the field's comment.
     userPoolMailThroughSes: false,
+    seedProfiles: [],
     backupRetentionDays: 7,
     enhancedMonitoring: true,
     enableWaf: true,
@@ -170,6 +185,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     // Off until this environment's mail stack is deployed and its SES
     // identity verified; see the field's comment.
     userPoolMailThroughSes: false,
+    seedProfiles: [],
     backupRetentionDays: 35,
     enhancedMonitoring: true,
     enableWaf: true,
@@ -181,5 +197,24 @@ export function resolveEnvironment(name: string, _app: cdk.App): OciEnvConfig {
     throw new Error(`Unknown env "${name}". Use one of: dev, int, prod`);
   }
   const cfg = ENVIRONMENTS[name as EnvName];
+  assertSeedProfiles(name as EnvName, cfg.seedProfiles);
   return { ...cfg, envName: name as EnvName };
+}
+
+/**
+ * A seed profile is non-prod content. Refuse at synth time, before anything
+ * reaches an environment, a profile listed for prod or a name that is not a
+ * plain directory name (the migrate entrypoint joins it into a path).
+ */
+export function assertSeedProfiles(envName: EnvName, profiles: readonly string[]): void {
+  if (envName === 'prod' && profiles.length > 0) {
+    throw new Error(`seedProfiles must be empty for prod (got: ${profiles.join(', ')})`);
+  }
+  for (const profile of profiles) {
+    if (!/^[a-z0-9-]{1,64}$/.test(profile)) {
+      throw new Error(
+        `Invalid seed profile name "${profile}" for ${envName}: lower-case letters, digits and hyphens only`,
+      );
+    }
+  }
 }
