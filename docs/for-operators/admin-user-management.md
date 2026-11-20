@@ -130,9 +130,7 @@ A reset sends no mail. The new password goes to the credentials sheet and you pa
 
 ### The invitation e-mail
 
-The invitation is in English and French, gives the address of the environment, the person's e-mail and the temporary password. Its text is in `infra/cdk/lib/identity-stack.ts` (`userInvitationMessage`).
-
-Where `userPoolMailThroughSes` is on in `infra/cdk/lib/environments.ts` (today: `dev`), the pool sends from `oci-act@<env-domain>` through the environment's SES identity, and a reply reaches the operator mailbox. Elsewhere it still uses Cognito's built-in sender, which stops at 50 messages a day and writes from an address outside the platform's domain; there, prefer `--suppress-mail`. See [the SES runbook](./ses.md#cognito-user-pool-mail) before turning the flag on for another environment.
+The pool sends the invitation with Cognito's built-in sender and its default English text. That sender has a low daily limit and writes from an address outside the platform's domain, so for a group prefer `--suppress-mail` and hand out the credentials sheet. Sending through the environment's SES identity, with an invitation in English and French, is the remaining part of [#642](https://github.com/FG-AI4H/oci-platform/issues/642).
 
 ### What the script does not do
 
