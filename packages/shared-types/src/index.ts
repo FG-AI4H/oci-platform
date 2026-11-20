@@ -4,7 +4,8 @@ import { ScoreAttributionSchema } from './evaluation-route.js';
 import { RegulatoryPathwaySchema } from './regulatory-pathway.js';
 import { DatasetSlugSchema } from './slug.js';
 import type { DatasetSlug } from './slug.js';
-import { EvaluationTaskSlugSchema } from './submission-validation.js';
+import { MAX_PREDICTION_ROWS, PredictionRowSchema } from './predictions-file.js';
+import { EvaluationTaskSlugSchema, SubmissionModeSchema } from './submission-validation.js';
 
 export { RegulatoryPathwaySchema } from './regulatory-pathway.js';
 export { DatasetSlugSchema } from './slug.js';
@@ -26,6 +27,27 @@ export type {
   SubmissionValidationReport,
 } from './submission-validation.js';
 export type { RegulatoryPathway } from './regulatory-pathway.js';
+
+// Predictions files as a participant uploads them in the browser (#645): the
+// CSV / JSON reader and the template a task hands out.
+export {
+  MAX_ITEM_ID_LENGTH,
+  MAX_PREDICTION_LABEL,
+  MAX_PREDICTION_ROWS,
+  MAX_REPORTED_FILE_ISSUES,
+  PREDICTIONS_CSV_DELIMITERS,
+  PREDICTIONS_CSV_HEADER,
+  PredictionRowSchema,
+  parsePredictionsFile,
+  predictionsTemplateCsv,
+} from './predictions-file.js';
+export type {
+  PredictionRow,
+  PredictionsCsvDelimiter,
+  PredictionsFileFormat,
+  PredictionsFileIssue,
+  PredictionsFileParseResult,
+} from './predictions-file.js';
 
 export {
   classifyEmailDomain,
@@ -3864,15 +3886,10 @@ export type EvaluationTaskDetail = z.infer<typeof EvaluationTaskDetailSchema>;
 export const SubmitPredictionsRequestSchema = z.object({
   methodName: z.string().min(1).max(120),
   intent: SubmissionIntentSchema.default('SCORED'),
-  predictions: z
-    .array(
-      z.object({
-        imageId: z.string().min(1).max(200),
-        grade: z.number().int().min(0).max(1000),
-      }),
-    )
-    .min(1)
-    .max(100_000),
+  // The row shape and the cap live in `predictions-file.ts`, which reads the
+  // same rows out of an uploaded file. One definition, so a file the reader
+  // accepts is a body this schema accepts.
+  predictions: z.array(PredictionRowSchema).min(1).max(MAX_PREDICTION_ROWS),
 });
 export type SubmitPredictionsRequest = z.infer<typeof SubmitPredictionsRequestSchema>;
 
@@ -4111,6 +4128,109 @@ export const ScoredSubmissionQuotaStateSchema = z.object({
   resetsAt: z.string().nullable(),
 });
 export type ScoredSubmissionQuotaState = z.infer<typeof ScoredSubmissionQuotaStateSchema>;
+
+/**
+ * `GET /v2/evaluation/tasks/:slug/quota` — what the signed-in caller has left on
+ * one task (#645), so a page can show it BEFORE the caller spends a slot rather
+ * than only in the refusal.
+ *
+ * Both limits are reported because both bind: `remaining` is the smaller of the
+ * two, and a caller with weekly slots left but the task total exhausted has
+ * none. `week.resetsAt` is always a real instant (next Monday 00:00 UTC); the
+ * total has no reset, which is why it has no such field.
+ */
+export const ScoredSubmissionQuotaSummarySchema = z.object({
+  taskSlug: EvaluationTaskSlugSchema,
+  week: z.object({
+    limit: z.number().int(),
+    used: z.number().int(),
+    remaining: z.number().int().nonnegative(),
+    /** ISO-8601 instant the weekly allowance frees up. */
+    resetsAt: z.string(),
+  }),
+  total: z.object({
+    limit: z.number().int(),
+    used: z.number().int(),
+    remaining: z.number().int().nonnegative(),
+  }),
+  /** Scored submissions the caller can still make now: the smaller remainder. */
+  remaining: z.number().int().nonnegative(),
+});
+export type ScoredSubmissionQuotaSummary = z.infer<typeof ScoredSubmissionQuotaSummarySchema>;
+
+/**
+ * Why a submission failed, as its submitter (or an administrator) is told.
+ *
+ * `quotaConsumed` is false for a predictions file refused before scoring: the
+ * file was never compared with the reference labels, so it cost the host
+ * nothing and told the participant nothing about them. A sealed run that failed
+ * did occupy an evaluation slot, and counts.
+ */
+export const EvaluationSubmissionFailureSchema = z.object({
+  /** Participant-facing text. Never a sealed run's operator detail. */
+  reason: z.string(),
+  quotaConsumed: z.boolean(),
+});
+export type EvaluationSubmissionFailure = z.infer<typeof EvaluationSubmissionFailureSchema>;
+
+/**
+ * `GET /v2/evaluation/tasks/:slug/submissions/:id` — one submission with its
+ * full result (#645). NEVER carries predictions or ground truth.
+ *
+ * WHO SEES WHAT. A SCORED or PENDING submission is as public as the task's
+ * result list it already appears in. A FAILED one is returned to its submitter
+ * and to administrators only, with the reason; anyone else gets a 404, the same
+ * answer as for an id that does not exist.
+ *
+ * `task` repeats the handful of task fields a reader needs to interpret the
+ * numbers (the kind decides which metric set this is; the threshold defines
+ * "referable"), so a page showing one submission does not have to load the
+ * task's whole result list and item identifiers to print them.
+ *
+ * The submitter's identity is not part of this shape. `viewerIsSubmitter` says
+ * only whether the caller is that person.
+ */
+export const EvaluationSubmissionDetailSchema = z
+  .object({
+    id: z.string().uuid(),
+    task: z.object({
+      slug: EvaluationTaskSlugSchema,
+      name: z.string(),
+      datasetSlug: z.string(),
+      taskKind: EvaluationTaskKindDbSchema,
+      numClasses: z.number().int(),
+      referableThreshold: z.number().int(),
+    }),
+    methodName: z.string(),
+    mode: SubmissionModeSchema,
+    status: SubmissionStatusSchema,
+    /** `null` until SCORED. For CLASSIFICATION, `metrics.perClass` is the per-class breakdown. */
+    scores: TaskKindScoresSchema.nullable(),
+    /** Null only when `scores` is null — same invariant as the list row. */
+    attribution: ScoreAttributionSchema.nullable(),
+    /** Non-null exactly when `status` is FAILED. */
+    failure: EvaluationSubmissionFailureSchema.nullable(),
+    viewerIsSubmitter: z.boolean(),
+    createdAt: z.string(),
+  })
+  .strict()
+  .superRefine((r, ctx) => {
+    if (r.scores !== null && r.attribution === null) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['attribution'],
+        message: 'a score cannot be returned without its route attribution (WP5 invariant 3)',
+      });
+    }
+    if ((r.status === 'FAILED') !== (r.failure !== null)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['failure'],
+        message: 'failure is present exactly when the submission is FAILED',
+      });
+    }
+  });
+export type EvaluationSubmissionDetail = z.infer<typeof EvaluationSubmissionDetailSchema>;
 
 export const tokens = {
   /** Phase B.A.1 added: Campaign, AnnotationToolIntegration (stub registry). */

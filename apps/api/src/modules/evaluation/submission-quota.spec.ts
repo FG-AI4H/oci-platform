@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  consumesScoredQuota,
   DEFAULT_SCORED_SUBMISSIONS_PER_TASK,
   DEFAULT_SCORED_SUBMISSIONS_PER_WEEK,
   quotaState,
+  quotaSummary,
   resolveScoredQuotaLimits,
   totalQuotaExceededMessage,
   weeklyQuotaExceededMessage,
@@ -97,5 +99,43 @@ describe('quotaState', () => {
       used: 12,
       resetsAt: null,
     });
+  });
+});
+
+describe('consumesScoredQuota (#645)', () => {
+  it.each([
+    ['PREDICTIONS', 'SCORED', true],
+    ['PREDICTIONS', 'PENDING', true],
+    // The one free row: a predictions file refused before scoring.
+    ['PREDICTIONS', 'FAILED', false],
+    ['CONTAINER', 'PENDING', true],
+    ['CONTAINER', 'SCORED', true],
+    // A sealed run held a host slot whatever came out of it.
+    ['CONTAINER', 'FAILED', true],
+    ['ENCRYPTED', 'FAILED', true],
+  ] as const)('%s + %s counts: %s', (mode, status, expected) => {
+    expect(consumesScoredQuota({ mode, status })).toBe(expected);
+  });
+});
+
+describe('quotaSummary (#645)', () => {
+  const limits = { perWeek: 3, perTask: 10 };
+  // A Wednesday; the week resets the following Monday at 00:00 UTC.
+  const now = new Date('2026-12-16T10:00:00.000Z');
+
+  it('reports both limits and the smaller remainder', () => {
+    expect(quotaSummary('chest-xr', { weekUsed: 1, totalUsed: 9 }, limits, now)).toEqual({
+      taskSlug: 'chest-xr',
+      week: { limit: 3, used: 1, remaining: 2, resetsAt: '2026-12-21T00:00:00.000Z' },
+      total: { limit: 10, used: 9, remaining: 1 },
+      remaining: 1,
+    });
+  });
+
+  it('floors at zero when a cap was lowered below what is already used', () => {
+    const summary = quotaSummary('chest-xr', { weekUsed: 5, totalUsed: 12 }, limits, now);
+    expect(summary.week.remaining).toBe(0);
+    expect(summary.total.remaining).toBe(0);
+    expect(summary.remaining).toBe(0);
   });
 });
