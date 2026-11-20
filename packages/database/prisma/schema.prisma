@@ -673,10 +673,11 @@ model Dataset {
   accessRequests      AccessRequest[]
   annotationCampaigns AnnotationCampaign[]
 
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  dicomObjects DicomObject[]
-  dicomSeries  DicomSeries[]
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  dicomObjects          DicomObject[]
+  dicomSeries           DicomSeries[]
+  dicomFindingDecisions DicomFindingDecision[]
 
   @@index([visibility, status])
   @@index([hostId])
@@ -806,6 +807,48 @@ model DicomObject {
   @@index([datasetId, seriesInstanceUid])
   @@index([datasetId, checkStatus])
   @@map("dicom_objects")
+  @@schema("catalog")
+}
+
+/// An operator's decision on de-identification findings of a dataset
+/// (#674, ADR-0026): these populated attributes, with these values, are
+/// accepted, for this reason. The values themselves are not here: a
+/// decision names them by the same keyed digest `dicom_findings` holds.
+/// A decision is never edited or deleted; a later one adds to it.
+model DicomFindingDecision {
+  id          String   @id @default(uuid()) @db.Uuid
+  datasetId   String   @map("dataset_id") @db.Uuid
+  /// Why the operator accepted the findings, in their own words.
+  reason      String
+  /// Soft FK → identity.users.id. The operator.
+  decidedById String   @map("decided_by_id") @db.Uuid
+  decidedAt   DateTime @default(now()) @map("decided_at") @db.Timestamptz(6)
+
+  dataset  Dataset                @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  accepted DicomAcceptedFinding[]
+
+  @@index([datasetId, decidedAt])
+  @@map("dicom_finding_decisions")
+  @@schema("catalog")
+}
+
+/// One (attribute, value digest) a decision accepts, for one dataset.
+/// A stored file is released when every one of its findings has a row
+/// here for its dataset. `datasetId` is repeated from the decision so
+/// that this lookup is one index read, and so that a finding is
+/// accepted at most once per dataset.
+model DicomAcceptedFinding {
+  id          String @id @default(uuid()) @db.Uuid
+  decisionId  String @map("decision_id") @db.Uuid
+  datasetId   String @map("dataset_id") @db.Uuid
+  attribute   String
+  valueDigest String @map("value_digest")
+
+  decision DicomFindingDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  @@unique([datasetId, attribute, valueDigest])
+  @@index([decisionId])
+  @@map("dicom_accepted_findings")
   @@schema("catalog")
 }
 
@@ -1884,12 +1927,12 @@ model Submission {
 
   task EvaluationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  @@index([taskId])
   /// One EvalAI submission pk = one OCI submission. Makes seam intake
   /// idempotent, so a forwarder retrying a timed-out POST cannot spend a
   /// second scored slot for the same entry. NULLs are distinct in Postgres, so
   /// directly-submitted rows (both columns null) are unconstrained.
   @@unique([externalChallengeId, externalSubmissionId], map: "submissions_external_ref_key")
+  @@index([taskId])
   @@map("submissions")
   @@schema("evaluation")
 }
