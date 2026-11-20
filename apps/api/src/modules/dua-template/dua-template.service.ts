@@ -3,7 +3,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { DuaTemplateAudience, PreviewDuaRequest, PreviewDuaResponse } from '@oci/shared-types';
+import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import Handlebars from 'handlebars';
+import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { CatalogService } from '../catalog/catalog.service.js';
 
 /**
@@ -38,6 +40,34 @@ export class DuaTemplateService {
     this.compileAll();
   }
 
+  /**
+   * The preview as the HTTP route serves it (#658). The agreement of a
+   * PRIVATE dataset states its DUO terms, its commercial terms and the
+   * first domain of its e-mail allowlist, so only its host or an admin
+   * may ask for it; anyone else gets the answer for an unknown slug.
+   * RESTRICTED and PUBLIC datasets are unchanged: their record is
+   * already readable by the caller.
+   */
+  async previewFor(
+    body: PreviewDuaRequest,
+    user: CognitoAccessTokenPayload,
+  ): Promise<PreviewDuaResponse> {
+    const dataset = await this.catalog.findOwnerBySlug(body.datasetSlug);
+    if (dataset?.visibility === 'PRIVATE') {
+      const groups = (user['cognito:groups'] ?? []) as string[];
+      const isHost = Boolean(user.sub) && cognitoSubAsUuid(user.sub) === dataset.hostId;
+      if (!isHost && !groups.includes('admin')) {
+        throw new NotFoundException(`dataset "${body.datasetSlug}" not found`);
+      }
+    }
+    return this.preview(body);
+  }
+
+  /**
+   * Renders without asking who the caller is. For callers that have
+   * already authorised the request themselves (DUA signing, on an
+   * approved access request); the HTTP route goes through `previewFor`.
+   */
   async preview(body: PreviewDuaRequest): Promise<PreviewDuaResponse> {
     const dataset = await this.catalog.findOwnerBySlug(body.datasetSlug);
     if (!dataset) {
