@@ -93,9 +93,13 @@ When an upload completes, the platform reads the header of the file. It never re
 
 **What happens when it finds one.** The file is **held**: you and the platform's operators can still see and download it, and nobody else can. It does not appear in the dataset's file list, in the manifest served to other people, or in their archive, whatever the dataset's visibility. A finding is a warning, not a verdict. De-identified files normally keep a code in patient name and patient id and keep shifted dates, so expect most real files to be held at first.
 
-**How you know.** The upload's response carries the outcome (`dicomCheckStatus`: `CLEAR`, `HELD` or `UNREADABLE`). The upload page does not show it yet: a held file looks like any other on your own dataset page, and is simply missing for everyone else.
+**How you know.** The upload's response carries the outcome (`dicomCheckStatus`: `CLEAR`, `HELD` or `UNREADABLE`). The upload page does not show it yet. On your dataset page, the **Imaging series** card says how many images are held and marks the series they belong to. In the file list a held file looks like any other to you, and is simply missing for everyone else.
 
 **What lifts the hold.** An operator reviews the findings and records a decision. The review screen is not available yet ([#674](https://github.com/FG-AI4H/oci-platform/issues/674)); until it is, a held file stays held.
+
+**Viewing a series.** The dataset page lists the DICOM series of the latest version under **Imaging series**. `view` opens one in the platform's own viewer: scroll through the images, change the window (with presets for CT), zoom, move, invert. Nothing is downloaded to disk and nothing can be drawn or measured: the viewer only displays. Anyone who may download from the dataset may view its series, except for held images, which only you and the operators see.
+
+A series is made of single-frame images. Reports, presentation states and multi-frame objects are stored and downloadable, and are not shown in the viewer. Uncompressed, JPEG-LS and JPEG lossless files have been verified; a series in a compression the viewer cannot decode opens with a message that names it.
 
 **What the platform does not do.**
 

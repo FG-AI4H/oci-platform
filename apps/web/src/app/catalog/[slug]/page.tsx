@@ -27,6 +27,7 @@ import type {
   DatasetDetail,
   DatasetStatus,
   DatasetVisibility,
+  DicomSeriesList,
 } from '@oci/shared-types';
 import { lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../../auth';
@@ -37,6 +38,7 @@ import {
   summariseBulkDownload,
 } from '../../../lib/dataset-files';
 import { datasetJsonLd } from '../../../lib/dataset-jsonld';
+import { heldImageCount, seriesRows } from '../../../lib/dicom-series';
 import { siteUrl } from '../../../lib/site-url';
 import { isAdmin, isCampaignManager } from '../../../lib/groups';
 import { isHostOfDataset } from '../../../lib/identity';
@@ -48,6 +50,7 @@ import { JsonTree } from './json-tree';
 import { ManifestFullView } from './manifest-full-view';
 import { ManifestTabs } from './manifest-tabs';
 import { ProvenanceCard } from './provenance-card';
+import { SeriesViewButton } from './series-viewer';
 
 const visibilityTone: Record<DatasetVisibility, 'success' | 'info' | 'warning'> = {
   PUBLIC: 'success',
@@ -176,6 +179,22 @@ export default async function DatasetDetailPage({
   }
 
   if (!detail) notFound();
+
+  // DICOM series of the latest version (ADR-0026). Best effort: a
+  // dataset the caller may not download from answers 403, and then
+  // there is simply nothing to view. Never cached: the list depends on
+  // who asks.
+  let dicomSeries: DicomSeriesList | null = null;
+  try {
+    dicomSeries = await apiFetch<DicomSeriesList>(
+      `/v2/storage/datasets/${encodeURIComponent(slug)}/dicom/series`,
+      { session, revalidate: 0 },
+    );
+  } catch {
+    dicomSeries = null;
+  }
+  const seriesList = dicomSeries ? seriesRows(dicomSeries.series) : [];
+  const heldImages = dicomSeries ? heldImageCount(dicomSeries.series) : 0;
 
   const m = (detail.croissant ?? {}) as Record<string, unknown> & CroissantPreview;
   const conformsTo =
@@ -463,6 +482,69 @@ export default async function DatasetDetailPage({
               />
             </CardContent>
           </Card>
+
+          {dicomSeries && seriesList.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Imaging series</CardTitle>
+                <CardDescription>
+                  DICOM series in the latest version. Open one to scroll through its images and
+                  change the window, without downloading anything.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {heldImages > 0 ? (
+                  <Alert tone="warning">
+                    <AlertTitle as="h3">
+                      {heldImages} {heldImages === 1 ? 'image is' : 'images are'} held
+                    </AlertTitle>
+                    <AlertDescription>
+                      Their headers carry values that de-identification normally removes, such as a
+                      patient id or a study date. Until a platform operator has reviewed them, only
+                      the dataset&apos;s host and platform operators see these images. Other readers
+                      do not see them, or a series made only of them.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+                <ul className="space-y-2">
+                  {seriesList.map((row, i) => (
+                    <li
+                      key={row.id}
+                      className={
+                        'flex flex-col gap-3 rounded-md p-3 sm:flex-row sm:items-center sm:justify-between' +
+                        (i % 2 === 0 ? ' bg-[var(--color-subtle)]' : '')
+                      }
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-sm font-medium text-[var(--color-foreground)]">
+                          {row.title}
+                        </p>
+                        <p className="text-xs text-[var(--color-muted-foreground)]">{row.meta}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {row.held ? (
+                          <Badge tone="warning">
+                            {row.held === 'all' ? 'held' : `${row.heldCount} held`}
+                          </Badge>
+                        ) : null}
+                        <SeriesViewButton
+                          slug={detail.slug}
+                          seriesId={row.id}
+                          title={row.title}
+                          meta={row.meta}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {dicomSeries.total > seriesList.length ? (
+                  <p className="text-xs text-[var(--color-muted-foreground)]">
+                    Showing the first {seriesList.length} of {dicomSeries.total} series.
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
 
           {detail.distributions.length > 0 ? (
             <Card>

@@ -22,6 +22,12 @@ The `-L` follows the 302; `-O` follows redirects but uses the original URL for n
 
 For TB-scale workloads, watch [issue #88](https://github.com/FG-AI4H/oci-platform/issues/88) — a CLI tool with parallelism + resume is queued.
 
+### Looking at a DICOM series before downloading
+
+When a dataset holds DICOM images, its page has an **Imaging series** card. `view` opens a series in the platform's own viewer, in the browser: scroll through the images with the wheel, the arrow keys or the slider, change the window by dragging or with the CT presets (brain, subdural, bone, lung, mediastinum), zoom, move, invert and reset. The controls under the image do everything the mouse does.
+
+The viewer only displays. It has no measuring or drawing tools, and it shows single-frame series only. You can view what you may download: on a restricted dataset, that is after your request is approved.
+
 ## Citing
 
 Every published version of every dataset has:

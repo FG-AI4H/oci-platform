@@ -13,6 +13,9 @@
     "clean": "rm -rf .next .turbo"
   },
   "dependencies": {
+    "@cornerstonejs/core": "5.19.4",
+    "@cornerstonejs/dicom-image-loader": "5.19.4",
+    "@cornerstonejs/metadata": "5.19.4",
     "@hookform/resolvers": "^5.2.2",
     "@oci/auth": "workspace:*",
     "@oci/croissant": "workspace:*",
@@ -20,6 +23,7 @@
     "@oci/ui": "workspace:*",
     "@tanstack/react-query": "^5.100.8",
     "aws-jwt-verify": "^5.1.1",
+    "dicom-parser": "1.8.21",
     "next": "^16.4.3",
     "next-auth": "5.0.0-beta.32",
     "react": "^19.2.5",

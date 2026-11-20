@@ -15,6 +15,15 @@ const nextConfig: NextConfig = {
   // review (#79); developers can re-enable per-session via
   // `process.env.NEXT_DEV_INDICATORS=true` if needed.
   devIndicators: false,
+  // The DICOM viewer's codecs (#674, ADR-0026) are WebAssembly modules
+  // whose glue code contains `require('fs')` behind a Node-only guard.
+  // Turbopack still has to resolve it for the browser bundle; point it
+  // at an empty module there, and leave the server untouched.
+  turbopack: {
+    resolveAlias: {
+      fs: { browser: './src/lib/empty-module.ts' },
+    },
+  },
   async headers() {
     return [
       {
