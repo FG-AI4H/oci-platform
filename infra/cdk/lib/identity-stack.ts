@@ -29,6 +29,53 @@ const GROUP_PRECEDENCE: Record<PlatformGroup, number> = {
   participant: 30,
 };
 
+/**
+ * How long a temporary password works. One constant, because the invitation
+ * message states the number and must not drift from the policy.
+ */
+const TEMPORARY_PASSWORD_VALIDITY_DAYS = 3;
+
+/**
+ * The invitation Cognito sends with a temporary password, in English and
+ * French, naming the environment's address (#642).
+ *
+ * Cognito's rules for this template (`MessageTemplateType` in its API
+ * reference) shape the text:
+ *
+ *   - the body must contain `{username}` and `{####}`. Each appears exactly
+ *     once, in a block the two languages share, so the message does not
+ *     depend on Cognito substituting a placeholder more than once;
+ *   - the body may hold letters, marks, symbols, numbers, punctuation and
+ *     whitespace. A no-break space is a separator and may not pass as
+ *     whitespace, hence the ordinary space before the French colons;
+ *   - subject up to 140 characters, body up to 20 000.
+ *
+ * `test/identity-stack.spec.ts` holds the text to these rules, since a
+ * template Cognito rejects only shows up as a failed deploy.
+ *
+ * Accounts are created with the e-mail as their `Username` (the pool signs
+ * people in by e-mail), so `{username}` should come out as the e-mail
+ * address. That is Cognito's doing, not ours: look at the first invitation a
+ * deployed pool sends.
+ */
+export function userInvitationMessage(
+  domainName: string,
+  validityDays: number,
+): { emailSubject: string; emailBody: string } {
+  const address = `https://${domainName}`;
+  const link = `<a href="${address}">${address}</a>`;
+  return {
+    emailSubject: 'Your OCI Platform account / Votre compte sur la plateforme OCI',
+    emailBody: [
+      '<p>Hello,</p>',
+      `<p>An account has been created for you on the OCI Platform. Sign in at ${link} with the e-mail address and the temporary password below. The first time you sign in, you will be asked to choose your own password. The temporary password works for ${validityDays} days. If it has expired, ask the person who set up your account for a new one.</p>`,
+      '<p>Bonjour,</p>',
+      `<p>Un compte a été créé pour vous sur la plateforme OCI. Connectez-vous sur ${link} avec l'adresse e-mail et le mot de passe temporaire indiqués ci-dessous. À la première connexion, vous devrez choisir votre propre mot de passe. Le mot de passe temporaire est valable ${validityDays} jours. S'il a expiré, demandez-en un nouveau à la personne qui a créé votre compte.</p>`,
+      '<p>E-mail / Adresse e-mail : {username}<br>Temporary password / Mot de passe temporaire : {####}</p>',
+    ].join('\n'),
+  };
+}
+
 export interface IdentityStackProps extends cdk.StackProps {
   cfg: OciEnvConfig;
   tags: Record<string, string>;
@@ -79,13 +126,33 @@ export class IdentityStack extends cdk.Stack {
       selfSignUpEnabled: true,
       signInAliases: { email: true, username: false },
       autoVerify: { email: true },
+      // Pool mail through the environment's own SES domain identity (#642).
+      // The identity lives in mail-stack, which deploys AFTER this stack
+      // (mail -> api -> identity), so there is no construct to reference and
+      // no dependency to declare: `sesVerifiedDomain` makes CDK build the
+      // identity ARN from the domain name alone. Whether the identity exists
+      // yet is therefore environment data; see `userPoolMailThroughSes`.
+      //
+      // The sender is the mailbox DocuSeal already writes from, so a reply
+      // reaches the inbound forwarder and a person, not a dead address.
+      email: props.cfg.userPoolMailThroughSes
+        ? cognito.UserPoolEmail.withSES({
+            fromEmail: `oci-act@${props.cfg.domainName}`,
+            fromName: 'OCI Platform',
+            sesVerifiedDomain: props.cfg.domainName,
+          })
+        : undefined,
+      // Sent when an operator creates an account (`AdminCreateUser`, which
+      // is what `scripts/provision-users.ts` calls). Independent of the
+      // sender above: it applies with Cognito's built-in sender too.
+      userInvitation: userInvitationMessage(props.cfg.domainName, TEMPORARY_PASSWORD_VALIDITY_DAYS),
       passwordPolicy: {
         minLength: 12,
         requireLowercase: true,
         requireUppercase: true,
         requireDigits: true,
         requireSymbols: true,
-        tempPasswordValidity: cdk.Duration.days(3),
+        tempPasswordValidity: cdk.Duration.days(TEMPORARY_PASSWORD_VALIDITY_DAYS),
       },
       mfa: cognito.Mfa.OPTIONAL,
       mfaSecondFactor: { sms: false, otp: true },

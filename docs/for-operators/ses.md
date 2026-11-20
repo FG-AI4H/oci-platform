@@ -70,6 +70,21 @@ aws ses get-identity-verification-attributes \
 
 `dig +short TXT _amazonses.<env>.oci.ai4h.net` should return the SES-issued verification token; `dig +short CNAME <token>._domainkey.<env>.oci.ai4h.net` should resolve.
 
+## Cognito user-pool mail
+
+The Cognito user pool has mail of its own: the invitation sent when an operator creates an account (see [bulk provisioning](./admin-user-management.md#creating-many-accounts-at-once)), and the verification and password-reset codes. By default Cognito sends these itself, from an address outside the platform's domain and no more than 50 a day.
+
+`userPoolMailThroughSes` in `infra/cdk/lib/environments.ts` makes the pool send through this environment's SES identity instead, as `OCI Platform <oci-act@<env>.oci.ai4h.net>`. It is on for `dev`. Before turning it on for another environment:
+
+1. `oci-<env>-mail` is deployed and the identity is verified (the section above).
+2. SES production access covers the region (§ Production access below). In the sandbox, Cognito can only write to verified addresses.
+
+The order matters because the identity stack deploys **before** the mail stack and cannot depend on it (mail depends on api, api on identity). CDK gives the pool the identity's ARN built from the domain name; if the identity is not there yet, the identity stack fails to deploy and rolls back.
+
+The first time a pool in the account is pointed at SES, Cognito creates the service-linked role `AWSServiceRoleForAmazonCognitoIdp`, which needs `iam:CreateServiceLinkedRole` for the deploying role. If the deploy fails on that, the role is missing or the organisation's policy denies creating it.
+
+To check after a deploy: create a test account for an address you read, and look at the sender of the invitation.
+
 ## Inbound forwarder
 
 The receipt rule set `oci-<env>-inbound` is created by CDK but **not activated automatically** — SES only allows one active rule set per region/account, and CDK can't manage that singleton without interfering with other environments that share the account.

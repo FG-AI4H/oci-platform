@@ -62,6 +62,20 @@ export interface OciEnvConfig {
    * up yet, and DUA signing answers 503 there.
    */
   docusealDuaTemplateId: number | null;
+  /**
+   * Whether the Cognito user pool sends its mail (invitations, verification
+   * and password-reset codes) through this environment's SES domain identity
+   * (`mail-stack.ts`) rather than Cognito's built-in sender, which stops at
+   * 50 messages a day and writes from an address outside the platform's
+   * domain (#642, ADR-0004 amendment).
+   *
+   * Turn it on only once `oci-<env>-mail` has been deployed and SES reports
+   * the identity verified. The pool cannot wait for the mail stack on its
+   * own: mail depends on api and api on identity, so an identity-to-mail
+   * dependency would close a cycle. With the flag on and no verified
+   * identity, the identity stack fails to deploy and rolls back.
+   */
+  userPoolMailThroughSes: boolean;
   /** Backups & retention */
   backupRetentionDays: number;
   /** Whether prod-grade monitoring (X-Ray, Container Insights, alarms) is on */
@@ -104,6 +118,7 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     // beyond the cluster size).
     scoredSubmissionQuota: { perWeek: 3, perTask: 10 },
     docusealDuaTemplateId: 3,
+    userPoolMailThroughSes: true,
     backupRetentionDays: 7,
     enhancedMonitoring: false,
     enableWaf: false,
@@ -125,6 +140,9 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     },
     scoredSubmissionQuota: { perWeek: 3, perTask: 10 },
     docusealDuaTemplateId: null,
+    // Off until this environment's mail stack is deployed and its SES
+    // identity verified; see the field's comment.
+    userPoolMailThroughSes: false,
     backupRetentionDays: 7,
     enhancedMonitoring: true,
     enableWaf: true,
@@ -149,6 +167,9 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     },
     scoredSubmissionQuota: { perWeek: 3, perTask: 10 },
     docusealDuaTemplateId: null,
+    // Off until this environment's mail stack is deployed and its SES
+    // identity verified; see the field's comment.
+    userPoolMailThroughSes: false,
     backupRetentionDays: 35,
     enhancedMonitoring: true,
     enableWaf: true,
