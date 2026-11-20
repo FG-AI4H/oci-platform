@@ -230,6 +230,15 @@ function printReport(report: ProvisionReport, deps: CliDependencies): void {
   }
   if (report.stopped !== null) {
     deps.err(`Stopped early: ${report.stopped}`);
+    if (/multi-factor authentication/i.test(report.stopped)) {
+      // An MFA-protected profile works for the AWS CLI, which prompts once
+      // and keeps the session. The SDK this script uses cannot prompt.
+      deps.err(
+        'The AWS profile asks for an MFA code, which this script cannot prompt for. ' +
+          'Hand it the session the AWS CLI already holds, then run it again without AWS_PROFILE:',
+      );
+      deps.err('  eval "$(aws configure export-credentials --profile <profile> --format env)"');
+    }
   }
 }
 

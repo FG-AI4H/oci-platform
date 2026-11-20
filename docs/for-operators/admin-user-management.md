@@ -58,8 +58,8 @@ Same flow as granting — untick the checkbox and press **Apply**.
 
 ### What you need
 
-- The repository checked out and installed (`pnpm install`), on Node 24.
-- An AWS session for the environment's account, assumed through the operator role (`AWS_PROFILE=...`). No access key is ever put in a file. The role needs `cognito-idp:AdminGetUser`, `AdminCreateUser`, `AdminListGroupsForUser`, `AdminAddUserToGroup` and `AdminSetUserPassword` on the environment's user pool.
+- The repository checked out and installed (`pnpm install`), on Node 24. `pnpm provision-users` builds the one workspace package it needs before it starts, so nothing else has to be built first.
+- An AWS session for the environment's account, assumed through the operator role (`AWS_PROFILE=...`). No access key is ever put in a file. If the profile asks for an MFA code, the script cannot prompt for it: sign in with the AWS CLI first, hand its session over with `eval "$(aws configure export-credentials --profile <profile> --format env)"`, and run the script in that shell without `AWS_PROFILE`. The session stays in that shell's environment and is written nowhere. The role needs `cognito-idp:AdminGetUser`, `AdminCreateUser`, `AdminListGroupsForUser`, `AdminAddUserToGroup` and `AdminSetUserPassword` on the environment's user pool.
 - The user pool id. It is in the SSM parameter `/oci/<env>/cognito/user-pool-id` and in the outputs of the `oci-<env>-identity` stack. Pass it with `--user-pool-id` or set `COGNITO_USER_POOL_ID`; the script has no default, so it cannot write to the wrong environment by accident.
 
 ### The roster
