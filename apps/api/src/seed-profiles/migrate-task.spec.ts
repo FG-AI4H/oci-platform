@@ -51,7 +51,12 @@ function tmp(prefix: string): string {
   return dir;
 }
 afterAll(() => {
-  for (const dir of scratch) rmSync(dir, { recursive: true, force: true });
+  // Retries: on a busy machine a recursive delete can meet a directory the
+  // system has not finished emptying, and a leftover temp directory is no
+  // reason to fail the suite.
+  for (const dir of scratch) {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
 });
 
 interface Outcome {
