@@ -676,6 +676,7 @@ model Dataset {
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
   dicomObjects DicomObject[]
+  dicomSeries  DicomSeries[]
 
   @@index([visibility, status])
   @@index([hostId])
@@ -805,6 +806,26 @@ model DicomObject {
   @@index([datasetId, seriesInstanceUid])
   @@index([datasetId, checkStatus])
   @@map("dicom_objects")
+  @@schema("catalog")
+}
+
+/// One row per DICOM series of a dataset (#674, ADR-0026). It gives the
+/// series an id of the platform's own, so that a route and, later, an
+/// annotation task can point at a series without carrying a DICOM UID
+/// in a URL. Which instances belong to it is not stored here: that is
+/// read from `dicom_objects` through the distributions of a dataset
+/// version, because the set can differ from one version to the next.
+model DicomSeries {
+  id                String @id @default(uuid()) @db.Uuid
+  datasetId         String @map("dataset_id") @db.Uuid
+  seriesInstanceUid String @map("series_instance_uid")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  dataset Dataset @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@unique([datasetId, seriesInstanceUid])
+  @@map("dicom_series")
   @@schema("catalog")
 }
 
