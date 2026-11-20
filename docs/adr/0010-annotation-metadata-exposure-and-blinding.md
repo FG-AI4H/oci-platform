@@ -126,6 +126,10 @@ This satisfies the regulator-facing question: "for this annotation, what did the
 - **[ADR-0008](./0008-annotation-persistence-and-provenance.md)** — the **provenance schema** acquires a `metadataExposureProfile` field per Annotation row (Decision 4 above). The hash chain extends to cover this field. ADR-0008 acquires an "Amendments" entry.
 - **[ADR-0009](./0009-annotation-task-assignment-and-multi-rater-policy.md)** — Decision 1 step 5 (class-balance check) extends to **any declared stratification key**. The 1.5× soft cap applies per-key, evaluated independently. ADR-0009 acquires an "Amendments" entry.
 
+## Amendments to this ADR
+
+- **2026-11-18 — Limited by [ADR-0026](./0026-built-in-read-only-dicom-viewer-beside-the-tool-contract.md) for DICOM samples in the built-in viewer.** The reader's browser receives the whole DICOM file, header included, so server-side filtering covers the metadata the screen displays and not the header inside the sample. `never` fields are kept out by a hold on files whose header has them populated, lifted only by an operator's recorded decision. `hidden` fields that live in the header are not shown but are delivered, and the `metadataExposureProfile` records that the full header was delivered.
+
 ## References
 
 - [ADR-0006](./0006-annotation-integration-hub-orchestrator.md) — orchestrator model + role + catalog linkage.
