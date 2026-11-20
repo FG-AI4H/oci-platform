@@ -34,6 +34,17 @@ beforeEach(() => {
       slug: 'ct-demo',
       visibility: 'PUBLIC',
       status: 'PUBLISHED',
+      croissant: {
+        name: 'CT demo',
+        distribution: [
+          { '@id': 'readme.txt', contentUrl: 'https://example.org/readme.txt' },
+          {
+            '@id': 'slice-001.dcm',
+            sha256: 'cd'.repeat(32),
+            contentUrl: `/v2/catalog/datasets/ct-demo/distributions/${HELD_ID}/download`,
+          },
+        ],
+      },
       distributions: [
         { id: CLEAN_ID, filename: 'readme.txt' },
         { id: HELD_ID, filename: 'slice-001.dcm' },
@@ -64,9 +75,27 @@ describe('CatalogService.detail — held DICOM files', () => {
     await expect(listed(caller)).resolves.toEqual([CLEAN_ID]);
   });
 
-  it('lists it for the host of the dataset, without asking the index', async () => {
+  it('lists it for the host of the dataset', async () => {
     await expect(listed(user(HOST_SUB, 'host'))).resolves.toEqual([CLEAN_ID, HELD_ID]);
-    expect(repo.findHeldDistributionIds).not.toHaveBeenCalled();
+  });
+
+  it('lists it for the owner even when their token no longer carries the host group', async () => {
+    // The download routes go by host id alone; the list must agree, or
+    // the owner's own held files would seem to have vanished.
+    await expect(listed(user(HOST_SUB, 'participant'))).resolves.toEqual([CLEAN_ID, HELD_ID]);
+  });
+
+  it('takes the held file out of the manifest too, name, hash and id', async () => {
+    const forVisitor = JSON.stringify((await svc.detail('ct-demo')).croissant);
+    expect(forVisitor).not.toContain('slice-001.dcm');
+    expect(forVisitor).not.toContain(HELD_ID);
+    expect(forVisitor).toContain('readme.txt');
+
+    // `manifest()` is what the standalone manifest route serves.
+    expect(JSON.stringify(await svc.manifest('ct-demo'))).not.toContain('slice-001.dcm');
+    expect(JSON.stringify(await svc.manifest('ct-demo', user(HOST_SUB, 'host')))).toContain(
+      'slice-001.dcm',
+    );
   });
 
   it('lists it for an operator', async () => {

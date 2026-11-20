@@ -12,6 +12,18 @@ const OBJECT_KIND = {
   other: 'OTHER',
 } as const satisfies Record<DicomObjectKind, string>;
 
+const INT4_MAX = 2_147_483_647;
+
+/**
+ * Header integers go into INT4 columns. A value outside that range
+ * (a date written into InstanceNumber, or a crafted one) is not a
+ * usable number for ordering; store null, do not fail the upload.
+ */
+function int4(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  return Number.isInteger(value) && Math.abs(value) <= INT4_MAX ? value : null;
+}
+
 export interface DicomObjectRecord {
   datasetId: string;
   s3Bucket: string;
@@ -41,7 +53,7 @@ export class DicomIndexRepository {
     const header = record.parsed?.header ?? null;
     const columns = {
       datasetId: record.datasetId,
-      checkStatus: record.checkStatus,
+      checkStatus: record.checkStatus as DicomCheckStatus,
       unreadableReason: record.unreadableReason,
       objectKind: record.parsed ? OBJECT_KIND[record.parsed.objectKind] : null,
       sopClassUid: header?.sopClassUid ?? null,
@@ -51,15 +63,15 @@ export class DicomIndexRepository {
       frameOfReferenceUid: header?.frameOfReferenceUid ?? null,
       transferSyntaxUid: header?.transferSyntaxUid ?? null,
       modality: header?.modality ?? null,
-      seriesNumber: header?.seriesNumber ?? null,
-      instanceNumber: header?.instanceNumber ?? null,
+      seriesNumber: int4(header?.seriesNumber),
+      instanceNumber: int4(header?.instanceNumber),
       imagePositionPatient: header?.imagePositionPatient ?? [],
       imageOrientationPatient: header?.imageOrientationPatient ?? [],
-      rows: header?.rows ?? null,
-      columns: header?.columns ?? null,
-      numberOfFrames: header?.numberOfFrames ?? null,
-      bitsAllocated: header?.bitsAllocated ?? null,
-      pixelRepresentation: header?.pixelRepresentation ?? null,
+      rows: int4(header?.rows),
+      columns: int4(header?.columns),
+      numberOfFrames: int4(header?.numberOfFrames),
+      bitsAllocated: int4(header?.bitsAllocated),
+      pixelRepresentation: int4(header?.pixelRepresentation),
       photometricInterpretation: header?.photometricInterpretation ?? null,
       sliceThickness: header?.sliceThickness ?? null,
       pixelSpacing: header?.pixelSpacing ?? [],
@@ -69,6 +81,27 @@ export class DicomIndexRepository {
     };
 
     await this.prisma.client.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Checking the same file again must not undo an operator's
+      // decision: a RELEASED file stays released as long as the check
+      // finds nothing the decision did not already cover.
+      const existing = await tx.dicomObject.findUnique({
+        where: { s3Bucket_s3Key: { s3Bucket: record.s3Bucket, s3Key: record.s3Key } },
+        select: {
+          checkStatus: true,
+          findings: { select: { attribute: true, valueDigest: true } },
+        },
+      });
+      if (existing?.checkStatus === 'RELEASED' && record.checkStatus === 'HELD') {
+        const covered = new Set(
+          existing.findings.map(
+            (f: { attribute: string; valueDigest: string }) => `${f.attribute}\n${f.valueDigest}`,
+          ),
+        );
+        if (record.findings.every((f) => covered.has(`${f.attribute}\n${f.valueDigest}`))) {
+          columns.checkStatus = 'RELEASED';
+        }
+      }
+
       const object = await tx.dicomObject.upsert({
         where: { s3Bucket_s3Key: { s3Bucket: record.s3Bucket, s3Key: record.s3Key } },
         create: { s3Bucket: record.s3Bucket, s3Key: record.s3Key, ...columns },
@@ -97,23 +130,4 @@ export class DicomIndexRepository {
     });
     return row !== null;
   }
-
-  /**
-   * The held files of one dataset, as `bucket\nkey`. One query whatever
-   * the number of files, for callers that filter a whole file list.
-   */
-  async heldObjectKeys(datasetId: string): Promise<Set<string>> {
-    const rows = await this.prisma.client.dicomObject.findMany({
-      where: { datasetId, checkStatus: { in: [...DICOM_HELD_STATUSES] } },
-      select: { s3Bucket: true, s3Key: true },
-    });
-    return new Set(
-      rows.map((row: { s3Bucket: string; s3Key: string }) => objectKey(row.s3Bucket, row.s3Key)),
-    );
-  }
-}
-
-/** Newline cannot occur in a bucket name, so the pair is unambiguous. */
-export function objectKey(s3Bucket: string, s3Key: string): string {
-  return `${s3Bucket}\n${s3Key}`;
 }

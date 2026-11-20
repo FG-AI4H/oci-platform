@@ -339,11 +339,11 @@ describe('StorageService.completeUpload — header check before the file exists 
     s3.client.send.mockResolvedValue({});
   });
 
-  const complete = (key = KEY) =>
+  const complete = (...keys: string[]) =>
     svc.completeUpload({
       slug: 'demo',
       uploadId: 'upload-1',
-      key,
+      key: keys.length > 0 ? (keys[0] as string) : KEY,
       body: { parts: [{ partNumber: 1, etag: 'etag-1' }] },
       user: user(HOST_SUB, 'host'),
       // What the browser claims. The check never relies on it.
@@ -378,11 +378,49 @@ describe('StorageService.completeUpload — header check before the file exists 
     expect(order).toEqual(['check', 'row']);
   });
 
-  it('writes no row when the check cannot run, so the file is not reachable', async () => {
+  it('tells the host the outcome of the check', async () => {
+    dicomIndex.indexStoredObject.mockResolvedValue('HELD');
+    await expect(complete()).resolves.toMatchObject({ dicomCheckStatus: 'HELD' });
+
+    dicomIndex.indexStoredObject.mockResolvedValue(null);
+    await expect(complete()).resolves.toMatchObject({ dicomCheckStatus: null });
+  });
+
+  it('writes no row and discards the stored bytes when the check cannot run', async () => {
     dicomIndex.indexStoredObject.mockRejectedValue(new Error('storage unavailable'));
 
     await expect(complete()).rejects.toThrow('storage unavailable');
+
     expect(upsert).not.toHaveBeenCalled();
+    const sent = s3.client.send.mock.calls.map(
+      ([command]) => (command as { constructor: { name: string } }).constructor.name,
+    );
+    expect(sent).toEqual(['CompleteMultipartUploadCommand', 'DeleteObjectCommand']);
+    const discarded = s3.client.send.mock.calls[1]?.[0] as {
+      input: { Bucket: string; Key: string };
+    };
+    expect(discarded.input).toEqual({ Bucket: 'test-bucket', Key: KEY });
+  });
+
+  it('still reports the original failure when the bytes cannot be discarded', async () => {
+    dicomIndex.indexStoredObject.mockRejectedValue(new Error('storage unavailable'));
+    s3.client.send.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('AccessDenied'));
+
+    await expect(complete()).rejects.toThrow('storage unavailable');
+  });
+
+  it('refuses before storage assembles the object when there is no published version', async () => {
+    (
+      prisma.client as unknown as { datasetVersion: { findFirst: ReturnType<typeof vi.fn> } }
+    ).datasetVersion.findFirst.mockResolvedValue(null);
+
+    await expect(complete()).rejects.toMatchObject({ status: 400 });
+    expect(s3.client.send).not.toHaveBeenCalled();
+  });
+
+  it('refuses a missing key with a 400, not a crash', async () => {
+    await expect(complete(undefined as unknown as string)).rejects.toMatchObject({ status: 400 });
+    expect(s3.client.send).not.toHaveBeenCalled();
   });
 
   it('refuses a key outside the dataset, before touching storage', async () => {

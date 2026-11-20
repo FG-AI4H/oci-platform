@@ -91,7 +91,9 @@ When an upload completes, the platform reads the header of the file. It never re
 
 **What it looks for.** Attributes that de-identification normally empties, removes or replaces: patient name and id, other patient ids, birth date, address and telephone; accession number; institution name and address; referring and performing physician, operator; study, series and acquisition dates; device serial number and station name. It also reports private tags, a burned-in annotation flag, and anything written after the pixel data. The decision is recorded in [ADR-0026](../adr/0026-built-in-read-only-dicom-viewer-beside-the-tool-contract.md).
 
-**What happens when it finds one.** The file is **held**: you and the platform's operators can still see and download it, and nobody else can. It does not appear in the dataset's file list or in the archive for other people, whatever the dataset's visibility. A finding is a warning, not a verdict. De-identified files normally keep a code in patient name and patient id and keep shifted dates, so expect most real files to be held at first.
+**What happens when it finds one.** The file is **held**: you and the platform's operators can still see and download it, and nobody else can. It does not appear in the dataset's file list, in the manifest served to other people, or in their archive, whatever the dataset's visibility. A finding is a warning, not a verdict. De-identified files normally keep a code in patient name and patient id and keep shifted dates, so expect most real files to be held at first.
+
+**How you know.** The upload's response carries the outcome (`dicomCheckStatus`: `CLEAR`, `HELD` or `UNREADABLE`). The upload page does not show it yet: a held file looks like any other on your own dataset page, and is simply missing for everyone else.
 
 **What lifts the hold.** An operator reviews the findings and records a decision. The review screen is not available yet ([#674](https://github.com/FG-AI4H/oci-platform/issues/674)); until it is, a held file stays held.
 

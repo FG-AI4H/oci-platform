@@ -1,4 +1,3 @@
-import { DICOM_HELD_STATUSES } from '../../common/dicom-hold.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '@oci/database';
 import type {
@@ -527,31 +526,30 @@ export class CatalogRepository {
   }
 
   /**
-   * Ids of the distributions of a dataset whose stored file is a held
-   * DICOM file (ADR-0026). The index is keyed by where the bytes live,
-   * so this matches on bucket and key. Two queries, and only one when
-   * nothing is held, which is the common case.
+   * Ids of the distributions of a dataset, in any of its versions, whose
+   * stored file is a held DICOM file (ADR-0026). The index is keyed by
+   * where the bytes live, so this joins on bucket and key. All versions,
+   * not only the latest: a manifest refers to a file by the id of the
+   * row it was first uploaded as.
+   *
+   * Raw because Prisma cannot join on a composite of plain columns. The
+   * status list is `DICOM_HELD_STATUSES` in `common/dicom-hold.ts`;
+   * keep the two in step. Driven by the (dataset_id, check_status)
+   * index, so a dataset with nothing held costs one index probe.
    */
   async findHeldDistributionIds(datasetId: string): Promise<Set<string>> {
-    const held = await this.prisma.client.dicomObject.findMany({
-      where: { datasetId, checkStatus: { in: [...DICOM_HELD_STATUSES] } },
-      select: { s3Bucket: true, s3Key: true },
-    });
-    if (held.length === 0) return new Set();
-    const heldKeys = new Set(
-      held.map((o: { s3Bucket: string; s3Key: string }) => `${o.s3Bucket}\n${o.s3Key}`),
-    );
-    const rows = await this.prisma.client.distribution.findMany({
-      where: { datasetVersion: { datasetId }, storageBackend: 'S3' },
-      select: { id: true, s3Bucket: true, s3Key: true },
-    });
-    return new Set(
-      rows
-        .filter((r: { s3Bucket: string | null; s3Key: string | null }) =>
-          heldKeys.has(`${r.s3Bucket}\n${r.s3Key}`),
-        )
-        .map((r: { id: string }) => r.id),
-    );
+    const rows = await this.prisma.client.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT d.id
+      FROM catalog.dicom_objects o
+      JOIN catalog.distributions d
+        ON d.s3_bucket = o.s3_bucket AND d.s3_key = o.s3_key
+      JOIN catalog.dataset_versions v
+        ON v.id = d.dataset_version_id
+      WHERE o.dataset_id = ${datasetId}::uuid
+        AND o.check_status IN ('HELD', 'UNREADABLE')
+        AND v.dataset_id = ${datasetId}::uuid
+    `);
+    return new Set(rows.map((row) => row.id));
   }
 
   /**

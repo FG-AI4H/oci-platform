@@ -1,3 +1,4 @@
+import { withoutHeldDistributions } from '../../common/dicom-hold.js';
 import { createHash } from 'node:crypto';
 import {
   BadRequestException,
@@ -186,15 +187,33 @@ export class CatalogService {
 
     // ADR-0026: a held DICOM file is listed for its host and for
     // platform operators only. For anyone else it is absent from the
-    // file list, so neither its bytes nor its name are disclosed, and
-    // the counts the page derives from this list stay true.
-    if (!ownsRow && !groups.includes('admin') && ds.distributions.length > 0) {
-      const held = await this.repo.findHeldDistributionIds(ds.id);
-      if (held.size > 0) {
-        return { ...ds, distributions: ds.distributions.filter((d) => !held.has(d.id)) };
-      }
+    // file list and from the manifest, which names every uploaded
+    // file, so neither its bytes nor its name are disclosed and the
+    // counts the page derives from this response stay true.
+    if (groups.includes('admin')) return ds;
+    const held = await this.repo.findHeldDistributionIds(ds.id);
+    if (held.size === 0) return ds;
+    // Ownership by host id alone, the rule the download routes use: a
+    // host whose token no longer carries the `host` group must still
+    // see their own held files, or they would seem to have vanished.
+    if (user?.sub) {
+      const owner = ownsRow ? null : await this.repo.findIdAndHostBySlug(slug);
+      if (ownsRow || owner?.hostId === cognitoSubAsUuid(user.sub)) return ds;
     }
-    return ds;
+    return {
+      ...ds,
+      croissant: withoutHeldDistributions(ds.croissant, held) as typeof ds.croissant,
+      distributions: ds.distributions.filter((d) => !held.has(d.id)),
+    };
+  }
+
+  /**
+   * Ids of the distributions of a dataset whose stored file is held
+   * (ADR-0026). For sibling modules that serve a dataset's files or its
+   * manifest; the caller decides who is exempt.
+   */
+  heldDistributionIds(datasetId: string): Promise<Set<string>> {
+    return this.repo.findHeldDistributionIds(datasetId);
   }
 
   /** Returns the manifest as a plain JSON object (not nested in DatasetDetail). */

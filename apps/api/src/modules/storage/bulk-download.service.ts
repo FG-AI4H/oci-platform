@@ -1,3 +1,4 @@
+import { withoutHeldDistributions } from '../../common/dicom-hold.js';
 import { Readable } from 'node:stream';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import {
@@ -19,8 +20,6 @@ import {
 import { CatalogService } from '../catalog/catalog.service.js';
 import { PrismaService } from '../../prisma.service.js';
 import { S3ClientProvider } from './s3-client.js';
-import { objectKey } from './dicom-index.repository.js';
-import { DicomIndexService } from './dicom-index.service.js';
 import { StorageService } from './storage.service.js';
 
 /** One file that will end up in the archive. */
@@ -92,7 +91,6 @@ export class BulkDownloadService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(CatalogService) private readonly catalog: CatalogService,
     @Inject(StorageService) private readonly storage: StorageService,
-    @Inject(DicomIndexService) private readonly dicomIndex: DicomIndexService,
   ) {}
 
   /**
@@ -134,7 +132,7 @@ export class BulkDownloadService {
       });
     }
 
-    const rows = (await this.prisma.client.distribution.findMany({
+    const allRows = (await this.prisma.client.distribution.findMany({
       where: {
         datasetVersionId: version.id,
         storageBackend: 'S3',
@@ -162,11 +160,13 @@ export class BulkDownloadService {
     }>;
 
     // ADR-0026: held DICOM files go into the archive of their host and
-    // of platform operators only. For anyone else they are left out, the
-    // same way they are left out of the dataset's file list.
+    // of platform operators only. For anyone else they are left out of
+    // the archive, of the manifest inside it, and of every count in an
+    // error body, the same way the dataset's file list leaves them out.
     const held = this.storage.isHostOrOperator(dataset.hostId, args.user)
       ? new Set<string>()
-      : await this.dicomIndex.heldObjectKeys(owner.id);
+      : await this.catalog.heldDistributionIds(owner.id);
+    const rows = held.size === 0 ? allRows : allRows.filter((row) => !held.has(row.id));
 
     const taken = new Set<string>();
     const entries: BulkDownloadEntry[] = [];
@@ -178,7 +178,6 @@ export class BulkDownloadService {
       // guarantee both, but a half-written row must not become a
       // GetObject against `undefined`.
       if (!row.s3Bucket || !row.s3Key) continue;
-      if (held.has(objectKey(row.s3Bucket, row.s3Key))) continue;
 
       const derived =
         deriveDistributionFilename(row) ??
@@ -234,7 +233,7 @@ export class BulkDownloadService {
       slug: dataset.slug,
       datasetName: manifestString(version.croissant, 'name') ?? dataset.slug,
       version: version.version,
-      croissant: version.croissant,
+      croissant: withoutHeldDistributions(version.croissant, held),
       includeManifest: args.includeManifest,
       entries,
       totalBytes,

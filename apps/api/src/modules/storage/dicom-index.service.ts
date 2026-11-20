@@ -132,11 +132,6 @@ export class DicomIndexService {
     return this.repo.isHeld(s3Bucket, s3Key);
   }
 
-  /** The held files of a dataset, as keys built by `objectKey`. */
-  heldObjectKeys(datasetId: string): Promise<Set<string>> {
-    return this.repo.heldObjectKeys(datasetId);
-  }
-
   /**
    * One digest per distinct (attribute, value). Keyed, so that a short
    * value such as a name cannot be recovered from the database or the
