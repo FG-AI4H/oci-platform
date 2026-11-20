@@ -55,6 +55,7 @@ Last update: **2026-09-04** (correction, #489 — sealed container execution dow
 | DICOM: operator review of held files; viewer in the annotation and arbitration screens                                     | 🚧 Planned | [#674](https://github.com/FG-AI4H/oci-platform/issues/674)                                                                              |
 | CLI tool for TB-scale uploads                                                                                              | 🚧 Planned | [#88](https://github.com/FG-AI4H/oci-platform/issues/88)                                                                                |
 | External S3 mount for petabyte datasets                                                                                    | 🚧 Planned | [#89](https://github.com/FG-AI4H/oci-platform/issues/89)                                                                                |
+| Intake of an exam sample: arrival check, bulk upload, deletion runbook                                                     | 🚧 Partial | [#658](https://github.com/FG-AI4H/oci-platform/issues/658)                                                                              |
 
 ## Access governance
 

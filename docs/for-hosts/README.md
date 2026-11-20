@@ -17,6 +17,7 @@ The platform automates the bookkeeping (validation, federation, audit trail, aut
 | [DUO terms — choosing the right ones](./duo-terms-guide.md)     | You need to express what your dataset permits in machine-readable form.                                                       |
 | [Reviewing access requests](./reviewing-access-requests.md)     | The inbox flow: badges, the matcher's reasoning, decision notes.                                                              |
 | [Versioning](./versioning.md)                                   | When to bump major / minor / patch on a dataset.                                                                              |
+| [Providing a sample of exams](./providing-an-exam-sample.md)    | An institution lends a de-identified sample of exams for a limited time: our conditions (also in French).                     |
 
 ## Quick orientation
 
