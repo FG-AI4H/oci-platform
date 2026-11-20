@@ -2,10 +2,11 @@
   "name": "@oci/scripts",
   "version": "0.0.0",
   "private": true,
-  "description": "Operator scripts that need workspace dependencies (bulk account provisioning). Run with tsx; nothing here is built or deployed.",
+  "description": "Operator scripts that need workspace dependencies (bulk account provisioning, the radiology-workshop seed profile). Run with tsx; nothing here is built or deployed.",
   "type": "module",
   "scripts": {
     "provision-users": "tsx provision-users.ts",
+    "radiology-workshop": "tsx radiology-workshop.ts",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --passWithNoTests",
@@ -14,7 +15,10 @@
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1041.0",
+    "@oci/croissant": "workspace:*",
     "@oci/shared-types": "workspace:*",
+    "prettier": "^3.8.3",
+    "sharp": "^0.35.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {

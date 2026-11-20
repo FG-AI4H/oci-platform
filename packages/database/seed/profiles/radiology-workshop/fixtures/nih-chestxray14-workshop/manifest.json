@@ -1,0 +1,1995 @@
+{
+  "@context": {
+    "@vocab": "https://schema.org/",
+    "sc": "https://schema.org/",
+    "cr": "http://mlcommons.org/croissant/",
+    "rai": "http://mlcommons.org/croissant/RAI/",
+    "prov": "http://www.w3.org/ns/prov#",
+    "odrl": "http://www.w3.org/ns/odrl/2/",
+    "dct": "http://purl.org/dc/terms/",
+    "bio": "https://oci.ai4h.net/biocroissant/v0.1#"
+  },
+  "@type": "sc:Dataset",
+  "dct:conformsTo": "http://mlcommons.org/croissant/1.1",
+  "name": "STAND-IN (synthetic) for NIH ChestX-ray14: workshop slice (200 chest radiographs)",
+  "description": "SYNTHETIC STAND-IN, NOT DIAGNOSTIC. These are procedurally generated placeholder images, not radiographs: no NIH image is included. They stand in for the slice described below until the real files have been prepared, and the source and terms describe the dataset that will replace them. A 200-image slice of the NIH ChestX-ray14 collection, prepared for the December 2026 radiology workshop: frontal chest radiographs of adults, one per patient, balanced by sex and age band, at most 1024 px on the longest side. The reference labels of the evaluation task are held by the evaluation service and are not published. The reference label (airspace opacity present or absent) is invented for the stand-in and has no relation to the placeholder images. Source: https://nihcc.app.box.com/v/ChestXray-NIHCC. The images are provided by the NIH Clinical Center, which is the data provider. Cite: Xiaosong Wang, Yifan Peng, Le Lu, Zhiyong Lu, Mohammadhadi Bagheri, Ronald M. Summers. ChestX-ray8: Hospital-scale Chest X-ray Database and Benchmarks on Weakly-Supervised Classification and Localization of Common Thorax Diseases. IEEE CVPR 2017, pp. 3462-3471.",
+  "url": "https://nihcc.app.box.com/v/ChestXray-NIHCC",
+  "sameAs": "https://doi.org/10.1109/CVPR.2017.369",
+  "license": "https://nihcc.app.box.com/v/ChestXray-NIHCC",
+  "dct:rights": "PLACEHOLDER, TO BE REPLACED: the README shipped in the NIH download has not been read yet, so its text is not recorded here. As reported by third parties quoting NIH (Google Cloud public-dataset page, read on 20 November 2026): no restrictions on the use of the images, with three attribution requirements, namely a link to the NIH download site, a citation of the CVPR 2017 paper and an acknowledgement that the NIH Clinical Center is the data provider. This field becomes \"README text recorded on <date>\" once the README has been read.",
+  "version": "1.0.0",
+  "datePublished": "2026-11-20",
+  "creator": [
+    { "@type": "sc:Organization", "name": "National Institutes of Health Clinical Center" }
+  ],
+  "publisher": {
+    "@type": "sc:Organization",
+    "name": "OCI Platform (GI-AI4H): workshop slice of NIH ChestX-ray14"
+  },
+  "keywords": ["chest x-ray", "radiology", "binary finding", "subgroup analysis", "workshop"],
+  "citeAs": "@inproceedings{wang2017chestxray8, title={ChestX-ray8: Hospital-scale Chest X-ray Database and Benchmarks on Weakly-Supervised Classification and Localization of Common Thorax Diseases}, author={Wang, Xiaosong and Peng, Yifan and Lu, Le and Lu, Zhiyong and Bagheri, Mohammadhadi and Summers, Ronald M.}, booktitle={IEEE Conference on Computer Vision and Pattern Recognition (CVPR)}, pages={3462--3471}, year={2017}}",
+  "creditText": "The images are provided by the NIH Clinical Center, which is the data provider.",
+  "distribution": [
+    {
+      "@id": "75e8db79-006f-5710-a266-8c041dde3a42",
+      "@type": "cr:FileObject",
+      "name": "metadata.csv",
+      "description": "Image identifier, sex and age band of every image of the slice.",
+      "encodingFormat": "text/csv",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/75e8db79-006f-5710-a266-8c041dde3a42/download",
+      "contentSize": "5088 B",
+      "sha256": "907e0def3af99c59381c8d0e92a1fae45d1efc57981ab9c5e2dd8542299a8d22"
+    },
+    {
+      "@id": "37ffc812-40bf-50e9-805d-68fb5a325327",
+      "@type": "cr:FileObject",
+      "name": "model-a.csv",
+      "description": "Teaching file: a constructed predictions file to submit to the evaluation task.",
+      "encodingFormat": "text/csv",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/37ffc812-40bf-50e9-805d-68fb5a325327/download",
+      "contentSize": "4014 B",
+      "sha256": "d45a06b91f963eee93af9c9273dfef67e0b15fd54cf13f38e27733d43d1876fe"
+    },
+    {
+      "@id": "94292f20-4d68-5f3e-8c0e-4a9be4f2ac20",
+      "@type": "cr:FileObject",
+      "name": "model-b.csv",
+      "description": "Teaching file: a second constructed predictions file to submit and compare with the first.",
+      "encodingFormat": "text/csv",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/94292f20-4d68-5f3e-8c0e-4a9be4f2ac20/download",
+      "contentSize": "4014 B",
+      "sha256": "95c2cc285d5e72a468c28d825ff1da2242564caf4ff7102d812a74aec6014bed"
+    },
+    {
+      "@id": "e62ee93b-4aec-5c66-ab9b-ee70515c979e",
+      "@type": "cr:FileObject",
+      "name": "model-c.csv",
+      "description": "Teaching file: a predictions file with mistakes in it, to try the format check.",
+      "encodingFormat": "text/csv",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/e62ee93b-4aec-5c66-ab9b-ee70515c979e/download",
+      "contentSize": "3894 B",
+      "sha256": "442f4b8fc561987c2e8a8a480197acb840cc60a834fcd4a312753aec07ec2b23"
+    },
+    {
+      "@id": "21d5dbc0-a72f-5a83-a3ae-b88597b6f475",
+      "@type": "cr:FileObject",
+      "name": "standin_00002_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/21d5dbc0-a72f-5a83-a3ae-b88597b6f475/download",
+      "contentSize": "65865 B",
+      "sha256": "d726036efb64af20edc62c88f368ffe7d27f249e9f0ee40e8438f3560574b83f"
+    },
+    {
+      "@id": "84dbd426-59cd-58f5-9643-2106d359bad2",
+      "@type": "cr:FileObject",
+      "name": "standin_00005_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/84dbd426-59cd-58f5-9643-2106d359bad2/download",
+      "contentSize": "65865 B",
+      "sha256": "2d61179cd7d8d55ca97012630ecc2e8936ffdf2750a38d71b695d510f00b2840"
+    },
+    {
+      "@id": "899e3bc6-050b-564b-87b6-f6619017a207",
+      "@type": "cr:FileObject",
+      "name": "standin_00012_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/899e3bc6-050b-564b-87b6-f6619017a207/download",
+      "contentSize": "65865 B",
+      "sha256": "94709d7ccd884a0690d4bcd3e3db9f4d8576414d032f7e57a5c9d1a6ae21d66f"
+    },
+    {
+      "@id": "82171bef-70b6-5f0a-8259-725b97572b20",
+      "@type": "cr:FileObject",
+      "name": "standin_00014_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/82171bef-70b6-5f0a-8259-725b97572b20/download",
+      "contentSize": "65865 B",
+      "sha256": "e6fb926d832bf4ef7ee15b14c7576927ab5b1a85a4e4aee0e89d0fa356e13f06"
+    },
+    {
+      "@id": "79ddf9ed-19bd-5078-9dcd-3e12bc2b41ed",
+      "@type": "cr:FileObject",
+      "name": "standin_00015_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/79ddf9ed-19bd-5078-9dcd-3e12bc2b41ed/download",
+      "contentSize": "65865 B",
+      "sha256": "faf99b025003105d6e6e91a847e31c8ede9b0c34836428b0ca4aa9bcb943753a"
+    },
+    {
+      "@id": "f10bf0a4-b6df-5cbf-8ba7-08bfa4b7a52c",
+      "@type": "cr:FileObject",
+      "name": "standin_00019_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/f10bf0a4-b6df-5cbf-8ba7-08bfa4b7a52c/download",
+      "contentSize": "65865 B",
+      "sha256": "9fe7bf2cca042bf4150d69605dd3c77763706da3bf9c185863e4b3fce3a77da4"
+    },
+    {
+      "@id": "b46b23d7-b029-5973-b5bd-6548dd9ce7d6",
+      "@type": "cr:FileObject",
+      "name": "standin_00022_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/b46b23d7-b029-5973-b5bd-6548dd9ce7d6/download",
+      "contentSize": "65865 B",
+      "sha256": "20795490861598c173745e21e83d4654233387c48c164c728b41a405fb265fba"
+    },
+    {
+      "@id": "38c245e2-1ff5-5eff-9993-01658fb674c2",
+      "@type": "cr:FileObject",
+      "name": "standin_00027_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/38c245e2-1ff5-5eff-9993-01658fb674c2/download",
+      "contentSize": "65865 B",
+      "sha256": "2e733ebdfa8b5b7edbf7d38f83830d41b52b4e6b1c5fc7a346e3ddb379f4536c"
+    },
+    {
+      "@id": "a196081d-b22b-54e0-b3af-4673519d8050",
+      "@type": "cr:FileObject",
+      "name": "standin_00032_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/a196081d-b22b-54e0-b3af-4673519d8050/download",
+      "contentSize": "65865 B",
+      "sha256": "60351a8eb2baf45c500d88e7db4727449f91c74f13ae318b892f837a15d644fd"
+    },
+    {
+      "@id": "f1c47ecf-e2bd-5187-93b3-0b05733314d1",
+      "@type": "cr:FileObject",
+      "name": "standin_00041_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/f1c47ecf-e2bd-5187-93b3-0b05733314d1/download",
+      "contentSize": "65865 B",
+      "sha256": "ffde9c0693de50dc49fc06611306e54f64956c5db342a0de7bb02ab0c860c4a8"
+    },
+    {
+      "@id": "87f6bd50-2368-50e8-92ae-cb98bd646355",
+      "@type": "cr:FileObject",
+      "name": "standin_00044_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/87f6bd50-2368-50e8-92ae-cb98bd646355/download",
+      "contentSize": "65865 B",
+      "sha256": "48950d6cde10c01f9802d690c265d31fb7078dc465b5d5a787436183cf376db2"
+    },
+    {
+      "@id": "dd529c0f-157d-53b5-9d17-dc58b0dc7052",
+      "@type": "cr:FileObject",
+      "name": "standin_00056_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/dd529c0f-157d-53b5-9d17-dc58b0dc7052/download",
+      "contentSize": "65865 B",
+      "sha256": "79c2ef9fcbfd0b3cba11f7cf72601ae9b9fbd3fa6c4782ce114093a79fbfae0a"
+    },
+    {
+      "@id": "959de8e9-7b5c-5b32-92e1-ae572a4ab4d1",
+      "@type": "cr:FileObject",
+      "name": "standin_00061_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/959de8e9-7b5c-5b32-92e1-ae572a4ab4d1/download",
+      "contentSize": "65865 B",
+      "sha256": "2656a239834b9437e1e44fc9d4a2fd46d34cc2de09579746a17de08ce761bc52"
+    },
+    {
+      "@id": "c0e9be87-6aa9-58c9-b28d-b4f2c13d61dc",
+      "@type": "cr:FileObject",
+      "name": "standin_00072_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/c0e9be87-6aa9-58c9-b28d-b4f2c13d61dc/download",
+      "contentSize": "65865 B",
+      "sha256": "6bc50e1548f73cbb2a99239c87a2876aa287e2a28c55b2552913c8b04a1850b4"
+    },
+    {
+      "@id": "0c74db4f-0ba5-5d4f-ae15-8d167b310ca6",
+      "@type": "cr:FileObject",
+      "name": "standin_00073_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/0c74db4f-0ba5-5d4f-ae15-8d167b310ca6/download",
+      "contentSize": "65865 B",
+      "sha256": "7fd7b3ec46e5cacc1dcd722714efdbf17d5287e990620db226d5df632c7e4f73"
+    },
+    {
+      "@id": "1ffbd36b-dd45-5dee-ad60-6a5735b22f61",
+      "@type": "cr:FileObject",
+      "name": "standin_00076_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/1ffbd36b-dd45-5dee-ad60-6a5735b22f61/download",
+      "contentSize": "65865 B",
+      "sha256": "1a15b7105c6dd5cc18c269dee1b78be46dc990cd817b8796ec222dca7ef1070e"
+    },
+    {
+      "@id": "cc85c7c3-288e-5f49-b8a9-f8c5f23a70eb",
+      "@type": "cr:FileObject",
+      "name": "standin_00109_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/cc85c7c3-288e-5f49-b8a9-f8c5f23a70eb/download",
+      "contentSize": "65865 B",
+      "sha256": "34440635aa773ca2034c2f60105a981c312acba538aebb3e383a38907cbafd79"
+    },
+    {
+      "@id": "dd48460e-97c4-5fae-8905-2c300e06a36f",
+      "@type": "cr:FileObject",
+      "name": "standin_00119_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/dd48460e-97c4-5fae-8905-2c300e06a36f/download",
+      "contentSize": "65865 B",
+      "sha256": "ef9fe0aa0f38f351f92f0b9e05303142022b5e24a486b8e8cb978213463d47b0"
+    },
+    {
+      "@id": "6d3d6e08-3cd5-5698-a583-b4c5f56c5038",
+      "@type": "cr:FileObject",
+      "name": "standin_00120_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/6d3d6e08-3cd5-5698-a583-b4c5f56c5038/download",
+      "contentSize": "65865 B",
+      "sha256": "2db127b58b59276f154b6d85a57d52ee94c3efb9dc73e2d9654adab52dab2203"
+    },
+    {
+      "@id": "8b5baed9-60cb-5f5c-9d05-37b982de7509",
+      "@type": "cr:FileObject",
+      "name": "standin_00125_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/8b5baed9-60cb-5f5c-9d05-37b982de7509/download",
+      "contentSize": "65865 B",
+      "sha256": "380c98c59328aa1ee50ec73185c234e450d7dcd8ad05770030615d7b479bb2ff"
+    },
+    {
+      "@id": "d87c29b8-476c-5196-8330-52416e37a31e",
+      "@type": "cr:FileObject",
+      "name": "standin_00126_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/d87c29b8-476c-5196-8330-52416e37a31e/download",
+      "contentSize": "65865 B",
+      "sha256": "2a60bf04d008d39555651288017e653e4890f1db4e058956d9a2e41046e29108"
+    },
+    {
+      "@id": "c70c94ed-27b0-5a69-bec5-f9108760911a",
+      "@type": "cr:FileObject",
+      "name": "standin_00127_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/c70c94ed-27b0-5a69-bec5-f9108760911a/download",
+      "contentSize": "65865 B",
+      "sha256": "bbbaad0bf51a9ae11a04fb5fce947a2d21ff1ee82775fe66d8276af5437c6ba1"
+    },
+    {
+      "@id": "5354177d-916d-5a7e-9d58-c02f2020b3d3",
+      "@type": "cr:FileObject",
+      "name": "standin_00128_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/5354177d-916d-5a7e-9d58-c02f2020b3d3/download",
+      "contentSize": "65865 B",
+      "sha256": "4721bbf7fc83aa695c0d4d977552da96b00eef5d33621893a959703fdf56c486"
+    },
+    {
+      "@id": "5a81a651-db4a-53e0-9bbd-e9e92e80b56c",
+      "@type": "cr:FileObject",
+      "name": "standin_00133_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/5a81a651-db4a-53e0-9bbd-e9e92e80b56c/download",
+      "contentSize": "65865 B",
+      "sha256": "c66738f34162088d02c4a13f22ac517b05964c7519a79ff4a8cf679afa7908a4"
+    },
+    {
+      "@id": "6b386432-2687-5a24-879c-cd884a5b16d7",
+      "@type": "cr:FileObject",
+      "name": "standin_00136_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/6b386432-2687-5a24-879c-cd884a5b16d7/download",
+      "contentSize": "65865 B",
+      "sha256": "1d03dcabc9347cf394fb7672e1a3197cbac6cd7437d5e81213d7a91ff5cdcae6"
+    },
+    {
+      "@id": "1f2f5908-ce72-5a5d-9fa3-de420c4cc007",
+      "@type": "cr:FileObject",
+      "name": "standin_00139_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/1f2f5908-ce72-5a5d-9fa3-de420c4cc007/download",
+      "contentSize": "65865 B",
+      "sha256": "23a9b38569bb6a7a95fea4a8911ed1460561b53949b9cf2498e551ac573222a3"
+    },
+    {
+      "@id": "df454ae1-dc07-52f5-8ae7-751f40f8b59d",
+      "@type": "cr:FileObject",
+      "name": "standin_00148_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/df454ae1-dc07-52f5-8ae7-751f40f8b59d/download",
+      "contentSize": "65865 B",
+      "sha256": "4c4d318851a9954febca1c890b4b54562f671c79b75c7b99d09e078f30b13fdd"
+    },
+    {
+      "@id": "680540c4-60c8-5a1b-9715-2c1748870923",
+      "@type": "cr:FileObject",
+      "name": "standin_00160_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/680540c4-60c8-5a1b-9715-2c1748870923/download",
+      "contentSize": "65865 B",
+      "sha256": "1e870b56608cfb308164a25c266594fb15810af31c3a39d525c21d21d31e1197"
+    },
+    {
+      "@id": "c4d07729-3c51-5367-aae3-5a8013ffddc7",
+      "@type": "cr:FileObject",
+      "name": "standin_00180_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/c4d07729-3c51-5367-aae3-5a8013ffddc7/download",
+      "contentSize": "65865 B",
+      "sha256": "d94e443f76cf86c5bec0b8394a241edf3d7d1620412713bcf78828fe17da5f6d"
+    },
+    {
+      "@id": "857ebbc8-aec6-5648-842a-fc348223f8ad",
+      "@type": "cr:FileObject",
+      "name": "standin_00192_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/857ebbc8-aec6-5648-842a-fc348223f8ad/download",
+      "contentSize": "65865 B",
+      "sha256": "220e98edf2d55901ad5ba1f1294aefa34b22401bdffa5ace254893161ddfc487"
+    },
+    {
+      "@id": "be976079-bfe9-575f-836f-2ab1a7eeb7e8",
+      "@type": "cr:FileObject",
+      "name": "standin_00195_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/be976079-bfe9-575f-836f-2ab1a7eeb7e8/download",
+      "contentSize": "65865 B",
+      "sha256": "f3ad5d0588b5ce0fac8c1d25db4b7f283e340952ab121213fe83779621f622d6"
+    },
+    {
+      "@id": "d9dc5fcc-4a1a-5823-be6f-6807e24bcdf8",
+      "@type": "cr:FileObject",
+      "name": "standin_00216_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/d9dc5fcc-4a1a-5823-be6f-6807e24bcdf8/download",
+      "contentSize": "65865 B",
+      "sha256": "55640cfba272257659164d11854e6344d542e90d9952e2b516329bfc47c41e87"
+    },
+    {
+      "@id": "50c5521c-242e-5845-be1c-e66b85fc2768",
+      "@type": "cr:FileObject",
+      "name": "standin_00219_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/50c5521c-242e-5845-be1c-e66b85fc2768/download",
+      "contentSize": "65865 B",
+      "sha256": "a81872a9d3ec9ff8b55e634dc899db3840136baf547a8448b6be548d202fadd8"
+    },
+    {
+      "@id": "03e82952-2fbf-506c-8ea0-d15186ee3bc7",
+      "@type": "cr:FileObject",
+      "name": "standin_00227_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/03e82952-2fbf-506c-8ea0-d15186ee3bc7/download",
+      "contentSize": "65865 B",
+      "sha256": "5c6801213a9a6731a4ef4438ecf51e111f61b64db42733fbd2734357724cd638"
+    },
+    {
+      "@id": "995ce8c9-79aa-510a-820b-dd8d6150f741",
+      "@type": "cr:FileObject",
+      "name": "standin_00229_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/995ce8c9-79aa-510a-820b-dd8d6150f741/download",
+      "contentSize": "65865 B",
+      "sha256": "35d771c6293412d080edc5c750f4912416ce546875c98a61e60959a0528ca1f8"
+    },
+    {
+      "@id": "1a8f3452-53cd-50f3-b16b-f4b97f9455d3",
+      "@type": "cr:FileObject",
+      "name": "standin_00247_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/1a8f3452-53cd-50f3-b16b-f4b97f9455d3/download",
+      "contentSize": "65865 B",
+      "sha256": "62210b9a55ca229d5ab44c5f03ba3b0e9d9f0991e0dfc84645224ec57700892e"
+    },
+    {
+      "@id": "2842ad3c-5600-567d-87dd-94a47bc00f5c",
+      "@type": "cr:FileObject",
+      "name": "standin_00251_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2842ad3c-5600-567d-87dd-94a47bc00f5c/download",
+      "contentSize": "65865 B",
+      "sha256": "36d8c2570d06b0e3362b7e0363ef36bf13e7a312e8121af508c776540df17229"
+    },
+    {
+      "@id": "a0039081-6a57-52ee-b865-feb63faee7db",
+      "@type": "cr:FileObject",
+      "name": "standin_00253_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/a0039081-6a57-52ee-b865-feb63faee7db/download",
+      "contentSize": "65865 B",
+      "sha256": "5983a4d46c7d7b6ccaaf6080e0b3b55ac1e4a257f845085dddfb594e45a3b520"
+    },
+    {
+      "@id": "b19b758f-452b-5347-97d7-6f50e4b1f171",
+      "@type": "cr:FileObject",
+      "name": "standin_00268_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/b19b758f-452b-5347-97d7-6f50e4b1f171/download",
+      "contentSize": "65865 B",
+      "sha256": "9922bb08af29be4276ecb8c3da9bb1c70b5a77b99538c613f67a8b02a54d37fb"
+    },
+    {
+      "@id": "4661f6f8-4e58-5e73-88ae-98d9c7830172",
+      "@type": "cr:FileObject",
+      "name": "standin_00278_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/4661f6f8-4e58-5e73-88ae-98d9c7830172/download",
+      "contentSize": "65865 B",
+      "sha256": "8263651b46708c3daf2e6b76d906b3d94e2d9becfe76d5ec7a4725f17529a715"
+    },
+    {
+      "@id": "8c7e5576-770b-586e-8984-6d6e1d161129",
+      "@type": "cr:FileObject",
+      "name": "standin_00283_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/8c7e5576-770b-586e-8984-6d6e1d161129/download",
+      "contentSize": "65865 B",
+      "sha256": "97d223e63a6afa7709fc7774b599b1700b5644b8aaf87ecf3f27fe827961897d"
+    },
+    {
+      "@id": "1deced42-8cf9-5af4-91d4-683451658135",
+      "@type": "cr:FileObject",
+      "name": "standin_00296_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/1deced42-8cf9-5af4-91d4-683451658135/download",
+      "contentSize": "65865 B",
+      "sha256": "e5ce9d258dbf3a034cb0e1239ce1d6432d5a7d40cb875a7728eff899f5531e4e"
+    },
+    {
+      "@id": "444ead78-1d75-5752-b967-d0da3f86025f",
+      "@type": "cr:FileObject",
+      "name": "standin_00308_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/444ead78-1d75-5752-b967-d0da3f86025f/download",
+      "contentSize": "65865 B",
+      "sha256": "82aeb2e417cbb6014bc2af23850527fdb74b6719de2a2c9af2ace2a9bceb6e02"
+    },
+    {
+      "@id": "af292df8-9f8e-51b2-a761-f4f8302ec2c1",
+      "@type": "cr:FileObject",
+      "name": "standin_00311_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/af292df8-9f8e-51b2-a761-f4f8302ec2c1/download",
+      "contentSize": "65865 B",
+      "sha256": "104e0f85fff97dd82fe456807e7af7337a844ac37e0978cbe298e7017042ced7"
+    },
+    {
+      "@id": "21f7a19a-d888-502e-a095-256819fdf8ee",
+      "@type": "cr:FileObject",
+      "name": "standin_00318_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/21f7a19a-d888-502e-a095-256819fdf8ee/download",
+      "contentSize": "65865 B",
+      "sha256": "772706b4f54ccbe5d024ebcbc30f755cb2c53fdbd986c3f85721c17ea4446952"
+    },
+    {
+      "@id": "fde4b097-1feb-56ba-a59a-41dd4eaaf9b4",
+      "@type": "cr:FileObject",
+      "name": "standin_00325_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/fde4b097-1feb-56ba-a59a-41dd4eaaf9b4/download",
+      "contentSize": "65865 B",
+      "sha256": "fdb3f9c93b415b572293da4eaf29ede38fc87434f3fbe2829d931c5274b2ef34"
+    },
+    {
+      "@id": "70053da5-562c-5a1b-bb7c-a9fc01c14c25",
+      "@type": "cr:FileObject",
+      "name": "standin_00326_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/70053da5-562c-5a1b-bb7c-a9fc01c14c25/download",
+      "contentSize": "65865 B",
+      "sha256": "5b5aeaa481fd05cacf17e3fae3ad2abc39785608f6eb39d94ee3f7c8401e9333"
+    },
+    {
+      "@id": "77acdb6b-2486-53cb-ac68-522bef20c2b4",
+      "@type": "cr:FileObject",
+      "name": "standin_00340_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/77acdb6b-2486-53cb-ac68-522bef20c2b4/download",
+      "contentSize": "65865 B",
+      "sha256": "ca8da3db0aadfa097f90682ef2ad26681f9b3648443e9a86183624ec0ddb268d"
+    },
+    {
+      "@id": "7be5179b-8e45-5d1c-92c2-a93274bc7e01",
+      "@type": "cr:FileObject",
+      "name": "standin_00343_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/7be5179b-8e45-5d1c-92c2-a93274bc7e01/download",
+      "contentSize": "65865 B",
+      "sha256": "abf2d79c2d25a6469268d7568d7a54bf4a882fd496efa4f9925c200ad5d16a97"
+    },
+    {
+      "@id": "aa3af4e3-9443-51db-8d9b-75c21df956f2",
+      "@type": "cr:FileObject",
+      "name": "standin_00355_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/aa3af4e3-9443-51db-8d9b-75c21df956f2/download",
+      "contentSize": "65865 B",
+      "sha256": "1b4f46d030e9c6988382d6e95a1db4cfbbd002cbb41c61c5b0331c0d3b09c49d"
+    },
+    {
+      "@id": "cc6fc0c8-3ac0-5f15-8bb2-a27b5a134bcd",
+      "@type": "cr:FileObject",
+      "name": "standin_00367_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/cc6fc0c8-3ac0-5f15-8bb2-a27b5a134bcd/download",
+      "contentSize": "65865 B",
+      "sha256": "36256dd35189d93c4e47d06e5a1100791edb01806ebfae28ec7bdb75fc9f8a6c"
+    },
+    {
+      "@id": "1c1f0ede-839d-5d26-b83c-ecb56303837a",
+      "@type": "cr:FileObject",
+      "name": "standin_00369_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/1c1f0ede-839d-5d26-b83c-ecb56303837a/download",
+      "contentSize": "65865 B",
+      "sha256": "f7efefb4fe3ac508b91efaf0575d4b2bbd9229e93e29c5e989b41caaac6a9372"
+    },
+    {
+      "@id": "2e8b2fde-20a0-5fbc-bea4-9ce1b5e575f3",
+      "@type": "cr:FileObject",
+      "name": "standin_00370_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2e8b2fde-20a0-5fbc-bea4-9ce1b5e575f3/download",
+      "contentSize": "65865 B",
+      "sha256": "bee6fc4bc18f9055372886f4ebdb42b46e6a80a3292ec09a2186b6f588f11474"
+    },
+    {
+      "@id": "ce0998a2-80e4-53c0-a54e-01b427438319",
+      "@type": "cr:FileObject",
+      "name": "standin_00373_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/ce0998a2-80e4-53c0-a54e-01b427438319/download",
+      "contentSize": "65865 B",
+      "sha256": "9269d9df92b64a249d76e6fb6f100d2dc672078fe30d49ada9c73c1c71d767f7"
+    },
+    {
+      "@id": "58833c61-c69c-53c0-8d66-f9f5549dea8b",
+      "@type": "cr:FileObject",
+      "name": "standin_00379_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/58833c61-c69c-53c0-8d66-f9f5549dea8b/download",
+      "contentSize": "65865 B",
+      "sha256": "ff6175f4301bdf0d05c81b3f21550987ef95f96bab22395b1040312130ec9ac0"
+    },
+    {
+      "@id": "39cdf487-a021-5d48-b37d-0b9924913abf",
+      "@type": "cr:FileObject",
+      "name": "standin_00381_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/39cdf487-a021-5d48-b37d-0b9924913abf/download",
+      "contentSize": "65865 B",
+      "sha256": "65ee7e047457dce7bf859bc308813b75119d4ee804fc0444fe09af8d0074a50b"
+    },
+    {
+      "@id": "488d7bf1-efde-5384-b152-f139c341f876",
+      "@type": "cr:FileObject",
+      "name": "standin_00394_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/488d7bf1-efde-5384-b152-f139c341f876/download",
+      "contentSize": "65865 B",
+      "sha256": "2eee1a1fa74aeecb17bb176c02d23bfb3293dee3677c85b23413f0ca8e15b3fa"
+    },
+    {
+      "@id": "da886b87-42b5-574a-96aa-d9858b0ef3c7",
+      "@type": "cr:FileObject",
+      "name": "standin_00399_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/da886b87-42b5-574a-96aa-d9858b0ef3c7/download",
+      "contentSize": "65865 B",
+      "sha256": "bf9a981ad7fa396a265737770e5cb62ef64c9dad4c08c357f1c493babb7b70cf"
+    },
+    {
+      "@id": "0534f952-6953-52ca-a466-c8a93d152ec9",
+      "@type": "cr:FileObject",
+      "name": "standin_00400_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/0534f952-6953-52ca-a466-c8a93d152ec9/download",
+      "contentSize": "65865 B",
+      "sha256": "3fad89ec78de3421026dee36657d1dbfbefcb3f83c13b11756f6f7e4e0896c3e"
+    },
+    {
+      "@id": "7d567d4b-9649-55f1-a837-434590bbcde2",
+      "@type": "cr:FileObject",
+      "name": "standin_00408_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/7d567d4b-9649-55f1-a837-434590bbcde2/download",
+      "contentSize": "65865 B",
+      "sha256": "4180f113f44ca74a71c20be5a5378d933289717b7ca010dedc30d725e55983bd"
+    },
+    {
+      "@id": "6104b9b6-af29-56f9-a37a-1b2654554ddd",
+      "@type": "cr:FileObject",
+      "name": "standin_00417_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/6104b9b6-af29-56f9-a37a-1b2654554ddd/download",
+      "contentSize": "65865 B",
+      "sha256": "e6618f8131329a35e00995d7faa20ab745128aa59e468d001cf7d794ffb133a4"
+    },
+    {
+      "@id": "01a03213-3d2d-5daf-b841-0ecaa5b1decd",
+      "@type": "cr:FileObject",
+      "name": "standin_00421_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/01a03213-3d2d-5daf-b841-0ecaa5b1decd/download",
+      "contentSize": "65865 B",
+      "sha256": "db91650a753c11798dbdacc9ebe138f8346a8a7d89027e37f5f3da1ce94008dd"
+    },
+    {
+      "@id": "9b59e486-5086-53a5-8fa5-21534e2cddb1",
+      "@type": "cr:FileObject",
+      "name": "standin_00432_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/9b59e486-5086-53a5-8fa5-21534e2cddb1/download",
+      "contentSize": "65865 B",
+      "sha256": "4284b21454d96791c28303bc5d85e1cd4279a8e954605fb5905f9bfcf14f5ebc"
+    },
+    {
+      "@id": "7e102f15-dd58-56dd-856c-22a8293b0b71",
+      "@type": "cr:FileObject",
+      "name": "standin_00455_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/7e102f15-dd58-56dd-856c-22a8293b0b71/download",
+      "contentSize": "65865 B",
+      "sha256": "caf4a88360b770386d0af19401dd6b74791a8cae591c62a8c749311ea359d6d3"
+    },
+    {
+      "@id": "0e1f1c7d-03f8-5b59-bf02-8ee62da7f0c7",
+      "@type": "cr:FileObject",
+      "name": "standin_00457_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/0e1f1c7d-03f8-5b59-bf02-8ee62da7f0c7/download",
+      "contentSize": "65865 B",
+      "sha256": "b33c2d0694235df6763bc4c8c7fb9d1739bbb6a8581849194933d4f56141cb32"
+    },
+    {
+      "@id": "419cd508-50ad-584c-ac04-c5196aa07261",
+      "@type": "cr:FileObject",
+      "name": "standin_00480_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/419cd508-50ad-584c-ac04-c5196aa07261/download",
+      "contentSize": "65865 B",
+      "sha256": "29faf621aca751a1e098e83495f3a6a61c43d6d9eaa1a20977dba9b772c5eca6"
+    },
+    {
+      "@id": "14213ac5-eba6-59bf-a7d9-69579e4ad991",
+      "@type": "cr:FileObject",
+      "name": "standin_00495_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/14213ac5-eba6-59bf-a7d9-69579e4ad991/download",
+      "contentSize": "65865 B",
+      "sha256": "cf0b37e8e3ef5fbf437b720cffe6e81bf31cca383a5f979ebd1c1559928bd394"
+    },
+    {
+      "@id": "bf14673e-ab52-5b09-8595-3e2c8636ead0",
+      "@type": "cr:FileObject",
+      "name": "standin_00500_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/bf14673e-ab52-5b09-8595-3e2c8636ead0/download",
+      "contentSize": "65865 B",
+      "sha256": "8900636ab881f3109234c4fc3620c4cc64b2e9d2fb22fd39a06edd789e1a4706"
+    },
+    {
+      "@id": "4d2545e3-323f-5ab6-b8c3-1c3ee8c5a6e0",
+      "@type": "cr:FileObject",
+      "name": "standin_00501_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/4d2545e3-323f-5ab6-b8c3-1c3ee8c5a6e0/download",
+      "contentSize": "65865 B",
+      "sha256": "bf5921434c3ffcce90b7042ef6637080c7404182857601e92727c73793132c74"
+    },
+    {
+      "@id": "ff0a8b4a-8c1f-5b23-b668-02c00e06d3c4",
+      "@type": "cr:FileObject",
+      "name": "standin_00502_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/ff0a8b4a-8c1f-5b23-b668-02c00e06d3c4/download",
+      "contentSize": "65865 B",
+      "sha256": "02151ad11f53de406a3def77a7cb27a5ec218da8a4dc1e724bb78782db176d1c"
+    },
+    {
+      "@id": "cf8d0053-7662-5163-a894-fc5247aaf5c6",
+      "@type": "cr:FileObject",
+      "name": "standin_00509_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/cf8d0053-7662-5163-a894-fc5247aaf5c6/download",
+      "contentSize": "65865 B",
+      "sha256": "a82247fb6e429fd070fa1f1bc2159363e2125c22a5e12044d737abc92fc59a67"
+    },
+    {
+      "@id": "98c38a38-98a7-5a4b-8a10-e45c7298bb55",
+      "@type": "cr:FileObject",
+      "name": "standin_00522_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/98c38a38-98a7-5a4b-8a10-e45c7298bb55/download",
+      "contentSize": "65865 B",
+      "sha256": "5ce3079f3254612fbb46bd39198ee799e3026763b7efc32f5be9da553f9ef22e"
+    },
+    {
+      "@id": "4e62eac2-beea-5a5c-9530-07f502260ff9",
+      "@type": "cr:FileObject",
+      "name": "standin_00535_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/4e62eac2-beea-5a5c-9530-07f502260ff9/download",
+      "contentSize": "65865 B",
+      "sha256": "5d05cfd73b3d2f43eed956dece28b6da342f5e76b88a878aa443f52a43c21de0"
+    },
+    {
+      "@id": "192058a4-acaa-5be6-8def-13533cd26b8f",
+      "@type": "cr:FileObject",
+      "name": "standin_00542_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/192058a4-acaa-5be6-8def-13533cd26b8f/download",
+      "contentSize": "65865 B",
+      "sha256": "71e671721f40c279f07dfe4cd0cc3bdac3551832ea44ec4a26647616a5c97fb3"
+    },
+    {
+      "@id": "6bd73ef9-d9ab-5715-80eb-c09f294cddce",
+      "@type": "cr:FileObject",
+      "name": "standin_00555_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/6bd73ef9-d9ab-5715-80eb-c09f294cddce/download",
+      "contentSize": "65865 B",
+      "sha256": "1c300846c26d3c4445110b319e71b5f679151aebf6cd5a893f356a93a2bea617"
+    },
+    {
+      "@id": "85943fbb-34be-5fcf-bbd1-f0ee772d1ae0",
+      "@type": "cr:FileObject",
+      "name": "standin_00556_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/85943fbb-34be-5fcf-bbd1-f0ee772d1ae0/download",
+      "contentSize": "65865 B",
+      "sha256": "7a458ddadaebdddddf6d90c0e59930557a96bb85f04eef9eec9cdceddb33349e"
+    },
+    {
+      "@id": "7c15ca6f-4322-5626-b0a9-ab13a1f48c0a",
+      "@type": "cr:FileObject",
+      "name": "standin_00568_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/7c15ca6f-4322-5626-b0a9-ab13a1f48c0a/download",
+      "contentSize": "65865 B",
+      "sha256": "eca062c395485767be8eadb994217afb2ce23fa54e750f7e509b3fbe694017ce"
+    },
+    {
+      "@id": "62ad86b7-6620-5f25-920f-5dd11307ce32",
+      "@type": "cr:FileObject",
+      "name": "standin_00578_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/62ad86b7-6620-5f25-920f-5dd11307ce32/download",
+      "contentSize": "65865 B",
+      "sha256": "66dae6031c2987fee884addcf6d54f4483179341ad315e6c2d10ed0846ca3567"
+    },
+    {
+      "@id": "0729e4d5-678d-577e-9c74-4d5c01f93218",
+      "@type": "cr:FileObject",
+      "name": "standin_00581_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/0729e4d5-678d-577e-9c74-4d5c01f93218/download",
+      "contentSize": "65865 B",
+      "sha256": "2e6530e89b0824458a92fe4de5b383bd25781693a32ec2309d0715695e0e3712"
+    },
+    {
+      "@id": "f8a0d97e-51e2-5102-825c-6e5e5c5370d5",
+      "@type": "cr:FileObject",
+      "name": "standin_00583_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/f8a0d97e-51e2-5102-825c-6e5e5c5370d5/download",
+      "contentSize": "65865 B",
+      "sha256": "659201c008dd830c51fe132e0c973124ba6ab4ad06a46c3b6cab55837828e709"
+    },
+    {
+      "@id": "79f8f975-bb13-59b8-acfa-38e1fcca5c62",
+      "@type": "cr:FileObject",
+      "name": "standin_00596_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/79f8f975-bb13-59b8-acfa-38e1fcca5c62/download",
+      "contentSize": "65865 B",
+      "sha256": "41503891a1fff2a338bfa8ca18c29c51b8adc6a482cde43b2e192635800f158d"
+    },
+    {
+      "@id": "ed5464c8-9a95-50f8-a5d1-3ca997db9cba",
+      "@type": "cr:FileObject",
+      "name": "standin_00608_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/ed5464c8-9a95-50f8-a5d1-3ca997db9cba/download",
+      "contentSize": "65865 B",
+      "sha256": "e8e644299eb4c44b34bd2318a08c47dcb0b554a45b416bd42127b44bd81ff387"
+    },
+    {
+      "@id": "ab8413b0-84da-5b14-b884-d46454c3ec8f",
+      "@type": "cr:FileObject",
+      "name": "standin_00612_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/ab8413b0-84da-5b14-b884-d46454c3ec8f/download",
+      "contentSize": "65865 B",
+      "sha256": "af5bef3c3f2eec90c51fe96907a17ff719dc87a22b90b806307e0407e98e722a"
+    },
+    {
+      "@id": "50b0e462-e884-5a39-9792-c741adcc82cc",
+      "@type": "cr:FileObject",
+      "name": "standin_00614_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/50b0e462-e884-5a39-9792-c741adcc82cc/download",
+      "contentSize": "65865 B",
+      "sha256": "de71650398f0c693c0455cb4d7f325d1c2134d7b0df614f91f5662ba18889814"
+    },
+    {
+      "@id": "2e7e27aa-98e3-54de-8b69-dbba30d0f6a9",
+      "@type": "cr:FileObject",
+      "name": "standin_00622_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2e7e27aa-98e3-54de-8b69-dbba30d0f6a9/download",
+      "contentSize": "65865 B",
+      "sha256": "c98963c7f02e9f216df2ddb8d77421ffb56e91492689630b2286734e2698ae66"
+    },
+    {
+      "@id": "927d8079-853f-5db2-8ef7-aa6ba899dfbb",
+      "@type": "cr:FileObject",
+      "name": "standin_00627_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/927d8079-853f-5db2-8ef7-aa6ba899dfbb/download",
+      "contentSize": "65865 B",
+      "sha256": "c368c307be6fe4352321cb70c61ea33932cece3b44eea30341d424b5fae0c26e"
+    },
+    {
+      "@id": "69e18e36-b2ba-5b85-adfd-28ec5417a731",
+      "@type": "cr:FileObject",
+      "name": "standin_00632_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/69e18e36-b2ba-5b85-adfd-28ec5417a731/download",
+      "contentSize": "65865 B",
+      "sha256": "56ab833f3b24467b9f7770e207838f4cacd351e22946b76578ee1c022bd3b69d"
+    },
+    {
+      "@id": "3f43f557-26df-5819-8d23-547b857b46a1",
+      "@type": "cr:FileObject",
+      "name": "standin_00638_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/3f43f557-26df-5819-8d23-547b857b46a1/download",
+      "contentSize": "65865 B",
+      "sha256": "4f2dbd9e407d09be1fe02a4ea5da087d92e952fdd74183a902578e39563622a2"
+    },
+    {
+      "@id": "0796921e-799c-505c-91c5-41a0f5f9eb5b",
+      "@type": "cr:FileObject",
+      "name": "standin_00641_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/0796921e-799c-505c-91c5-41a0f5f9eb5b/download",
+      "contentSize": "65865 B",
+      "sha256": "d8f12e850eb04d1bdac6c7e5b2408bc4e753ed2f5a886c9f92b918ab044d58c1"
+    },
+    {
+      "@id": "e8553a25-2aa5-5f0c-8110-b19142ee6fa4",
+      "@type": "cr:FileObject",
+      "name": "standin_00650_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/e8553a25-2aa5-5f0c-8110-b19142ee6fa4/download",
+      "contentSize": "65865 B",
+      "sha256": "6a6d21400147870239ba38f571183e82229739e29dc41f2d9349f6a1b811a6de"
+    },
+    {
+      "@id": "9ebc4b5c-1ab8-5a8b-8854-82f017a24174",
+      "@type": "cr:FileObject",
+      "name": "standin_00669_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/9ebc4b5c-1ab8-5a8b-8854-82f017a24174/download",
+      "contentSize": "65865 B",
+      "sha256": "ca729f9d0ce6482b5aeef9d77df2d597d7785e59ac547d87eeff9d73a11a4606"
+    },
+    {
+      "@id": "60f3f85a-7f70-55cd-97ef-8a80f5eb9575",
+      "@type": "cr:FileObject",
+      "name": "standin_00672_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/60f3f85a-7f70-55cd-97ef-8a80f5eb9575/download",
+      "contentSize": "65865 B",
+      "sha256": "a2f1c1633d0766e573f8cb5883339a82a255e8652416d28512d057927cd43984"
+    },
+    {
+      "@id": "c331d359-f229-53fa-a925-68cea032dd55",
+      "@type": "cr:FileObject",
+      "name": "standin_00676_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/c331d359-f229-53fa-a925-68cea032dd55/download",
+      "contentSize": "65865 B",
+      "sha256": "e30bf39853c9a0b1fd79be8bd774ad79171ff6b705933726db122c269794b0e3"
+    },
+    {
+      "@id": "dcf7a6b9-5f6e-5107-ac0e-8c80cf59f3f5",
+      "@type": "cr:FileObject",
+      "name": "standin_00678_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/dcf7a6b9-5f6e-5107-ac0e-8c80cf59f3f5/download",
+      "contentSize": "65865 B",
+      "sha256": "efeadb10f105534eaba184d094ec86098c02255a4921cd27a6f437dd5f3cc45f"
+    },
+    {
+      "@id": "85623c8d-cad8-5f3f-8857-186d4f0fcee7",
+      "@type": "cr:FileObject",
+      "name": "standin_00682_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/85623c8d-cad8-5f3f-8857-186d4f0fcee7/download",
+      "contentSize": "65865 B",
+      "sha256": "88f26cfb2cda1fe9f908de07f1c3450b40b72f9a966699c6f0fde37cd23cb269"
+    },
+    {
+      "@id": "8a0d5d75-48f5-5047-8021-d2dd1ffdfbe3",
+      "@type": "cr:FileObject",
+      "name": "standin_00692_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/8a0d5d75-48f5-5047-8021-d2dd1ffdfbe3/download",
+      "contentSize": "65865 B",
+      "sha256": "d889c56be923aabe6556babf50824cdbe25ad5529703cff19bb340230c147457"
+    },
+    {
+      "@id": "e6b35f49-3b28-5bb5-8f84-14c9851d3ba6",
+      "@type": "cr:FileObject",
+      "name": "standin_00693_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/e6b35f49-3b28-5bb5-8f84-14c9851d3ba6/download",
+      "contentSize": "65865 B",
+      "sha256": "eca42f3b6f7ef8689bcd63dab259902e2228ede73729019897eb1c13fb80e979"
+    },
+    {
+      "@id": "24f51d48-3759-5b17-9841-b5af77b2b779",
+      "@type": "cr:FileObject",
+      "name": "standin_00705_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/24f51d48-3759-5b17-9841-b5af77b2b779/download",
+      "contentSize": "65865 B",
+      "sha256": "c425bd192fbe923e4e1ed79caa30c8a1fc030d3dbe51b5d8f6ddbbb1d15e2326"
+    },
+    {
+      "@id": "c588b55b-c349-521e-9af1-c8e324ba4745",
+      "@type": "cr:FileObject",
+      "name": "standin_00717_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/c588b55b-c349-521e-9af1-c8e324ba4745/download",
+      "contentSize": "65865 B",
+      "sha256": "dd7a46005b8cd7916f1b3b11305dd35019436a6d98cc54fa78db0930a1452ec1"
+    },
+    {
+      "@id": "5a1f9046-729d-5b9f-9dad-83aed0723034",
+      "@type": "cr:FileObject",
+      "name": "standin_00732_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/5a1f9046-729d-5b9f-9dad-83aed0723034/download",
+      "contentSize": "65865 B",
+      "sha256": "04c95abc8b1490aba880e2edc59df85739355e81de1b5d50bc603338a32d9238"
+    },
+    {
+      "@id": "e30b5fca-6dfc-5c2c-9396-bb829b32c104",
+      "@type": "cr:FileObject",
+      "name": "standin_00738_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/e30b5fca-6dfc-5c2c-9396-bb829b32c104/download",
+      "contentSize": "65865 B",
+      "sha256": "af379a95cc170098847dca0921f81131be6df56a2e15585b38d4a9f6eaa523fd"
+    },
+    {
+      "@id": "6ef28163-df00-5247-8a71-28fe41ac5299",
+      "@type": "cr:FileObject",
+      "name": "standin_00741_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/6ef28163-df00-5247-8a71-28fe41ac5299/download",
+      "contentSize": "65865 B",
+      "sha256": "67fa61c149c28cc389e3b12f4a0c12012dbab38e7a481a8754db161771e3afd5"
+    },
+    {
+      "@id": "e4439cb2-1b24-544b-badc-76ccaeb8c9b0",
+      "@type": "cr:FileObject",
+      "name": "standin_00758_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/e4439cb2-1b24-544b-badc-76ccaeb8c9b0/download",
+      "contentSize": "65865 B",
+      "sha256": "769c07cd2499d7f002b2a143efc02f8f0b6d92facba930c49eca83affc95f796"
+    },
+    {
+      "@id": "506ac106-caf5-5f4e-8183-5022a1d06699",
+      "@type": "cr:FileObject",
+      "name": "standin_00768_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/506ac106-caf5-5f4e-8183-5022a1d06699/download",
+      "contentSize": "65865 B",
+      "sha256": "4c1d81073f0f5e9d0619b26b871b86a0e01924252fb5b2947dca40d3957273c6"
+    },
+    {
+      "@id": "b3968f17-6f1e-5df0-ae9f-eb0b44a721f6",
+      "@type": "cr:FileObject",
+      "name": "standin_00775_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/b3968f17-6f1e-5df0-ae9f-eb0b44a721f6/download",
+      "contentSize": "65865 B",
+      "sha256": "689ea79c090e4ffc0be85c6c3aa6f256cf136e946b7d6ccbe4953d0563f7b258"
+    },
+    {
+      "@id": "64bb2c31-a597-5cad-b0c1-e3826b6ded46",
+      "@type": "cr:FileObject",
+      "name": "standin_00777_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/64bb2c31-a597-5cad-b0c1-e3826b6ded46/download",
+      "contentSize": "65865 B",
+      "sha256": "9cbf1965acb7df0dfe32a6da860acc1daa467fc4e1f965978852503e91e2d6e0"
+    },
+    {
+      "@id": "fbfbb4a3-a1f4-51cd-88bb-3fc556fb4678",
+      "@type": "cr:FileObject",
+      "name": "standin_00778_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/fbfbb4a3-a1f4-51cd-88bb-3fc556fb4678/download",
+      "contentSize": "65865 B",
+      "sha256": "338c55ed20b2e9863a48cf2e4d72a47069107ed35649286cfc2bac6734c68045"
+    },
+    {
+      "@id": "29d31ae5-9f67-5109-9b7e-92aaa6eb0831",
+      "@type": "cr:FileObject",
+      "name": "standin_00779_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/29d31ae5-9f67-5109-9b7e-92aaa6eb0831/download",
+      "contentSize": "65865 B",
+      "sha256": "26a97e3bc48e8f2a348691a653dd4fe86aa1ed615fbf278a1fb8331e0d29f138"
+    },
+    {
+      "@id": "2409eef4-269c-5d8a-8d77-5753427233ef",
+      "@type": "cr:FileObject",
+      "name": "standin_00780_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2409eef4-269c-5d8a-8d77-5753427233ef/download",
+      "contentSize": "65865 B",
+      "sha256": "07e9764d70a76968396f40b1753ace916c89131e5037312ff5e51460d60d2e3f"
+    },
+    {
+      "@id": "e3f30f8b-8b3d-5ce7-a09f-b8eec4b9f6b2",
+      "@type": "cr:FileObject",
+      "name": "standin_00802_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/e3f30f8b-8b3d-5ce7-a09f-b8eec4b9f6b2/download",
+      "contentSize": "65865 B",
+      "sha256": "5d84451d73f05c295ee705d06b2c41a0e1455fcc99425ddfa7d366cff193d40c"
+    },
+    {
+      "@id": "2a8dafbf-8c35-59d2-91f3-603aa0a8426f",
+      "@type": "cr:FileObject",
+      "name": "standin_00816_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2a8dafbf-8c35-59d2-91f3-603aa0a8426f/download",
+      "contentSize": "65865 B",
+      "sha256": "73f80fa57e1a59f0817acf3a095db20efcc169301f182285e14b32e2ee510b64"
+    },
+    {
+      "@id": "df01bbf6-8a8c-5e11-9f2b-f3f2452dff18",
+      "@type": "cr:FileObject",
+      "name": "standin_00826_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/df01bbf6-8a8c-5e11-9f2b-f3f2452dff18/download",
+      "contentSize": "65865 B",
+      "sha256": "c008302ad1680dc0f8151d825e15d1c6f040675286695eeb2dfb74f9e4b563eb"
+    },
+    {
+      "@id": "09e7cbe1-4f5d-5a90-9250-fb9baf918775",
+      "@type": "cr:FileObject",
+      "name": "standin_00827_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/09e7cbe1-4f5d-5a90-9250-fb9baf918775/download",
+      "contentSize": "65865 B",
+      "sha256": "aa44c0c1c4994317d73a0f82d16105f1c90cf5ae41c69570db2d940fd1ccdb21"
+    },
+    {
+      "@id": "83f6b32b-ad32-5b00-8ecb-85d1f518a5d2",
+      "@type": "cr:FileObject",
+      "name": "standin_00828_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/83f6b32b-ad32-5b00-8ecb-85d1f518a5d2/download",
+      "contentSize": "65865 B",
+      "sha256": "c993e3f36ef24826eebd09b70fe3ae9bcd322553f85275b0d057377912b13189"
+    },
+    {
+      "@id": "aecdfcda-ac57-584f-9105-9044b1bb7f29",
+      "@type": "cr:FileObject",
+      "name": "standin_00832_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/aecdfcda-ac57-584f-9105-9044b1bb7f29/download",
+      "contentSize": "65865 B",
+      "sha256": "52696d1a49d6a706f52461f38b2560adff69721b73e300bb785623166f5d642e"
+    },
+    {
+      "@id": "9aec6041-7dc0-5aae-82d7-62e221a66de9",
+      "@type": "cr:FileObject",
+      "name": "standin_00838_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/9aec6041-7dc0-5aae-82d7-62e221a66de9/download",
+      "contentSize": "65865 B",
+      "sha256": "8234606b1c878eadfd6dbb5b5e45c71710b98d469ecbb50f907dc75b1fb17704"
+    },
+    {
+      "@id": "e97bda97-5f6d-5944-a0a2-b09163dddd60",
+      "@type": "cr:FileObject",
+      "name": "standin_00843_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/e97bda97-5f6d-5944-a0a2-b09163dddd60/download",
+      "contentSize": "65865 B",
+      "sha256": "6bfd6fe174b7909362b9ac914a99962f36349222840a724fe8f83d7a6bd6a764"
+    },
+    {
+      "@id": "6237e2f1-f9f1-5b20-a1a6-355ea1ff53ff",
+      "@type": "cr:FileObject",
+      "name": "standin_00845_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/6237e2f1-f9f1-5b20-a1a6-355ea1ff53ff/download",
+      "contentSize": "65865 B",
+      "sha256": "f0dd46f6986804f14a7daddc07bda8ed40425d2ed13352a285f23a0199fd6692"
+    },
+    {
+      "@id": "39a6ed9f-b0cd-58ba-8145-a3e33048c8cc",
+      "@type": "cr:FileObject",
+      "name": "standin_00853_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/39a6ed9f-b0cd-58ba-8145-a3e33048c8cc/download",
+      "contentSize": "65865 B",
+      "sha256": "1d61be589e4418f4c596f835735ce2c5b4a7490873a6f78965e19b818c1e1acf"
+    },
+    {
+      "@id": "6bcb30d7-56dd-5aa0-b72c-48c1472d7073",
+      "@type": "cr:FileObject",
+      "name": "standin_00856_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/6bcb30d7-56dd-5aa0-b72c-48c1472d7073/download",
+      "contentSize": "65865 B",
+      "sha256": "0047138799da8ed8c34c2e97b1f38d09e514fe3eb7b06a62d6552ef006e75bdd"
+    },
+    {
+      "@id": "5ba20df8-b8eb-5e64-b8d1-87611ae13dc6",
+      "@type": "cr:FileObject",
+      "name": "standin_00873_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/5ba20df8-b8eb-5e64-b8d1-87611ae13dc6/download",
+      "contentSize": "65865 B",
+      "sha256": "7b62da1d547c5d33d89f1789444ec5e6d53e5153eece52b0799cbf6c7974273d"
+    },
+    {
+      "@id": "308ca1e9-570d-554b-8c3a-27d708294f0e",
+      "@type": "cr:FileObject",
+      "name": "standin_00876_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/308ca1e9-570d-554b-8c3a-27d708294f0e/download",
+      "contentSize": "65865 B",
+      "sha256": "eb6e0c0386b854701971fe95f92a75cb42fee1844bdc2053a8f1afe8b359d422"
+    },
+    {
+      "@id": "412c50b8-8aa9-5493-a6b3-6d6cffe044b8",
+      "@type": "cr:FileObject",
+      "name": "standin_00901_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/412c50b8-8aa9-5493-a6b3-6d6cffe044b8/download",
+      "contentSize": "65865 B",
+      "sha256": "96a4b1067891fc6be5c114db33d7e23218ba67a3cb43796ca74af3c39492719d"
+    },
+    {
+      "@id": "7e34caac-9634-5978-b1a2-75c7648ee26c",
+      "@type": "cr:FileObject",
+      "name": "standin_00903_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/7e34caac-9634-5978-b1a2-75c7648ee26c/download",
+      "contentSize": "65865 B",
+      "sha256": "4ed255415f8b7e4eef97e628722305b98361ce202eb1d86b92b5582bc8d1249b"
+    },
+    {
+      "@id": "1055de29-713b-5589-b600-7e859193e11f",
+      "@type": "cr:FileObject",
+      "name": "standin_00910_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/1055de29-713b-5589-b600-7e859193e11f/download",
+      "contentSize": "65865 B",
+      "sha256": "98be6294ffe109523ad31beda585829d22f61c166cb06a4e2bb7c60ae9ca0dad"
+    },
+    {
+      "@id": "a1561c51-8988-5d69-a13c-2c3829be25b2",
+      "@type": "cr:FileObject",
+      "name": "standin_00912_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/a1561c51-8988-5d69-a13c-2c3829be25b2/download",
+      "contentSize": "65865 B",
+      "sha256": "e74f91ab16ec65353f6f85436cee37e37309e6ac1a1e9f669a1674ff53b62b86"
+    },
+    {
+      "@id": "e04a8ed9-9df6-50cd-ae8f-16cff93a83f9",
+      "@type": "cr:FileObject",
+      "name": "standin_00914_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/e04a8ed9-9df6-50cd-ae8f-16cff93a83f9/download",
+      "contentSize": "65865 B",
+      "sha256": "45b10f6153a8fedae303220d2412fe86c180a59b44b34efea0e2b6d070df96c4"
+    },
+    {
+      "@id": "317100ae-f575-57a7-b589-083cd843a214",
+      "@type": "cr:FileObject",
+      "name": "standin_00919_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/317100ae-f575-57a7-b589-083cd843a214/download",
+      "contentSize": "65865 B",
+      "sha256": "8eb638e4beab7617db481bf14d523b1ff914da4076c7ef423ecd2d1e9e3068c5"
+    },
+    {
+      "@id": "4eb9ad51-d040-5e10-a3ac-952658115505",
+      "@type": "cr:FileObject",
+      "name": "standin_00921_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/4eb9ad51-d040-5e10-a3ac-952658115505/download",
+      "contentSize": "65865 B",
+      "sha256": "78c608d4addbec810dc327fe2149e4b7ece740d76830e96c1edf311fbe32a28b"
+    },
+    {
+      "@id": "217520b8-03b8-5928-9574-15396453828d",
+      "@type": "cr:FileObject",
+      "name": "standin_00925_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/217520b8-03b8-5928-9574-15396453828d/download",
+      "contentSize": "65865 B",
+      "sha256": "9025d03d70132b9a001481ea8e335e3959c47b37df76fb9d35747f56ce9cbd9b"
+    },
+    {
+      "@id": "1e693209-e1b6-570a-a379-b1d9e15dc822",
+      "@type": "cr:FileObject",
+      "name": "standin_00928_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/1e693209-e1b6-570a-a379-b1d9e15dc822/download",
+      "contentSize": "65865 B",
+      "sha256": "540625e390c069e5557eebbcc76a365829c66b8b95ce2e4dc6ff77688809acad"
+    },
+    {
+      "@id": "68626561-a852-54d0-885c-c47ae16bcf2a",
+      "@type": "cr:FileObject",
+      "name": "standin_00937_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/68626561-a852-54d0-885c-c47ae16bcf2a/download",
+      "contentSize": "65865 B",
+      "sha256": "16c639b381e9fd7f1356f62ec932a1de2ccf5892748d979c5732b49ba9672975"
+    },
+    {
+      "@id": "6c1b30fc-c8b9-51a5-8936-4c2817f4d3b8",
+      "@type": "cr:FileObject",
+      "name": "standin_00944_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/6c1b30fc-c8b9-51a5-8936-4c2817f4d3b8/download",
+      "contentSize": "65865 B",
+      "sha256": "771876f89efb113d7bdfcc2eb941bef148098733b90dec9debcb8bc32c1b5195"
+    },
+    {
+      "@id": "ec13ad37-5268-5d31-8661-2dcf4cc5aa48",
+      "@type": "cr:FileObject",
+      "name": "standin_00949_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/ec13ad37-5268-5d31-8661-2dcf4cc5aa48/download",
+      "contentSize": "65865 B",
+      "sha256": "7fc3288b84d6d4e8532dadee83102f7202609130b99025e14f0cdc593a5e093b"
+    },
+    {
+      "@id": "518679e9-96f4-5555-881e-d3f560820888",
+      "@type": "cr:FileObject",
+      "name": "standin_00965_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/518679e9-96f4-5555-881e-d3f560820888/download",
+      "contentSize": "65865 B",
+      "sha256": "3aaca8e20c9068d3520f2b44c889d11c5b37bf4fa87f0bc1bafd7f6ea4c0b466"
+    },
+    {
+      "@id": "fb19c4b1-9e55-5049-b845-f216f37c4527",
+      "@type": "cr:FileObject",
+      "name": "standin_00967_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/fb19c4b1-9e55-5049-b845-f216f37c4527/download",
+      "contentSize": "65865 B",
+      "sha256": "cc25c5b7d98f6331a86a58398e6d05db21f4a366ae01c64ab02f6becb5474c4b"
+    },
+    {
+      "@id": "6f1ec834-0dcb-52ea-a4e7-63ede88162ea",
+      "@type": "cr:FileObject",
+      "name": "standin_00991_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/6f1ec834-0dcb-52ea-a4e7-63ede88162ea/download",
+      "contentSize": "65865 B",
+      "sha256": "6f9b7b5045ae7b441a269130f008e2d2360c88e927808a30aa425dadb4e70615"
+    },
+    {
+      "@id": "2c86fb52-34cf-5cf5-9ca7-ee8ffa8a82d3",
+      "@type": "cr:FileObject",
+      "name": "standin_00998_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2c86fb52-34cf-5cf5-9ca7-ee8ffa8a82d3/download",
+      "contentSize": "65865 B",
+      "sha256": "00a165808c5a0704d0135604f440564898dacc381603fb44180990e8f09f6a55"
+    },
+    {
+      "@id": "5fe4129e-2352-5d05-aa4c-218fecc6f0fc",
+      "@type": "cr:FileObject",
+      "name": "standin_00999_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/5fe4129e-2352-5d05-aa4c-218fecc6f0fc/download",
+      "contentSize": "65865 B",
+      "sha256": "cc3edb378b7830f79142f7c60bd7e0beba650472178c2e95095f2fba92d5e034"
+    },
+    {
+      "@id": "6375678a-7d63-5012-a595-e163e4dfe3ed",
+      "@type": "cr:FileObject",
+      "name": "standin_01008_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/6375678a-7d63-5012-a595-e163e4dfe3ed/download",
+      "contentSize": "65865 B",
+      "sha256": "dd2faf58fa1aa38ea3ecd7ce8a8b7ba8810fb8ed135e75bc2544a1c6ac589c51"
+    },
+    {
+      "@id": "85b5de05-8e3c-5be4-a4c8-95c8712d348d",
+      "@type": "cr:FileObject",
+      "name": "standin_01014_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/85b5de05-8e3c-5be4-a4c8-95c8712d348d/download",
+      "contentSize": "65865 B",
+      "sha256": "14540d567a9b41c564e941d906b3761663e340b65e453ae1fcb461a71e58dc5f"
+    },
+    {
+      "@id": "874125e7-5c35-5a68-b877-1b071135cc43",
+      "@type": "cr:FileObject",
+      "name": "standin_01015_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/874125e7-5c35-5a68-b877-1b071135cc43/download",
+      "contentSize": "65865 B",
+      "sha256": "0719895c8bfca379cd934199c67a2d561385c325ebc9c68a3eb82dc38ba7eb5b"
+    },
+    {
+      "@id": "79acf915-dfa7-5d30-b534-f00bbe3f2edb",
+      "@type": "cr:FileObject",
+      "name": "standin_01019_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/79acf915-dfa7-5d30-b534-f00bbe3f2edb/download",
+      "contentSize": "65865 B",
+      "sha256": "7bd09575df4b7c268b4addbd5e28f3d9420d2f6c4c1a10b68e377a6b888e30a5"
+    },
+    {
+      "@id": "86ff0fb5-2cea-5d2d-a38e-9003ad96ea68",
+      "@type": "cr:FileObject",
+      "name": "standin_01020_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/86ff0fb5-2cea-5d2d-a38e-9003ad96ea68/download",
+      "contentSize": "65865 B",
+      "sha256": "672ab288c1bdd822f339911ddb1169d2f938f771ef17033b76de61ae14a7ca75"
+    },
+    {
+      "@id": "26599968-f8ea-5472-ba08-b18bff0a9d17",
+      "@type": "cr:FileObject",
+      "name": "standin_01030_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/26599968-f8ea-5472-ba08-b18bff0a9d17/download",
+      "contentSize": "65865 B",
+      "sha256": "101faaa9e04a913059ad64fc9a5173e647ba8ee4bf216229b3e53c2f6f1ea8bc"
+    },
+    {
+      "@id": "7d94ead6-6634-5a92-baaf-7a3308f4da27",
+      "@type": "cr:FileObject",
+      "name": "standin_01031_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/7d94ead6-6634-5a92-baaf-7a3308f4da27/download",
+      "contentSize": "65865 B",
+      "sha256": "50d46fe5afd044c917b6fe58b6881d7765345ebde14ea80d1fa8871318d07e6f"
+    },
+    {
+      "@id": "9ab0bb45-805e-5768-8087-3a669560bf6c",
+      "@type": "cr:FileObject",
+      "name": "standin_01032_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/9ab0bb45-805e-5768-8087-3a669560bf6c/download",
+      "contentSize": "65865 B",
+      "sha256": "b4aafad0fcbd454a17ce711d4e5e3a6b0902dcdc2f4144771c91867480bbc483"
+    },
+    {
+      "@id": "a7150e4d-8f83-5c53-812d-76f91af5680a",
+      "@type": "cr:FileObject",
+      "name": "standin_01034_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/a7150e4d-8f83-5c53-812d-76f91af5680a/download",
+      "contentSize": "65865 B",
+      "sha256": "7dbc5df09fbd23d730f6f2f3ca2901b2a0ced354993a630bceb1b8b493895407"
+    },
+    {
+      "@id": "da0b873b-60d9-5050-b9de-1f1bc928db86",
+      "@type": "cr:FileObject",
+      "name": "standin_01042_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/da0b873b-60d9-5050-b9de-1f1bc928db86/download",
+      "contentSize": "65865 B",
+      "sha256": "117728660b7a336c58762813354ce7cde2250a1e0ed891adac48724216270c02"
+    },
+    {
+      "@id": "f867a255-84a5-51ae-aa84-f39e5eae77d4",
+      "@type": "cr:FileObject",
+      "name": "standin_01045_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/f867a255-84a5-51ae-aa84-f39e5eae77d4/download",
+      "contentSize": "65865 B",
+      "sha256": "aad6230f468cd5d3340f948e4a3a46f563cf109868509ea4303588ff4392900f"
+    },
+    {
+      "@id": "14eb6896-21e2-5a15-ba34-d19883b4f39b",
+      "@type": "cr:FileObject",
+      "name": "standin_01050_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/14eb6896-21e2-5a15-ba34-d19883b4f39b/download",
+      "contentSize": "65865 B",
+      "sha256": "e527366769eb11b96e7364401bfd04885d0440e13030b10ed0400f877f2003ef"
+    },
+    {
+      "@id": "b40e1644-333f-5b6f-b112-1685dc8c37aa",
+      "@type": "cr:FileObject",
+      "name": "standin_01056_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/b40e1644-333f-5b6f-b112-1685dc8c37aa/download",
+      "contentSize": "65865 B",
+      "sha256": "d9325d3845e847994c2e53bdd59c359b72ea92833a2803497e1e384b392e1561"
+    },
+    {
+      "@id": "20376f6f-0df2-578f-aad1-1333a4bae30d",
+      "@type": "cr:FileObject",
+      "name": "standin_01058_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/20376f6f-0df2-578f-aad1-1333a4bae30d/download",
+      "contentSize": "65865 B",
+      "sha256": "3b513cab2b6886886d04c41d04bb1221e43902a973b6e0d320086c731dfc4aa1"
+    },
+    {
+      "@id": "1b65bca3-b4ea-5194-a1c8-1857e9b2f01b",
+      "@type": "cr:FileObject",
+      "name": "standin_01065_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/1b65bca3-b4ea-5194-a1c8-1857e9b2f01b/download",
+      "contentSize": "65865 B",
+      "sha256": "14ed8121f6a1b1a594042b41cf2027d7156f4e9c831d69ae7352614b9f456281"
+    },
+    {
+      "@id": "4c5d613d-a933-52b0-bb73-32376bbd2139",
+      "@type": "cr:FileObject",
+      "name": "standin_01076_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/4c5d613d-a933-52b0-bb73-32376bbd2139/download",
+      "contentSize": "65865 B",
+      "sha256": "af1c7ab0abc796b10f8bfce64c144e72de5c95db717e1946ce345936e842056c"
+    },
+    {
+      "@id": "27948ee3-3fb1-51f4-8d18-79c09889a7e0",
+      "@type": "cr:FileObject",
+      "name": "standin_01087_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/27948ee3-3fb1-51f4-8d18-79c09889a7e0/download",
+      "contentSize": "65865 B",
+      "sha256": "b213dc65ec06db1a0fe54e0117d20d3ae942526a3fe74d0b25b4996989ba999f"
+    },
+    {
+      "@id": "2224df40-9d9e-5c93-a1e6-046c18f08e5f",
+      "@type": "cr:FileObject",
+      "name": "standin_01090_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2224df40-9d9e-5c93-a1e6-046c18f08e5f/download",
+      "contentSize": "65865 B",
+      "sha256": "55732fb364d6348cb087bf3ec39185ecd02508713b754a7e55e38bee227b2826"
+    },
+    {
+      "@id": "19fc0075-87ee-503c-9274-0f4bf8fa719e",
+      "@type": "cr:FileObject",
+      "name": "standin_01105_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/19fc0075-87ee-503c-9274-0f4bf8fa719e/download",
+      "contentSize": "65865 B",
+      "sha256": "a7d6f40e8cdf1f731be9ff45a780fea55bf0a4ddf6ef298a17a538b465eb2e98"
+    },
+    {
+      "@id": "c609e251-ba3b-51cf-a4a6-c5a76fe3c6db",
+      "@type": "cr:FileObject",
+      "name": "standin_01109_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/c609e251-ba3b-51cf-a4a6-c5a76fe3c6db/download",
+      "contentSize": "65865 B",
+      "sha256": "dfd33a58ba6b598943cff37d406c299395f08d20de2d1fefae2d83b7a0498b92"
+    },
+    {
+      "@id": "88c56f82-5a44-5d32-9322-6e0aa77f9719",
+      "@type": "cr:FileObject",
+      "name": "standin_01123_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/88c56f82-5a44-5d32-9322-6e0aa77f9719/download",
+      "contentSize": "65865 B",
+      "sha256": "60b078e34a766d3a62dcbe5760688d5a448ad2be3dfa92d1f616d05342468fd9"
+    },
+    {
+      "@id": "8cd53d2b-d391-5e02-9131-d04dde3ad1b0",
+      "@type": "cr:FileObject",
+      "name": "standin_01125_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/8cd53d2b-d391-5e02-9131-d04dde3ad1b0/download",
+      "contentSize": "65865 B",
+      "sha256": "97a326df0a36c4346b89ac85c75d00263eb80053f5938ccf89a597c7f9e0aee5"
+    },
+    {
+      "@id": "44c23b0a-93a0-5335-aeb8-982bf877115b",
+      "@type": "cr:FileObject",
+      "name": "standin_01130_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/44c23b0a-93a0-5335-aeb8-982bf877115b/download",
+      "contentSize": "65865 B",
+      "sha256": "fbfedc6c1c1cfb39c33d7deb5f87d255c0f22cf8e0a954cf687b2b94c89f5b7c"
+    },
+    {
+      "@id": "b5d2035a-b4e1-59d8-aff0-546eebc54d64",
+      "@type": "cr:FileObject",
+      "name": "standin_01137_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/b5d2035a-b4e1-59d8-aff0-546eebc54d64/download",
+      "contentSize": "65865 B",
+      "sha256": "0e14ddd53e7055734c0fce073147c9ff3ec9f5cba3a3ba114949004317893a5c"
+    },
+    {
+      "@id": "2a19b16c-e56f-57e9-a055-54f39bd91fb3",
+      "@type": "cr:FileObject",
+      "name": "standin_01144_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2a19b16c-e56f-57e9-a055-54f39bd91fb3/download",
+      "contentSize": "65865 B",
+      "sha256": "ba5941fcc8c2ac450fcef0d4b192d2f439411dbdaa1024bcf1e087007c25338b"
+    },
+    {
+      "@id": "a758597f-0c3f-54e3-a19e-9e6be20622b9",
+      "@type": "cr:FileObject",
+      "name": "standin_01145_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/a758597f-0c3f-54e3-a19e-9e6be20622b9/download",
+      "contentSize": "65865 B",
+      "sha256": "58e2e993f15f9c0ac187811367a0c913ce6363e64e61a46b0662300283d1de2f"
+    },
+    {
+      "@id": "aa15dc86-564b-5517-a83d-2264114e1f05",
+      "@type": "cr:FileObject",
+      "name": "standin_01146_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/aa15dc86-564b-5517-a83d-2264114e1f05/download",
+      "contentSize": "65865 B",
+      "sha256": "cf18f3aae21990a733c1fd67d44eb6814a4f541ce563c66bfcc45b888c7cb624"
+    },
+    {
+      "@id": "2c38e824-a45f-50c8-aec4-87579b66b9e1",
+      "@type": "cr:FileObject",
+      "name": "standin_01149_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2c38e824-a45f-50c8-aec4-87579b66b9e1/download",
+      "contentSize": "65865 B",
+      "sha256": "0c811061fe0911415d5f566632bea8ef6bcf36bd8afa8bb80af08ddfddd98543"
+    },
+    {
+      "@id": "d30b1f30-6692-59c1-8fb0-5f655354d863",
+      "@type": "cr:FileObject",
+      "name": "standin_01153_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/d30b1f30-6692-59c1-8fb0-5f655354d863/download",
+      "contentSize": "65865 B",
+      "sha256": "adb80ccfe5d5415794626e9722a6a46a70220918ac2aba8d1c29ec4e5c165f19"
+    },
+    {
+      "@id": "3370b25d-120b-50ff-9ca2-d22fbee2dedb",
+      "@type": "cr:FileObject",
+      "name": "standin_01155_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/3370b25d-120b-50ff-9ca2-d22fbee2dedb/download",
+      "contentSize": "65865 B",
+      "sha256": "07081985c39972128d4e499885097eed11aa2524b862a3e459db3926a051da9a"
+    },
+    {
+      "@id": "2e48603e-0da6-5216-a7c7-5628c34255a1",
+      "@type": "cr:FileObject",
+      "name": "standin_01160_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2e48603e-0da6-5216-a7c7-5628c34255a1/download",
+      "contentSize": "65865 B",
+      "sha256": "f65a6a01d0192f5503502882a9ee00385d064fc7b52c675e0b511bd7826b34b3"
+    },
+    {
+      "@id": "acabedd9-01de-5afd-9a50-0d5b9b7eb35e",
+      "@type": "cr:FileObject",
+      "name": "standin_01163_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/acabedd9-01de-5afd-9a50-0d5b9b7eb35e/download",
+      "contentSize": "65865 B",
+      "sha256": "cf3a36c2d10edfdf4c27c961ca40332b47c35af58f6bff3a508e4e614c15093f"
+    },
+    {
+      "@id": "388f584f-690f-5161-a8fd-64ae22a79d95",
+      "@type": "cr:FileObject",
+      "name": "standin_01167_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/388f584f-690f-5161-a8fd-64ae22a79d95/download",
+      "contentSize": "65865 B",
+      "sha256": "3450c0dedd9ff1a4281406d35481e9883c9f11424505e343e870ba11e0fb0c15"
+    },
+    {
+      "@id": "d4d66d59-0f2e-582d-b2a5-099074d19556",
+      "@type": "cr:FileObject",
+      "name": "standin_01189_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/d4d66d59-0f2e-582d-b2a5-099074d19556/download",
+      "contentSize": "65865 B",
+      "sha256": "3d5931b4959db02cb5898234cf2be6bf170f0b6446f02279271b493c0127bc35"
+    },
+    {
+      "@id": "14759ec9-dae0-5c63-97d1-58f0649a521f",
+      "@type": "cr:FileObject",
+      "name": "standin_01219_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/14759ec9-dae0-5c63-97d1-58f0649a521f/download",
+      "contentSize": "65865 B",
+      "sha256": "e1425a8ff5255ef957967c83206e01ba151bb153e8418d509608bcf3e03060a3"
+    },
+    {
+      "@id": "6fcb0494-561b-59f1-b94e-c19aa83aa136",
+      "@type": "cr:FileObject",
+      "name": "standin_01221_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/6fcb0494-561b-59f1-b94e-c19aa83aa136/download",
+      "contentSize": "65865 B",
+      "sha256": "3752b7e6772037b869eae47fe4d39a49263d74877fe3500eee570ff198f16d3b"
+    },
+    {
+      "@id": "01d07593-4b22-56ed-a164-7cf3984e92b8",
+      "@type": "cr:FileObject",
+      "name": "standin_01227_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/01d07593-4b22-56ed-a164-7cf3984e92b8/download",
+      "contentSize": "65865 B",
+      "sha256": "d63d8f5361315043d654890d229d42c5c91c0b22453c47d95218640d75204b53"
+    },
+    {
+      "@id": "f6c5c6d6-a238-5397-9dd2-e71477b47b73",
+      "@type": "cr:FileObject",
+      "name": "standin_01228_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/f6c5c6d6-a238-5397-9dd2-e71477b47b73/download",
+      "contentSize": "65865 B",
+      "sha256": "5495e7c09c75bb190cab02b844fe9bc74baaefbc3e646cea32ce892457686142"
+    },
+    {
+      "@id": "f7722843-77c1-5dbe-9233-2b3fd5a98720",
+      "@type": "cr:FileObject",
+      "name": "standin_01238_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/f7722843-77c1-5dbe-9233-2b3fd5a98720/download",
+      "contentSize": "65865 B",
+      "sha256": "512484473f53554e636b4ac2e90f7a7a7876e31dd79610be18c44250adb79aee"
+    },
+    {
+      "@id": "fe64a838-fa16-594c-a694-fda750710fa9",
+      "@type": "cr:FileObject",
+      "name": "standin_01239_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/fe64a838-fa16-594c-a694-fda750710fa9/download",
+      "contentSize": "65865 B",
+      "sha256": "0bb05b6e2c803cd4746a3ad5606f461bbfe1e4df6fc777afe9dc390f248e5558"
+    },
+    {
+      "@id": "78a2e768-8735-56f4-a9ca-579e4cc25f3e",
+      "@type": "cr:FileObject",
+      "name": "standin_01252_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/78a2e768-8735-56f4-a9ca-579e4cc25f3e/download",
+      "contentSize": "65865 B",
+      "sha256": "79c586629987161435f0aab4b3e1791e401e84edb0384d855ca66af0998c7b22"
+    },
+    {
+      "@id": "fac58a91-7546-5e1b-ba90-27714e81df60",
+      "@type": "cr:FileObject",
+      "name": "standin_01256_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/fac58a91-7546-5e1b-ba90-27714e81df60/download",
+      "contentSize": "65865 B",
+      "sha256": "0d9eb1ba77ed6aeebc5c3e4001fc2d8077e5c0ad50012aee5b7a682c564b132d"
+    },
+    {
+      "@id": "ea83a498-43ec-53f4-8983-5b4f239fa5bc",
+      "@type": "cr:FileObject",
+      "name": "standin_01263_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/ea83a498-43ec-53f4-8983-5b4f239fa5bc/download",
+      "contentSize": "65865 B",
+      "sha256": "d4e868916034eae7ff925bfbe1518c9db7b603abd49ae409f5ccf842d133fa8a"
+    },
+    {
+      "@id": "cee61abc-41fb-570d-9c77-28fdce84d8d7",
+      "@type": "cr:FileObject",
+      "name": "standin_01270_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/cee61abc-41fb-570d-9c77-28fdce84d8d7/download",
+      "contentSize": "65865 B",
+      "sha256": "70d5cce478c3085b8911b85cab03c37c4ce8d7c056a2287d8903a8cd840cbbaa"
+    },
+    {
+      "@id": "2e03881f-a329-503d-98f8-e509b5f27761",
+      "@type": "cr:FileObject",
+      "name": "standin_01284_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2e03881f-a329-503d-98f8-e509b5f27761/download",
+      "contentSize": "65865 B",
+      "sha256": "a1e409378d13c511cd49a987d36b1f2cd036e967edd8845378d3f514efe270b9"
+    },
+    {
+      "@id": "462e4ea3-41fc-53ee-92b6-1211f7387775",
+      "@type": "cr:FileObject",
+      "name": "standin_01302_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/462e4ea3-41fc-53ee-92b6-1211f7387775/download",
+      "contentSize": "65865 B",
+      "sha256": "9bc505a7589152aafcf104c2d7d0101d6c4e782346926dde2c0372334152dcae"
+    },
+    {
+      "@id": "fc2098b6-02f4-50b0-b712-6f51a6a8d1e8",
+      "@type": "cr:FileObject",
+      "name": "standin_01311_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/fc2098b6-02f4-50b0-b712-6f51a6a8d1e8/download",
+      "contentSize": "65865 B",
+      "sha256": "5af03c10d505705840c7ac639259a4dad45a4d1991a2ec1e911040554047776a"
+    },
+    {
+      "@id": "8fcb48da-9ee4-54f6-84f3-44b6c759624a",
+      "@type": "cr:FileObject",
+      "name": "standin_01322_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/8fcb48da-9ee4-54f6-84f3-44b6c759624a/download",
+      "contentSize": "65865 B",
+      "sha256": "76428973c6332329dafbdd2a8a80f22d8b6146ac80ba72d2a1de9c3fc51db2d8"
+    },
+    {
+      "@id": "3b858d34-6524-59d8-bdfc-6282d45dca19",
+      "@type": "cr:FileObject",
+      "name": "standin_01326_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/3b858d34-6524-59d8-bdfc-6282d45dca19/download",
+      "contentSize": "65865 B",
+      "sha256": "ac3b2d5cd1fa21b9fca8254144d5b49b4b34e1ea1d8d2afae8a7396bd10562f2"
+    },
+    {
+      "@id": "7f290a32-48a4-52fd-be68-451b31eb967b",
+      "@type": "cr:FileObject",
+      "name": "standin_01336_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/7f290a32-48a4-52fd-be68-451b31eb967b/download",
+      "contentSize": "65865 B",
+      "sha256": "517999d6ad3ce0ed563ee8fa2fab4ccd5846089629bfdfe717f52a8c07fea43c"
+    },
+    {
+      "@id": "5b5b34b2-c16f-5153-ac04-c3c9197a8256",
+      "@type": "cr:FileObject",
+      "name": "standin_01338_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/5b5b34b2-c16f-5153-ac04-c3c9197a8256/download",
+      "contentSize": "65865 B",
+      "sha256": "642999db883b5384af501a3b3eaa971d12e81c6473c1e2fd61a9462e6d7823c3"
+    },
+    {
+      "@id": "7ada2f83-cf6a-5a10-811e-1cb33d669d1c",
+      "@type": "cr:FileObject",
+      "name": "standin_01344_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/7ada2f83-cf6a-5a10-811e-1cb33d669d1c/download",
+      "contentSize": "65865 B",
+      "sha256": "6ab997ac71d12221b14183cd2734c5d144ccf68bdfc030b1201579f3b76e8ca6"
+    },
+    {
+      "@id": "db0049c1-9ade-5f21-83ea-f3932004411a",
+      "@type": "cr:FileObject",
+      "name": "standin_01349_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/db0049c1-9ade-5f21-83ea-f3932004411a/download",
+      "contentSize": "65865 B",
+      "sha256": "1849cdc6e9ee11dd6ffe9db5ef42a70a0fa1b57110ca47da7e33b47f8c21d565"
+    },
+    {
+      "@id": "dd6cc736-d09b-5385-99f0-cbc5b0dbdedc",
+      "@type": "cr:FileObject",
+      "name": "standin_01350_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/dd6cc736-d09b-5385-99f0-cbc5b0dbdedc/download",
+      "contentSize": "65865 B",
+      "sha256": "d2a7ed10caca3730bb0b304f63b5698054ad51efcdf490d3d5ef5b127e43fb54"
+    },
+    {
+      "@id": "4c6f1f89-4db8-5f73-a752-54fc20fbe3a2",
+      "@type": "cr:FileObject",
+      "name": "standin_01353_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/4c6f1f89-4db8-5f73-a752-54fc20fbe3a2/download",
+      "contentSize": "65865 B",
+      "sha256": "72927e8da7bcc64b39dbab0b10b0db81a4b004fb357887e32646e615965a5102"
+    },
+    {
+      "@id": "bb676f9b-d1bc-5939-a643-b3f0173ad941",
+      "@type": "cr:FileObject",
+      "name": "standin_01371_002.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/bb676f9b-d1bc-5939-a643-b3f0173ad941/download",
+      "contentSize": "65865 B",
+      "sha256": "5d12bea4a7e286fbf12d504b535ab9b031761ad7bf1d4ce4b4104b6134136ae9"
+    },
+    {
+      "@id": "95c77368-fb0a-50af-a2e9-4a89ce796056",
+      "@type": "cr:FileObject",
+      "name": "standin_01372_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/95c77368-fb0a-50af-a2e9-4a89ce796056/download",
+      "contentSize": "65865 B",
+      "sha256": "0fb1149634e032a46c52e9cac814506646278f1d54bd08129113e97891d2d444"
+    },
+    {
+      "@id": "cef2a361-4711-5509-ba98-10084b690f85",
+      "@type": "cr:FileObject",
+      "name": "standin_01379_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/cef2a361-4711-5509-ba98-10084b690f85/download",
+      "contentSize": "65865 B",
+      "sha256": "29dbadd0d179d0c99310fbf18a1c7fcc52f80c0600a70c8430aec8648de13a26"
+    },
+    {
+      "@id": "994829cf-42aa-5918-8909-8b3ad7786bef",
+      "@type": "cr:FileObject",
+      "name": "standin_01383_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/994829cf-42aa-5918-8909-8b3ad7786bef/download",
+      "contentSize": "65865 B",
+      "sha256": "a38fd4ef165ad72fc6acdd3389fccdb1b650f72c1328b3a525910735e112e0f6"
+    },
+    {
+      "@id": "59d68e58-60e4-5529-83f9-2ef58b3638df",
+      "@type": "cr:FileObject",
+      "name": "standin_01386_000.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/59d68e58-60e4-5529-83f9-2ef58b3638df/download",
+      "contentSize": "65865 B",
+      "sha256": "7d9bfd39085c18d34f09916e960615ab238be1abbc2235f962599509a05c0455"
+    },
+    {
+      "@id": "2d6a4eee-c5d3-5cfb-8f95-ae415966843d",
+      "@type": "cr:FileObject",
+      "name": "standin_01396_001.png",
+      "encodingFormat": "image/png",
+      "contentUrl": "/v2/catalog/datasets/nih-chestxray14-workshop/distributions/2d6a4eee-c5d3-5cfb-8f95-ae415966843d/download",
+      "contentSize": "65865 B",
+      "sha256": "931bdfc3bdead8e1f0b0e47edfe2283a7fd91763cf911dd7eca52706d79096f2"
+    }
+  ],
+  "recordSet": [
+    {
+      "@type": "cr:RecordSet",
+      "@id": "images",
+      "name": "images",
+      "description": "One row per image of the slice. The reference label of the evaluation task is not part of this record set or of any distribution: it is held by the evaluation service.",
+      "key": "images/image_id",
+      "field": [
+        {
+          "@type": "cr:Field",
+          "@id": "images/image_id",
+          "name": "image_id",
+          "description": "Identifier of the image: its file name without the extension. The item identifier of the evaluation task.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": { "@id": "75e8db79-006f-5710-a266-8c041dde3a42" },
+            "extract": { "column": "image_id" }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "images/sex",
+          "name": "sex",
+          "description": "Sex as recorded by the source: F or M.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": { "@id": "75e8db79-006f-5710-a266-8c041dde3a42" },
+            "extract": { "column": "sex" }
+          }
+        },
+        {
+          "@type": "cr:Field",
+          "@id": "images/age_band",
+          "name": "age_band",
+          "description": "Age at the examination, as a band: 18-39, 40-59 or 60+.",
+          "dataType": "sc:Text",
+          "source": {
+            "fileObject": { "@id": "75e8db79-006f-5710-a266-8c041dde3a42" },
+            "extract": { "column": "age_band" }
+          }
+        }
+      ]
+    }
+  ],
+  "bio:imagingModality": [{ "@type": "sc:DefinedTerm", "name": "X-ray" }],
+  "bio:bodyRegion": [{ "@type": "sc:DefinedTerm", "name": "Chest" }],
+  "bio:anonymizationLevel": "DEIDENTIFIED",
+  "bio:synthetic": true,
+  "rai:dataCollection": "Selection rule: 200 images drawn with a fixed seed (20261217) from the images of the metadata file that have a reference label, a patient aged 18 or over, sex recorded as F or M and a PA projection. Six strata (sex by age band: 18-39, 40-59, 60+) of equal size to within one image, 40% of each with the finding; at most one image per patient. 60 of them, with the same balance, form the reading subset.",
+  "rai:dataCollectionTimeframe": "Slice prepared on 2026-11-20",
+  "rai:dataAnnotationProtocol": "The reference label (airspace opacity present or absent) is invented for the stand-in and has no relation to the placeholder images.",
+  "rai:personalSensitiveInformation": "Sex and age band are published per image. Age in years, the patient identifier and every other column of the source metadata are left out.",
+  "bio:labelProtocol": {
+    "version": "Invented labels of the synthetic stand-in",
+    "labelScale": "0 = airspace opacity absent; 1 = present",
+    "gradersPerItem": 1,
+    "graderQualification": "none: generated by a script",
+    "perRaterLabelsRetained": false
+  },
+  "prov:wasDerivedFrom": {
+    "@type": "prov:Entity",
+    "@id": "https://doi.org/10.1109/CVPR.2017.369",
+    "name": "NIH ChestX-ray14 (ChestX-ray8), Wang et al., 2017"
+  },
+  "prov:wasGeneratedBy": [
+    {
+      "@type": ["prov:Activity", "https://w3id.org/dpv/ai#DataCollection"],
+      "@id": "#activity-workshop-slice-v1",
+      "name": "Selection of a 200-image slice of NIH ChestX-ray14, one image per patient, balanced by sex and age band, at most 1024 px on the longest side",
+      "prov:startedAtTime": "2026-11-20T00:00:00Z",
+      "prov:endedAtTime": "2026-11-20T00:00:00Z",
+      "prov:used": "https://doi.org/10.1109/CVPR.2017.369",
+      "prov:wasAssociatedWith": {
+        "@type": "prov:SoftwareAgent",
+        "name": "oci-platform scripts/radiology-workshop",
+        "prov:actedOnBehalfOf": { "@type": "prov:Organization", "name": "OCI Platform (GI-AI4H)" }
+      }
+    },
+    {
+      "@type": ["prov:Activity", "https://w3id.org/dpv/ai#DataLabelling"],
+      "@id": "#activity-reference-labels",
+      "name": "Reference labels of the evaluation task (not published)",
+      "prov:used": {
+        "@type": "prov:Entity",
+        "@id": "#guideline-reference-labels",
+        "name": "Invented labels of the synthetic stand-in",
+        "version": "1"
+      },
+      "prov:wasAssociatedWith": [{ "@type": "prov:SoftwareAgent", "prov:hadRole": "Annotator" }]
+    }
+  ],
+  "prov:wasAttributedTo": [
+    {
+      "@type": "prov:Organization",
+      "name": "National Institutes of Health Clinical Center (data provider)"
+    },
+    {
+      "@type": "prov:Organization",
+      "name": "OCI Platform (GI-AI4H): re-publisher of the workshop slice"
+    }
+  ],
+  "odrl:hasOffer": {
+    "@type": "odrl:Offer",
+    "@id": "#offer-source-terms",
+    "odrl:permission": [
+      {
+        "odrl:action": ["odrl:use", "odrl:distribute", "odrl:derive"],
+        "odrl:target": "nih-chestxray14-workshop",
+        "odrl:duty": [{ "odrl:action": "odrl:attribute" }]
+      }
+    ]
+  },
+  "cr:consentCode": [
+    {
+      "@type": "sc:DefinedTerm",
+      "@id": "http://purl.obolibrary.org/obo/DUO_0000004",
+      "termCode": "DUO_0000004",
+      "name": "no restriction",
+      "inDefinedTermSet": "http://purl.obolibrary.org/obo/duo.owl"
+    }
+  ]
+}

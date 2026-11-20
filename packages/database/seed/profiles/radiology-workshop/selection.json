@@ -1,0 +1,3423 @@
+{
+  "schemaVersion": 1,
+  "profile": "radiology-workshop",
+  "standIn": true,
+  "seed": 20261217,
+  "preparedOn": "2026-11-20",
+  "rule": "200 images drawn with a fixed seed (20261217) from the images of the metadata file that have a reference label, a patient aged 18 or over, sex recorded as F or M and a PA projection. Six strata (sex by age band: 18-39, 40-59, 60+) of equal size to within one image, 40% of each with the finding; at most one image per patient. 60 of them, with the same balance, form the reading subset.",
+  "source": {
+    "name": "NIH ChestX-ray14",
+    "downloadPage": "https://nihcc.app.box.com/v/ChestXray-NIHCC",
+    "metadataFile": "Data_Entry_standin.csv",
+    "imagesFetchedFrom": "Synthetic stand-in drawn by scripts/radiology-workshop/standin.ts; nothing was fetched",
+    "readme": null
+  },
+  "finding": {
+    "sourceName": "Airspace opacity",
+    "nameEn": "Airspace opacity",
+    "nameFr": "Opacité alvéolaire"
+  },
+  "labelSource": "synthetic-stand-in",
+  "images": [
+    {
+      "imageId": "standin_00002_001",
+      "file": "standin_00002_001.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "d726036efb64af20edc62c88f368ffe7d27f249e9f0ee40e8438f3560574b83f",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "d726036efb64af20edc62c88f368ffe7d27f249e9f0ee40e8438f3560574b83f",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00005_001",
+      "file": "standin_00005_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "2d61179cd7d8d55ca97012630ecc2e8936ffdf2750a38d71b695d510f00b2840",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "2d61179cd7d8d55ca97012630ecc2e8936ffdf2750a38d71b695d510f00b2840",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00012_002",
+      "file": "standin_00012_002.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "94709d7ccd884a0690d4bcd3e3db9f4d8576414d032f7e57a5c9d1a6ae21d66f",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "94709d7ccd884a0690d4bcd3e3db9f4d8576414d032f7e57a5c9d1a6ae21d66f",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00014_000",
+      "file": "standin_00014_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "e6fb926d832bf4ef7ee15b14c7576927ab5b1a85a4e4aee0e89d0fa356e13f06",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "e6fb926d832bf4ef7ee15b14c7576927ab5b1a85a4e4aee0e89d0fa356e13f06",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00015_001",
+      "file": "standin_00015_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "faf99b025003105d6e6e91a847e31c8ede9b0c34836428b0ca4aa9bcb943753a",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "faf99b025003105d6e6e91a847e31c8ede9b0c34836428b0ca4aa9bcb943753a",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00019_000",
+      "file": "standin_00019_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "9fe7bf2cca042bf4150d69605dd3c77763706da3bf9c185863e4b3fce3a77da4",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "9fe7bf2cca042bf4150d69605dd3c77763706da3bf9c185863e4b3fce3a77da4",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00022_000",
+      "file": "standin_00022_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "20795490861598c173745e21e83d4654233387c48c164c728b41a405fb265fba",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "20795490861598c173745e21e83d4654233387c48c164c728b41a405fb265fba",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00027_000",
+      "file": "standin_00027_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "2e733ebdfa8b5b7edbf7d38f83830d41b52b4e6b1c5fc7a346e3ddb379f4536c",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "2e733ebdfa8b5b7edbf7d38f83830d41b52b4e6b1c5fc7a346e3ddb379f4536c",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00032_000",
+      "file": "standin_00032_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "60351a8eb2baf45c500d88e7db4727449f91c74f13ae318b892f837a15d644fd",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "60351a8eb2baf45c500d88e7db4727449f91c74f13ae318b892f837a15d644fd",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00041_001",
+      "file": "standin_00041_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "ffde9c0693de50dc49fc06611306e54f64956c5db342a0de7bb02ab0c860c4a8",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "ffde9c0693de50dc49fc06611306e54f64956c5db342a0de7bb02ab0c860c4a8",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00044_001",
+      "file": "standin_00044_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "48950d6cde10c01f9802d690c265d31fb7078dc465b5d5a787436183cf376db2",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "48950d6cde10c01f9802d690c265d31fb7078dc465b5d5a787436183cf376db2",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00056_000",
+      "file": "standin_00056_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "79c2ef9fcbfd0b3cba11f7cf72601ae9b9fbd3fa6c4782ce114093a79fbfae0a",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "79c2ef9fcbfd0b3cba11f7cf72601ae9b9fbd3fa6c4782ce114093a79fbfae0a",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00061_000",
+      "file": "standin_00061_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "2656a239834b9437e1e44fc9d4a2fd46d34cc2de09579746a17de08ce761bc52",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "2656a239834b9437e1e44fc9d4a2fd46d34cc2de09579746a17de08ce761bc52",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00072_002",
+      "file": "standin_00072_002.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "6bc50e1548f73cbb2a99239c87a2876aa287e2a28c55b2552913c8b04a1850b4",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "6bc50e1548f73cbb2a99239c87a2876aa287e2a28c55b2552913c8b04a1850b4",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00073_000",
+      "file": "standin_00073_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "7fd7b3ec46e5cacc1dcd722714efdbf17d5287e990620db226d5df632c7e4f73",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "7fd7b3ec46e5cacc1dcd722714efdbf17d5287e990620db226d5df632c7e4f73",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00076_000",
+      "file": "standin_00076_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "1a15b7105c6dd5cc18c269dee1b78be46dc990cd817b8796ec222dca7ef1070e",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "1a15b7105c6dd5cc18c269dee1b78be46dc990cd817b8796ec222dca7ef1070e",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00109_001",
+      "file": "standin_00109_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "34440635aa773ca2034c2f60105a981c312acba538aebb3e383a38907cbafd79",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "34440635aa773ca2034c2f60105a981c312acba538aebb3e383a38907cbafd79",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00119_000",
+      "file": "standin_00119_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "ef9fe0aa0f38f351f92f0b9e05303142022b5e24a486b8e8cb978213463d47b0",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "ef9fe0aa0f38f351f92f0b9e05303142022b5e24a486b8e8cb978213463d47b0",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00120_001",
+      "file": "standin_00120_001.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "2db127b58b59276f154b6d85a57d52ee94c3efb9dc73e2d9654adab52dab2203",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "2db127b58b59276f154b6d85a57d52ee94c3efb9dc73e2d9654adab52dab2203",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00125_002",
+      "file": "standin_00125_002.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "380c98c59328aa1ee50ec73185c234e450d7dcd8ad05770030615d7b479bb2ff",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "380c98c59328aa1ee50ec73185c234e450d7dcd8ad05770030615d7b479bb2ff",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00126_000",
+      "file": "standin_00126_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "2a60bf04d008d39555651288017e653e4890f1db4e058956d9a2e41046e29108",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "2a60bf04d008d39555651288017e653e4890f1db4e058956d9a2e41046e29108",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00127_002",
+      "file": "standin_00127_002.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "bbbaad0bf51a9ae11a04fb5fce947a2d21ff1ee82775fe66d8276af5437c6ba1",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "bbbaad0bf51a9ae11a04fb5fce947a2d21ff1ee82775fe66d8276af5437c6ba1",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00128_002",
+      "file": "standin_00128_002.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "4721bbf7fc83aa695c0d4d977552da96b00eef5d33621893a959703fdf56c486",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "4721bbf7fc83aa695c0d4d977552da96b00eef5d33621893a959703fdf56c486",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00133_001",
+      "file": "standin_00133_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "c66738f34162088d02c4a13f22ac517b05964c7519a79ff4a8cf679afa7908a4",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "c66738f34162088d02c4a13f22ac517b05964c7519a79ff4a8cf679afa7908a4",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00136_002",
+      "file": "standin_00136_002.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "1d03dcabc9347cf394fb7672e1a3197cbac6cd7437d5e81213d7a91ff5cdcae6",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "1d03dcabc9347cf394fb7672e1a3197cbac6cd7437d5e81213d7a91ff5cdcae6",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00139_001",
+      "file": "standin_00139_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "23a9b38569bb6a7a95fea4a8911ed1460561b53949b9cf2498e551ac573222a3",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "23a9b38569bb6a7a95fea4a8911ed1460561b53949b9cf2498e551ac573222a3",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00148_000",
+      "file": "standin_00148_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "4c4d318851a9954febca1c890b4b54562f671c79b75c7b99d09e078f30b13fdd",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "4c4d318851a9954febca1c890b4b54562f671c79b75c7b99d09e078f30b13fdd",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00160_001",
+      "file": "standin_00160_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "1e870b56608cfb308164a25c266594fb15810af31c3a39d525c21d21d31e1197",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "1e870b56608cfb308164a25c266594fb15810af31c3a39d525c21d21d31e1197",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00180_000",
+      "file": "standin_00180_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "d94e443f76cf86c5bec0b8394a241edf3d7d1620412713bcf78828fe17da5f6d",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "d94e443f76cf86c5bec0b8394a241edf3d7d1620412713bcf78828fe17da5f6d",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00192_001",
+      "file": "standin_00192_001.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "220e98edf2d55901ad5ba1f1294aefa34b22401bdffa5ace254893161ddfc487",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "220e98edf2d55901ad5ba1f1294aefa34b22401bdffa5ace254893161ddfc487",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00195_001",
+      "file": "standin_00195_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "f3ad5d0588b5ce0fac8c1d25db4b7f283e340952ab121213fe83779621f622d6",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "f3ad5d0588b5ce0fac8c1d25db4b7f283e340952ab121213fe83779621f622d6",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00216_001",
+      "file": "standin_00216_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "55640cfba272257659164d11854e6344d542e90d9952e2b516329bfc47c41e87",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "55640cfba272257659164d11854e6344d542e90d9952e2b516329bfc47c41e87",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00219_002",
+      "file": "standin_00219_002.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "a81872a9d3ec9ff8b55e634dc899db3840136baf547a8448b6be548d202fadd8",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "a81872a9d3ec9ff8b55e634dc899db3840136baf547a8448b6be548d202fadd8",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00227_002",
+      "file": "standin_00227_002.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "5c6801213a9a6731a4ef4438ecf51e111f61b64db42733fbd2734357724cd638",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "5c6801213a9a6731a4ef4438ecf51e111f61b64db42733fbd2734357724cd638",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00229_000",
+      "file": "standin_00229_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "35d771c6293412d080edc5c750f4912416ce546875c98a61e60959a0528ca1f8",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "35d771c6293412d080edc5c750f4912416ce546875c98a61e60959a0528ca1f8",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00247_002",
+      "file": "standin_00247_002.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "62210b9a55ca229d5ab44c5f03ba3b0e9d9f0991e0dfc84645224ec57700892e",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "62210b9a55ca229d5ab44c5f03ba3b0e9d9f0991e0dfc84645224ec57700892e",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00251_001",
+      "file": "standin_00251_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "36d8c2570d06b0e3362b7e0363ef36bf13e7a312e8121af508c776540df17229",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "36d8c2570d06b0e3362b7e0363ef36bf13e7a312e8121af508c776540df17229",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00253_001",
+      "file": "standin_00253_001.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "5983a4d46c7d7b6ccaaf6080e0b3b55ac1e4a257f845085dddfb594e45a3b520",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "5983a4d46c7d7b6ccaaf6080e0b3b55ac1e4a257f845085dddfb594e45a3b520",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00268_000",
+      "file": "standin_00268_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "9922bb08af29be4276ecb8c3da9bb1c70b5a77b99538c613f67a8b02a54d37fb",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "9922bb08af29be4276ecb8c3da9bb1c70b5a77b99538c613f67a8b02a54d37fb",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00278_001",
+      "file": "standin_00278_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "8263651b46708c3daf2e6b76d906b3d94e2d9becfe76d5ec7a4725f17529a715",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "8263651b46708c3daf2e6b76d906b3d94e2d9becfe76d5ec7a4725f17529a715",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00283_001",
+      "file": "standin_00283_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "97d223e63a6afa7709fc7774b599b1700b5644b8aaf87ecf3f27fe827961897d",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "97d223e63a6afa7709fc7774b599b1700b5644b8aaf87ecf3f27fe827961897d",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00296_001",
+      "file": "standin_00296_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "e5ce9d258dbf3a034cb0e1239ce1d6432d5a7d40cb875a7728eff899f5531e4e",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "e5ce9d258dbf3a034cb0e1239ce1d6432d5a7d40cb875a7728eff899f5531e4e",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00308_000",
+      "file": "standin_00308_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "82aeb2e417cbb6014bc2af23850527fdb74b6719de2a2c9af2ace2a9bceb6e02",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "82aeb2e417cbb6014bc2af23850527fdb74b6719de2a2c9af2ace2a9bceb6e02",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00311_001",
+      "file": "standin_00311_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "104e0f85fff97dd82fe456807e7af7337a844ac37e0978cbe298e7017042ced7",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "104e0f85fff97dd82fe456807e7af7337a844ac37e0978cbe298e7017042ced7",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00318_000",
+      "file": "standin_00318_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "772706b4f54ccbe5d024ebcbc30f755cb2c53fdbd986c3f85721c17ea4446952",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "772706b4f54ccbe5d024ebcbc30f755cb2c53fdbd986c3f85721c17ea4446952",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00325_001",
+      "file": "standin_00325_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "fdb3f9c93b415b572293da4eaf29ede38fc87434f3fbe2829d931c5274b2ef34",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "fdb3f9c93b415b572293da4eaf29ede38fc87434f3fbe2829d931c5274b2ef34",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00326_001",
+      "file": "standin_00326_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "5b5aeaa481fd05cacf17e3fae3ad2abc39785608f6eb39d94ee3f7c8401e9333",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "5b5aeaa481fd05cacf17e3fae3ad2abc39785608f6eb39d94ee3f7c8401e9333",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00340_002",
+      "file": "standin_00340_002.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "ca8da3db0aadfa097f90682ef2ad26681f9b3648443e9a86183624ec0ddb268d",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "ca8da3db0aadfa097f90682ef2ad26681f9b3648443e9a86183624ec0ddb268d",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00343_000",
+      "file": "standin_00343_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "abf2d79c2d25a6469268d7568d7a54bf4a882fd496efa4f9925c200ad5d16a97",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "abf2d79c2d25a6469268d7568d7a54bf4a882fd496efa4f9925c200ad5d16a97",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00355_000",
+      "file": "standin_00355_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "1b4f46d030e9c6988382d6e95a1db4cfbbd002cbb41c61c5b0331c0d3b09c49d",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "1b4f46d030e9c6988382d6e95a1db4cfbbd002cbb41c61c5b0331c0d3b09c49d",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00367_000",
+      "file": "standin_00367_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "36256dd35189d93c4e47d06e5a1100791edb01806ebfae28ec7bdb75fc9f8a6c",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "36256dd35189d93c4e47d06e5a1100791edb01806ebfae28ec7bdb75fc9f8a6c",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00369_001",
+      "file": "standin_00369_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "f7efefb4fe3ac508b91efaf0575d4b2bbd9229e93e29c5e989b41caaac6a9372",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "f7efefb4fe3ac508b91efaf0575d4b2bbd9229e93e29c5e989b41caaac6a9372",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00370_001",
+      "file": "standin_00370_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "bee6fc4bc18f9055372886f4ebdb42b46e6a80a3292ec09a2186b6f588f11474",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "bee6fc4bc18f9055372886f4ebdb42b46e6a80a3292ec09a2186b6f588f11474",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00373_001",
+      "file": "standin_00373_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "9269d9df92b64a249d76e6fb6f100d2dc672078fe30d49ada9c73c1c71d767f7",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "9269d9df92b64a249d76e6fb6f100d2dc672078fe30d49ada9c73c1c71d767f7",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00379_001",
+      "file": "standin_00379_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "ff6175f4301bdf0d05c81b3f21550987ef95f96bab22395b1040312130ec9ac0",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "ff6175f4301bdf0d05c81b3f21550987ef95f96bab22395b1040312130ec9ac0",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00381_001",
+      "file": "standin_00381_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "65ee7e047457dce7bf859bc308813b75119d4ee804fc0444fe09af8d0074a50b",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "65ee7e047457dce7bf859bc308813b75119d4ee804fc0444fe09af8d0074a50b",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00394_001",
+      "file": "standin_00394_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "2eee1a1fa74aeecb17bb176c02d23bfb3293dee3677c85b23413f0ca8e15b3fa",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "2eee1a1fa74aeecb17bb176c02d23bfb3293dee3677c85b23413f0ca8e15b3fa",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00399_001",
+      "file": "standin_00399_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "bf9a981ad7fa396a265737770e5cb62ef64c9dad4c08c357f1c493babb7b70cf",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "bf9a981ad7fa396a265737770e5cb62ef64c9dad4c08c357f1c493babb7b70cf",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00400_000",
+      "file": "standin_00400_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "3fad89ec78de3421026dee36657d1dbfbefcb3f83c13b11756f6f7e4e0896c3e",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "3fad89ec78de3421026dee36657d1dbfbefcb3f83c13b11756f6f7e4e0896c3e",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00408_000",
+      "file": "standin_00408_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "4180f113f44ca74a71c20be5a5378d933289717b7ca010dedc30d725e55983bd",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "4180f113f44ca74a71c20be5a5378d933289717b7ca010dedc30d725e55983bd",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00417_001",
+      "file": "standin_00417_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "e6618f8131329a35e00995d7faa20ab745128aa59e468d001cf7d794ffb133a4",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "e6618f8131329a35e00995d7faa20ab745128aa59e468d001cf7d794ffb133a4",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00421_001",
+      "file": "standin_00421_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "db91650a753c11798dbdacc9ebe138f8346a8a7d89027e37f5f3da1ce94008dd",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "db91650a753c11798dbdacc9ebe138f8346a8a7d89027e37f5f3da1ce94008dd",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00432_001",
+      "file": "standin_00432_001.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "4284b21454d96791c28303bc5d85e1cd4279a8e954605fb5905f9bfcf14f5ebc",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "4284b21454d96791c28303bc5d85e1cd4279a8e954605fb5905f9bfcf14f5ebc",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00455_000",
+      "file": "standin_00455_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "caf4a88360b770386d0af19401dd6b74791a8cae591c62a8c749311ea359d6d3",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "caf4a88360b770386d0af19401dd6b74791a8cae591c62a8c749311ea359d6d3",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00457_000",
+      "file": "standin_00457_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "b33c2d0694235df6763bc4c8c7fb9d1739bbb6a8581849194933d4f56141cb32",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "b33c2d0694235df6763bc4c8c7fb9d1739bbb6a8581849194933d4f56141cb32",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00480_001",
+      "file": "standin_00480_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "29faf621aca751a1e098e83495f3a6a61c43d6d9eaa1a20977dba9b772c5eca6",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "29faf621aca751a1e098e83495f3a6a61c43d6d9eaa1a20977dba9b772c5eca6",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00495_001",
+      "file": "standin_00495_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "cf0b37e8e3ef5fbf437b720cffe6e81bf31cca383a5f979ebd1c1559928bd394",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "cf0b37e8e3ef5fbf437b720cffe6e81bf31cca383a5f979ebd1c1559928bd394",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00500_001",
+      "file": "standin_00500_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "8900636ab881f3109234c4fc3620c4cc64b2e9d2fb22fd39a06edd789e1a4706",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "8900636ab881f3109234c4fc3620c4cc64b2e9d2fb22fd39a06edd789e1a4706",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00501_001",
+      "file": "standin_00501_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "bf5921434c3ffcce90b7042ef6637080c7404182857601e92727c73793132c74",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "bf5921434c3ffcce90b7042ef6637080c7404182857601e92727c73793132c74",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00502_000",
+      "file": "standin_00502_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "02151ad11f53de406a3def77a7cb27a5ec218da8a4dc1e724bb78782db176d1c",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "02151ad11f53de406a3def77a7cb27a5ec218da8a4dc1e724bb78782db176d1c",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00509_000",
+      "file": "standin_00509_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "a82247fb6e429fd070fa1f1bc2159363e2125c22a5e12044d737abc92fc59a67",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "a82247fb6e429fd070fa1f1bc2159363e2125c22a5e12044d737abc92fc59a67",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00522_000",
+      "file": "standin_00522_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "5ce3079f3254612fbb46bd39198ee799e3026763b7efc32f5be9da553f9ef22e",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "5ce3079f3254612fbb46bd39198ee799e3026763b7efc32f5be9da553f9ef22e",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00535_000",
+      "file": "standin_00535_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "5d05cfd73b3d2f43eed956dece28b6da342f5e76b88a878aa443f52a43c21de0",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "5d05cfd73b3d2f43eed956dece28b6da342f5e76b88a878aa443f52a43c21de0",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00542_001",
+      "file": "standin_00542_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "71e671721f40c279f07dfe4cd0cc3bdac3551832ea44ec4a26647616a5c97fb3",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "71e671721f40c279f07dfe4cd0cc3bdac3551832ea44ec4a26647616a5c97fb3",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00555_000",
+      "file": "standin_00555_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "1c300846c26d3c4445110b319e71b5f679151aebf6cd5a893f356a93a2bea617",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "1c300846c26d3c4445110b319e71b5f679151aebf6cd5a893f356a93a2bea617",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00556_001",
+      "file": "standin_00556_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "7a458ddadaebdddddf6d90c0e59930557a96bb85f04eef9eec9cdceddb33349e",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "7a458ddadaebdddddf6d90c0e59930557a96bb85f04eef9eec9cdceddb33349e",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00568_000",
+      "file": "standin_00568_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "eca062c395485767be8eadb994217afb2ce23fa54e750f7e509b3fbe694017ce",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "eca062c395485767be8eadb994217afb2ce23fa54e750f7e509b3fbe694017ce",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00578_000",
+      "file": "standin_00578_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "66dae6031c2987fee884addcf6d54f4483179341ad315e6c2d10ed0846ca3567",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "66dae6031c2987fee884addcf6d54f4483179341ad315e6c2d10ed0846ca3567",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00581_002",
+      "file": "standin_00581_002.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "2e6530e89b0824458a92fe4de5b383bd25781693a32ec2309d0715695e0e3712",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "2e6530e89b0824458a92fe4de5b383bd25781693a32ec2309d0715695e0e3712",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00583_000",
+      "file": "standin_00583_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "659201c008dd830c51fe132e0c973124ba6ab4ad06a46c3b6cab55837828e709",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "659201c008dd830c51fe132e0c973124ba6ab4ad06a46c3b6cab55837828e709",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00596_000",
+      "file": "standin_00596_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "41503891a1fff2a338bfa8ca18c29c51b8adc6a482cde43b2e192635800f158d",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "41503891a1fff2a338bfa8ca18c29c51b8adc6a482cde43b2e192635800f158d",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00608_000",
+      "file": "standin_00608_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "e8e644299eb4c44b34bd2318a08c47dcb0b554a45b416bd42127b44bd81ff387",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "e8e644299eb4c44b34bd2318a08c47dcb0b554a45b416bd42127b44bd81ff387",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00612_001",
+      "file": "standin_00612_001.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "af5bef3c3f2eec90c51fe96907a17ff719dc87a22b90b806307e0407e98e722a",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "af5bef3c3f2eec90c51fe96907a17ff719dc87a22b90b806307e0407e98e722a",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00614_000",
+      "file": "standin_00614_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "de71650398f0c693c0455cb4d7f325d1c2134d7b0df614f91f5662ba18889814",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "de71650398f0c693c0455cb4d7f325d1c2134d7b0df614f91f5662ba18889814",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00622_001",
+      "file": "standin_00622_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "c98963c7f02e9f216df2ddb8d77421ffb56e91492689630b2286734e2698ae66",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "c98963c7f02e9f216df2ddb8d77421ffb56e91492689630b2286734e2698ae66",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00627_000",
+      "file": "standin_00627_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "c368c307be6fe4352321cb70c61ea33932cece3b44eea30341d424b5fae0c26e",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "c368c307be6fe4352321cb70c61ea33932cece3b44eea30341d424b5fae0c26e",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00632_000",
+      "file": "standin_00632_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "56ab833f3b24467b9f7770e207838f4cacd351e22946b76578ee1c022bd3b69d",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "56ab833f3b24467b9f7770e207838f4cacd351e22946b76578ee1c022bd3b69d",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00638_000",
+      "file": "standin_00638_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "4f2dbd9e407d09be1fe02a4ea5da087d92e952fdd74183a902578e39563622a2",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "4f2dbd9e407d09be1fe02a4ea5da087d92e952fdd74183a902578e39563622a2",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00641_000",
+      "file": "standin_00641_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "d8f12e850eb04d1bdac6c7e5b2408bc4e753ed2f5a886c9f92b918ab044d58c1",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "d8f12e850eb04d1bdac6c7e5b2408bc4e753ed2f5a886c9f92b918ab044d58c1",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00650_000",
+      "file": "standin_00650_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "6a6d21400147870239ba38f571183e82229739e29dc41f2d9349f6a1b811a6de",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "6a6d21400147870239ba38f571183e82229739e29dc41f2d9349f6a1b811a6de",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00669_002",
+      "file": "standin_00669_002.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "ca729f9d0ce6482b5aeef9d77df2d597d7785e59ac547d87eeff9d73a11a4606",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "ca729f9d0ce6482b5aeef9d77df2d597d7785e59ac547d87eeff9d73a11a4606",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00672_000",
+      "file": "standin_00672_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "a2f1c1633d0766e573f8cb5883339a82a255e8652416d28512d057927cd43984",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "a2f1c1633d0766e573f8cb5883339a82a255e8652416d28512d057927cd43984",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00676_000",
+      "file": "standin_00676_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "e30bf39853c9a0b1fd79be8bd774ad79171ff6b705933726db122c269794b0e3",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "e30bf39853c9a0b1fd79be8bd774ad79171ff6b705933726db122c269794b0e3",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00678_000",
+      "file": "standin_00678_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "efeadb10f105534eaba184d094ec86098c02255a4921cd27a6f437dd5f3cc45f",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "efeadb10f105534eaba184d094ec86098c02255a4921cd27a6f437dd5f3cc45f",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00682_000",
+      "file": "standin_00682_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "88f26cfb2cda1fe9f908de07f1c3450b40b72f9a966699c6f0fde37cd23cb269",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "88f26cfb2cda1fe9f908de07f1c3450b40b72f9a966699c6f0fde37cd23cb269",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00692_000",
+      "file": "standin_00692_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "d889c56be923aabe6556babf50824cdbe25ad5529703cff19bb340230c147457",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "d889c56be923aabe6556babf50824cdbe25ad5529703cff19bb340230c147457",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00693_001",
+      "file": "standin_00693_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "eca42f3b6f7ef8689bcd63dab259902e2228ede73729019897eb1c13fb80e979",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "eca42f3b6f7ef8689bcd63dab259902e2228ede73729019897eb1c13fb80e979",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00705_000",
+      "file": "standin_00705_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "c425bd192fbe923e4e1ed79caa30c8a1fc030d3dbe51b5d8f6ddbbb1d15e2326",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "c425bd192fbe923e4e1ed79caa30c8a1fc030d3dbe51b5d8f6ddbbb1d15e2326",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00717_000",
+      "file": "standin_00717_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "dd7a46005b8cd7916f1b3b11305dd35019436a6d98cc54fa78db0930a1452ec1",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "dd7a46005b8cd7916f1b3b11305dd35019436a6d98cc54fa78db0930a1452ec1",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00732_001",
+      "file": "standin_00732_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "04c95abc8b1490aba880e2edc59df85739355e81de1b5d50bc603338a32d9238",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "04c95abc8b1490aba880e2edc59df85739355e81de1b5d50bc603338a32d9238",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00738_002",
+      "file": "standin_00738_002.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "af379a95cc170098847dca0921f81131be6df56a2e15585b38d4a9f6eaa523fd",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "af379a95cc170098847dca0921f81131be6df56a2e15585b38d4a9f6eaa523fd",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00741_001",
+      "file": "standin_00741_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "67fa61c149c28cc389e3b12f4a0c12012dbab38e7a481a8754db161771e3afd5",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "67fa61c149c28cc389e3b12f4a0c12012dbab38e7a481a8754db161771e3afd5",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00758_002",
+      "file": "standin_00758_002.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "769c07cd2499d7f002b2a143efc02f8f0b6d92facba930c49eca83affc95f796",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "769c07cd2499d7f002b2a143efc02f8f0b6d92facba930c49eca83affc95f796",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00768_000",
+      "file": "standin_00768_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "4c1d81073f0f5e9d0619b26b871b86a0e01924252fb5b2947dca40d3957273c6",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "4c1d81073f0f5e9d0619b26b871b86a0e01924252fb5b2947dca40d3957273c6",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00775_001",
+      "file": "standin_00775_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "689ea79c090e4ffc0be85c6c3aa6f256cf136e946b7d6ccbe4953d0563f7b258",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "689ea79c090e4ffc0be85c6c3aa6f256cf136e946b7d6ccbe4953d0563f7b258",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00777_002",
+      "file": "standin_00777_002.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "9cbf1965acb7df0dfe32a6da860acc1daa467fc4e1f965978852503e91e2d6e0",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "9cbf1965acb7df0dfe32a6da860acc1daa467fc4e1f965978852503e91e2d6e0",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00778_001",
+      "file": "standin_00778_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "338c55ed20b2e9863a48cf2e4d72a47069107ed35649286cfc2bac6734c68045",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "338c55ed20b2e9863a48cf2e4d72a47069107ed35649286cfc2bac6734c68045",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00779_001",
+      "file": "standin_00779_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "26a97e3bc48e8f2a348691a653dd4fe86aa1ed615fbf278a1fb8331e0d29f138",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "26a97e3bc48e8f2a348691a653dd4fe86aa1ed615fbf278a1fb8331e0d29f138",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00780_001",
+      "file": "standin_00780_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "07e9764d70a76968396f40b1753ace916c89131e5037312ff5e51460d60d2e3f",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "07e9764d70a76968396f40b1753ace916c89131e5037312ff5e51460d60d2e3f",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00802_001",
+      "file": "standin_00802_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "5d84451d73f05c295ee705d06b2c41a0e1455fcc99425ddfa7d366cff193d40c",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "5d84451d73f05c295ee705d06b2c41a0e1455fcc99425ddfa7d366cff193d40c",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00816_001",
+      "file": "standin_00816_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "73f80fa57e1a59f0817acf3a095db20efcc169301f182285e14b32e2ee510b64",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "73f80fa57e1a59f0817acf3a095db20efcc169301f182285e14b32e2ee510b64",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00826_002",
+      "file": "standin_00826_002.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "c008302ad1680dc0f8151d825e15d1c6f040675286695eeb2dfb74f9e4b563eb",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "c008302ad1680dc0f8151d825e15d1c6f040675286695eeb2dfb74f9e4b563eb",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00827_002",
+      "file": "standin_00827_002.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "aa44c0c1c4994317d73a0f82d16105f1c90cf5ae41c69570db2d940fd1ccdb21",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "aa44c0c1c4994317d73a0f82d16105f1c90cf5ae41c69570db2d940fd1ccdb21",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00828_000",
+      "file": "standin_00828_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "c993e3f36ef24826eebd09b70fe3ae9bcd322553f85275b0d057377912b13189",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "c993e3f36ef24826eebd09b70fe3ae9bcd322553f85275b0d057377912b13189",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00832_001",
+      "file": "standin_00832_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "52696d1a49d6a706f52461f38b2560adff69721b73e300bb785623166f5d642e",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "52696d1a49d6a706f52461f38b2560adff69721b73e300bb785623166f5d642e",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00838_001",
+      "file": "standin_00838_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "8234606b1c878eadfd6dbb5b5e45c71710b98d469ecbb50f907dc75b1fb17704",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "8234606b1c878eadfd6dbb5b5e45c71710b98d469ecbb50f907dc75b1fb17704",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00843_000",
+      "file": "standin_00843_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "6bfd6fe174b7909362b9ac914a99962f36349222840a724fe8f83d7a6bd6a764",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "6bfd6fe174b7909362b9ac914a99962f36349222840a724fe8f83d7a6bd6a764",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00845_000",
+      "file": "standin_00845_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "f0dd46f6986804f14a7daddc07bda8ed40425d2ed13352a285f23a0199fd6692",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "f0dd46f6986804f14a7daddc07bda8ed40425d2ed13352a285f23a0199fd6692",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00853_002",
+      "file": "standin_00853_002.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "1d61be589e4418f4c596f835735ce2c5b4a7490873a6f78965e19b818c1e1acf",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "1d61be589e4418f4c596f835735ce2c5b4a7490873a6f78965e19b818c1e1acf",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00856_001",
+      "file": "standin_00856_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "0047138799da8ed8c34c2e97b1f38d09e514fe3eb7b06a62d6552ef006e75bdd",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "0047138799da8ed8c34c2e97b1f38d09e514fe3eb7b06a62d6552ef006e75bdd",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00873_002",
+      "file": "standin_00873_002.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "7b62da1d547c5d33d89f1789444ec5e6d53e5153eece52b0799cbf6c7974273d",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "7b62da1d547c5d33d89f1789444ec5e6d53e5153eece52b0799cbf6c7974273d",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00876_001",
+      "file": "standin_00876_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "eb6e0c0386b854701971fe95f92a75cb42fee1844bdc2053a8f1afe8b359d422",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "eb6e0c0386b854701971fe95f92a75cb42fee1844bdc2053a8f1afe8b359d422",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00901_000",
+      "file": "standin_00901_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "96a4b1067891fc6be5c114db33d7e23218ba67a3cb43796ca74af3c39492719d",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "96a4b1067891fc6be5c114db33d7e23218ba67a3cb43796ca74af3c39492719d",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00903_002",
+      "file": "standin_00903_002.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "4ed255415f8b7e4eef97e628722305b98361ce202eb1d86b92b5582bc8d1249b",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "4ed255415f8b7e4eef97e628722305b98361ce202eb1d86b92b5582bc8d1249b",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00910_001",
+      "file": "standin_00910_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "98be6294ffe109523ad31beda585829d22f61c166cb06a4e2bb7c60ae9ca0dad",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "98be6294ffe109523ad31beda585829d22f61c166cb06a4e2bb7c60ae9ca0dad",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00912_000",
+      "file": "standin_00912_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "e74f91ab16ec65353f6f85436cee37e37309e6ac1a1e9f669a1674ff53b62b86",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "e74f91ab16ec65353f6f85436cee37e37309e6ac1a1e9f669a1674ff53b62b86",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00914_000",
+      "file": "standin_00914_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "45b10f6153a8fedae303220d2412fe86c180a59b44b34efea0e2b6d070df96c4",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "45b10f6153a8fedae303220d2412fe86c180a59b44b34efea0e2b6d070df96c4",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00919_002",
+      "file": "standin_00919_002.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "8eb638e4beab7617db481bf14d523b1ff914da4076c7ef423ecd2d1e9e3068c5",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "8eb638e4beab7617db481bf14d523b1ff914da4076c7ef423ecd2d1e9e3068c5",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00921_000",
+      "file": "standin_00921_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "78c608d4addbec810dc327fe2149e4b7ece740d76830e96c1edf311fbe32a28b",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "78c608d4addbec810dc327fe2149e4b7ece740d76830e96c1edf311fbe32a28b",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00925_000",
+      "file": "standin_00925_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "9025d03d70132b9a001481ea8e335e3959c47b37df76fb9d35747f56ce9cbd9b",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "9025d03d70132b9a001481ea8e335e3959c47b37df76fb9d35747f56ce9cbd9b",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00928_001",
+      "file": "standin_00928_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "540625e390c069e5557eebbcc76a365829c66b8b95ce2e4dc6ff77688809acad",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "540625e390c069e5557eebbcc76a365829c66b8b95ce2e4dc6ff77688809acad",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00937_001",
+      "file": "standin_00937_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "16c639b381e9fd7f1356f62ec932a1de2ccf5892748d979c5732b49ba9672975",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "16c639b381e9fd7f1356f62ec932a1de2ccf5892748d979c5732b49ba9672975",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00944_001",
+      "file": "standin_00944_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "771876f89efb113d7bdfcc2eb941bef148098733b90dec9debcb8bc32c1b5195",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "771876f89efb113d7bdfcc2eb941bef148098733b90dec9debcb8bc32c1b5195",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00949_000",
+      "file": "standin_00949_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "7fc3288b84d6d4e8532dadee83102f7202609130b99025e14f0cdc593a5e093b",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "7fc3288b84d6d4e8532dadee83102f7202609130b99025e14f0cdc593a5e093b",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00965_000",
+      "file": "standin_00965_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "3aaca8e20c9068d3520f2b44c889d11c5b37bf4fa87f0bc1bafd7f6ea4c0b466",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "3aaca8e20c9068d3520f2b44c889d11c5b37bf4fa87f0bc1bafd7f6ea4c0b466",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00967_000",
+      "file": "standin_00967_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "cc25c5b7d98f6331a86a58398e6d05db21f4a366ae01c64ab02f6becb5474c4b",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "cc25c5b7d98f6331a86a58398e6d05db21f4a366ae01c64ab02f6becb5474c4b",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00991_000",
+      "file": "standin_00991_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "6f9b7b5045ae7b441a269130f008e2d2360c88e927808a30aa425dadb4e70615",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "6f9b7b5045ae7b441a269130f008e2d2360c88e927808a30aa425dadb4e70615",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00998_001",
+      "file": "standin_00998_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "00a165808c5a0704d0135604f440564898dacc381603fb44180990e8f09f6a55",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "00a165808c5a0704d0135604f440564898dacc381603fb44180990e8f09f6a55",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_00999_000",
+      "file": "standin_00999_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "cc3edb378b7830f79142f7c60bd7e0beba650472178c2e95095f2fba92d5e034",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "cc3edb378b7830f79142f7c60bd7e0beba650472178c2e95095f2fba92d5e034",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01008_001",
+      "file": "standin_01008_001.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "dd2faf58fa1aa38ea3ecd7ce8a8b7ba8810fb8ed135e75bc2544a1c6ac589c51",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "dd2faf58fa1aa38ea3ecd7ce8a8b7ba8810fb8ed135e75bc2544a1c6ac589c51",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01014_001",
+      "file": "standin_01014_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "14540d567a9b41c564e941d906b3761663e340b65e453ae1fcb461a71e58dc5f",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "14540d567a9b41c564e941d906b3761663e340b65e453ae1fcb461a71e58dc5f",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01015_002",
+      "file": "standin_01015_002.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "0719895c8bfca379cd934199c67a2d561385c325ebc9c68a3eb82dc38ba7eb5b",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "0719895c8bfca379cd934199c67a2d561385c325ebc9c68a3eb82dc38ba7eb5b",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01019_001",
+      "file": "standin_01019_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "7bd09575df4b7c268b4addbd5e28f3d9420d2f6c4c1a10b68e377a6b888e30a5",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "7bd09575df4b7c268b4addbd5e28f3d9420d2f6c4c1a10b68e377a6b888e30a5",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01020_000",
+      "file": "standin_01020_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "672ab288c1bdd822f339911ddb1169d2f938f771ef17033b76de61ae14a7ca75",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "672ab288c1bdd822f339911ddb1169d2f938f771ef17033b76de61ae14a7ca75",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01030_000",
+      "file": "standin_01030_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "101faaa9e04a913059ad64fc9a5173e647ba8ee4bf216229b3e53c2f6f1ea8bc",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "101faaa9e04a913059ad64fc9a5173e647ba8ee4bf216229b3e53c2f6f1ea8bc",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01031_001",
+      "file": "standin_01031_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "50d46fe5afd044c917b6fe58b6881d7765345ebde14ea80d1fa8871318d07e6f",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "50d46fe5afd044c917b6fe58b6881d7765345ebde14ea80d1fa8871318d07e6f",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01032_001",
+      "file": "standin_01032_001.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "b4aafad0fcbd454a17ce711d4e5e3a6b0902dcdc2f4144771c91867480bbc483",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "b4aafad0fcbd454a17ce711d4e5e3a6b0902dcdc2f4144771c91867480bbc483",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01034_000",
+      "file": "standin_01034_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "7dbc5df09fbd23d730f6f2f3ca2901b2a0ced354993a630bceb1b8b493895407",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "7dbc5df09fbd23d730f6f2f3ca2901b2a0ced354993a630bceb1b8b493895407",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01042_000",
+      "file": "standin_01042_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "117728660b7a336c58762813354ce7cde2250a1e0ed891adac48724216270c02",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "117728660b7a336c58762813354ce7cde2250a1e0ed891adac48724216270c02",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01045_000",
+      "file": "standin_01045_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "aad6230f468cd5d3340f948e4a3a46f563cf109868509ea4303588ff4392900f",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "aad6230f468cd5d3340f948e4a3a46f563cf109868509ea4303588ff4392900f",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01050_000",
+      "file": "standin_01050_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "e527366769eb11b96e7364401bfd04885d0440e13030b10ed0400f877f2003ef",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "e527366769eb11b96e7364401bfd04885d0440e13030b10ed0400f877f2003ef",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01056_001",
+      "file": "standin_01056_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "d9325d3845e847994c2e53bdd59c359b72ea92833a2803497e1e384b392e1561",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "d9325d3845e847994c2e53bdd59c359b72ea92833a2803497e1e384b392e1561",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01058_001",
+      "file": "standin_01058_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "3b513cab2b6886886d04c41d04bb1221e43902a973b6e0d320086c731dfc4aa1",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "3b513cab2b6886886d04c41d04bb1221e43902a973b6e0d320086c731dfc4aa1",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01065_001",
+      "file": "standin_01065_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "14ed8121f6a1b1a594042b41cf2027d7156f4e9c831d69ae7352614b9f456281",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "14ed8121f6a1b1a594042b41cf2027d7156f4e9c831d69ae7352614b9f456281",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01076_002",
+      "file": "standin_01076_002.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "af1c7ab0abc796b10f8bfce64c144e72de5c95db717e1946ce345936e842056c",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "af1c7ab0abc796b10f8bfce64c144e72de5c95db717e1946ce345936e842056c",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01087_000",
+      "file": "standin_01087_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "b213dc65ec06db1a0fe54e0117d20d3ae942526a3fe74d0b25b4996989ba999f",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "b213dc65ec06db1a0fe54e0117d20d3ae942526a3fe74d0b25b4996989ba999f",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01090_000",
+      "file": "standin_01090_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "55732fb364d6348cb087bf3ec39185ecd02508713b754a7e55e38bee227b2826",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "55732fb364d6348cb087bf3ec39185ecd02508713b754a7e55e38bee227b2826",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01105_001",
+      "file": "standin_01105_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "a7d6f40e8cdf1f731be9ff45a780fea55bf0a4ddf6ef298a17a538b465eb2e98",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "a7d6f40e8cdf1f731be9ff45a780fea55bf0a4ddf6ef298a17a538b465eb2e98",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01109_001",
+      "file": "standin_01109_001.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "dfd33a58ba6b598943cff37d406c299395f08d20de2d1fefae2d83b7a0498b92",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "dfd33a58ba6b598943cff37d406c299395f08d20de2d1fefae2d83b7a0498b92",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01123_000",
+      "file": "standin_01123_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "60b078e34a766d3a62dcbe5760688d5a448ad2be3dfa92d1f616d05342468fd9",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "60b078e34a766d3a62dcbe5760688d5a448ad2be3dfa92d1f616d05342468fd9",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01125_002",
+      "file": "standin_01125_002.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "97a326df0a36c4346b89ac85c75d00263eb80053f5938ccf89a597c7f9e0aee5",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "97a326df0a36c4346b89ac85c75d00263eb80053f5938ccf89a597c7f9e0aee5",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01130_000",
+      "file": "standin_01130_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "fbfedc6c1c1cfb39c33d7deb5f87d255c0f22cf8e0a954cf687b2b94c89f5b7c",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "fbfedc6c1c1cfb39c33d7deb5f87d255c0f22cf8e0a954cf687b2b94c89f5b7c",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01137_001",
+      "file": "standin_01137_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "0e14ddd53e7055734c0fce073147c9ff3ec9f5cba3a3ba114949004317893a5c",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "0e14ddd53e7055734c0fce073147c9ff3ec9f5cba3a3ba114949004317893a5c",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01144_002",
+      "file": "standin_01144_002.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "ba5941fcc8c2ac450fcef0d4b192d2f439411dbdaa1024bcf1e087007c25338b",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "ba5941fcc8c2ac450fcef0d4b192d2f439411dbdaa1024bcf1e087007c25338b",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01145_000",
+      "file": "standin_01145_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "58e2e993f15f9c0ac187811367a0c913ce6363e64e61a46b0662300283d1de2f",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "58e2e993f15f9c0ac187811367a0c913ce6363e64e61a46b0662300283d1de2f",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01146_000",
+      "file": "standin_01146_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "cf18f3aae21990a733c1fd67d44eb6814a4f541ce563c66bfcc45b888c7cb624",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "cf18f3aae21990a733c1fd67d44eb6814a4f541ce563c66bfcc45b888c7cb624",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01149_001",
+      "file": "standin_01149_001.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "0c811061fe0911415d5f566632bea8ef6bcf36bd8afa8bb80af08ddfddd98543",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "0c811061fe0911415d5f566632bea8ef6bcf36bd8afa8bb80af08ddfddd98543",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01153_000",
+      "file": "standin_01153_000.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "adb80ccfe5d5415794626e9722a6a46a70220918ac2aba8d1c29ec4e5c165f19",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "adb80ccfe5d5415794626e9722a6a46a70220918ac2aba8d1c29ec4e5c165f19",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01155_000",
+      "file": "standin_01155_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "07081985c39972128d4e499885097eed11aa2524b862a3e459db3926a051da9a",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "07081985c39972128d4e499885097eed11aa2524b862a3e459db3926a051da9a",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01160_001",
+      "file": "standin_01160_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "f65a6a01d0192f5503502882a9ee00385d064fc7b52c675e0b511bd7826b34b3",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "f65a6a01d0192f5503502882a9ee00385d064fc7b52c675e0b511bd7826b34b3",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01163_000",
+      "file": "standin_01163_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "cf3a36c2d10edfdf4c27c961ca40332b47c35af58f6bff3a508e4e614c15093f",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "cf3a36c2d10edfdf4c27c961ca40332b47c35af58f6bff3a508e4e614c15093f",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01167_000",
+      "file": "standin_01167_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "3450c0dedd9ff1a4281406d35481e9883c9f11424505e343e870ba11e0fb0c15",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "3450c0dedd9ff1a4281406d35481e9883c9f11424505e343e870ba11e0fb0c15",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01189_000",
+      "file": "standin_01189_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "3d5931b4959db02cb5898234cf2be6bf170f0b6446f02279271b493c0127bc35",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "3d5931b4959db02cb5898234cf2be6bf170f0b6446f02279271b493c0127bc35",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01219_002",
+      "file": "standin_01219_002.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "e1425a8ff5255ef957967c83206e01ba151bb153e8418d509608bcf3e03060a3",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "e1425a8ff5255ef957967c83206e01ba151bb153e8418d509608bcf3e03060a3",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01221_000",
+      "file": "standin_01221_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "3752b7e6772037b869eae47fe4d39a49263d74877fe3500eee570ff198f16d3b",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "3752b7e6772037b869eae47fe4d39a49263d74877fe3500eee570ff198f16d3b",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01227_000",
+      "file": "standin_01227_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "d63d8f5361315043d654890d229d42c5c91c0b22453c47d95218640d75204b53",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "d63d8f5361315043d654890d229d42c5c91c0b22453c47d95218640d75204b53",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01228_002",
+      "file": "standin_01228_002.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "5495e7c09c75bb190cab02b844fe9bc74baaefbc3e646cea32ce892457686142",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "5495e7c09c75bb190cab02b844fe9bc74baaefbc3e646cea32ce892457686142",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01238_000",
+      "file": "standin_01238_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "512484473f53554e636b4ac2e90f7a7a7876e31dd79610be18c44250adb79aee",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "512484473f53554e636b4ac2e90f7a7a7876e31dd79610be18c44250adb79aee",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01239_002",
+      "file": "standin_01239_002.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "0bb05b6e2c803cd4746a3ad5606f461bbfe1e4df6fc777afe9dc390f248e5558",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "0bb05b6e2c803cd4746a3ad5606f461bbfe1e4df6fc777afe9dc390f248e5558",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01252_000",
+      "file": "standin_01252_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "79c586629987161435f0aab4b3e1791e401e84edb0384d855ca66af0998c7b22",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "79c586629987161435f0aab4b3e1791e401e84edb0384d855ca66af0998c7b22",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01256_000",
+      "file": "standin_01256_000.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "0d9eb1ba77ed6aeebc5c3e4001fc2d8077e5c0ad50012aee5b7a682c564b132d",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "0d9eb1ba77ed6aeebc5c3e4001fc2d8077e5c0ad50012aee5b7a682c564b132d",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01263_002",
+      "file": "standin_01263_002.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "d4e868916034eae7ff925bfbe1518c9db7b603abd49ae409f5ccf842d133fa8a",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "d4e868916034eae7ff925bfbe1518c9db7b603abd49ae409f5ccf842d133fa8a",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01270_001",
+      "file": "standin_01270_001.png",
+      "sex": "M",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "70d5cce478c3085b8911b85cab03c37c4ce8d7c056a2287d8903a8cd840cbbaa",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "70d5cce478c3085b8911b85cab03c37c4ce8d7c056a2287d8903a8cd840cbbaa",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01284_000",
+      "file": "standin_01284_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "a1e409378d13c511cd49a987d36b1f2cd036e967edd8845378d3f514efe270b9",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "a1e409378d13c511cd49a987d36b1f2cd036e967edd8845378d3f514efe270b9",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01302_000",
+      "file": "standin_01302_000.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": true,
+      "upstream": {
+        "sha256": "9bc505a7589152aafcf104c2d7d0101d6c4e782346926dde2c0372334152dcae",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "9bc505a7589152aafcf104c2d7d0101d6c4e782346926dde2c0372334152dcae",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01311_002",
+      "file": "standin_01311_002.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "5af03c10d505705840c7ac639259a4dad45a4d1991a2ec1e911040554047776a",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "5af03c10d505705840c7ac639259a4dad45a4d1991a2ec1e911040554047776a",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01322_000",
+      "file": "standin_01322_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "76428973c6332329dafbdd2a8a80f22d8b6146ac80ba72d2a1de9c3fc51db2d8",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "76428973c6332329dafbdd2a8a80f22d8b6146ac80ba72d2a1de9c3fc51db2d8",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01326_001",
+      "file": "standin_01326_001.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "ac3b2d5cd1fa21b9fca8254144d5b49b4b34e1ea1d8d2afae8a7396bd10562f2",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "ac3b2d5cd1fa21b9fca8254144d5b49b4b34e1ea1d8d2afae8a7396bd10562f2",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01336_000",
+      "file": "standin_01336_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "517999d6ad3ce0ed563ee8fa2fab4ccd5846089629bfdfe717f52a8c07fea43c",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "517999d6ad3ce0ed563ee8fa2fab4ccd5846089629bfdfe717f52a8c07fea43c",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01338_000",
+      "file": "standin_01338_000.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "642999db883b5384af501a3b3eaa971d12e81c6473c1e2fd61a9462e6d7823c3",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "642999db883b5384af501a3b3eaa971d12e81c6473c1e2fd61a9462e6d7823c3",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01344_001",
+      "file": "standin_01344_001.png",
+      "sex": "F",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "6ab997ac71d12221b14183cd2734c5d144ccf68bdfc030b1201579f3b76e8ca6",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "6ab997ac71d12221b14183cd2734c5d144ccf68bdfc030b1201579f3b76e8ca6",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01349_001",
+      "file": "standin_01349_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "1849cdc6e9ee11dd6ffe9db5ef42a70a0fa1b57110ca47da7e33b47f8c21d565",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "1849cdc6e9ee11dd6ffe9db5ef42a70a0fa1b57110ca47da7e33b47f8c21d565",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01350_000",
+      "file": "standin_01350_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "d2a7ed10caca3730bb0b304f63b5698054ad51efcdf490d3d5ef5b127e43fb54",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "d2a7ed10caca3730bb0b304f63b5698054ad51efcdf490d3d5ef5b127e43fb54",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01353_001",
+      "file": "standin_01353_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "72927e8da7bcc64b39dbab0b10b0db81a4b004fb357887e32646e615965a5102",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "72927e8da7bcc64b39dbab0b10b0db81a4b004fb357887e32646e615965a5102",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01371_002",
+      "file": "standin_01371_002.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": true,
+      "upstream": {
+        "sha256": "5d12bea4a7e286fbf12d504b535ab9b031761ad7bf1d4ce4b4104b6134136ae9",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "5d12bea4a7e286fbf12d504b535ab9b031761ad7bf1d4ce4b4104b6134136ae9",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01372_001",
+      "file": "standin_01372_001.png",
+      "sex": "F",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "0fb1149634e032a46c52e9cac814506646278f1d54bd08129113e97891d2d444",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "0fb1149634e032a46c52e9cac814506646278f1d54bd08129113e97891d2d444",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01379_001",
+      "file": "standin_01379_001.png",
+      "sex": "M",
+      "ageBand": "18-39",
+      "campaign": false,
+      "upstream": {
+        "sha256": "29dbadd0d179d0c99310fbf18a1c7fcc52f80c0600a70c8430aec8648de13a26",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "29dbadd0d179d0c99310fbf18a1c7fcc52f80c0600a70c8430aec8648de13a26",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01383_000",
+      "file": "standin_01383_000.png",
+      "sex": "M",
+      "ageBand": "40-59",
+      "campaign": false,
+      "upstream": {
+        "sha256": "a38fd4ef165ad72fc6acdd3389fccdb1b650f72c1328b3a525910735e112e0f6",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "a38fd4ef165ad72fc6acdd3389fccdb1b650f72c1328b3a525910735e112e0f6",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01386_000",
+      "file": "standin_01386_000.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": false,
+      "upstream": {
+        "sha256": "7d9bfd39085c18d34f09916e960615ab238be1abbc2235f962599509a05c0455",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "7d9bfd39085c18d34f09916e960615ab238be1abbc2235f962599509a05c0455",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    },
+    {
+      "imageId": "standin_01396_001",
+      "file": "standin_01396_001.png",
+      "sex": "F",
+      "ageBand": "60+",
+      "campaign": true,
+      "upstream": {
+        "sha256": "931bdfc3bdead8e1f0b0e47edfe2283a7fd91763cf911dd7eca52706d79096f2",
+        "bytes": 65865
+      },
+      "hosted": {
+        "sha256": "931bdfc3bdead8e1f0b0e47edfe2283a7fd91763cf911dd7eca52706d79096f2",
+        "bytes": 65865,
+        "width": 256,
+        "height": 256
+      }
+    }
+  ]
+}
