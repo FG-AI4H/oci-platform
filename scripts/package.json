@@ -1,0 +1,27 @@
+{
+  "name": "@oci/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Operator scripts that need workspace dependencies (bulk account provisioning). Run with tsx; nothing here is built or deployed.",
+  "type": "module",
+  "scripts": {
+    "provision-users": "tsx provision-users.ts",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "clean": "rm -rf .turbo"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cognito-identity-provider": "^3.1041.0",
+    "@oci/shared-types": "workspace:*",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "eslint": "^9.39.4",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  }
+}

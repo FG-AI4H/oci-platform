@@ -84,6 +84,7 @@ function loadTaxonomy(): Taxonomy {
 function listTsFiles(dir: string, out: string[] = []): string[] {
   let entries: string[];
   try {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- walks the fixed apps/api/src tree
     entries = readdirSync(dir);
   } catch {
     return out;
@@ -91,6 +92,7 @@ function listTsFiles(dir: string, out: string[] = []): string[] {
   for (const name of entries) {
     if (name === 'node_modules' || name === 'dist' || name.startsWith('.')) continue;
     const full = join(dir, name);
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- walks the fixed apps/api/src tree
     const st = statSync(full);
     if (st.isDirectory()) {
       listTsFiles(full, out);
@@ -114,6 +116,7 @@ interface FoundCall {
 function scanCallSites(files: string[]): FoundCall[] {
   const calls: FoundCall[] = [];
   for (const file of files) {
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- a file found by listTsFiles under apps/api/src
     const src = readFileSync(file, 'utf8');
     for (const callMatch of src.matchAll(EMIT_PATTERN)) {
       const body = callMatch[1] ?? '';
