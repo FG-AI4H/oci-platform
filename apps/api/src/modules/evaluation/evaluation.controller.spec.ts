@@ -15,6 +15,8 @@ function controller() {
     validatePredictions: vi.fn(async () => ({ kind: 'validated-predictions' })),
     submitContainer: vi.fn(async () => ({ kind: 'queued-container' })),
     validateContainer: vi.fn(async () => ({ kind: 'validated-container' })),
+    getSubmissionDetail: vi.fn(async () => ({ kind: 'submission-detail' })),
+    getScoredQuota: vi.fn(async () => ({ kind: 'quota' })),
   };
   return { svc, c: new EvaluationController(svc as unknown as EvaluationService) };
 }
@@ -64,5 +66,33 @@ describe('EvaluationController.submit routes on intent', () => {
     await c.submit('idrid-dr-grading' as never, container('SCORED'), req);
     expect(svc.submitContainer).toHaveBeenCalled();
     expect(svc.validateContainer).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #645. Who may read a FAILED submission is decided in the service from the
+ * caller's identity, so the controller's whole job is to hand that identity
+ * over — including its absence. The rule itself is exercised over HTTP against
+ * Postgres in `evaluation-submissions.int.spec.ts`.
+ */
+describe('EvaluationController reads (#645)', () => {
+  const ID = '22222222-2222-4222-8222-222222222222';
+
+  it('passes the caller to the submission read', async () => {
+    const { svc, c } = controller();
+    await c.submissionDetail('idrid-dr-grading' as never, ID, req);
+    expect(svc.getSubmissionDetail).toHaveBeenCalledWith('idrid-dr-grading', ID, user);
+  });
+
+  it('passes an anonymous caller through as undefined, not as a default identity', async () => {
+    const { svc, c } = controller();
+    await c.submissionDetail('idrid-dr-grading' as never, ID, {} as never);
+    expect(svc.getSubmissionDetail).toHaveBeenCalledWith('idrid-dr-grading', ID, undefined);
+  });
+
+  it('reads the quota for the caller', async () => {
+    const { svc, c } = controller();
+    await c.quota('idrid-dr-grading' as never, req);
+    expect(svc.getScoredQuota).toHaveBeenCalledWith('idrid-dr-grading', user);
   });
 });
