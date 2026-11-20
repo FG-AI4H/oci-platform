@@ -4,6 +4,13 @@ name: Deploy
 #  - push to main (auto-deploys dev only; doc-only changes are skipped via paths-ignore)
 #  - workflow_dispatch (manual; choose dev / int / prod)
 #
+# Deploy freeze on dev (#641): while the REPOSITORY variable DEPLOY_FREEZE_DEV
+# is 'true', a push to main stops in the first job (`freeze-gate`) with a
+# notice naming the commit that was not deployed, and every later job is
+# skipped. A manual run still deploys dev when dispatched with
+# `override_freeze`. int and prod are never frozen by it. Operator steps:
+# docs/deployment.md, "Deploy freeze on dev".
+#
 # The required GitHub Environment must exist on the repo (dev / int / prod) and the AWS
 # OIDC role gha-oci-deploy-{env} must be provisioned via the oci-{env}-bootstrap CDK stack.
 on:
@@ -24,13 +31,23 @@ on:
         default: 'dev'
         type: choice
         options: [dev, int, prod]
+      override_freeze:
+        description: 'Deploy to dev although DEPLOY_FREEZE_DEV is true (no effect on int or prod)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   id-token: write
   contents: read
 
 concurrency:
-  group: deploy-${{ inputs.target || 'dev' }}
+  # A push that the dev freeze stops gets a group of its own instead of
+  # `deploy-dev`. It deploys nothing, so it has no reason to wait behind a
+  # running deploy; and GitHub keeps only ONE pending run per group, so left
+  # in `deploy-dev` it would cancel an `override_freeze` deploy that is
+  # waiting its turn. The condition is the one `freeze-gate` applies to a push.
+  group: deploy-${{ inputs.target || 'dev' }}${{ github.event_name == 'push' && vars.DEPLOY_FREEZE_DEV == 'true' && format('-frozen-{0}', github.run_id) || '' }}
   cancel-in-progress: false
 
 env:
@@ -42,7 +59,72 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  # First job of every run: may this run deploy at all? (#641)
+  #
+  # It only reads the trigger, the target and one repository variable, so it
+  # holds no permission, checks nothing out and assumes no AWS role. It has no
+  # `environment:` on purpose: an environment-level variable would not be
+  # visible here, which is why DEPLOY_FREEZE_DEV must be a repository variable.
+  freeze-gate:
+    name: freeze-gate (DEPLOY_FREEZE_DEV)
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      # 'true' when a push was stopped by the freeze. `preflight` skips on it,
+      # and `build-images` and `cdk-deploy` skip with it, so the run ends
+      # green with its deploy jobs skipped: not deployed, and not a failure.
+      frozen: ${{ steps.gate.outputs.frozen }}
+    steps:
+      - name: Check the dev deploy freeze
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+          TARGET: ${{ inputs.target || 'dev' }}
+          # GitHub compares strings without regard to case, so 'TRUE' freezes
+          # too. Anything else, including 'true' with a stray space, does not.
+          FREEZE_ON: ${{ vars.DEPLOY_FREEZE_DEV == 'true' }}
+          FREEZE_RAW: ${{ vars.DEPLOY_FREEZE_DEV }}
+          OVERRIDE: ${{ inputs.override_freeze }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          FROZEN=false
+
+          if [[ "$TARGET" != "dev" ]]; then
+            echo "Target is $TARGET: the dev deploy freeze does not apply."
+          elif [[ "$FREEZE_ON" != "true" ]]; then
+            # A typo must not pass for "no freeze" unnoticed.
+            if [[ -n "$FREEZE_RAW" && "${FREEZE_RAW,,}" != "false" ]]; then
+              echo "::warning title=DEPLOY_FREEZE_DEV not recognised::The repository variable DEPLOY_FREEZE_DEV is set to something other than 'true' or 'false'. It is read as NOT frozen and this run deploys. Set it to exactly 'true' to freeze dev."
+            fi
+            echo "DEPLOY_FREEZE_DEV is not 'true': dev is not frozen."
+          elif [[ "$EVENT" == "workflow_dispatch" && "$OVERRIDE" == "true" ]]; then
+            echo "::notice title=Deploy freeze overridden::DEPLOY_FREEZE_DEV is 'true' and $ACTOR dispatched this run with override_freeze, so $SHA is deployed to dev."
+          elif [[ "$EVENT" == "workflow_dispatch" ]]; then
+            # Someone asked for a deploy and does not get one: fail, so the
+            # run cannot be mistaken for a deploy that went out.
+            echo "::error title=dev is frozen::DEPLOY_FREEZE_DEV is 'true' and this run was dispatched without override_freeze, so $SHA was NOT deployed to dev. To deploy on purpose, run the workflow again with override_freeze ticked. To end the freeze, set the repository variable DEPLOY_FREEZE_DEV to 'false'."
+            exit 1
+          else
+            FROZEN=true
+            echo "::notice title=dev is frozen, commit not deployed::DEPLOY_FREEZE_DEV is 'true': $SHA was NOT deployed to dev and the remaining jobs are skipped. To deploy it now, run this workflow by hand with target dev and override_freeze ticked. After the freeze, set DEPLOY_FREEZE_DEV to 'false' and run this workflow on main, or dev stays behind until the next merge."
+            {
+              echo "### dev is frozen: this commit was not deployed"
+              echo
+              echo "- Commit: \`$SHA\`"
+              echo "- Why: the repository variable \`DEPLOY_FREEZE_DEV\` is \`true\`."
+              echo "- To deploy during the freeze: run the Deploy workflow by hand on \`main\`, target \`dev\`, with \`override_freeze\` ticked."
+              echo "- After the freeze: set \`DEPLOY_FREEZE_DEV\` to \`false\`, then run the Deploy workflow on \`main\` with target \`dev\`. Until then \`dev\` runs the last commit deployed before the freeze."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "frozen=$FROZEN" >> "$GITHUB_OUTPUT"
+
   preflight:
+    needs: freeze-gate
+    # A frozen push stops at the gate: no wait for CI, no build, no deploy.
+    if: needs.freeze-gate.outputs.frozen != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -155,10 +237,13 @@ jobs:
           exit 1
 
   build-images:
-    needs: preflight
+    needs: [freeze-gate, preflight]
     # Skip the whole pipeline when preflight found this SHA superseded.
     # `cdk-deploy` needs this job, so it skips too — nothing stale ships.
-    if: needs.preflight.outputs.superseded != 'true'
+    # A frozen push never gets here: `preflight` is skipped, and a job whose
+    # dependency was skipped is skipped. The freeze is named anyway so the
+    # rule does not rest on that propagation alone.
+    if: needs.freeze-gate.outputs.frozen != 'true' && needs.preflight.outputs.superseded != 'true'
     # Native ARM64 runner — builds linux/arm64 images directly without
     # QEMU emulation. Avoids "qemu: uncaught target signal 4 (Illegal
     # instruction)" crashes that hit Turbopack / SWC native binaries
