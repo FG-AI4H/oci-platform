@@ -8,6 +8,6 @@
     "target": "ES2022",
     "types": ["node"]
   },
-  "include": ["bin/**/*", "lib/**/*"],
+  "include": ["bin/**/*", "lib/**/*", "test/**/*"],
   "exclude": ["node_modules", "cdk.out", "dist"]
 }

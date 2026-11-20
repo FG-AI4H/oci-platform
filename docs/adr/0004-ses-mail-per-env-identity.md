@@ -53,6 +53,20 @@ DocuSeal is the first sender. The OCI API gains SES API access via task-role gra
 - **Mailgun / Postmark.** Lower friction for "just send the email." Rejected: another vendor for credential management, billing, and bounce handling, when SES is already in our trust + cost envelope. Also adds a `From:` address outside the platform's verified domains.
 - **Google Workspace / Microsoft 365 for inbound.** Real mailbox, no Lambda. Rejected for now: the team is too small to justify per-seat licensing; we revisit when the OCI ACT formalises and the team grows.
 
+## Amendment, 20 November 2026: the Cognito user pool sends through the same identity
+
+Tracked in [#642](https://github.com/FG-AI4H/oci-platform/issues/642).
+
+**What changed.** The decision above names DocuSeal as the first sender and the API as a later one. The Cognito user pool is a third: it mails an invitation when an operator creates an account, and the verification and password-reset codes. Until now it used Cognito's built-in sender, which is limited to 50 messages a day and writes from an address outside the platform's domain. Creating accounts in bulk (`scripts/provision-users.ts`) makes that limit a real one.
+
+**Decision.** The pool sends through the environment's SES domain identity, as `oci-act@<env-domain>`, the mailbox DocuSeal already writes from and the inbound forwarder already delivers. It does so only where `userPoolMailThroughSes` is set in `environments.ts`: `dev` today.
+
+**Why a flag and not a stack dependency.** The identity belongs to `oci-<env>-mail`, which deploys after `oci-<env>-identity` (mail depends on api for the cluster, api on identity for the pool parameters). An identity-to-mail dependency would close a cycle, and moving the SES identity into an earlier stack would replace a live identity and its DKIM records. So the pool is given the identity's ARN by name (`UserPoolEmail.withSES` with `sesVerifiedDomain`), with no CloudFormation reference, and whether the identity exists yet is recorded per environment. Turning the flag on before the mail stack is deployed and verified makes the identity stack fail and roll back; the runbook lists the checks.
+
+**Also decided.** The invitation is bilingual, English and French, and names the environment's address. It does not depend on the flag.
+
+**Not decided here.** The temporary-password validity stays at 3 days.
+
 ## References
 
 - Issue: [FG-AI4H/oci-platform#193](https://github.com/FG-AI4H/oci-platform/issues/193) — tracking implementation
