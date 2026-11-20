@@ -17,6 +17,9 @@ const reuseExisting = process.env.CI ? false : true;
 
 export default defineConfig({
   testDir: './e2e',
+  // Runs against the app in deployed mode with a stand-in pool; it has
+  // its own config, `playwright.session.config.ts` (#643).
+  testIgnore: 'session-refresh.spec.ts',
   // Wipes test-pattern rows from the dev Postgres so the suite starts
   // from a known state. Skip with PW_NO_RESET=1.
   globalSetup: './e2e/global-setup.ts',
