@@ -40,6 +40,21 @@ export type {
   EmailDomainAllowlistEntry,
 } from './email-domain.js';
 
+// DICOM series read endpoints (#674, ADR-0026).
+export {
+  DicomSeriesDetailSchema,
+  DicomSeriesInstanceSchema,
+  DicomSeriesListSchema,
+  DicomSeriesSummarySchema,
+  DicomSeriesVersionQuerySchema,
+} from './dicom.js';
+export type {
+  DicomSeriesDetail,
+  DicomSeriesInstance,
+  DicomSeriesList,
+  DicomSeriesSummary,
+} from './dicom.js';
+
 // Modality → allowed task kinds (#247). Shared between the campaign-
 // create form (disables incompatible radios with a rationale tooltip)
 // and the API service guard (rejects incompatible combos with 400).

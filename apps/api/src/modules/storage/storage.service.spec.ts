@@ -431,3 +431,37 @@ describe('StorageService.completeUpload — header check before the file exists 
     expect(dicomIndex.indexStoredObject).not.toHaveBeenCalled();
   });
 });
+
+describe('StorageService.signedUrlValidUntil', () => {
+  const FIFTEEN_MINUTES = 15 * 60 * 1000;
+
+  function withCredentials(expiration: Date | undefined): void {
+    (s3.client as unknown as { config: unknown }).config = {
+      credentials: async () => ({ accessKeyId: 'k', secretAccessKey: 's', expiration }),
+    };
+  }
+
+  it('is the address lifetime when the credentials do not expire first', async () => {
+    withCredentials(undefined);
+    const before = Date.now();
+
+    const until = (await svc.signedUrlValidUntil()).getTime();
+
+    expect(until).toBeGreaterThanOrEqual(before + FIFTEEN_MINUTES);
+    expect(until).toBeLessThanOrEqual(Date.now() + FIFTEEN_MINUTES);
+
+    withCredentials(new Date(Date.now() + 6 * 60 * 60 * 1000));
+    expect((await svc.signedUrlValidUntil()).getTime()).toBeLessThanOrEqual(
+      Date.now() + FIFTEEN_MINUTES,
+    );
+  });
+
+  it('is the end of the signing credentials when they go first', async () => {
+    // Temporary credentials are renewed only in their last five
+    // minutes, so an address can be signed with six minutes left.
+    const expiration = new Date(Date.now() + 6 * 60 * 1000);
+    withCredentials(expiration);
+
+    expect(await svc.signedUrlValidUntil()).toEqual(expiration);
+  });
+});

@@ -72,7 +72,7 @@ export class StorageService {
   // 10 000 parts; beyond that, computePartSize scales.
   private static readonly MAX_PARTS = 10_000;
   private static readonly PART_URL_TTL_S = 15 * 60;
-  private static readonly DOWNLOAD_URL_TTL_S = 15 * 60;
+  static readonly DOWNLOAD_URL_TTL_S = 15 * 60;
   private readonly logger = new Logger(StorageService.name);
 
   constructor(
@@ -401,6 +401,36 @@ export class StorageService {
     if (!user?.sub) return false;
     const groups = (user['cognito:groups'] ?? []) as string[];
     return groups.includes('admin') || subToUuid(user.sub) === hostId;
+  }
+
+  /**
+   * A signed storage address for one stored object, good for
+   * `DOWNLOAD_URL_TTL_S`. There is NO authorisation here: the caller
+   * has already decided that this reader may have these bytes
+   * (`authoriseDatasetBytes`, and the hold on DICOM files).
+   */
+  signStoredObjectUrl(s3Bucket: string, s3Key: string): Promise<string> {
+    return this.presign(
+      new GetObjectCommand({ Bucket: s3Bucket, Key: s3Key }),
+      StorageService.DOWNLOAD_URL_TTL_S,
+    );
+  }
+
+  /**
+   * Until when an address signed now is sure to work. Call it BEFORE
+   * signing, so that what is stated is never later than the truth.
+   *
+   * Not simply now + TTL: a signed address also dies with the
+   * credentials that signed it. On AWS those are the task role's
+   * temporary credentials, which the SDK renews only in their last
+   * five minutes, so an address signed late in their life is shorter
+   * lived than its TTL says.
+   */
+  async signedUrlValidUntil(): Promise<Date> {
+    const byTtl = Date.now() + StorageService.DOWNLOAD_URL_TTL_S * 1000;
+    const credentials = await this.s3.client.config.credentials();
+    const byCredentials = credentials.expiration?.getTime() ?? Number.POSITIVE_INFINITY;
+    return new Date(Math.min(byTtl, byCredentials));
   }
 
   // ----- helpers ---------------------------------------------------

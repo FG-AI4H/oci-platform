@@ -6,6 +6,9 @@ import { AccessRequestModule } from '../access-request/access-request.module.js'
 import { BulkDownloadService } from './bulk-download.service.js';
 import { DicomIndexRepository } from './dicom-index.repository.js';
 import { DicomIndexService } from './dicom-index.service.js';
+import { DicomSeriesController } from './dicom-series.controller.js';
+import { DicomSeriesRepository } from './dicom-series.repository.js';
+import { DicomSeriesService } from './dicom-series.service.js';
 import { S3ClientProvider } from './s3-client.js';
 import { StorageController } from './storage.controller.js';
 import { StorageService } from './storage.service.js';
@@ -21,10 +24,14 @@ import { StorageService } from './storage.service.js';
  * and `StorageService.authoriseDatasetBytes`, and CatalogModule
  * importing StorageModule would close a dependency cycle
  * (StorageModule → CatalogModule already).
+ *
+ * The DICOM series index is here too (ADR-0026): it is written when an
+ * upload completes and read by `/v2/storage/...`, under the same gate
+ * as a download.
  */
 @Module({
   imports: [AuthModule, CatalogModule, AccessRequestModule],
-  controllers: [StorageController],
+  controllers: [StorageController, DicomSeriesController],
   providers: [
     PrismaService,
     S3ClientProvider,
@@ -32,6 +39,8 @@ import { StorageService } from './storage.service.js';
     DicomIndexService,
     StorageService,
     BulkDownloadService,
+    DicomSeriesRepository,
+    DicomSeriesService,
   ],
   exports: [StorageService, BulkDownloadService],
 })
