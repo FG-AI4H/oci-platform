@@ -43,6 +43,7 @@ const record = (overrides: Partial<DicomObjectRecord> = {}): DicomObjectRecord =
 let tx: {
   dicomObject: { findUnique: ReturnType<typeof vi.fn>; upsert: ReturnType<typeof vi.fn> };
   dicomFinding: { deleteMany: ReturnType<typeof vi.fn>; createMany: ReturnType<typeof vi.fn> };
+  dicomSeries: { createMany: ReturnType<typeof vi.fn> };
 };
 let repo: DicomIndexRepository;
 
@@ -53,6 +54,7 @@ beforeEach(() => {
       upsert: vi.fn().mockResolvedValue({ id: 'object-1' }),
     },
     dicomFinding: { deleteMany: vi.fn(), createMany: vi.fn() },
+    dicomSeries: { createMany: vi.fn() },
   };
   const prisma = {
     client: { $transaction: (run: (client: typeof tx) => Promise<void>) => run(tx) },
@@ -123,6 +125,28 @@ describe('DicomIndexRepository.save', () => {
     );
 
     expect(written().create).toMatchObject({ checkStatus: 'HELD' });
+  });
+
+  it('gives the series a row of its own, without failing when it is already there', async () => {
+    await repo.save(record());
+
+    // `skipDuplicates` is ON CONFLICT DO NOTHING: the files of one
+    // series finish side by side, and each of them tries.
+    expect(tx.dicomSeries.createMany).toHaveBeenCalledWith({
+      data: [{ datasetId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', seriesInstanceUid: 'series-1' }],
+      skipDuplicates: true,
+    });
+  });
+
+  it('creates no series row for a file that names no series', async () => {
+    await repo.save(
+      record({
+        parsed: { header: header({ seriesInstanceUid: null }), objectKind: 'other' },
+      }),
+    );
+    await repo.save(record({ checkStatus: 'UNREADABLE', parsed: null, findings: [] }));
+
+    expect(tx.dicomSeries.createMany).not.toHaveBeenCalled();
   });
 
   it('records an unreadable file with no header columns and no findings', async () => {

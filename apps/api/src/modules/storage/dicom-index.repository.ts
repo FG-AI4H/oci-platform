@@ -37,8 +37,9 @@ export interface DicomObjectRecord {
 }
 
 /**
- * The only place that touches `catalog.dicom_objects` and
- * `catalog.dicom_findings` on the write side (ADR-0026).
+ * The only place that touches `catalog.dicom_objects`,
+ * `catalog.dicom_findings` and `catalog.dicom_series` on the write
+ * side (ADR-0026).
  */
 @Injectable()
 export class DicomIndexRepository {
@@ -108,6 +109,15 @@ export class DicomIndexRepository {
         update: columns,
         select: { id: true },
       });
+      // The series gets a row of its own, so that it has an id a route
+      // can carry. The files of one series are uploaded side by side:
+      // `skipDuplicates` (ON CONFLICT DO NOTHING) lets them all try.
+      if (header?.seriesInstanceUid) {
+        await tx.dicomSeries.createMany({
+          data: [{ datasetId: record.datasetId, seriesInstanceUid: header.seriesInstanceUid }],
+          skipDuplicates: true,
+        });
+      }
       await tx.dicomFinding.deleteMany({ where: { dicomObjectId: object.id } });
       if (record.findings.length > 0) {
         await tx.dicomFinding.createMany({

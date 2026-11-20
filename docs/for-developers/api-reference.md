@@ -134,7 +134,7 @@ Returns `{ url, expiresAt }` — the presigned PUT URL for one part.
 
 Body: `{ parts: [{ partNumber, etag }] }`. Finalises the multipart on S3, upserts the Distribution row.
 
-Response: `UploadedDistribution` — `{ distributionId, name, contentUrl, contentType, contentSizeBytes, sha256, uploadedAt }`. The `contentUrl` is the relative `/v2/catalog/datasets/:slug/distributions/:id/download` path you paste into the next manifest version.
+Response: `UploadedDistribution` — `{ distributionId, name, contentUrl, contentType, contentSizeBytes, sha256, uploadedAt, dicomCheckStatus }`. The `contentUrl` is the relative `/v2/catalog/datasets/:slug/distributions/:id/download` path you paste into the next manifest version. `dicomCheckStatus` is `null` for a file that is not DICOM; for a DICOM file it is `CLEAR`, or `HELD` / `UNREADABLE` when the file is held (see [DICOM series](#dicom-series-674-adr-0026)).
 
 ### `POST /v2/catalog/datasets/:slug/uploads/:uploadId/abort?key=…` _(host)_
 
@@ -147,6 +147,35 @@ Gated download. Returns `302` to a 15-minute presigned S3 GET. Authz:
 - PUBLIC + `requiresAccess: false`: any authenticated caller.
 - RESTRICTED **or** `requiresAccess: true`: caller must have an APPROVED `AccessRequest` for the dataset.
 - PRIVATE: host or admin only.
+
+A DICOM file that is held is a `404` for everyone but its host and admins.
+
+## DICOM series (#674, ADR-0026)
+
+When an upload completes, the platform reads the header of the stored file (never the pixel data), and indexes it if it is DICOM. The two routes below read that index. They are what the built-in viewer uses, and they carry what a DICOM JSON data source needs per instance.
+
+Access is that of a download: PRIVATE → host or admin; RESTRICTED → host, admin, or an APPROVED access request; PUBLIC → anyone, signed in or not.
+
+**Held files.** A DICOM file with undecided de-identification findings is returned to its host and to admins only. For everyone else it is absent from the lists and from the counts, and a series made only of held files is a `404`, the same answer as an unknown id.
+
+A series is made of single-frame images. Left out for every caller: other DICOM objects (reports, presentation states, multi-frame objects), files behind an individual access gate (`requiresAccess`), files hosted elsewhere, and uploads that did not finish. A file whose header could not be read belongs to no series: its host and admins find it in the dataset's file list, not here.
+
+### `GET /v2/storage/datasets/:slug/dicom/series`
+
+The series of one dataset version. `?version=1.0.0` names the version; the default is the latest.
+
+Response: `DicomSeriesList` — `{ datasetSlug, version, total, series: [{ id, studyInstanceUid, seriesInstanceUid, modality, seriesNumber, instanceCount, heldInstanceCount, rows, columns }] }`, by study, then series number. At most 500 series are returned and there is no paging yet; `total` is the full count. `rows` and `columns` are `null` unless every instance of the series states the same value. `id` is the platform's own id for the series and stays the same from one dataset version to the next.
+
+### `GET /v2/storage/dicom/series/:id`
+
+One series, with its instances in display order: along the stack, in the direction the scanner numbered them. A series that is not one stack (a localiser, missing positions) is ordered by instance number. `?version=` as above.
+
+Response: `DicomSeriesDetail` — the fields of the list entry, plus `{ datasetSlug, version, frameOfReferenceUid, expiresAt, instances: [...] }`. Each instance carries:
+
+- `url`: a signed storage address. The browser fetches the file from storage directly, with no `Authorization` header. It works at least until `expiresAt` (15 minutes at most); ask for the series again after that, or when storage refuses an address.
+- `distributionId`, `held`, and the header fields a viewer needs before it has the file: `sopInstanceUid`, `sopClassUid`, `transferSyntaxUid`, `instanceNumber`, `rows`, `columns`, `bitsAllocated`, `pixelRepresentation`, `photometricInterpretation`, `imagePositionPatient`, `imageOrientationPatient`, `pixelSpacing`, `sliceThickness`, `windowCenter`, `windowWidth`.
+
+Both responses are sent with `Cache-Control: no-store`.
 
 ## Certification (#117)
 
