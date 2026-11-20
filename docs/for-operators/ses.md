@@ -81,7 +81,7 @@ The Cognito user pool has mail of its own: the invitation sent when an operator 
 
 The order matters because the identity stack deploys **before** the mail stack and cannot depend on it (mail depends on api, api on identity). CDK gives the pool the identity's ARN built from the domain name; if the identity is not there yet, the identity stack fails to deploy and rolls back.
 
-The first time a pool in the account is pointed at SES, Cognito creates the service-linked role `AWSServiceRoleForAmazonCognitoIdp`, which needs `iam:CreateServiceLinkedRole` for the deploying role. If the deploy fails on that, the role is missing or the organisation's policy denies creating it.
+The first time a pool in the account is pointed at SES, Cognito creates the service-linked role `AWSServiceRoleForAmazonCognitoIdpEmailService`, which needs `iam:CreateServiceLinkedRole` for the role CloudFormation deploys with. On 2026-11-20 that role did not exist in the account yet. If a deploy fails on it, the organisation's policy denies creating it; the identity stack then rolls back and the pool keeps the built-in sender.
 
 To check after a deploy: create a test account for an address you read, and look at the sender of the invitation.
 
