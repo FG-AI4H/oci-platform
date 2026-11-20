@@ -77,7 +77,7 @@ exam_12-03-2024
 0012345678.dcm
 ```
 
-Dates, numbers of more than five digits, accented letters and any word outside a short list of generic ones (exam, study, series, image, slice, ct, brain, head, axial and the like, in English or French) are refused. Send no spreadsheet, no report and no `DICOMDIR` with the images: a folder that holds anything other than images is refused.
+Number the exams and the images from 1: a short number is accepted as a counter, so a patient or record number must never be used as one. Dates, numbers of more than five digits, accented letters and any word outside a short list of generic ones (exam, study, series, image, slice, ct, brain, head, axial and the like, in English or French) are refused. Send no spreadsheet, no report and no `DICOMDIR` with the images: a folder that holds anything other than images is refused.
 
 ## 3. The key stays with you
 

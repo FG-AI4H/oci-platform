@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { IDENTIFYING_ATTRIBUTES, orderInstances, type DicomInstanceHeader } from '@oci/dicom';
 import { z } from 'zod';
@@ -18,9 +18,12 @@ import { describeTransferSyntax } from './transfer-syntaxes.js';
  * (`IDENTIFYING_ATTRIBUTES` and the file-level findings of `@oci/dicom`);
  * this module holds no list of its own.
  *
- * Nothing here returns the value of an attribute. A result carries the
- * attribute's name, the files and a count of distinct values, so that
- * the report, the record and the terminal cannot leak what they flag.
+ * Nothing here returns the value of an identifying attribute. A result
+ * carries the attribute's name, the files and a count of distinct
+ * values, so that the report, the record and the terminal cannot leak
+ * what they flag. The few header fields that are reported (modality,
+ * transfer syntax, sizes) are reported only when they have the shape of
+ * what they are.
  */
 
 export const ARRIVAL_CHECK_TOOL = 'check-exam-sample';
@@ -90,7 +93,7 @@ export interface AcceptedFinding {
 }
 
 export interface SeriesSummary {
-  /** Short digest of the series UID: enough to match two reports, not a header value. */
+  /** Short salted digest of the series UID: names the series within one record, nothing more. */
   ref: string;
   number: number | null;
   modality: string | null;
@@ -105,7 +108,7 @@ export interface SeriesSummary {
 export interface ExamSummary {
   /** 1, 2, 3… in the order of the exams' folders. */
   exam: number;
-  /** Short digest of the study UID. */
+  /** Short salted digest of the study UID: ties a line of the sheet to an exam of the record. */
   ref: string;
   /** Top-level folders the exam's files are in. */
   folders: string[];
@@ -158,8 +161,15 @@ function describeFinding(attribute: string): string {
   );
 }
 
-function shortDigest(value: string): string {
-  return createHash('sha256').update(value).digest('hex').slice(0, 12);
+/** A DICOM modality code (CT, MR, OT…) and a UID, as they may be printed. */
+const MODALITY_CODE = /^[A-Z0-9_]{1,16}$/;
+const UID_VALUE = /^[0-9.]{1,64}$/;
+/** Fields that one exam of one patient has one value of. */
+const ONE_PER_EXAM = ['PatientName', 'PatientID', 'StudyDate'] as const;
+
+function errorCode(err: unknown): string {
+  const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : null;
+  return typeof code === 'string' ? code : 'error';
 }
 
 /** Groups files under one code, keeping first-seen order. */
@@ -186,6 +196,8 @@ interface Image {
   header: DicomInstanceHeader;
   multiFrame: boolean;
   findings: string[];
+  /** Digests of the values of each accepted attribute in this file. */
+  acceptedDigests: Map<string, string[]>;
 }
 
 function unevenSpacing(images: readonly Image[]): boolean {
@@ -242,11 +254,21 @@ export function checkSample(
 ): ArrivalCheckResult {
   const listing = listFolder(folder);
   const problems = new Problems();
+  // Exams and series are referred to by a short digest of their UID. The
+  // salt is made for this run and kept nowhere, so a reference cannot be
+  // worked back to a UID, or forward from one.
+  const salt = randomBytes(16);
+  const reference = (uid: string): string =>
+    createHash('sha256').update(salt).update(uid).digest('hex').slice(0, 12);
   const warnings: string[] = [];
 
   // Position of an entry in its folder, for names that may not be printed.
   const children = new Map<string, string[]>();
-  for (const entry of [...listing.files, ...listing.notRegular]) {
+  for (const entry of [
+    ...listing.files,
+    ...listing.notRegular,
+    ...listing.unreadable.map((unreadable) => unreadable.path).filter((entry) => entry !== ''),
+  ]) {
     const parts = entry.split('/');
     parts.forEach((name, depth) => {
       const parent = parts.slice(0, depth).join('/');
@@ -272,6 +294,13 @@ export function checkSample(
   const contentSeen = new Map<string, string>();
   let totalBytes = 0;
 
+  for (const unreadable of listing.unreadable) {
+    problems.add(
+      'unreadable-entry',
+      'a file or folder could not be read, so it was not checked',
+      `${unreadable.path === '' ? '(the folder itself)' : judgePath(unreadable.path, position).display} (${unreadable.code})`,
+    );
+  }
   for (const notRegular of listing.notRegular) {
     const named = judgePath(notRegular, position);
     problems.add(
@@ -291,7 +320,18 @@ export function checkSample(
       );
     }
 
-    const file = readSampleFile(path.join(folder, ...relative.split('/')));
+    let file: SampleFile;
+    try {
+      file = readSampleFile(path.join(folder, ...relative.split('/')));
+    } catch (err) {
+      // The system's message carries the path, and a name may be what is refused: keep the code only.
+      problems.add(
+        'unreadable-entry',
+        'a file or folder could not be read, so it was not checked',
+        `${named.display} (${errorCode(err)})`,
+      );
+      continue;
+    }
     totalBytes += file.sizeBytes;
 
     if (file.header.kind === 'not-dicom') {
@@ -313,10 +353,15 @@ export function checkSample(
     }
 
     const carried: string[] = [];
+    const valuesInFile = new Map<string, Set<string>>();
     for (const finding of file.header.findings) {
+      const digest = createHash('sha256').update(finding.value).digest('hex');
       const seen = valuesSeen.get(finding.attribute) ?? new Set<string>();
-      seen.add(createHash('sha256').update(finding.value).digest('hex'));
+      seen.add(digest);
       valuesSeen.set(finding.attribute, seen);
+      const inFile = valuesInFile.get(finding.attribute) ?? new Set<string>();
+      inFile.add(digest);
+      valuesInFile.set(finding.attribute, inFile);
 
       if (acceptedReasons.has(finding.attribute)) {
         if (!carried.includes(finding.attribute)) carried.push(finding.attribute);
@@ -330,7 +375,21 @@ export function checkSample(
     }
     for (const attribute of carried) {
       acceptedFiles.set(attribute, (acceptedFiles.get(attribute) ?? 0) + 1);
+      // A decision says "this field holds a code". One file then has one
+      // value for it. A second value sits inside a sequence (the original
+      // attributes a system kept, another issuer's number) and is exactly
+      // what the decision did not look at.
+      if ((valuesInFile.get(attribute)?.size ?? 0) > 1) {
+        problems.add(
+          `finding:${attribute}:several-values`,
+          `${attribute} was accepted by decision and has more than one value in one file (a second one inside a sequence)`,
+          named.display,
+        );
+      }
     }
+    const digestsHere = new Map(
+      [...valuesInFile.entries()].map(([attribute, digests]) => [attribute, [...digests]]),
+    );
 
     const { header, objectKind } = file.header;
     if (objectKind === 'other') {
@@ -365,12 +424,34 @@ export function checkSample(
       contentSeen.set(file.sha256, named.display);
     }
 
+    // Header fields that are printed and recorded must have the shape of
+    // what they are; a free string is not echoed, wherever it sits.
+    if (header.modality !== null && !MODALITY_CODE.test(header.modality)) {
+      problems.add(
+        'not-a-code:Modality',
+        'Modality holds something other than a DICOM modality code',
+        named.display,
+      );
+      continue;
+    }
+    if (header.transferSyntaxUid !== null && !UID_VALUE.test(header.transferSyntaxUid)) {
+      problems.add(
+        'not-a-code:TransferSyntaxUID',
+        'the transfer syntax is not a UID',
+        named.display,
+      );
+      continue;
+    }
+
     images.push({
       path: named.display,
       file,
       header,
       multiFrame: objectKind === 'multi-frame-image',
       findings: carried,
+      acceptedDigests: new Map(
+        carried.map((attribute) => [attribute, digestsHere.get(attribute) ?? []]),
+      ),
     });
   }
 
@@ -387,7 +468,7 @@ export function checkSample(
   const files: CheckedFile[] = [];
   const exams: ExamSummary[] = [...byStudy.entries()]
     .map(([studyUid, seriesOfStudy]) => ({
-      ref: shortDigest(studyUid),
+      ref: reference(studyUid),
       seriesOfStudy,
       // Exams are numbered in the order of their folders, which is the
       // order the person doing the visual check will open them in.
@@ -401,11 +482,22 @@ export function checkSample(
     )
     .map(({ ref, seriesOfStudy }, index) => {
       const exam = index + 1;
+      const members = [...seriesOfStudy.values()].flat();
+      for (const attribute of ONE_PER_EXAM) {
+        const digests = new Set(members.flatMap((m) => m.acceptedDigests.get(attribute) ?? []));
+        if (digests.size > 1) {
+          problems.add(
+            `finding:${attribute}:several-values-in-exam`,
+            `${attribute} was accepted by decision and has more than one value within one exam`,
+            `exam ${exam} (${[...new Set(members.map((m) => m.path.split('/')[0] ?? ''))].sort().join(', ')})`,
+          );
+        }
+      }
       const lookClosely: string[] = [];
       const folders = new Set<string>();
       const series = [...seriesOfStudy.entries()]
         .map(([seriesUid, members]) => ({
-          summary: summariseSeries(shortDigest(seriesUid), members),
+          summary: summariseSeries(reference(seriesUid), members),
           members,
         }))
         .sort(

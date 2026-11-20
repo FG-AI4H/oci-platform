@@ -265,3 +265,31 @@ describe('check-exam-sample: --list-attributes', () => {
     expect(cli.out[0]).toBe('(0010,0010)  PatientName');
   });
 });
+
+describe('check-exam-sample: what a broken input cannot make it print', () => {
+  it('does not quote a decisions file that is not JSON', () => {
+    writeCleanSample(sample, { exams: 1 });
+    writeFileSync(path.join(desk, 'decisions.json'), `${INVENTED_MARKER} is not json`);
+    const cli = command();
+    expect(cli.run(sample, '--accept-findings', 'decisions.json')).toBe(EXIT_REFUSED);
+    expect(cli.text()).toMatch(/decisions\.json is not JSON/);
+    expect(cli.text()).not.toContain(INVENTED_MARKER);
+  });
+
+  it('prints a modality code and never a free string in its place', () => {
+    writeFile(
+      sample,
+      'exam-001/series-01/0001.dcm',
+      slice({
+        exam: 1,
+        series: 1,
+        instance: 1,
+        overrides: [{ tag: '00080060', vr: 'LO', value: `${INVENTED_MARKER}^First` }],
+      }),
+    );
+    const cli = command();
+    expect(cli.run(sample, '--record-out', 'record.json')).toBe(EXIT_SAMPLE_REFUSED);
+    expect(cli.text()).toMatch(/Modality holds something other than a DICOM modality code/);
+    expect(everythingWritten(cli.text())).not.toContain(INVENTED_MARKER);
+  });
+});

@@ -7,14 +7,14 @@
  * Run from the repository root, with the operator's own session token in
  * the environment (never on the command line):
  *
- *   export OCI_API_TOKEN=…        # from the operator's signed-in session
+ *   read -rs OCI_API_TOKEN && export OCI_API_TOKEN   # typed or pasted, not echoed
  *   pnpm upload-exam-sample /path/to/sample --dry-run \
  *     --record ~/oci-intake/arrival-record.json --sheet ~/oci-intake/visual-check.csv \
  *     --dataset <slug> --api https://<platform> \
  *     --state ~/oci-intake/upload-state.json --manifest-out ~/oci-intake/upload-manifest.json
  *
- * Exit code 0: done. 1: stopped part-way, run again to resume. 2: refused
- * before anything was sent. `--help` lists every option.
+ * Exit code 0: done. 1: stopped part-way; the message says whether to run
+ * again. 2: refused, and this run sent nothing. `--help` lists every option.
  *
  * Operator steps: docs/runbooks/exam-sample-intake.md.
  * The work is in ./exam-intake/; this file only starts it.

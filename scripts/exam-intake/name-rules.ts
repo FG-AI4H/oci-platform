@@ -9,6 +9,10 @@
  * random identifier. Anything else is refused, and the institution
  * renames at source.
  *
+ * What it cannot do: a counter of up to five digits is accepted, and a
+ * short patient number looks exactly like one. The guide asks for
+ * counters that start at 1; the rule cannot check that they do.
+ *
  * The convention is spelled out in docs/for-hosts/providing-an-exam-sample.md.
  */
 
@@ -93,25 +97,33 @@ const EXTENSION = /\.(dcm|dicom|ima)$/i;
 /** A counter may have any number of leading zeros and at most this many other digits. */
 export const MAX_COUNTER_DIGITS = 5;
 
-// A DICOM UID: numeric components separated by dots. At least five
-// components, so that a date written 12.03.1975 is not read as one.
+// A DICOM UID: numeric components separated by dots, the first of them
+// 0, 1 or 2 as every registered root is, and at least five components,
+// so that a date or a record number written with dots is not read as one.
 // Both patterns are anchored and their repeated group starts with a literal dot,
 // so there is one way to match and no backtracking to speak of.
 // eslint-disable-next-line security/detect-unsafe-regex
-const UID = /^\d+(?:\.\d+){4,}$/;
+const UID = /^[0-2](?:\.\d+){4,}$/;
 // eslint-disable-next-line security/detect-unsafe-regex
-const PREFIXED_UID = /^([A-Za-z]+)[._-](\d+(?:\.\d+){4,})$/;
+const PREFIXED_UID = /^([A-Za-z]+)[._-]([0-2](?:\.\d+){4,})$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HEX_ID = /^[0-9a-f]{16,64}$/i;
 // Day, month, year or year, month, day with separators. Eight digits in
 // a row are caught by the counter rule.
 const DATE_DMY = /(?:^|\D)\d{1,2}[-_. ]\d{1,2}[-_. ](?:19|20)\d{2}(?:\D|$)/;
 const DATE_YMD = /(?:^|\D)(?:19|20)\d{2}[-_. ]\d{1,2}[-_. ]\d{1,2}(?:\D|$)/;
+// The same with a two-digit year. Not applied to a UID, where three short
+// components in a row are ordinary.
+const DATE_SHORT = /(?:^|\D)\d{1,2}[-_. ]\d{1,2}[-_. ]\d{2}(?:\D|$)/;
+/** Digits a name may hold in all, leading zeros aside: room for three counters, not for a record number in pieces. */
+export const MAX_DIGITS_IN_NAME = 9;
 
 function isRandomIdentifier(name: string): boolean {
   if (UUID.test(name)) return true;
-  // Letters and digits both present: sixteen digits alone are a number.
-  return HEX_ID.test(name) && /[a-f]/i.test(name) && /\d/.test(name);
+  // A random identifier in hexadecimal has letters and digits mixed all
+  // through. A number with a letter or two in front is a record number.
+  const letters = name.replace(/[^a-f]/gi, '').length;
+  return HEX_ID.test(name) && letters >= 4 && name.length - letters >= 4;
 }
 
 /**
@@ -121,6 +133,7 @@ function isRandomIdentifier(name: string): boolean {
 export function nameProblem(name: string): string | null {
   const stem = name.replace(EXTENSION, '');
   if (stem.length === 0) return 'the name is empty';
+  if (DATE_DMY.test(stem) || DATE_YMD.test(stem)) return 'it reads as a date';
   if (UID.test(stem) && stem.length <= 64) return null;
   if (isRandomIdentifier(stem)) return null;
   // A generic word in front of a UID, as many archives export: CT.1.2.840…
@@ -129,14 +142,19 @@ export function nameProblem(name: string): string | null {
     return null;
   }
 
-  if (DATE_DMY.test(stem) || DATE_YMD.test(stem)) return 'it reads as a date';
+  if (DATE_SHORT.test(stem)) return 'it reads as a date';
   if (!/^[A-Za-z0-9._ -]+$/.test(stem)) {
     return 'it has a character other than unaccented letters, digits, "-", "_", "." and space';
   }
+  let digits = 0;
   for (const token of stem.match(/[A-Za-z]+|\d+/g) ?? []) {
     if (/^\d+$/.test(token)) {
       if (token.replace(/^0+/, '').length > MAX_COUNTER_DIGITS) {
         return `it has a number of more than ${MAX_COUNTER_DIGITS} digits (a patient number, an accession number or a date look the same)`;
+      }
+      digits += token.replace(/^0+/, '').length;
+      if (digits > MAX_DIGITS_IN_NAME) {
+        return `it has more than ${MAX_DIGITS_IN_NAME} digits in all (a record number written in pieces looks the same)`;
       }
     } else if (!NEUTRAL_WORDS.has(token.toLowerCase())) {
       return 'it has a word outside the naming convention (a surname looks the same)';

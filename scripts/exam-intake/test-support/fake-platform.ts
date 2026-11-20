@@ -60,6 +60,8 @@ export class FakePlatform {
   failCompleteAt: { nth: number; status: number } | null = null;
   /** Answer this check status whatever the file holds, to play a platform that disagrees. */
   forceCheckStatus: string | null = null;
+  /** Answer no check status at all, as the platform does for a file it does not see as DICOM. */
+  silentAboutCheck = false;
   /** Largest JSON body accepted, as the real API. */
   bodyLimit = 1024 * 1024;
 
@@ -257,15 +259,16 @@ export class FakePlatform {
       this.uploads.delete(complete[1] ?? '');
 
       const parsed = parseDicomHeader(new Uint8Array(bytes), { totalSize: bytes.length });
-      const status =
-        this.forceCheckStatus ??
-        (parsed.kind === 'not-dicom'
-          ? null
-          : parsed.kind === 'ok'
-            ? parsed.findings.length > 0
-              ? 'HELD'
-              : 'CLEAR'
-            : 'UNREADABLE');
+      const status = this.silentAboutCheck
+        ? null
+        : (this.forceCheckStatus ??
+          (parsed.kind === 'not-dicom'
+            ? null
+            : parsed.kind === 'ok'
+              ? parsed.findings.length > 0
+                ? 'HELD'
+                : 'CLEAR'
+              : 'UNREADABLE'));
 
       const croissantId = input.croissantId ?? upload.key.split('/').pop() ?? '';
       const existing = latest.distributions.find((d) => d.croissantId === croissantId);

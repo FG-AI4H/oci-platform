@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 /**
  * The platform's own HTTP API, as far as a bulk upload needs it: read a
  * dataset, create it, publish a version, upload one file through the
@@ -77,6 +79,29 @@ export class PlatformApiError extends Error {
   ) {
     super(`${step}: HTTP ${status}${detail ? ` (${detail})` : ''}`);
   }
+}
+
+/**
+ * The file on disk is not the file whose checksum was taken. The upload
+ * is aborted before storage assembles anything.
+ */
+export class FileChanged extends Error {
+  override readonly name = 'FileChanged';
+}
+
+/** A signed storage address: https, or plain http to this machine only (a local stack). */
+function storageAddress(raw: unknown): string {
+  let url: URL | null = null;
+  try {
+    url = typeof raw === 'string' ? new URL(raw) : null;
+  } catch {
+    url = null;
+  }
+  const local = url !== null && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (url === null || (url.protocol !== 'https:' && !(url.protocol === 'http:' && local))) {
+    throw new PlatformApiError('ask for a part address', 200, 'the storage address is not https');
+  }
+  return url.toString();
 }
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
@@ -207,15 +232,28 @@ export class HttpPlatformApi implements PlatformApi {
     });
     if (init.status !== 201) this.fail('start the upload', init);
     const { uploadId, key, partSize } = init.json as {
-      uploadId: string;
-      key: string;
-      partSize: number;
+      uploadId: unknown;
+      key: unknown;
+      partSize: unknown;
     };
+    if (
+      typeof uploadId !== 'string' ||
+      typeof key !== 'string' ||
+      typeof partSize !== 'number' ||
+      !Number.isInteger(partSize) ||
+      partSize < 1
+    ) {
+      throw new PlatformApiError('start the upload', init.status, 'the answer is not understood');
+    }
     const upload = `${base}/${encodeURIComponent(uploadId)}`;
     const keyQuery = `key=${encodeURIComponent(key)}`;
 
     try {
       const parts: Array<{ partNumber: number; etag: string }> = [];
+      // What is sent must be what was checked: the file is read again
+      // here, long after its checksum was taken, and the platform does
+      // not hash what it stores.
+      const sent = createHash('sha256');
       for (let offset = 0, partNumber = 1; offset < file.sizeBytes; partNumber += 1) {
         const length = Math.min(partSize, file.sizeBytes - offset);
         const address = await this.call(
@@ -224,13 +262,16 @@ export class HttpPlatformApi implements PlatformApi {
           `${upload}/parts/${partNumber}/url?${keyQuery}`,
         );
         if (address.status !== 200) this.fail('ask for a part address', address);
+        const target = storageAddress((address.json as { url?: unknown } | null)?.url);
+        const bytes = file.read(offset, length);
+        if (bytes.length !== length) {
+          throw new FileChanged('the file is shorter than when it was checked');
+        }
+        sent.update(bytes);
         let put: Response;
         try {
           // The signed address is its own authorisation: no header, and it is never logged.
-          put = await this.fetchImpl((address.json as { url: string }).url, {
-            method: 'PUT',
-            body: file.read(offset, length),
-          });
+          put = await this.fetchImpl(target, { method: 'PUT', body: bytes });
         } catch {
           throw new PlatformApiError('send a part to storage', 0, 'storage could not be reached');
         }
@@ -239,6 +280,12 @@ export class HttpPlatformApi implements PlatformApi {
         if (!etag) throw new PlatformApiError('send a part to storage', put.status, 'no ETag');
         parts.push({ partNumber, etag });
         offset += length;
+      }
+      if (file.read(file.sizeBytes, 1).length > 0) {
+        throw new FileChanged('the file is longer than when it was checked');
+      }
+      if (sent.digest('hex') !== file.sha256) {
+        throw new FileChanged('the bytes read are not the bytes that were checked');
       }
 
       const query =

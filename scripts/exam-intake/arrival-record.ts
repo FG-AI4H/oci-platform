@@ -14,9 +14,11 @@ import {
  * The uploader refuses a folder without a passing record for exactly
  * its files.
  *
- * It holds paths, checksums, counts and attribute names. It never holds
- * a header value, and it refers to an exam and a series by a short
- * digest of their UID, not by the UID.
+ * It holds paths, checksums, counts, attribute names, and the technical
+ * description of each series (modality code, image size, slice
+ * thickness, transfer syntax). It never holds
+ * the value of an identifying attribute, and it refers to an exam and
+ * a series by a short salted digest of their UID, not by the UID.
  */
 
 const Sha256 = z.string().regex(/^[0-9a-f]{64}$/);

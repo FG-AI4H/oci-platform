@@ -24,7 +24,7 @@ pnpm check-exam-sample ~/oci-intake/sample \
   --sheet-out ~/oci-intake/visual-check.csv
 ```
 
-It reads the header of every file with the platform's own reader (`@oci/dicom`) and the platform's own list of identifying attributes (`pnpm check-exam-sample --list-attributes` prints it). It prints, per exam, the series with their number of images, slice thickness, modality and transfer syntax, and it never prints the value of an attribute: a refused file is named by its path and by the name of the attribute.
+It reads the header of every file with the platform's own reader (`@oci/dicom`) and the platform's own list of identifying attributes (`pnpm check-exam-sample --list-attributes` prints it). It prints, per exam, the series with their number of images, slice thickness, modality and transfer syntax. It never prints the value of an identifying attribute: a refused file is named by its path and by the name of the attribute. A modality or a transfer syntax is printed only when it has the shape of a code; anything else there refuses the sample.
 
 **Exit code 1 means the sample is refused**, as a whole, when any of this is true:
 
@@ -32,6 +32,8 @@ It reads the header of every file with the platform's own reader (`@oci/dicom`) 
 - private tags are present, `BurnedInAnnotation` says `YES`, something follows the pixel data, or sequences are nested deeper than the check reads;
 - a file or folder name breaks the naming convention of the guide (the name itself is withheld from the output);
 - a file is not DICOM, cannot be read, or is a DICOM object other than an image (a report, a `DICOMDIR`); or the folder holds a link.
+
+This includes files the operating system adds by itself. On macOS, opening the folder in Finder writes a `.DS_Store` file, and the upload, which checks the folder again, then refuses it. Delete such files (`find <folder> -name .DS_Store -delete`) rather than work around the refusal.
 
 A refused sample is not edited here. Tell the institution which attribute and which files (the record lists them all), delete the copy, and wait for a corrected one.
 
@@ -53,7 +55,7 @@ De-identified files commonly keep a code in the patient name and the patient num
    }
    ```
 
-   Only `PatientName`, `PatientID`, `StudyDate`, `SeriesDate` and `AcquisitionDate` can be accepted this way; a birth date, an institution name or private tags never can. The output then shows how many files carry each accepted field and how many distinct values there are: fifty exams with fifty codes is what a code looks like, one value everywhere or thousands of values is not. The decision is copied into the record.
+   Only `PatientName`, `PatientID`, `StudyDate`, `SeriesDate` and `AcquisitionDate` can be accepted this way; a birth date, an institution name or private tags never can. A decision covers one value per file, and one patient name, patient number and study date per exam: a second value, which is what a system leaves inside a sequence when it replaces the original, still refuses the sample. What a decision cannot see is a real name sitting among codes, one per exam; that is what the institution's written statement is for. The output then shows how many files carry each accepted field and how many distinct values there are: fifty exams with fifty codes is what a code looks like, one value everywhere or thousands of values is not. The decision is copied into the record.
 
    **Consequence:** the platform holds every such file after upload. A held file is served to nobody but the dataset's host and platform operators until an operator records a decision on the platform, and the screen for that decision does not exist yet ([#674](https://github.com/FG-AI4H/oci-platform/issues/674)). Until it does, a sample accepted this way cannot be read by workshop participants.
 
@@ -83,9 +85,10 @@ Then the same command without `--dry-run`.
 - **The token** is the access token of the operator's own signed-in session (the account must be in the `host` group, and becomes the dataset's host). It is read from `OCI_API_TOKEN` only, refused on the command line, never printed and never written to a file. It expires; when the upload stops with "the session token was not accepted", export a new one and run the same command again.
 - **It refuses** unless the folder is exactly what was checked: it runs the check again, compares every file's checksum with the record, and requires a line with a name, a date and `clear` for every exam on the sheet. It also refuses a record made with another version of the platform's attribute list.
 - **The dataset** is created PRIVATE with access tier CONTROLLED when it does not exist, and an existing dataset that is anything else is refused. `--manifest-base` is its Croissant description without a file list: name, description, licence, and the DUO terms chosen by the institution ([duo-terms-guide.md](../for-hosts/duo-terms-guide.md)); a non-public dataset cannot be published without at least one. Choose a slug that cannot be guessed (add a random suffix) and a name and description that do not name the institution: see section 5.
-- **Resuming.** Progress is written to `--state` after each file. An interrupted upload is continued by running the same command again; if the state file is lost, the script recognises what the platform already holds by checksum.
-- **Agreement of the two checks.** For each file the platform answers with the outcome of its own check. A file the arrival check passed must come back `CLEAR`; a file with an accepted finding must come back `HELD`. Anything else stops the upload at once. The cause is then a difference of version between this checkout and the deployed platform; remove what was uploaded with the deletion runbook before trying again.
-- **The manifest** written at the end lists every file with its checksum, size, exam, platform id and check outcome, and who did the visual check. It holds no header value. Keep it with the record and the sheet: together they are what the written confirmation of deletion will refer to.
+- **Resuming.** Progress is written to `--state` after each file, with the platform's answer for it. An interrupted upload is continued by running the same command again. A file counts as done only when the state file holds the platform's answer: if the state file is lost, or an answer never arrived, the file is sent again, which replaces its entry on the platform. Its first copy then stays in storage, unlisted, until the dataset is deleted.
+- **What is sent is what was checked.** Each file is hashed again as it is sent, and the upload of a file is abandoned before storage assembles it if it is no longer the file whose checksum is in the record. The platform itself does not hash what it stores, so this is the only such check.
+- **Agreement of the two checks.** For each file the platform answers with the outcome of its own check. A file the arrival check passed must come back `CLEAR`; a file with an accepted finding must come back `HELD`. Anything else stops the upload at once, and running the command again stops at the same file. The cause is then a difference of version between this checkout and the deployed platform; remove what was uploaded with the deletion runbook before trying again.
+- **The manifest** written at the end lists every file with its checksum, size, exam, platform id and the check outcome the platform gave, and who did the visual check. It holds no value of an identifying attribute. Keep it with the record and the sheet: together they are what the written confirmation of deletion will refer to.
 
 **The file list in the catalogue.** The files are attached to one version of the dataset, which is all the viewer needs. `--publish-file-list <version>` additionally publishes a version whose Croissant manifest lists every file. The API accepts a request of one mebibyte at most, which is about 3,000 files; above that the script says so, does not publish, and leaves the list in the upload manifest. Fifty exams with thin slices exceed it.
 

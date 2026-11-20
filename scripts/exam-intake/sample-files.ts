@@ -34,24 +34,41 @@ export interface FolderListing {
   files: string[];
   /** Entries that are not regular files or folders (links, devices): never read. */
   notRegular: string[];
+  /** Entries the system refused to list or look at, with its error code. `''` is the folder itself. */
+  unreadable: Array<{ path: string; code: string }>;
 }
 
 /** Every file under `folder`. Symbolic links are listed, never followed. */
 export function listFolder(folder: string): FolderListing {
   const files: string[] = [];
   const notRegular: string[] = [];
+  const unreadable: FolderListing['unreadable'] = [];
+  const codeOf = (err: unknown): string => {
+    const code = err !== null && typeof err === 'object' && 'code' in err ? err.code : null;
+    return typeof code === 'string' ? code : 'error';
+  };
   const visit = (relative: string): void => {
-    const names = readdirSync(path.join(folder, relative)).sort();
+    let names: string[];
+    try {
+      names = readdirSync(path.join(folder, relative)).sort();
+    } catch (err) {
+      unreadable.push({ path: relative, code: codeOf(err) });
+      return;
+    }
     for (const name of names) {
       const child = relative === '' ? name : `${relative}/${name}`;
-      const stat = lstatSync(path.join(folder, child));
-      if (stat.isDirectory()) visit(child);
-      else if (stat.isFile()) files.push(child);
-      else notRegular.push(child);
+      try {
+        const stat = lstatSync(path.join(folder, child));
+        if (stat.isDirectory()) visit(child);
+        else if (stat.isFile()) files.push(child);
+        else notRegular.push(child);
+      } catch (err) {
+        unreadable.push({ path: child, code: codeOf(err) });
+      }
     }
   };
   visit('');
-  return { files, notRegular };
+  return { files, notRegular, unreadable };
 }
 
 export type HeaderReading = Exclude<ParseDicomHeaderResult, { kind: 'truncated' }>;

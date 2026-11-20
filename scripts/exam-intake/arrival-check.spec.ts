@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { IDENTIFYING_ATTRIBUTES } from '@oci/dicom';
@@ -171,11 +179,11 @@ describe("arrival check: the platform's identifying attributes", () => {
     for (let instance = 1; instance <= 3; instance += 1) {
       writeFile(
         folder,
-        `exam-001/series-01/000${instance}.dcm`,
+        `exam-00${instance}/series-01/0001.dcm`,
         slice({
-          exam: 1,
+          exam: instance,
           series: 1,
-          instance,
+          instance: 1,
           overrides: [
             {
               tag: '00100020',
@@ -452,4 +460,163 @@ describe('arrival check: the attribute list', () => {
       createHash('sha256').update(JSON.stringify(IDENTIFYING_ATTRIBUTES)).digest('hex'),
     );
   });
+});
+
+describe('arrival check: what a recorded decision does not cover', () => {
+  const decisions = AcceptedFindingsSchema.parse({
+    decidedBy: 'An Operator',
+    decidedOn: '2026-12-01',
+    institutionStatement: 'letter ref. EX-1',
+    attributes: [
+      { attribute: 'PatientName', reason: 'study codes' },
+      { attribute: 'PatientID', reason: 'study codes' },
+    ],
+  });
+
+  it('refuses a second value of an accepted attribute inside a sequence of the same file', () => {
+    writeFile(
+      folder,
+      'exam-001/series-01/0001.dcm',
+      slice({
+        exam: 1,
+        series: 1,
+        instance: 1,
+        overrides: [
+          { tag: '00100010', vr: 'PN', value: 'CODE-001' },
+          {
+            // Original attributes kept by a system that replaced the name.
+            tag: '04000561',
+            vr: 'SQ',
+            value: [[{ tag: '00100010', vr: 'PN', value: `${INVENTED_MARKER}^ORIGINAL` }]],
+          },
+        ],
+      }),
+    );
+
+    const result = checkSample(folder, { accepted: decisions });
+
+    expect(result.verdict).toBe('REFUSED');
+    expect(codes(result)).toEqual([
+      'finding:PatientName:several-values',
+      'finding:PatientName:several-values-in-exam',
+    ]);
+    expect(JSON.stringify(result)).not.toContain(INVENTED_MARKER);
+  });
+
+  it('accepts the same code repeated inside a sequence', () => {
+    writeFile(
+      folder,
+      'exam-001/series-01/0001.dcm',
+      slice({
+        exam: 1,
+        series: 1,
+        instance: 1,
+        overrides: [
+          { tag: '00100020', vr: 'LO', value: 'CODE-001' },
+          {
+            tag: '00101002',
+            vr: 'SQ',
+            value: [[{ tag: '00100020', vr: 'LO', value: 'CODE-001' }]],
+          },
+        ],
+      }),
+    );
+    expect(checkSample(folder, { accepted: decisions }).verdict).toBe('PASS');
+  });
+
+  it('refuses two values of patient name, patient id or study date within one exam', () => {
+    for (const instance of [1, 2]) {
+      writeFile(
+        folder,
+        `exam-001/series-01/000${instance}.dcm`,
+        slice({
+          exam: 1,
+          series: 1,
+          instance,
+          overrides: [{ tag: '00100020', vr: 'LO', value: `${INVENTED_MARKER}-${instance}` }],
+        }),
+      );
+    }
+    const result = checkSample(folder, { accepted: decisions });
+    expect(result.verdict).toBe('REFUSED');
+    expect(result.problems).toEqual([
+      {
+        code: 'finding:PatientID:several-values-in-exam',
+        summary: 'PatientID was accepted by decision and has more than one value within one exam',
+        files: ['exam 1 (exam-001)'],
+      },
+    ]);
+    expect(JSON.stringify(result)).not.toContain(INVENTED_MARKER);
+  });
+});
+
+describe('arrival check: header fields that are printed', () => {
+  it('refuses a modality that is not a code, and does not repeat it', () => {
+    writeFile(
+      folder,
+      'exam-001/series-01/0001.dcm',
+      slice({
+        exam: 1,
+        series: 1,
+        instance: 1,
+        overrides: [{ tag: '00080060', vr: 'LO', value: `${INVENTED_MARKER}^First 1975` }],
+      }),
+    );
+    const result = checkSample(folder);
+    expect(codes(result)).toEqual(['not-a-code:Modality', 'no-images']);
+    expect(JSON.stringify(result)).not.toContain(INVENTED_MARKER);
+  });
+
+  it('refuses a transfer syntax that is not a UID, and does not repeat it', () => {
+    writeFile(
+      folder,
+      'exam-001/series-01/0001.dcm',
+      slice({ exam: 1, series: 1, instance: 1, transferSyntaxUid: `1.2.${INVENTED_MARKER}` }),
+    );
+    const result = checkSample(folder);
+    expect(result.verdict).toBe('REFUSED');
+    expect(JSON.stringify(result)).not.toContain(INVENTED_MARKER);
+  });
+
+  it('refers to an exam by a reference that cannot be recomputed from its UID', () => {
+    writeCleanSample(folder, { exams: 1 });
+    const first = checkSample(folder).exams[0]?.ref;
+    const second = checkSample(folder).exams[0]?.ref;
+    expect(first).toMatch(/^[0-9a-f]{12}$/);
+    expect(second).not.toBe(first);
+  });
+});
+
+describe('arrival check: what the system will not let it read', () => {
+  // Root reads anything; the refusal cannot be staged then.
+  const asRoot = process.getuid?.() === 0;
+
+  it.skipIf(asRoot)(
+    'refuses the sample, names the entry by its place, and keeps the system message out',
+    () => {
+      writeCleanSample(folder, { exams: 1 });
+      const locked = writeFile(
+        folder,
+        'Zorblax Quillfeather/0001.dcm',
+        slice({ exam: 2, series: 1, instance: 1 }),
+      );
+      chmodSync(locked, 0o000);
+      const lockedFolder = path.join(folder, 'exam-009');
+      mkdirSync(lockedFolder);
+      chmodSync(lockedFolder, 0o000);
+      try {
+        const result = checkSample(folder);
+        expect(result.verdict).toBe('REFUSED');
+        const unreadable = result.problems.find((problem) => problem.code === 'unreadable-entry');
+        expect(unreadable?.files).toEqual([
+          'exam-009 (EACCES)',
+          '[name withheld: entry 1 of 3]/0001.dcm (EACCES)',
+        ]);
+        expect(JSON.stringify(result)).not.toMatch(/Zorblax|Quillfeather/);
+      } finally {
+        chmodSync(locked, 0o600);
+        chmodSync(lockedFolder, 0o700);
+      }
+    },
+  );
 });

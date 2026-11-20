@@ -15,6 +15,7 @@ import {
 import { buildRecord } from './arrival-record.js';
 import { newOutputFile, writeNewFile } from './output-path.js';
 import { RecordPathError } from './purge-record.js';
+import { describeError } from './safe-error.js';
 import { describeTransferSyntax } from './transfer-syntaxes.js';
 import { buildSheet } from './visual-check-sheet.js';
 
@@ -34,6 +35,8 @@ export const EXIT_OK = 0;
 export const EXIT_SAMPLE_REFUSED = 1;
 /** The command itself was refused, before any file was read. */
 export const EXIT_REFUSED = 2;
+/** The command failed part-way for a reason of its own (an output could not be written). */
+export const EXIT_FAILED = 3;
 
 /** How many files of one problem are named in the terminal; the record names them all. */
 const FILES_SHOWN = 20;
@@ -47,7 +50,7 @@ reader and its own list of identifying attributes. Opens no network connection.
 Refuses the sample (exit 1) when an identifying attribute is populated, when a
 file or folder name breaks the naming convention, or when a file is not a DICOM
 image. Prints, per exam: series, images, slice thickness, modality and transfer
-syntax. Never prints the value of an attribute.
+syntax. Never prints the value of an identifying attribute, nor a name it refuses.
 
 Options
   --record-out <file>       Write the record of the check (JSON: paths, checksums,
@@ -72,13 +75,18 @@ function megabytes(bytes: number): string {
 
 function readDecisions(file: string, deps: CheckCliDependencies): AcceptedFindings {
   const absolute = path.resolve(deps.workingDirectory, file);
+  let text: string;
+  try {
+    text = readFileSync(absolute, 'utf8');
+  } catch (err) {
+    throw new Refusal(`cannot read the decisions file ${absolute}: ${describeError(err)}`);
+  }
   let json: unknown;
   try {
-    json = JSON.parse(readFileSync(absolute, 'utf8'));
-  } catch (err) {
-    throw new Refusal(
-      `cannot read the decisions file ${absolute}: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    json = JSON.parse(text);
+  } catch {
+    // The parser's message quotes the text it could not read.
+    throw new Refusal(`the decisions file ${absolute} is not JSON`);
   }
   const parsed = AcceptedFindingsSchema.safeParse(json);
   if (!parsed.success) {
@@ -241,9 +249,8 @@ export function run(argv: readonly string[], deps: CheckCliDependencies): number
       deps.err('Run with --help for the options.');
       return EXIT_REFUSED;
     }
-    // A failure to read the folder. The message is the system's: a path and a code.
-    deps.err(`Failed: ${err instanceof Error ? err.message : String(err)}`);
-    return EXIT_REFUSED;
+    deps.err(`Failed: ${describeError(err)}`);
+    return EXIT_FAILED;
   }
 }
 

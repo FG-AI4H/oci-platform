@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { z } from 'zod';
 import { attributeListDigest, checkSample } from './arrival-check.js';
 import type { ArrivalRecord } from './arrival-record.js';
 import {
@@ -24,6 +25,9 @@ export const UPLOAD_TOOL = 'upload-exam-sample';
 export const UPLOAD_TOOL_VERSION = '1';
 
 export const DICOM_CONTENT_TYPE = 'application/dicom';
+
+/** How the platform's silence about a stored file is written: it did not see a DICOM file. */
+const NOT_DICOM = 'not DICOM';
 
 /** A reason the folder may not be uploaded. Carries every finding, not the first. */
 export class NotUploadable extends Error {
@@ -117,21 +121,24 @@ export function storageName(relativePath: string): string {
   return relativePath.replaceAll('/', '__');
 }
 
-export interface UploadedEntry {
-  sha256: string;
-  distributionId: string;
-  dicomCheckStatus: string | null;
-}
-
 /** What is kept between two runs, so that an interrupted upload resumes. No token, no address. */
-export interface UploadState {
-  tool: typeof UPLOAD_TOOL;
-  apiBase: string;
-  datasetSlug: string;
-  recordDigest: string;
-  /** By path relative to the sample folder. */
-  uploaded: Record<string, UploadedEntry>;
-}
+export const UploadStateSchema = z.object({
+  tool: z.literal(UPLOAD_TOOL),
+  apiBase: z.string(),
+  datasetSlug: z.string(),
+  recordDigest: z.string(),
+  /** By path relative to the sample folder: what was sent, and the platform's answer for it. */
+  uploaded: z.record(
+    z.string(),
+    z.object({
+      sha256: z.string(),
+      distributionId: z.string(),
+      /** The platform's check outcome; null when it did not see a DICOM file. */
+      dicomCheckStatus: z.string().nullable(),
+    }),
+  ),
+});
+export type UploadState = z.infer<typeof UploadStateSchema>;
 
 export function emptyState(
   apiBase: string,
@@ -320,32 +327,32 @@ export async function uploadSample(
 
   // A file an earlier run uploaded and the platform judged differently
   // from the arrival check stops this run too: it is not "done".
+  const isRecorded = (file: { path: string; sha256: string }): boolean =>
+    state.uploaded[file.path]?.sha256 === file.sha256;
   for (const file of sample.record.files) {
     const known = state.uploaded[file.path];
-    if (known && known.sha256 === file.sha256 && known.dicomCheckStatus !== null) {
-      requireAgreement(file, known.dicomCheckStatus);
+    if (known && isRecorded(file)) {
+      requireAgreement(file, known.dicomCheckStatus ?? NOT_DICOM);
     }
   }
 
-  // What the platform already has, whatever the state file says: a file
-  // attached to the latest version under the same identifier and checksum.
-  const onPlatform = new Map(dataset.distributions.map((d) => [d.croissantId, d]));
-  const pending = sample.record.files.filter((file) => {
-    const known = state.uploaded[file.path];
-    const there = onPlatform.get(file.path);
-    if (there && there.contentHash === file.sha256) {
-      if (!known) {
-        state.uploaded[file.path] = {
-          sha256: file.sha256,
-          distributionId: there.id,
-          // Not returned by the dataset detail; the upload that made it was told.
-          dicomCheckStatus: null,
-        };
-      }
-      return false;
-    }
-    return !(known && known.sha256 === file.sha256);
-  });
+  // A file is done only when this state file holds the platform's own
+  // answer for it. The dataset detail does not return that answer, so a
+  // file the platform holds and the state does not know is never taken
+  // as done: its outcome would be a guess. It is sent again, which
+  // replaces its row on the platform and brings the answer back. That
+  // happens when the state file was lost, or when an answer did not
+  // arrive. The copy stored first stays in the bucket, unlisted, until
+  // the dataset is deleted.
+  const onPlatform = new Set(dataset.distributions.map((d) => d.croissantId));
+  const pending = sample.record.files.filter((file) => !isRecorded(file));
+  const sentAgain = pending.filter((file) => onPlatform.has(file.path)).length;
+  if (sentAgain > 0) {
+    out(
+      `${sentAgain} file(s) are on the platform without an outcome recorded in the state file: they are sent again. ` +
+        'Their first copy stays in storage, unlisted, until the dataset is deleted.',
+    );
+  }
   const total = sample.record.files.length;
   out(
     `Dataset "${slug}", version ${target.version}: ${total - pending.length} of ${total} file(s) already there, ${pending.length} to upload.`,
@@ -376,7 +383,7 @@ export async function uploadSample(
 
         // The platform runs the same check on what it stored. It must
         // agree with the arrival check, file by file.
-        requireAgreement(current, uploaded.dicomCheckStatus ?? 'not DICOM');
+        requireAgreement(current, uploaded.dicomCheckStatus ?? NOT_DICOM);
         done += 1;
         if (done % 100 === 0) out(`  ${done} of ${pending.length} uploaded`);
       } catch (err) {
@@ -391,7 +398,13 @@ export async function uploadSample(
   // Everything is there. Check that it all went to one version.
   const after = await api.getDataset(slug);
   if (after === null) throw new Error('the dataset cannot be read back after the upload');
-  requireRestricted(after);
+  if (after.visibility !== 'PRIVATE' || after.accessTier !== 'CONTROLLED') {
+    // Not a refusal: the files are on the platform by now.
+    throw new Error(
+      `the dataset "${slug}" is now ${after.visibility} with access tier ${after.accessTier}: ` +
+        'someone changed it during the upload. The files are stored; make it PRIVATE again or delete it.',
+    );
+  }
   if (after.versions[0]?.id !== target.id) {
     throw new Error(
       `a new version of "${slug}" was published during the upload: the files are split between two versions`,
@@ -418,8 +431,8 @@ export async function uploadSample(
       exam: file.exam,
       seriesRef: file.seriesRef,
       distributionId,
-      dicomCheckStatus:
-        entry?.dicomCheckStatus ?? (file.acceptedFindings.length > 0 ? 'HELD' : null),
+      // Always the platform's own answer, as this state file recorded it.
+      dicomCheckStatus: entry?.dicomCheckStatus ?? NOT_DICOM,
     };
   });
   const croissantDistribution = files.map((file) =>

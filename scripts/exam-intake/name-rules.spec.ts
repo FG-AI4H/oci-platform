@@ -15,6 +15,9 @@ describe('nameProblem', () => {
     'tdm-crane',
     'DICOMDIR',
     '1.2.826.0.1.3680043.8.498.658.1.1.1',
+    // Three short components in a row are ordinary in a UID.
+    '1.3.12.2.1107.5.1.4.73473.3',
+    'exam-012-series-03-image-00045',
     '1.2.826.0.1.3680043.8.498.658.1.1.1.dcm',
     'CT.1.2.826.0.1.3680043.8.498.658.1.1.1.dcm',
     '3f2b8c1e-9a4d-4e7f-8b21-0c5d6e7f8a9b',
@@ -41,6 +44,18 @@ describe('nameProblem', () => {
     ['1234567890123456', /number of more than 5 digits/],
     // Too few components to be a UID: the same shape as a date or a record number.
     ['12.3456789', /number of more than 5 digits/],
+    // Dates with a two-digit year, and dates dressed as a UID.
+    ['exam_12-03-75', /reads as a date/],
+    ['12-03-75', /reads as a date/],
+    ['12.03.1975.08.30', /reads as a date/],
+    ['1975.03.12.1.1', /reads as a date/],
+    ['patient.12.03.1975.1.2', /reads as a date/],
+    // A UID starts with 0, 1 or 2; a long number in front of dots is a record number.
+    ['0791234567.1.1.1.1', /number of more than 5 digits/],
+    ['756.1234.5678.97.1', /more than 9 digits in all/],
+    // A number with a letter or two in front is not a random identifier.
+    ['CD20240312000123', /word outside the naming convention/],
+    ['A123456789012345', /word outside the naming convention/],
   ])('refuses %s', (name, reason) => {
     expect(nameProblem(name)).toMatch(reason);
   });

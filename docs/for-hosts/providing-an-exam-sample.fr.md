@@ -77,7 +77,7 @@ examen_12-03-2024
 0012345678.dcm
 ```
 
-Les dates, les nombres de plus de cinq chiffres, les lettres accentuées et tout mot qui ne figure pas dans une courte liste de mots génériques (examen, etude, serie, image, coupe, tdm, cerveau, crane, tete, axial et semblables, en français ou en anglais) sont refusés. N'envoyez ni tableur, ni compte rendu, ni `DICOMDIR` avec les images : un dossier qui contient autre chose que des images est refusé.
+Numérotez les examens et les images à partir de 1 : un nombre court est accepté comme compteur, un numéro de patient ou de dossier ne doit donc jamais en tenir lieu. Les dates, les nombres de plus de cinq chiffres, les lettres accentuées et tout mot qui ne figure pas dans une courte liste de mots génériques (examen, etude, serie, image, coupe, tdm, cerveau, crane, tete, axial et semblables, en français ou en anglais) sont refusés. N'envoyez ni tableur, ni compte rendu, ni `DICOMDIR` avec les images : un dossier qui contient autre chose que des images est refusé.
 
 ## 3. La clé reste chez vous
 

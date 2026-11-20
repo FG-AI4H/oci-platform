@@ -59,6 +59,9 @@ BEGIN
   IF v_slug !~ '^[a-z0-9-]{3,80}$' THEN
     RAISE EXCEPTION 'the slug is not one the platform issues: nothing was deleted';
   END IF;
+  IF v_reference ~ '^__.*__$' THEN
+    RAISE EXCEPTION 'the reference placeholder was not filled in: nothing was deleted';
+  END IF;
   IF v_reference !~ '^[A-Za-z0-9#._-]{1,80}$' THEN
     RAISE EXCEPTION 'the reference must be 1 to 80 letters, digits or # . _ - : nothing was deleted';
   END IF;

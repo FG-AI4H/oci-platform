@@ -511,6 +511,9 @@ describe.skipIf(!dockerAvailable)('exposure of a PRIVATE dataset against Postgre
         ).rejects.toBeInstanceOf(NotFoundException);
         // The single-file route needs a distribution id as well, which
         // an outsider has no way to learn: an invented one answers 404.
+        // The wording of that 404 still differs from the one for an
+        // unknown slug ("distribution not found" against "dataset not
+        // found"), so this route confirms a slug too.
         await expect(
           storage.getDownloadUrl({
             slug: PRIVATE_SLUG,

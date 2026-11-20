@@ -11,7 +11,8 @@
  *     --record-out ~/oci-intake/arrival-record.json --sheet-out ~/oci-intake/visual-check.csv
  *
  * Exit code 0: the sample passed. 1: it is refused. 2: the command was
- * refused before a file was read. `--help` lists every option.
+ * refused before a file was read. 3: it failed part-way (an output could
+ * not be written). `--help` lists every option.
  *
  * Operator steps: docs/runbooks/exam-sample-intake.md.
  * The work is in ./exam-intake/; this file only starts it.

@@ -14,7 +14,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseRecord } from './arrival-record.js';
 import { run as runCheck } from './check-cli.js';
-import { HttpPlatformApi } from './platform-api.js';
+import { FileChanged, HttpPlatformApi } from './platform-api.js';
 import { FakePlatform } from './test-support/fake-platform.js';
 import {
   INVENTED_MARKER,
@@ -421,15 +421,19 @@ describe('upload-exam-sample: interrupted and run again', () => {
     expect(readManifest().files).toHaveLength(6);
   });
 
-  it('resumes from what the platform holds when the state file is lost', async () => {
+  it('sends again what the platform holds when the state file is lost, rather than guess its outcome', async () => {
     platform.failCompleteAt = { nth: 4, status: 500 };
     await command().run('--manifest-base', 'base.json', '--concurrency', '1');
     rmSync(path.join(desk, 'state.json'));
 
     const again = command();
     expect(await again.run('--concurrency', '1')).toBe(EXIT_OK);
-    expect(again.text()).toMatch(/3 of 6 file\(s\) already there, 3 to upload/);
-    expect(platform.objects.size).toBe(6);
+    expect(again.text()).toMatch(/3 file\(s\) are on the platform without an outcome recorded/);
+    expect(again.text()).toMatch(/0 of 6 file\(s\) already there, 6 to upload/);
+    // The first copies stay in storage, unlisted, until the dataset is deleted.
+    expect(platform.objects.size).toBe(9);
+    expect(platform.datasets.get(SLUG)?.versions[0]?.distributions).toHaveLength(6);
+    expect(readManifest().files.every((file) => file.dicomCheckStatus === 'CLEAR')).toBe(true);
   });
 
   it('says to renew the token when the session has expired part-way, and resumes with the new one', async () => {
@@ -630,5 +634,123 @@ describe('upload-exam-sample: dry run and refusals', () => {
     expect(code).toBe(EXIT_REFUSED);
     expect(cli.text()).toMatch(/inside the repository/);
     expect(platform.requests).toEqual([]);
+  });
+});
+
+describe("upload-exam-sample: the platform's check cannot be got round by running again", () => {
+  beforeEach(() => {
+    writeCleanSample(sample, { exams: 1, slicesPerSeries: 3 });
+    checkAndLook();
+  });
+
+  it('stops again with a new state file when the platform still holds the file', async () => {
+    platform.forceCheckStatus = 'HELD';
+    expect(await command().run('--manifest-base', 'base.json', '--concurrency', '1')).toBe(
+      EXIT_FAILED,
+    );
+    rmSync(path.join(desk, 'state.json'));
+
+    const again = command();
+    expect(await again.run('--concurrency', '1')).toBe(EXIT_FAILED);
+    expect(again.text()).toMatch(/says HELD, the arrival check expected CLEAR/);
+    expect(existsSync(path.join(desk, 'manifest.json'))).toBe(false);
+  });
+
+  it('stops, and stays stopped, when the platform does not see a DICOM file', async () => {
+    platform.silentAboutCheck = true;
+    const first = command();
+    expect(await first.run('--manifest-base', 'base.json', '--concurrency', '1')).toBe(EXIT_FAILED);
+    expect(first.text()).toMatch(/says not DICOM, the arrival check expected CLEAR/);
+
+    platform.silentAboutCheck = false;
+    const second = command();
+    expect(await second.run('--concurrency', '1')).toBe(EXIT_FAILED);
+    expect(second.text()).toMatch(/says not DICOM/);
+    expect(existsSync(path.join(desk, 'manifest.json'))).toBe(false);
+  });
+
+  it('never writes an outcome the platform did not give', async () => {
+    writeFileSync(
+      path.join(desk, 'decisions.json'),
+      JSON.stringify({
+        decidedBy: 'An Operator',
+        decidedOn: '2026-12-01',
+        institutionStatement: 'letter ref. EX-1',
+        attributes: [{ attribute: 'PatientID', reason: 'study codes' }],
+      }),
+    );
+    writeFile(
+      sample,
+      'exam-001/series-01/0001.dcm',
+      slice({
+        exam: 1,
+        series: 1,
+        instance: 1,
+        overrides: [{ tag: '00100020', vr: 'LO', value: 'CODE-001' }],
+      }),
+    );
+    checkAndLook({ decisions: 'decisions.json' });
+    // A platform that does not hold the file the arrival check says it must hold.
+    platform.forceCheckStatus = 'CLEAR';
+    expect(await command().run('--manifest-base', 'base.json', '--concurrency', '1')).toBe(
+      EXIT_FAILED,
+    );
+    rmSync(path.join(desk, 'state.json'));
+    const again = command();
+    expect(await again.run('--concurrency', '1')).toBe(EXIT_FAILED);
+    expect(again.text()).toMatch(/says CLEAR, the arrival check expected HELD or RELEASED/);
+    expect(again.text()).not.toMatch(/held by the platform/);
+  });
+});
+
+describe('upload-exam-sample: what is sent is what was checked', () => {
+  const bytes = slice({ exam: 1, series: 1, instance: 1 });
+  const checked = {
+    filename: 'exam-001__series-01__0001.dcm',
+    croissantId: 'exam-001/series-01/0001.dcm',
+    contentType: 'application/dicom',
+    sizeBytes: bytes.length,
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  };
+  const reader = (content: Uint8Array) => (offset: number, length: number) =>
+    content.subarray(offset, offset + length);
+  let api: HttpPlatformApi;
+
+  beforeEach(() => {
+    platform.addDataset(SLUG);
+    platform.addVersion(SLUG, '1.0.0');
+    platform.partSize = 200;
+    api = new HttpPlatformApi(platform.origin, TOKEN);
+  });
+
+  it('stores the file when the bytes read are the bytes checked', async () => {
+    await api.uploadFile(SLUG, { ...checked, read: reader(bytes) });
+    expect([...platform.objects.values()]).toEqual([bytes]);
+  });
+
+  it.each([
+    [
+      'swapped for another of the same size',
+      () => bytes.map((byte, i) => (i === 300 ? byte ^ 1 : byte)),
+      /not the bytes that were checked/,
+    ],
+    ['cut short', () => bytes.subarray(0, bytes.length - 8), /shorter than when it was checked/],
+    ['grown', () => new Uint8Array([...bytes, 1, 2, 3]), /longer than when it was checked/],
+  ] as Array<[string, () => Uint8Array, RegExp]>)(
+    'refuses a file %s after the check, and stores nothing',
+    async (_what, changed, message) => {
+      const attempt = api.uploadFile(SLUG, { ...checked, read: reader(changed()) });
+      await expect(attempt).rejects.toBeInstanceOf(FileChanged);
+      await expect(attempt).rejects.toThrow(message);
+      expect(platform.objects.size).toBe(0);
+      expect(platform.datasets.get(SLUG)?.versions[0]?.distributions).toEqual([]);
+    },
+  );
+
+  it('refuses a part size it cannot use', async () => {
+    platform.partSize = 0;
+    await expect(api.uploadFile(SLUG, { ...checked, read: reader(bytes) })).rejects.toThrow(
+      /the answer is not understood/,
+    );
   });
 });

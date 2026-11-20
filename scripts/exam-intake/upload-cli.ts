@@ -7,17 +7,19 @@ import { parseRecord } from './arrival-record.js';
 import { newOutputFile, replaceFile, rewritableOutputFile, writeNewFile } from './output-path.js';
 import {
   checkApiBase,
+  FileChanged,
   HttpPlatformApi,
   PlatformApiError,
   type PlatformApi,
 } from './platform-api.js';
 import { RecordPathError } from './purge-record.js';
+import { describeError } from './safe-error.js';
 import {
   emptyState,
   NotUploadable,
   PlatformDisagrees,
   readManifestBase,
-  UPLOAD_TOOL,
+  UploadStateSchema,
   uploadSample,
   verifyBeforeUpload,
   type ManifestBase,
@@ -42,7 +44,7 @@ export interface UploadCliDependencies {
 export const EXIT_OK = 0;
 /** The upload started and did not finish. Run it again: it resumes. */
 export const EXIT_FAILED = 1;
-/** The command was refused before anything was sent. */
+/** The command was refused: nothing was sent by this run. */
 export const EXIT_REFUSED = 2;
 
 export const USAGE = `Upload a checked sample of exams as the files of one dataset version.
@@ -98,19 +100,20 @@ function readText(label: string, file: string): string {
 
 function readState(file: string, expected: UploadState): UploadState {
   if (!existsSync(file)) return expected;
-  let state: UploadState;
+  let parsed;
   try {
-    state = JSON.parse(readFileSync(file, 'utf8')) as UploadState;
+    parsed = UploadStateSchema.safeParse(JSON.parse(readFileSync(file, 'utf8')));
   } catch {
     throw new Refusal(`the state file ${file} cannot be read as JSON`);
   }
+  if (!parsed.success) {
+    throw new Refusal(`the state file ${file} is not a state file of this command`);
+  }
+  const state = parsed.data;
   if (
-    state.tool !== UPLOAD_TOOL ||
     state.apiBase !== expected.apiBase ||
     state.datasetSlug !== expected.datasetSlug ||
-    state.recordDigest !== expected.recordDigest ||
-    typeof state.uploaded !== 'object' ||
-    state.uploaded === null
+    state.recordDigest !== expected.recordDigest
   ) {
     throw new Refusal(
       `the state file ${file} belongs to another upload (another platform, dataset or arrival-check record); give a new --state file`,
@@ -311,12 +314,13 @@ async function runUpload(argv: readonly string[], deps: UploadCliDependencies): 
     return EXIT_OK;
   } catch (err) {
     if (err instanceof NotUploadable) throw err;
-    const message =
-      err instanceof PlatformApiError || err instanceof PlatformDisagrees || err instanceof Error
-        ? err.message
-        : 'unknown error';
-    deps.err(`Stopped: ${message}`);
-    if (!(err instanceof PlatformDisagrees)) {
+    deps.err(`Stopped: ${describeError(err)}`);
+    if (err instanceof FileChanged) {
+      deps.err(
+        'A file changed after the folder was verified. Nothing of it was stored. ' +
+          'Find out what changed the folder, run the arrival check again, and start over.',
+      );
+    } else if (!(err instanceof PlatformDisagrees)) {
       deps.err(
         `Progress is in ${statePath}. Run the same command again to continue` +
           `${err instanceof PlatformApiError && err.status === 401 ? `, with a new token in $${TOKEN_VARIABLE}` : ''}.`,
@@ -341,7 +345,7 @@ export async function run(argv: readonly string[], deps: UploadCliDependencies):
       deps.err('Run with --help for the options.');
       return EXIT_REFUSED;
     }
-    deps.err(`Failed: ${err instanceof Error ? err.message : String(err)}`);
+    deps.err(`Failed: ${describeError(err)}`);
     return EXIT_FAILED;
   }
 }
