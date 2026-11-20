@@ -3,6 +3,7 @@ import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   UploadPartCommand,
 } from '@aws-sdk/client-s3';
@@ -12,6 +13,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type {
@@ -25,6 +27,7 @@ import type {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CatalogService } from '../catalog/catalog.service.js';
 import { PrismaService } from '../../prisma.service.js';
+import { DicomIndexService } from './dicom-index.service.js';
 import { S3ClientProvider } from './s3-client.js';
 import { AccessRequestService } from '../access-request/access-request.service.js';
 
@@ -70,12 +73,14 @@ export class StorageService {
   private static readonly MAX_PARTS = 10_000;
   private static readonly PART_URL_TTL_S = 15 * 60;
   private static readonly DOWNLOAD_URL_TTL_S = 15 * 60;
+  private readonly logger = new Logger(StorageService.name);
 
   constructor(
     @Inject(S3ClientProvider) private readonly s3: S3ClientProvider,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(CatalogService) private readonly catalog: CatalogService,
     @Inject(AccessRequestService) private readonly accessRequests: AccessRequestService,
+    @Inject(DicomIndexService) private readonly dicomIndex: DicomIndexService,
   ) {}
 
   async initUpload(
@@ -151,6 +156,24 @@ export class StorageService {
   }): Promise<UploadedDistribution> {
     const target = await this.requireHost(args.slug, args.user);
 
+    // `initUpload` mints every key under the dataset's own prefix. The
+    // key comes back from the browser, so hold it to that: the DICOM
+    // index below records the file against this dataset (ADR-0026).
+    if (typeof args.key !== 'string' || !args.key.startsWith(`${target.slug}/`)) {
+      throw new BadRequestException('upload key does not belong to this dataset');
+    }
+
+    // Everything that can refuse the upload is checked before storage
+    // assembles the object: once it has, a refusal would leave the
+    // bytes behind with no row pointing at them. Uploads attach to the
+    // latest published version, so there has to be one.
+    const versionId = await this.latestVersionIdOrNull(target.id);
+    if (!versionId) {
+      throw new BadRequestException(
+        `dataset "${args.slug}" has no published version yet; publish a manifest first`,
+      );
+    }
+
     // S3 wants the parts sorted by partNumber and ETags surrounded by
     // double-quotes (the SDK is finicky about both). Defensive sort +
     // quote-add even though the browser usually gets this right.
@@ -169,19 +192,22 @@ export class StorageService {
     });
     await this.s3.client.send(completeCmd);
 
-    // Persist the Distribution. The latest published version of the
-    // dataset becomes the parent — uploads attach to whatever's
-    // currently live. (PR D's `findIdAndHostBySlug` plus a follow-up
-    // version lookup; we already have the dataset id from
-    // `requireHost` above.)
-    const versionId = await this.latestVersionIdOrNull(target.id);
-    if (!versionId) {
-      // No published version yet — host needs to publish a manifest
-      // before attaching uploads. Reject loudly so the UI can suggest
-      // the right next step.
-      throw new BadRequestException(
-        `dataset "${args.slug}" has no published version yet; publish a manifest first`,
-      );
+    // ADR-0026: read the header before the file is offered to anyone.
+    // A DICOM file with de-identification findings is recorded as held,
+    // and every path that serves bytes checks that. If the check itself
+    // cannot run, no Distribution row is written, so the file is not
+    // reachable, and the stored object is discarded so that unchecked
+    // bytes do not stay behind. Fail closed.
+    let dicomCheckStatus: UploadedDistribution['dicomCheckStatus'];
+    try {
+      dicomCheckStatus = await this.dicomIndex.indexStoredObject({
+        datasetId: target.id,
+        s3Bucket: this.s3.bucket,
+        s3Key: args.key,
+      });
+    } catch (err) {
+      await this.discardStoredObject(target.id, args.key);
+      throw err;
     }
 
     const filename = args.body.croissantId ?? args.key.split('/').filter(Boolean).pop() ?? args.key;
@@ -222,6 +248,7 @@ export class StorageService {
       contentSizeBytes: Number(dist.contentSizeBytes ?? 0n),
       sha256: dist.contentHash,
       uploadedAt: new Date().toISOString(),
+      dicomCheckStatus,
     };
   }
 
@@ -277,11 +304,22 @@ export class StorageService {
       throw new NotFoundException('distribution upload is not complete');
     }
 
-    await this.authoriseDatasetBytes({
+    const dataset = await this.authoriseDatasetBytes({
       datasetId: ds.id,
       requiresAccess: dist.requiresAccess,
       user: args.user,
     });
+
+    // ADR-0026: a DICOM file with undecided de-identification findings
+    // is served to nobody but its host and platform operators, whatever
+    // the dataset's visibility. 404, not 403: the file is not listed for
+    // this caller either, so its existence is not confirmed.
+    if (
+      !this.isHostOrOperator(dataset.hostId, args.user) &&
+      (await this.dicomIndex.isHeld(dist.s3Bucket, dist.s3Key))
+    ) {
+      throw new NotFoundException('distribution not found');
+    }
 
     const cmd = new GetObjectCommand({ Bucket: dist.s3Bucket, Key: dist.s3Key });
     return this.presign(cmd, StorageService.DOWNLOAD_URL_TTL_S);
@@ -354,6 +392,17 @@ export class StorageService {
     return fullDataset;
   }
 
+  /**
+   * Who may read a held DICOM file (ADR-0026): the dataset's host and
+   * platform operators. Until a separate operator role exists, an
+   * operator is a member of the `admin` group.
+   */
+  isHostOrOperator(hostId: string, user: CognitoAccessTokenPayload | undefined): boolean {
+    if (!user?.sub) return false;
+    const groups = (user['cognito:groups'] ?? []) as string[];
+    return groups.includes('admin') || subToUuid(user.sub) === hostId;
+  }
+
   // ----- helpers ---------------------------------------------------
 
   private async requireHost(
@@ -373,6 +422,21 @@ export class StorageService {
       throw new ForbiddenException('only the dataset host or an admin can upload');
     }
     return { ...target, slug };
+  }
+
+  /**
+   * Remove an object whose upload could not be finished. Best effort:
+   * the caller is already failing, and that failure is what the host
+   * must see. On a versioned bucket this hides the object behind a
+   * delete marker; removing the version itself is an operator's task.
+   */
+  private async discardStoredObject(datasetId: string, key: string): Promise<void> {
+    try {
+      await this.s3.client.send(new DeleteObjectCommand({ Bucket: this.s3.bucket, Key: key }));
+    } catch {
+      // The dataset, not the key: a file name can carry an identifier.
+      this.logger.error(`could not discard an unchecked upload dataset=${datasetId}`);
+    }
   }
 
   private async latestVersionIdOrNull(datasetId: string): Promise<string | null> {

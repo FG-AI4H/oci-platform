@@ -4,6 +4,8 @@ import { PrismaService } from '../../prisma.service.js';
 import { CatalogModule } from '../catalog/catalog.module.js';
 import { AccessRequestModule } from '../access-request/access-request.module.js';
 import { BulkDownloadService } from './bulk-download.service.js';
+import { DicomIndexRepository } from './dicom-index.repository.js';
+import { DicomIndexService } from './dicom-index.service.js';
 import { S3ClientProvider } from './s3-client.js';
 import { StorageController } from './storage.controller.js';
 import { StorageService } from './storage.service.js';
@@ -23,7 +25,14 @@ import { StorageService } from './storage.service.js';
 @Module({
   imports: [AuthModule, CatalogModule, AccessRequestModule],
   controllers: [StorageController],
-  providers: [PrismaService, S3ClientProvider, StorageService, BulkDownloadService],
+  providers: [
+    PrismaService,
+    S3ClientProvider,
+    DicomIndexRepository,
+    DicomIndexService,
+    StorageService,
+    BulkDownloadService,
+  ],
   exports: [StorageService, BulkDownloadService],
 })
 export class StorageModule {}

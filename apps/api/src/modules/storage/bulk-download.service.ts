@@ -1,3 +1,4 @@
+import { withoutHeldDistributions } from '../../common/dicom-hold.js';
 import { Readable } from 'node:stream';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import {
@@ -131,7 +132,7 @@ export class BulkDownloadService {
       });
     }
 
-    const rows = (await this.prisma.client.distribution.findMany({
+    const allRows = (await this.prisma.client.distribution.findMany({
       where: {
         datasetVersionId: version.id,
         storageBackend: 'S3',
@@ -157,6 +158,15 @@ export class BulkDownloadService {
       s3Key: string | null;
       contentSizeBytes: bigint | null;
     }>;
+
+    // ADR-0026: held DICOM files go into the archive of their host and
+    // of platform operators only. For anyone else they are left out of
+    // the archive, of the manifest inside it, and of every count in an
+    // error body, the same way the dataset's file list leaves them out.
+    const held = this.storage.isHostOrOperator(dataset.hostId, args.user)
+      ? new Set<string>()
+      : await this.catalog.heldDistributionIds(owner.id);
+    const rows = held.size === 0 ? allRows : allRows.filter((row) => !held.has(row.id));
 
     const taken = new Set<string>();
     const entries: BulkDownloadEntry[] = [];
@@ -223,7 +233,7 @@ export class BulkDownloadService {
       slug: dataset.slug,
       datasetName: manifestString(version.croissant, 'name') ?? dataset.slug,
       version: version.version,
-      croissant: version.croissant,
+      croissant: withoutHeldDistributions(version.croissant, held),
       includeManifest: args.includeManifest,
       entries,
       totalBytes,

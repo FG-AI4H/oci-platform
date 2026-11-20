@@ -1008,7 +1008,17 @@ export interface UploadedDistribution {
   contentSizeBytes: number;
   sha256: string | null;
   uploadedAt: string;
+  /**
+   * Outcome of the header check when the file is DICOM (ADR-0026), null
+   * when it is not. `HELD` and `UNREADABLE` mean the file is visible to
+   * its host and to platform operators only, until an operator decides.
+   * Optional so that responses recorded before the check still parse.
+   */
+  dicomCheckStatus?: DicomCheckStatus | null;
 }
+
+/** See `UploadedDistribution.dicomCheckStatus`. */
+export type DicomCheckStatus = 'CLEAR' | 'HELD' | 'RELEASED' | 'UNREADABLE';
 
 // ==== Access requests (DAP package, Phase B) ============================
 //

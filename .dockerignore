@@ -1,6 +1,9 @@
 node_modules
 **/node_modules
 **/dist
+# Incremental compiler state. With `dist` left out and this left in, tsc
+# inside the image believes a package is already built and emits nothing.
+**/*.tsbuildinfo
 **/.next
 **/.turbo
 **/cdk.out

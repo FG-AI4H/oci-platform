@@ -129,6 +129,9 @@ importers:
       '@oci/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@oci/dicom':
+        specifier: workspace:*
+        version: link:../../packages/dicom
       '@oci/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types

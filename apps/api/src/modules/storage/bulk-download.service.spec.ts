@@ -39,9 +39,11 @@ interface PrismaMock {
 }
 interface CatalogMock {
   findOwnerBySlug: ReturnType<typeof vi.fn>;
+  heldDistributionIds: ReturnType<typeof vi.fn>;
 }
 interface StorageMock {
   authoriseDatasetBytes: ReturnType<typeof vi.fn>;
+  isHostOrOperator: ReturnType<typeof vi.fn>;
 }
 
 let s3: S3Mock;
@@ -82,8 +84,11 @@ beforeEach(() => {
       distribution: { findMany: vi.fn() },
     },
   };
-  catalog = { findOwnerBySlug: vi.fn() };
-  storage = { authoriseDatasetBytes: vi.fn() };
+  catalog = {
+    findOwnerBySlug: vi.fn(),
+    heldDistributionIds: vi.fn().mockResolvedValue(new Set<string>()),
+  };
+  storage = { authoriseDatasetBytes: vi.fn(), isHostOrOperator: vi.fn().mockReturnValue(false) };
 
   // Happy-path defaults; individual tests override.
   catalog.findOwnerBySlug.mockResolvedValue({
@@ -162,6 +167,76 @@ describe('BulkDownloadService.plan — lookup + authz', () => {
     await expect(plan()).rejects.toBeInstanceOf(ForbiddenException);
     // No content disclosure — not even a count — to an unauthorised caller.
     expect(prisma.client.distribution.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('BulkDownloadService.plan — held DICOM files (ADR-0026)', () => {
+  const HELD_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const rows = () => [
+    row(),
+    row({
+      id: HELD_ID,
+      croissantId: 'held.dcm',
+      s3Key: 'idrid/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/held.dcm',
+    }),
+  ];
+  const manifestNamingBoth = {
+    ...CROISSANT,
+    distribution: [
+      { '@id': 'IDRiD_001.jpg', contentUrl: 'https://example.org/IDRiD_001.jpg' },
+      {
+        '@id': 'held.dcm',
+        name: 'held.dcm',
+        sha256: 'ab'.repeat(32),
+        contentUrl: `/v2/catalog/datasets/idrid/distributions/${HELD_ID}/download`,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    prisma.client.distribution.findMany.mockResolvedValue(rows());
+    prisma.client.datasetVersion.findFirst.mockResolvedValue({
+      id: LATEST_VERSION_ID,
+      version: '1.0.0',
+      croissant: manifestNamingBoth,
+    });
+    catalog.heldDistributionIds.mockResolvedValue(new Set([HELD_ID]));
+  });
+
+  it('leaves a held file out of the archive of anyone but the host and operators', async () => {
+    const result = await plan();
+
+    expect(catalog.heldDistributionIds).toHaveBeenCalledWith(DATASET_ID);
+    expect(result.entries.map((e) => e.filename)).toEqual(['IDRiD_001.jpg']);
+  });
+
+  it('leaves it out of the manifest that goes into the archive, name and hash included', async () => {
+    const result = await plan(true);
+
+    const text = JSON.stringify(result.croissant);
+    expect(text).not.toContain('held.dcm');
+    expect(text).not.toContain(HELD_ID);
+    expect(text).toContain('IDRiD_001.jpg');
+  });
+
+  it('keeps file and manifest entry for the host or an operator', async () => {
+    storage.isHostOrOperator.mockReturnValue(true);
+
+    const result = await plan(true);
+
+    expect(storage.isHostOrOperator).toHaveBeenCalledWith('host', expect.anything());
+    expect(catalog.heldDistributionIds).not.toHaveBeenCalled();
+    expect(result.entries.map((e) => e.filename)).toEqual(['IDRiD_001.jpg', 'held.dcm']);
+    expect(JSON.stringify(result.croissant)).toContain('held.dcm');
+  });
+
+  it('409s like an empty dataset when every file is held, without counting them', async () => {
+    prisma.client.distribution.findMany.mockResolvedValue([rows()[1]]);
+
+    const err = (await rejection(plan())) as { getStatus(): number; getResponse(): unknown };
+
+    expect(err.getStatus()).toBe(409);
+    expect(err.getResponse()).toMatchObject({ candidateCount: 0 });
   });
 });
 

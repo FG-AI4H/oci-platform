@@ -526,6 +526,33 @@ export class CatalogRepository {
   }
 
   /**
+   * Ids of the distributions of a dataset, in any of its versions, whose
+   * stored file is a held DICOM file (ADR-0026). The index is keyed by
+   * where the bytes live, so this joins on bucket and key. All versions,
+   * not only the latest: a manifest refers to a file by the id of the
+   * row it was first uploaded as.
+   *
+   * Raw because Prisma cannot join on a composite of plain columns. The
+   * status list is `DICOM_HELD_STATUSES` in `common/dicom-hold.ts`;
+   * keep the two in step. Driven by the (dataset_id, check_status)
+   * index, so a dataset with nothing held costs one index probe.
+   */
+  async findHeldDistributionIds(datasetId: string): Promise<Set<string>> {
+    const rows = await this.prisma.client.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT d.id
+      FROM catalog.dicom_objects o
+      JOIN catalog.distributions d
+        ON d.s3_bucket = o.s3_bucket AND d.s3_key = o.s3_key
+      JOIN catalog.dataset_versions v
+        ON v.id = d.dataset_version_id
+      WHERE o.dataset_id = ${datasetId}::uuid
+        AND o.check_status IN ('HELD', 'UNREADABLE')
+        AND v.dataset_id = ${datasetId}::uuid
+    `);
+    return new Set(rows.map((row) => row.id));
+  }
+
+  /**
    * Look up Distributions by ID for the publish-time adoption pass
    * (PR I, #87). Returns just the columns the catalog service needs
    * to copy onto a freshly-extracted ExtractedDistribution: storage
