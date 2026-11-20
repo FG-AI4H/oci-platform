@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { AccessRequestDecisionSchema } from '@oci/shared-types';
-import { auth } from '../../../../auth';
+import { fetchAsUser } from '../../../../lib/api-action';
 import { isHost } from '../../../../lib/groups';
+import { sessionForAction } from '../../../../lib/session-recovery';
 
 export type DecisionState = { status: 'idle' } | { status: 'error'; message: string };
 
@@ -18,8 +19,8 @@ export async function decideAction(
   _prev: DecisionState,
   formData: FormData,
 ): Promise<DecisionState> {
-  const session = await auth();
-  if (!session?.accessToken || !isHost(session)) {
+  const session = await sessionForAction();
+  if (!session?.user || !isHost(session)) {
     return { status: 'error', message: 'Only hosts can decide access requests.' };
   }
 
@@ -40,15 +41,17 @@ export async function decideAction(
   if (!base) {
     return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
   }
-  const res = await fetch(`${base}/v2/catalog/access-requests/${encodeURIComponent(id)}/decision`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.accessToken}`,
+  const res = await fetchAsUser(
+    `${base}/v2/catalog/access-requests/${encodeURIComponent(id)}/decision`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(parsed.data),
+      cache: 'no-store',
     },
-    body: JSON.stringify(parsed.data),
-    cache: 'no-store',
-  });
+  );
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');

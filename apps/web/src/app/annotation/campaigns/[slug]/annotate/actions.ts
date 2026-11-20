@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import type { PullNextResponse, SubmitAssignmentResponse } from '@oci/shared-types';
-import { auth } from '../../../../../auth';
+import { fetchAsUser } from '../../../../../lib/api-action';
 import { isAnnotationWorker } from '../../../../../lib/groups';
+import { sessionForAction } from '../../../../../lib/session-recovery';
 
 export type PullState =
   | { status: 'idle' }
@@ -29,8 +30,8 @@ export type SubmitState =
  * (router behaviour lives on the API side; this action just forwards).
  */
 export async function pullNextAction(_prev: PullState, formData: FormData): Promise<PullState> {
-  const session = await auth();
-  if (!session?.accessToken || !isAnnotationWorker(session)) {
+  const session = await sessionForAction();
+  if (!session?.user || !isAnnotationWorker(session)) {
     return {
       status: 'error',
       message: 'You need an annotation role (annotator / arbitration-annotator / expert-reviewer).',
@@ -42,15 +43,9 @@ export async function pullNextAction(_prev: PullState, formData: FormData): Prom
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (!base) return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
 
-  const res = await fetch(
+  const res = await fetchAsUser(
     `${base}/v2/annotation/campaigns/${encodeURIComponent(slug)}/tasks/next`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${session.accessToken}`,
-      },
-      cache: 'no-store',
-    },
+    { method: 'POST', cache: 'no-store' },
   );
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -85,9 +80,9 @@ export async function submitAssignmentAction(
   _prev: SubmitState,
   formData: FormData,
 ): Promise<SubmitState> {
-  const session = await auth();
+  const session = await sessionForAction();
   const submissionRaw = String(formData.get('submission') ?? '');
-  if (!session?.accessToken || !isAnnotationWorker(session)) {
+  if (!session?.user || !isAnnotationWorker(session)) {
     return {
       status: 'error',
       message: 'You need an annotation role to submit.',
@@ -132,13 +127,12 @@ export async function submitAssignmentAction(
       submission: submissionRaw,
     };
   }
-  const res = await fetch(
+  const res = await fetchAsUser(
     `${base}/v2/annotation/assignments/${encodeURIComponent(assignmentId)}/submissions`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.accessToken}`,
       },
       body: JSON.stringify({
         submission,

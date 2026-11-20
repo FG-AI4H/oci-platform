@@ -21,6 +21,7 @@ import {
 } from '@oci/shared-types';
 import { auth } from '../../../../../auth';
 import { apiFetch } from '../../../../../lib/api';
+import { fetchAsUser } from '../../../../../lib/api-action';
 import { annotationGateForCaller } from '../../../../../lib/groups';
 import { AnnotateForm } from './annotate-form';
 
@@ -75,12 +76,12 @@ export default async function AnnotatePage({ params }: PageProps) {
     if (!base) {
       pullError = 'NEXT_PUBLIC_API_BASE_URL not set in web env.';
     } else {
-      const res = await fetch(
+      const res = await fetchAsUser(
         `${base}/v2/annotation/campaigns/${encodeURIComponent(slug)}/tasks/next`,
+        { method: 'POST', cache: 'no-store' },
         {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${session.accessToken ?? ''}` },
-          cache: 'no-store',
+          returnTo: `/annotation/campaigns/${encodeURIComponent(slug)}/annotate`,
+          rendering: true,
         },
       );
       if (res.ok) {

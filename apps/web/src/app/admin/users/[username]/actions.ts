@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { PlatformGroupSchema, type PlatformGroup } from '@oci/shared-types';
-import { auth } from '../../../../auth';
+import { fetchAsUser } from '../../../../lib/api-action';
 import { isAdmin } from '../../../../lib/groups';
+import { sessionForAction } from '../../../../lib/session-recovery';
 
 export type GroupActionResult =
   | { status: 'idle' }
@@ -25,8 +26,8 @@ export async function toggleGroupAction(
   _prev: GroupActionResult,
   formData: FormData,
 ): Promise<GroupActionResult> {
-  const session = await auth();
-  if (!session?.accessToken || !isAdmin(session)) {
+  const session = await sessionForAction();
+  if (!session?.user || !isAdmin(session)) {
     return { status: 'error', message: 'Only admins can change group memberships.' };
   }
 
@@ -52,11 +53,10 @@ export async function toggleGroupAction(
       ? `${base}/v2/admin/users/${encodeURIComponent(username)}/groups`
       : `${base}/v2/admin/users/${encodeURIComponent(username)}/groups/${encodeURIComponent(group)}`;
 
-  const res = await fetch(url, {
+  const res = await fetchAsUser(url, {
     method: desired === 'grant' ? 'POST' : 'DELETE',
     headers: {
       ...(desired === 'grant' ? { 'Content-Type': 'application/json' } : {}),
-      Authorization: `Bearer ${session.accessToken}`,
     },
     body: desired === 'grant' ? JSON.stringify({ group }) : undefined,
     cache: 'no-store',

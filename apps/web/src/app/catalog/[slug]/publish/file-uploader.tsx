@@ -3,18 +3,39 @@
 import { useCallback, useRef, useState } from 'react';
 import type { UploadedDistribution } from '@oci/shared-types';
 import { Alert, AlertDescription, AlertTitle, Button } from '@oci/ui';
-import { uploadMultipart } from '../../../../lib/multipart-upload';
+import { uploadMultipart, type UploadTransport } from '../../../../lib/multipart-upload';
 import { revalidateDatasetDetail } from './actions';
+import {
+  abortUploadAction,
+  completeUploadAction,
+  initUploadAction,
+  uploadPartUrlAction,
+  type UploadCallResult,
+} from './upload-actions';
 
 interface Props {
   slug: string;
-  /**
-   * Bearer token for our API. Forwarded to multipart-upload as
-   * `Authorization: Bearer <token>` on every API call. The browser
-   * never sees S3 directly — every PUT goes through a presigned URL
-   * minted server-side per part.
-   */
-  accessToken: string;
+}
+
+function unwrap<T>(result: UploadCallResult<T>): T {
+  if (!result.ok) throw new Error(result.error);
+  return result.data;
+}
+
+/**
+ * The upload's API calls go through server actions, which hold the
+ * session. The browser gets a presigned URL per part and never a
+ * bearer token.
+ */
+function serverTransport(slug: string): UploadTransport {
+  return {
+    init: async (request) => unwrap(await initUploadAction(slug, request)),
+    partUrl: async (ref, partNumber) => unwrap(await uploadPartUrlAction(slug, ref, partNumber)),
+    complete: async (ref, file, body) => unwrap(await completeUploadAction(slug, ref, file, body)),
+    abort: async (ref) => {
+      unwrap(await abortUploadAction(slug, ref));
+    },
+  };
 }
 
 interface UploadingFile {
@@ -42,13 +63,14 @@ interface UploadingFile {
  *     the browser is hostile; the manifest carries hashes when the
  *     host already has them.
  */
-export function FileUploader({ slug, accessToken }: Props) {
+export function FileUploader({ slug }: Props) {
   const [files, setFiles] = useState<UploadingFile[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handlePicked = useCallback(
     (picked: FileList | File[]) => {
       const incoming = Array.from(picked);
+      const transport = serverTransport(slug);
       const next: UploadingFile[] = incoming.map((file) => ({
         // Stable identity for state updates. Reference equality (`f ===
         // entry`) breaks the moment `onProgress` setFiles spreads the
@@ -70,7 +92,7 @@ export function FileUploader({ slug, accessToken }: Props) {
         uploadMultipart({
           slug,
           file: entry.file,
-          accessToken,
+          transport,
           signal: entry.controller.signal,
           onProgress: (fraction) =>
             setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, fraction } : f))),
@@ -83,8 +105,8 @@ export function FileUploader({ slug, accessToken }: Props) {
                   : f,
               ),
             );
-            // Browser → API direct uploads bypass Next.js, so the
-            // detail page's 30s cache hides the freshly-attached
+            // The upload does not revalidate anything by itself, so
+            // the detail page's 30s cache hides the freshly-attached
             // distribution. Force a re-render via the server action.
             revalidateDatasetDetail(slug).catch(() => {
               /* best-effort */
@@ -105,7 +127,7 @@ export function FileUploader({ slug, accessToken }: Props) {
           );
       });
     },
-    [slug, accessToken],
+    [slug],
   );
 
   return (

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { ListDatasetsResponse } from '@oci/shared-types';
-import { auth } from '../../../auth';
+import { sessionAccessToken } from '../../../auth';
 
 /**
  * Server-side proxy for the catalog list endpoint, scoped to the
@@ -19,7 +19,7 @@ import { auth } from '../../../auth';
  * be valid picks even if shown.
  */
 export async function GET(req: Request): Promise<NextResponse> {
-  const session = await auth();
+  const accessToken = await sessionAccessToken();
   const url = new URL(req.url);
   const q = url.searchParams.get('q') ?? '';
   if (q.length < 2) {
@@ -32,7 +32,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   }
 
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
 
   const apiUrl = `${base}/v2/catalog/datasets?source=local&limit=10&q=${encodeURIComponent(q)}`;
   const res = await fetch(apiUrl, { headers, cache: 'no-store' });

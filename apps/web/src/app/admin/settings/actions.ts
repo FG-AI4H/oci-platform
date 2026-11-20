@@ -3,8 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { MaintenanceBannerToneSchema, type PlatformSettings } from '@oci/shared-types';
-import { auth } from '../../../auth';
+import { fetchAsUser } from '../../../lib/api-action';
 import { isAdmin } from '../../../lib/groups';
+import { sessionForAction } from '../../../lib/session-recovery';
 
 export interface UpdateSettingsValues {
   bannerEnabled: 'on' | '';
@@ -34,8 +35,8 @@ export async function updateSettingsAction(
   _prev: UpdateSettingsState,
   formData: FormData,
 ): Promise<UpdateSettingsState> {
-  const session = await auth();
-  if (!session?.accessToken || !isAdmin(session)) {
+  const session = await sessionForAction();
+  if (!session?.user || !isAdmin(session)) {
     return { status: 'error', message: 'Only admins can update settings.' };
   }
 
@@ -87,11 +88,10 @@ export async function updateSettingsAction(
     return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
   }
 
-  const res = await fetch(`${base}/v2/admin/settings`, {
+  const res = await fetchAsUser(`${base}/v2/admin/settings`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.accessToken}`,
     },
     body: JSON.stringify(body),
     cache: 'no-store',

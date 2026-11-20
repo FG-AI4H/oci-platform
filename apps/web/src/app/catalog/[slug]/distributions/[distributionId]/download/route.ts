@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '../../../../../../auth';
+import { sessionAccessToken } from '../../../../../../auth';
 
 /**
  * Proxies a gated download for a platform-hosted distribution.
@@ -23,10 +23,10 @@ export async function GET(
     return NextResponse.json({ message: 'NEXT_PUBLIC_API_BASE_URL not set' }, { status: 500 });
   }
 
-  const session = await auth();
+  const accessToken = await sessionAccessToken();
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (session?.accessToken) {
-    headers.Authorization = `Bearer ${session.accessToken}`;
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
   }
 
   // The API returns 302 with the presigned URL in `Location`. Disable

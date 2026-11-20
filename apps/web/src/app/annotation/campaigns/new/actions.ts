@@ -9,8 +9,9 @@ import {
   type CampaignOutputLicense,
   type CampaignTaskKind,
 } from '@oci/shared-types';
-import { auth } from '../../../../auth';
+import { fetchAsUser } from '../../../../lib/api-action';
 import { isCampaignManager } from '../../../../lib/groups';
+import { sessionForAction } from '../../../../lib/session-recovery';
 
 export interface CreateCampaignValues {
   slug: string;
@@ -52,8 +53,8 @@ export async function createCampaignAction(
   _prev: CreateCampaignState,
   formData: FormData,
 ): Promise<CreateCampaignState> {
-  const session = await auth();
-  if (!session?.accessToken || !isCampaignManager(session)) {
+  const session = await sessionForAction();
+  if (!session?.user || !isCampaignManager(session)) {
     return { status: 'error', message: 'Only campaign managers can create campaigns.' };
   }
 
@@ -102,11 +103,10 @@ export async function createCampaignAction(
   if (!base) {
     return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
   }
-  const res = await fetch(`${base}/v2/annotation/campaigns`, {
+  const res = await fetchAsUser(`${base}/v2/annotation/campaigns`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.accessToken}`,
     },
     body: JSON.stringify(parsed.data),
     cache: 'no-store',

@@ -8,8 +8,9 @@ import {
   type InstructionsMediaRef,
   type PublishInstructionsResponse,
 } from '@oci/shared-types';
-import { auth } from '../../../../../auth';
+import { fetchAsUser } from '../../../../../lib/api-action';
 import { isCampaignManager } from '../../../../../lib/groups';
+import { sessionForAction } from '../../../../../lib/session-recovery';
 
 /** One media row as typed in the form; every field is a raw string. */
 export interface MediaRowValues {
@@ -83,8 +84,8 @@ export async function publishInstructionsAction(
   formData: FormData,
 ): Promise<PublishInstructionsState> {
   const values = readValues(formData);
-  const session = await auth();
-  if (!session?.accessToken || !isCampaignManager(session)) {
+  const session = await sessionForAction();
+  if (!session?.user || !isCampaignManager(session)) {
     return {
       status: 'error',
       message: 'Only campaign managers can publish instructions.',
@@ -146,13 +147,12 @@ export async function publishInstructionsAction(
   if (!base) {
     return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.', values };
   }
-  const res = await fetch(
+  const res = await fetchAsUser(
     `${base}/v2/annotation/campaigns/${encodeURIComponent(slug.data)}/instructions`,
     {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.accessToken}`,
       },
       body: JSON.stringify(parsed.data),
       cache: 'no-store',
