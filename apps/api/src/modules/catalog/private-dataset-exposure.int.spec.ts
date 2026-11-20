@@ -26,6 +26,8 @@ import type { PassportService } from '../passport/passport.service.js';
 import { BulkDownloadService } from '../storage/bulk-download.service.js';
 import { DicomIndexRepository } from '../storage/dicom-index.repository.js';
 import { DicomIndexService } from '../storage/dicom-index.service.js';
+import { DicomSeriesRepository } from '../storage/dicom-series.repository.js';
+import { DicomSeriesService } from '../storage/dicom-series.service.js';
 import type { S3ClientProvider } from '../storage/s3-client.js';
 import { StorageService } from '../storage/storage.service.js';
 import { CatalogRepository } from './catalog.repository.js';
@@ -140,6 +142,7 @@ describe.skipIf(!dockerAvailable)('exposure of a PRIVATE dataset against Postgre
   let catalog: CatalogService;
   let storage: StorageService;
   let bulk: BulkDownloadService;
+  let series: DicomSeriesService;
   let accessRequests: AccessRequestService;
   let dua: DuaTemplateService;
   let campaigns: CampaignService;
@@ -269,6 +272,7 @@ describe.skipIf(!dockerAvailable)('exposure of a PRIVATE dataset against Postgre
       new DicomIndexService(s3, new DicomIndexRepository(prismaService)),
     );
     bulk = new BulkDownloadService(s3, prismaService, catalog, storage);
+    series = new DicomSeriesService(new DicomSeriesRepository(prismaService), storage, catalog);
     dua = new DuaTemplateService(catalog);
     campaigns = new CampaignService(new CampaignRepository(prismaService));
 
@@ -523,6 +527,41 @@ describe.skipIf(!dockerAvailable)('exposure of a PRIVATE dataset against Postgre
         ).rejects.toBeInstanceOf(NotFoundException);
       },
     );
+
+    // The two DICOM series routes (#674) hand out the same bytes as a
+    // download, by signed storage addresses, and go through the same gate.
+    it.each(everyoneButHostAndAdmin)(
+      'refuses the list of DICOM series and the addresses of one series to %s',
+      async (_who, caller) => {
+        const row = await prisma.dicomSeries.upsert({
+          where: {
+            datasetId_seriesInstanceUid: {
+              datasetId: privateId,
+              seriesInstanceUid: '1.2.826.0.1.3680043.8.498.658.77',
+            },
+          },
+          create: { datasetId: privateId, seriesInstanceUid: '1.2.826.0.1.3680043.8.498.658.77' },
+          update: {},
+        });
+        await expect(
+          series.listForDataset({ slug: PRIVATE_SLUG, version: undefined, user: caller }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(
+          series.getSeries({ seriesId: row.id, version: undefined, user: caller }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+      },
+    );
+
+    it('gives the list of DICOM series to the owning host and to an admin', async () => {
+      for (const caller of [OWNER, ADMIN]) {
+        const list = await series.listForDataset({
+          slug: PRIVATE_SLUG,
+          version: undefined,
+          user: caller,
+        });
+        expect(list.datasetSlug).toBe(PRIVATE_SLUG);
+      }
+    });
 
     it('an approved access request does not open a PRIVATE dataset', async () => {
       const request = await prisma.accessRequest.create({

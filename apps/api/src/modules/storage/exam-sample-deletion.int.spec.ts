@@ -185,8 +185,17 @@ describe.skipIf(!dockerAvailable)('exam sample deletion SQL against Postgres (#6
         },
       });
     }
-    await prisma.dicomSeries.create({
-      data: { datasetId: dataset.id, seriesInstanceUid: '1.2.826.0.1.3680043.8.498.658.10' },
+    // The index writes the series row itself when it records an image
+    // (#674); the upsert only makes sure one exists whatever the files were.
+    await prisma.dicomSeries.upsert({
+      where: {
+        datasetId_seriesInstanceUid: {
+          datasetId: dataset.id,
+          seriesInstanceUid: '1.2.826.0.1.3680043.8.498.658.10',
+        },
+      },
+      create: { datasetId: dataset.id, seriesInstanceUid: '1.2.826.0.1.3680043.8.498.658.10' },
+      update: {},
     });
 
     // A reading campaign pinned to the version, with two tasks, an
