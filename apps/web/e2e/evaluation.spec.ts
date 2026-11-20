@@ -53,11 +53,27 @@ test.describe('evaluation surface (ADR-0017)', () => {
     await firstTask.click();
     await expect(page).toHaveURL(/\/evaluation\/[^/]+$/);
 
-    // Task summary card: the referable cut-off is explained, not just
-    // printed as a bare integer.
+    // Task summary card. Which task heads the list is not this spec's to
+    // decide, so read its kind and assert what that kind shows (#645): the
+    // grading vocabulary appears on a grading task only.
     await expect(page.getByRole('heading', { level: 2, name: 'About this task' })).toBeVisible();
-    await expect(page.getByText('Referable threshold', { exact: true })).toBeVisible();
-    await expect(page.getByText('referable means grade ≥', { exact: false })).toBeVisible();
+    const kind = (
+      await page
+        .locator('dt', { hasText: /^Task kind$/ })
+        .locator('xpath=following-sibling::dd[1]')
+        .innerText()
+    ).trim();
+    expect(['Grading', 'Classification']).toContain(kind);
+    const isGrading = kind === 'Grading';
+    if (isGrading) {
+      // The referable cut-off is explained, not just printed as a bare integer.
+      await expect(page.getByText('Referable threshold', { exact: true })).toBeVisible();
+      await expect(page.getByText('referable means grade ≥', { exact: false })).toBeVisible();
+    } else {
+      await expect(page.getByText('Classes', { exact: true })).toBeVisible();
+      await expect(page.getByText('Referable threshold', { exact: true })).toHaveCount(0);
+      await expect(page.getByText('Grades', { exact: true })).toHaveCount(0);
+    }
 
     // #441 — the item-ID key set is published on the task page. This is the
     // half of that issue a participant actually hits: the identifiers were
@@ -87,13 +103,15 @@ test.describe('evaluation surface (ADR-0017)', () => {
     if ((await submissions.count()) === 0) {
       await expect(page.getByText('No submissions scored yet.', { exact: false })).toBeVisible();
     } else {
-      // Headline metric plus the four supporting rates are all labelled.
+      // Headline metric plus the four supporting rates are all labelled, in
+      // the vocabulary of the task's kind.
       const first = submissions.first();
-      await expect(first.getByText('QWK', { exact: true })).toBeVisible();
-      await expect(first.getByText('Accuracy', { exact: true })).toBeVisible();
-      await expect(first.getByText('Referable sensitivity', { exact: true })).toBeVisible();
-      await expect(first.getByText('Referable specificity', { exact: true })).toBeVisible();
-      await expect(first.getByText('Coverage', { exact: true })).toBeVisible();
+      const labels = isGrading
+        ? ['QWK', 'Accuracy', 'Referable sensitivity', 'Referable specificity', 'Coverage']
+        : ['Macro F1', 'Balanced accuracy', 'Accuracy', 'Micro F1', 'Coverage'];
+      for (const label of labels) {
+        await expect(first.getByText(label, { exact: true })).toBeVisible();
+      }
 
       // #486 — every SCORED row carries its attribution, as a badge whose
       // text (not colour) names the state. The seeded `demo-baseline-v1` on

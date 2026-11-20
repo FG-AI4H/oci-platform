@@ -107,9 +107,8 @@ describe('parsePredictionsFile — CSV (#645)', () => {
     const result = issues(parsePredictionsFile(text));
     expect(result.issueCount).toBe(7);
     expect(result.issues.map((i) => i.line)).toEqual([2, 3, 4, 5, 6, 7, 8]);
-    expect(result.issues[0]?.message).toBe(
-      'No label for "img_01". Fill it in, or delete the line to leave the item out.',
-    );
+    expect(result.issues[0]?.message).toBe('No label for "img_01".');
+    expect(result.missingLabelCount).toBe(1);
     expect(result.issues[2]?.message).toBe(
       'The label for "img_03" must be a whole number such as 0 or 1. Found: 2.0',
     );
@@ -202,6 +201,7 @@ describe('predictionsTemplateCsv (#645)', () => {
   it('read back untouched, reports every line as unlabelled', () => {
     const result = issues(parsePredictionsFile(predictionsTemplateCsv(['a', 'b', 'c'])));
     expect(result.issueCount).toBe(3);
+    expect(result.missingLabelCount).toBe(3);
     expect(result.issues.map((i) => i.line)).toEqual([2, 3, 4]);
   });
 

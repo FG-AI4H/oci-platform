@@ -55,8 +55,12 @@ export const PREDICTIONS_CSV_HEADER = ['item_id', 'label'] as const;
 export const PREDICTIONS_CSV_DELIMITERS = [',', ';'] as const;
 export type PredictionsCsvDelimiter = (typeof PREDICTIONS_CSV_DELIMITERS)[number];
 
-/** How many problems one parse reports in full. The total is always given. */
-export const MAX_REPORTED_FILE_ISSUES = 20;
+/**
+ * How many problems one parse reports in full. The total is always given. Ten
+ * is enough to see the pattern: a file with many problems nearly always has
+ * the same one on every line.
+ */
+export const MAX_REPORTED_FILE_ISSUES = 10;
 
 export type PredictionsFileFormat = 'CSV' | 'JSON';
 
@@ -75,12 +79,19 @@ export type PredictionsFileParseResult =
       issues: PredictionsFileIssue[];
       /** Every problem found, including those not listed. */
       issueCount: number;
+      /**
+       * How many of them are a line with no label — what an unfinished template
+       * looks like. Counted apart so a page can say once what to do about them
+       * (fill in, or delete the line) instead of on every line.
+       */
+      missingLabelCount: number;
     };
 
 /** Collects problems, keeping the first few and counting all of them. */
 class IssueLog {
   readonly issues: PredictionsFileIssue[] = [];
   count = 0;
+  missingLabels = 0;
 
   add(line: number | null, message: string): void {
     this.count += 1;
@@ -113,6 +124,7 @@ function parseJson(text: string): PredictionsFileParseResult {
     format: 'JSON',
     issues: log.issues,
     issueCount: log.count,
+    missingLabelCount: log.missingLabels,
   });
 
   let parsed: unknown;
@@ -301,6 +313,7 @@ function parseCsv(text: string): PredictionsFileParseResult {
     format: 'CSV',
     issues: log.issues,
     issueCount: log.count,
+    missingLabelCount: log.missingLabels,
   });
 
   const { delimiter, body } = detectDelimiter(text);
@@ -355,10 +368,8 @@ function parseCsv(text: string): PredictionsFileParseResult {
     } else if (itemId.length > MAX_ITEM_ID_LENGTH) {
       log.add(record.line, `The item_id is longer than ${MAX_ITEM_ID_LENGTH} characters.`);
     } else if (label === '') {
-      log.add(
-        record.line,
-        `No label for "${itemId}". Fill it in, or delete the line to leave the item out.`,
-      );
+      log.missingLabels += 1;
+      log.add(record.line, `No label for "${itemId}".`);
     } else if (!/^\d+$/.test(label)) {
       log.add(
         record.line,

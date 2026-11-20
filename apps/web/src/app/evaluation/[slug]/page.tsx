@@ -6,6 +6,7 @@ import {
   AlertTitle,
   ArrowLeftIcon,
   Badge,
+  Button,
   Card,
   CardContent,
   CardDescription,
@@ -20,11 +21,11 @@ import {
 import type {
   EvaluationSubmissionResult,
   EvaluationTaskDetail,
-  EvaluationTaskKindDb,
   ScoreAttribution,
   SubmissionStatus,
 } from '@oci/shared-types';
 import { apiFetch } from '../../../lib/api';
+import { metricCells, TASK_KIND_LABEL } from '../../../components/evaluation/metrics';
 import {
   describeAttribution,
   isPublishedResult,
@@ -51,12 +52,12 @@ import {
  * page shows it next to the method name and hands out rank numbers only to
  * published results — a provisional, legacy or retracted score keeps its
  * metrics but is not "#1" of anything.
+ *
+ * Each row's method name links to the submission's own page (#645), except a
+ * FAILED row: the API returns a failed submission to its submitter and to
+ * administrators only, and this page does not know who is reading it, so a
+ * link there would be a 404 for nearly everyone who followed it.
  */
-
-const TASK_KIND_LABEL: Record<EvaluationTaskKindDb, string> = {
-  GRADING: 'Grading',
-  CLASSIFICATION: 'Classification',
-};
 
 const STATUS_TONE: Record<SubmissionStatus, 'success' | 'info' | 'danger'> = {
   SCORED: 'success',
@@ -69,23 +70,6 @@ const STATUS_NOTE: Record<SubmissionStatus, string | null> = {
   PENDING: 'Awaiting scoring — no metrics yet.',
   FAILED: 'Scoring did not complete, so this submission has no metrics.',
 };
-
-/**
- * QWK stays a 0–1-scale figure (and can be negative — worse than chance),
- * so it is never rendered as a percentage. `signDisplay: 'negative'` keeps
- * the minus sign without prefixing positives with a `+`.
- */
-const QWK_FORMATTER = new Intl.NumberFormat('en-GB', {
-  minimumFractionDigits: 3,
-  maximumFractionDigits: 3,
-  signDisplay: 'negative',
-});
-
-/** The four bounded 0–1 rates read better as percentages. */
-const RATE_FORMATTER = new Intl.NumberFormat('en-GB', {
-  style: 'percent',
-  maximumFractionDigits: 1,
-});
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' });
 
@@ -132,7 +116,9 @@ export default async function EvaluationTaskDetailPage({
 
   if (!detail) notFound();
 
-  const topGrade = detail.numClasses - 1;
+  const topLabel = detail.numClasses - 1;
+  const isGrading = detail.taskKind === 'GRADING';
+  const submitHref = `/evaluation/${encodeURIComponent(detail.slug)}/submit` as const;
   const scoredCount = detail.submissions.filter((s) => s.scores !== null).length;
   const publishedCount = detail.submissions.filter((s) => isPublishedResult(s.attribution)).length;
 
@@ -166,12 +152,17 @@ export default async function EvaluationTaskDetailPage({
                 metrics below come back.
               </p>
             </div>
-            <div className="flex flex-row flex-wrap items-start gap-2 lg:flex-col lg:items-end">
-              <Badge tone="info">{TASK_KIND_LABEL[detail.taskKind]}</Badge>
-              <Badge tone={detail.submissions.length > 0 ? 'primary' : 'neutral'}>
-                {detail.submissions.length.toLocaleString('en-GB')}{' '}
-                {detail.submissions.length === 1 ? 'submission' : 'submissions'}
-              </Badge>
+            <div className="flex flex-col items-start gap-4 lg:items-end">
+              <div className="flex flex-row flex-wrap items-start gap-2">
+                <Badge tone="info">{TASK_KIND_LABEL[detail.taskKind]}</Badge>
+                <Badge tone={detail.submissions.length > 0 ? 'primary' : 'neutral'}>
+                  {detail.submissions.length.toLocaleString('en-GB')}{' '}
+                  {detail.submissions.length === 1 ? 'submission' : 'submissions'}
+                </Badge>
+              </div>
+              <Button asChild size="lg">
+                <Link href={submitHref}>Submit predictions</Link>
+              </Button>
             </div>
           </div>
         </Container>
@@ -183,7 +174,9 @@ export default async function EvaluationTaskDetailPage({
             <CardHeader>
               <CardTitle as="h2">About this task</CardTitle>
               <CardDescription>
-                What is being scored, on which dataset, and where the referable cut-off sits.
+                {isGrading
+                  ? 'What is being scored, on which dataset, and where the referable cut-off sits.'
+                  : 'What is being scored, on which dataset, and which labels a prediction may take.'}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -200,23 +193,43 @@ export default async function EvaluationTaskDetailPage({
                     {detail.datasetSlug}
                   </Link>
                 </DefinitionItem>
-                <DefinitionItem term="Grades">
-                  <span className="tabular-nums">
-                    {detail.numClasses.toLocaleString('en-GB')} classes
-                  </span>{' '}
-                  <span className="text-[var(--color-muted-foreground)]">
-                    (grade 0 to {topGrade.toLocaleString('en-GB')})
-                  </span>
-                </DefinitionItem>
-                <DefinitionItem term="Referable threshold">
-                  <span className="tabular-nums">
-                    {detail.referableThreshold.toLocaleString('en-GB')}
-                  </span>{' '}
-                  <span className="text-[var(--color-muted-foreground)]">
-                    — referable means grade ≥ {detail.referableThreshold.toLocaleString('en-GB')};
-                    anything below that counts as non-referable.
-                  </span>
-                </DefinitionItem>
+                {/*
+                 * "Grades" and the referable threshold describe an ordinal
+                 * scale, so they appear on grading tasks only (#645). A
+                 * classification task has neither: its labels are categories
+                 * with no order, and nothing is split at a cut-off.
+                 */}
+                {isGrading ? (
+                  <>
+                    <DefinitionItem term="Grades">
+                      <span className="tabular-nums">
+                        {detail.numClasses.toLocaleString('en-GB')} classes
+                      </span>{' '}
+                      <span className="text-[var(--color-muted-foreground)]">
+                        (grade 0 to {topLabel.toLocaleString('en-GB')})
+                      </span>
+                    </DefinitionItem>
+                    <DefinitionItem term="Referable threshold">
+                      <span className="tabular-nums">
+                        {detail.referableThreshold.toLocaleString('en-GB')}
+                      </span>{' '}
+                      <span className="text-[var(--color-muted-foreground)]">
+                        — referable means grade ≥{' '}
+                        {detail.referableThreshold.toLocaleString('en-GB')}; anything below that
+                        counts as non-referable.
+                      </span>
+                    </DefinitionItem>
+                  </>
+                ) : (
+                  <DefinitionItem term="Classes">
+                    <span className="tabular-nums">
+                      {detail.numClasses.toLocaleString('en-GB')}
+                    </span>{' '}
+                    <span className="text-[var(--color-muted-foreground)]">
+                      (label 0 to {topLabel.toLocaleString('en-GB')})
+                    </span>
+                  </DefinitionItem>
+                )}
                 <DefinitionItem term="Items">
                   <span className="tabular-nums">{detail.itemCount.toLocaleString('en-GB')}</span>{' '}
                   <span className="text-[var(--color-muted-foreground)]">
@@ -318,17 +331,19 @@ export default async function EvaluationTaskDetailPage({
               {detail.submissions.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-[var(--color-border-strong)] bg-[var(--color-subtle)] p-8 text-center text-sm text-[var(--color-muted-foreground)]">
                   No submissions scored yet. Results appear here as soon as the first predictions
-                  file is submitted.
+                  file is submitted.{' '}
+                  <Link
+                    href={submitHref}
+                    className="rounded font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+                  >
+                    Submit predictions
+                  </Link>
                 </p>
               ) : (
                 <ol aria-label="Submissions, best first" className="space-y-4">
                   {ranked.map(({ submission, rank }) => (
                     <li key={submission.id}>
-                      <SubmissionRow
-                        submission={submission}
-                        rank={rank}
-                        taskKind={detail.taskKind}
-                      />
+                      <SubmissionRow submission={submission} rank={rank} task={detail} />
                     </li>
                   ))}
                 </ol>
@@ -356,67 +371,14 @@ export default async function EvaluationTaskDetailPage({
   );
 }
 
-/** One metric cell's label and formatted value; `null` renders an em dash. */
-type MetricCell = { label: string; value: string | null };
-
-/**
- * The metric columns for a submission, chosen by the scoring family that
- * produced them (ADR-0020).
- *
- * There is deliberately no metric set common to every kind: quadratic-weighted
- * kappa is meaningless for nominal categories, where predicting a neighbouring
- * class is not "closer" to correct, and per-class F1 says nothing about an
- * ordinal scale. So the columns change with the kind rather than showing blanks
- * for metrics that do not exist.
- *
- * The first cell is the kind's primary metric — the one the API ordered by.
- *
- * An unscored submission (PENDING / FAILED) carries no scores at all, so its
- * columns are taken from the TASK's kind rather than guessed: every submission
- * on a task shares that task's kind, which keeps the row shape stable instead of
- * reflowing the grid as results arrive.
- */
-function metricCells(
-  taskKind: EvaluationTaskKindDb,
-  scores: EvaluationSubmissionResult['scores'],
-): MetricCell[] {
-  const kind = scores?.kind ?? taskKind;
-
-  if (kind === 'CLASSIFICATION') {
-    const m = scores?.kind === 'CLASSIFICATION' ? scores.metrics : null;
-    return [
-      { label: 'Macro F1', value: m ? RATE_FORMATTER.format(m.macroF1) : null },
-      { label: 'Balanced accuracy', value: m ? RATE_FORMATTER.format(m.balancedAccuracy) : null },
-      { label: 'Accuracy', value: m ? RATE_FORMATTER.format(m.accuracy) : null },
-      { label: 'Micro F1', value: m ? RATE_FORMATTER.format(m.microF1) : null },
-      { label: 'Coverage', value: m ? RATE_FORMATTER.format(m.coverage) : null },
-    ];
-  }
-
-  const m = scores?.kind === 'GRADING' ? scores.metrics : null;
-  return [
-    { label: 'QWK', value: m ? QWK_FORMATTER.format(m.qwk) : null },
-    { label: 'Accuracy', value: m ? RATE_FORMATTER.format(m.accuracy) : null },
-    {
-      label: 'Referable sensitivity',
-      value: m ? RATE_FORMATTER.format(m.referableSensitivity) : null,
-    },
-    {
-      label: 'Referable specificity',
-      value: m ? RATE_FORMATTER.format(m.referableSpecificity) : null,
-    },
-    { label: 'Coverage', value: m ? RATE_FORMATTER.format(m.coverage) : null },
-  ];
-}
-
 function SubmissionRow({
   submission,
   rank,
-  taskKind,
+  task,
 }: {
   submission: EvaluationSubmissionResult;
   rank: number | null;
-  taskKind: EvaluationTaskKindDb;
+  task: Pick<EvaluationTaskDetail, 'slug' | 'taskKind' | 'referableThreshold'>;
 }) {
   const { scores, attribution } = submission;
   const note = STATUS_NOTE[submission.status];
@@ -433,7 +395,16 @@ function SubmissionRow({
             {rank !== null ? (
               <span className="tabular-nums text-[var(--color-muted-foreground)]">#{rank}</span>
             ) : null}
-            <span className="min-w-0 break-words">{submission.methodName}</span>
+            {submission.status === 'FAILED' ? (
+              <span className="min-w-0 break-words">{submission.methodName}</span>
+            ) : (
+              <Link
+                href={`/evaluation/${encodeURIComponent(task.slug)}/submissions/${submission.id}`}
+                className="min-w-0 break-words rounded underline decoration-[var(--color-border-strong)] underline-offset-4 hover:text-[var(--color-primary)] hover:decoration-[var(--color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+              >
+                {submission.methodName}
+              </Link>
+            )}
           </h3>
           {attribution ? (
             <AttributionLine attribution={attribution} describe={attributionNote === null} />
@@ -456,7 +427,7 @@ function SubmissionRow({
       ) : null}
 
       <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-5">
-        {metricCells(taskKind, scores).map((cell, i) => (
+        {metricCells(task, scores).map((cell, i) => (
           <Metric
             key={cell.label}
             label={cell.label}
