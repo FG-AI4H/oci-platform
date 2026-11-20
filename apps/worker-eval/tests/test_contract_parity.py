@@ -1,7 +1,7 @@
 """The Pydantic mirror must not drift from the TypeScript source of truth.
 
 The queue message, the failure taxonomy and the outbox payload are defined in
-`packages/shared-types/src/index.ts` and mirrored in `worker_eval.contract`.
+`packages/shared-types/src/` and mirrored in `worker_eval.contract`.
 Drift is the likeliest way a control gets silently skipped — a field the API
 starts sending that the worker never reads, or a failure code the worker cannot
 express — so this module parses the TypeScript and fails on any difference.
@@ -28,9 +28,17 @@ from worker_eval.contract import (
     SealedRunResult,
 )
 
-SHARED_TYPES = (
-    Path(__file__).resolve().parents[3] / "packages" / "shared-types" / "src" / "index.ts"
-)
+# The whole `src/` tree, not `index.ts` alone.
+#
+# `index.ts` is a barrel that re-exports focused modules, and declarations get
+# moved OUT of it whenever an import cycle forces an extraction (`slug.ts`,
+# `submission-validation.ts`, `regulatory-pathway.ts` all began life in there).
+# Pinning this test to one file made it fail the moment `DatasetSlugSchema`
+# moved — a green-to-red flip that said nothing about the contract, which is the
+# fastest way to get a real parity check weakened or deleted. Reading the tree
+# means an extraction is invisible here and only a genuine change to a
+# declaration can fail it.
+SHARED_TYPES_SRC = Path(__file__).resolve().parents[3] / "packages" / "shared-types" / "src"
 
 EXPECTED_MESSAGE_FIELDS = [
     "submissionId",
@@ -69,12 +77,17 @@ EXPECTED_FAILURE_CODES = [
 
 @pytest.fixture(scope="module")
 def source() -> str:
-    if not SHARED_TYPES.is_file():
+    if not SHARED_TYPES_SRC.is_dir():
         pytest.fail(
-            f"cannot read {SHARED_TYPES} — the wire contract cannot be checked for drift. "
+            f"cannot read {SHARED_TYPES_SRC} — the wire contract cannot be checked for drift. "
             "This test must run from inside the monorepo checkout."
         )
-    return SHARED_TYPES.read_text(encoding="utf-8")
+    # Sorted for determinism; specs excluded so a fixture in a test file can
+    # never be mistaken for the contract itself.
+    files = sorted(f for f in SHARED_TYPES_SRC.glob("*.ts") if not f.name.endswith(".spec.ts"))
+    if not files:
+        pytest.fail(f"no TypeScript sources under {SHARED_TYPES_SRC}")
+    return "\n".join(f.read_text(encoding="utf-8") for f in files)
 
 
 def declaration_block(source: str, name: str) -> str:

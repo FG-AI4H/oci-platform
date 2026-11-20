@@ -199,9 +199,17 @@ export class EvaluationService {
     slug: string,
     body: SubmitPredictionsRequest,
     user?: CognitoAccessTokenPayload,
+    /**
+     * EvalAI seam provenance (WP4). When present the participant is already
+     * resolved from the entrant identity the seam sent, so `requireParticipant`
+     * is bypassed — NOT because the seam is unauthenticated, but because its
+     * caller is a machine and the participant it acts for is an EvalAI team,
+     * not a Cognito user. The quota still binds that team.
+     */
+    seam?: { submittedBy: string; externalSubmissionId: string; externalChallengeId: string },
   ): Promise<SubmitPredictionsResponse> {
     // Cheapest gate first — no I/O at all on the anonymous rejection path.
-    const submittedBy = this.requireParticipant(user);
+    const submittedBy = seam ? seam.submittedBy : this.requireParticipant(user);
 
     const ctx = await this.repo.findScoringContext(slug);
     if (!ctx) throw new NotFoundException(`evaluation task "${slug}" not found`);
@@ -249,6 +257,18 @@ export class EvaluationService {
       throw err;
     }
 
+    // Seam submissions are attributed to the reference route here, because the
+    // seam's response contract reports the route and whether its result counts
+    // as published. Direct participant submissions are left unattributed on
+    // purpose: pinning the route on every submission, in both modes and with a
+    // refusal when none resolves, is #583 and lands there.
+    const ref = seam ? await this.repo.findReferenceRouteVersionForMode('PREDICTIONS') : null;
+    if (seam && !ref) {
+      this.logger.error(
+        'no reference PREDICTIONS route is seeded — this seam submission is scored ' +
+          'without attribution and will read as a pre-registry result',
+      );
+    }
     const created = await this.repo.createSubmission({
       taskId: ctx.id,
       methodName: body.methodName,
@@ -256,6 +276,11 @@ export class EvaluationService {
       status: 'SCORED',
       scores,
       error: null,
+      routeId: ref?.routeId ?? null,
+      routeVersion: ref?.version ?? null,
+      routeVersionId: ref?.versionId ?? null,
+      externalSubmissionId: seam?.externalSubmissionId ?? null,
+      externalChallengeId: seam?.externalChallengeId ?? null,
     });
     return { id: created.id, scores };
   }

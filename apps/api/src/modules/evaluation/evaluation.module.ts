@@ -9,6 +9,9 @@ import { RolesGuard } from '../../auth/roles.guard.js';
 import { SubmissionBodyPipe } from './dto/submission-body.pipe.js';
 import { EvalQueueProvider } from './eval-queue.js';
 import { EVAL_WORKER_VERIFIER, EvalWorkerGuard } from './eval-worker.guard.js';
+import { EVAL_SEAM_VERIFIER, EvalSeamGuard } from './eval-seam.guard.js';
+import { EvalAiSeamController } from './evalai-seam.controller.js';
+import { EvalAiSeamService } from './evalai-seam.service.js';
 import { EvaluationController } from './evaluation.controller.js';
 import { EvaluationService } from './evaluation.service.js';
 import { EvaluationRepository } from './evaluation.repository.js';
@@ -23,9 +26,22 @@ import { SubmissionResultService } from './submission-result.service.js';
  */
 const DEFAULT_EVAL_WORKER_SCOPE = 'oci-eval/submit-result';
 
+/**
+ * Scope required on the EvalAI seam worker's token (WP4). A DIFFERENT credential
+ * from the sealed-run worker's: that one only writes results, this one only
+ * creates submissions, and they are operated by different sides. One shared
+ * token would let either do the other's job.
+ */
+const DEFAULT_EVAL_SEAM_SCOPE = 'oci-eval/seam-intake';
+
 @Module({
   imports: [AuthModule],
-  controllers: [RouteRegistryController, EvaluationController, SubmissionResultController],
+  controllers: [
+    EvalAiSeamController,
+    RouteRegistryController,
+    EvaluationController,
+    SubmissionResultController,
+  ],
   providers: [
     RouteRegistryService,
     RouteRegistryRepository,
@@ -37,6 +53,8 @@ const DEFAULT_EVAL_WORKER_SCOPE = 'oci-eval/submit-result';
     EvalQueueProvider,
     SubmissionResultService,
     EvalWorkerGuard,
+    EvalSeamGuard,
+    EvalAiSeamService,
     {
       // Verifier for the sealed-run worker's machine-to-machine token. Separate
       // from `COGNITO_VERIFIER` in AuthModule because it pins a DIFFERENT
@@ -62,6 +80,33 @@ const DEFAULT_EVAL_WORKER_SCOPE = 'oci-eval/submit-result';
           tokenUse: 'access',
           clientId,
           scope: process.env.OCI_EVAL_WORKER_SCOPE ?? DEFAULT_EVAL_WORKER_SCOPE,
+        });
+      },
+    },
+    {
+      // Verifier for the EvalAI seam worker. Mirrors the sealed-run verifier but
+      // pins the SEAM client id and its own scope, so the organizer-run worker
+      // that creates submissions cannot also write results, and vice versa.
+      provide: EVAL_SEAM_VERIFIER,
+      useFactory: () => {
+        const logger = new Logger('EvalSeamVerifier');
+        if (process.env.OCI_ENV === 'local') {
+          logger.warn('OCI_ENV=local — EvalAI seam intake auth STUBBED; no JWT verification');
+          return undefined;
+        }
+        const userPoolId = process.env.COGNITO_USER_POOL_ID;
+        const clientId = process.env.COGNITO_EVAL_SEAM_CLIENT_ID;
+        if (!userPoolId || !clientId) {
+          logger.warn(
+            'COGNITO_USER_POOL_ID or COGNITO_EVAL_SEAM_CLIENT_ID not set — EvalAI seam intake will reject every call',
+          );
+          return undefined;
+        }
+        return CognitoJwtVerifier.create({
+          userPoolId,
+          tokenUse: 'access',
+          clientId,
+          scope: process.env.OCI_EVAL_SEAM_SCOPE ?? DEFAULT_EVAL_SEAM_SCOPE,
         });
       },
     },

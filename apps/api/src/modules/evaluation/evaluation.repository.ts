@@ -424,6 +424,86 @@ export class EvaluationRepository {
     });
   }
 
+  /**
+   * The reference route version for a mode (WP5 §5). Used to attribute every
+   * new submission: invariant 1 requires a SCORED row to carry a route, and a
+   * row created after the registry exists is not "legacy" — it just needs
+   * attributing. Returns null only if the seed is missing, which is a
+   * deployment fault rather than a normal state.
+   */
+  async findReferenceRouteVersionForMode(mode: 'PREDICTIONS' | 'CONTAINER' | 'ENCRYPTED'): Promise<{
+    routeId: string;
+    routeSlug: string;
+    versionId: string;
+    version: string;
+    reviewStatus: string;
+  } | null> {
+    const route = await this.prisma.client.evaluationRoute.findFirst({
+      where: { mode, isReference: true },
+      select: {
+        id: true,
+        slug: true,
+        versions: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { id: true, version: true, reviewStatus: true },
+        },
+      },
+    });
+    const v = route?.versions.at(0);
+    if (!route || !v) return null;
+    return {
+      routeId: route.id,
+      routeSlug: route.slug,
+      versionId: v.id,
+      version: v.version,
+      reviewStatus: v.reviewStatus,
+    };
+  }
+
+  /**
+   * Find the submission already created for an external front-door entry.
+   *
+   * Backs seam-intake idempotency: an EvalAI submission pk identifies one
+   * entry, so a retried POST must return what already exists rather than
+   * create a second row and spend a second scored slot.
+   */
+  async findByExternalRef(ref: {
+    externalChallengeId: string;
+    externalSubmissionId: string;
+  }): Promise<{
+    id: string;
+    routeSlug: string | null;
+    routeVersion: string | null;
+    reviewStatus: string | null;
+  } | null> {
+    const row = await this.prisma.client.submission.findUnique({
+      where: {
+        externalChallengeId_externalSubmissionId: {
+          externalChallengeId: ref.externalChallengeId,
+          externalSubmissionId: ref.externalSubmissionId,
+        },
+      },
+      // Same narrow route projection as the read boundary: the response only
+      // needs slug/version/status, and the attribution must come from the
+      // STORED route rather than being recomputed, or a replay could answer
+      // with a different route than the one that actually scored the entry.
+      select: {
+        id: true,
+        routeVersionRef: {
+          select: { version: true, reviewStatus: true, route: { select: { slug: true } } },
+        },
+      },
+    });
+    if (!row) return null;
+    return {
+      id: row.id,
+      routeSlug: row.routeVersionRef?.route.slug ?? null,
+      routeVersion: row.routeVersionRef?.version ?? null,
+      reviewStatus: row.routeVersionRef?.reviewStatus ?? null,
+    };
+  }
+
   async createSubmission(data: {
     taskId: string;
     methodName: string;
@@ -431,6 +511,13 @@ export class EvaluationRepository {
     status: SubmissionStatus;
     scores: TaskKindScores | null;
     error: string | null;
+    /** Route attribution (WP5 invariant 1). Null only for rows that predate it. */
+    routeId?: string | null;
+    routeVersion?: string | null;
+    routeVersionId?: string | null;
+    /** EvalAI seam provenance (WP4 §4). Null for direct OCI submissions. */
+    externalSubmissionId?: string | null;
+    externalChallengeId?: string | null;
   }): Promise<{ id: string }> {
     return this.prisma.client.submission.create({
       data: {
@@ -445,6 +532,11 @@ export class EvaluationRepository {
         ...(data.scores !== null
           ? { scores: data.scores as unknown as Prisma.InputJsonValue }
           : {}),
+        routeId: data.routeId ?? null,
+        routeVersion: data.routeVersion ?? null,
+        routeVersionId: data.routeVersionId ?? null,
+        externalSubmissionId: data.externalSubmissionId ?? null,
+        externalChallengeId: data.externalChallengeId ?? null,
       },
       select: { id: true },
     });
