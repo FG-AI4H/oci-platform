@@ -20,6 +20,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,md,json,yml,yaml}\"",
     "lint:root": "eslint . --max-warnings=0",
     "provision-users": "pnpm --silent --filter @oci/shared-types build && pnpm --filter @oci/scripts run provision-users",
+    "radiology-workshop": "pnpm --silent --filter \"@oci/croissant...\" build && pnpm --filter @oci/scripts run radiology-workshop",
     "prepare": "husky || true"
   },
   "devDependencies": {

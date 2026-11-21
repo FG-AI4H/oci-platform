@@ -35,6 +35,7 @@ Last update: **2026-09-04** (correction, #489 — sealed container execution dow
 | Public Croissant catalogue endpoint (federation outbound)                                               | ✅ Live    | PR C                                                               |
 | Three rich seed fixtures (PUBLIC + RESTRICTED + PRIVATE) for local UI testing                           | ✅ Live    | PR M ([#144](https://github.com/FG-AI4H/oci-platform/pull/144))    |
 | OCI-owned public demo dataset with real S3-hosted images                                                | ✅ Live    | PR [#252](https://github.com/FG-AI4H/oci-platform/pull/252) (#251) |
+| Radiology workshop seed profile (dataset, task, campaign, cards, reset): stand-in data, switched off    | 🚧 Partial | [#644](https://github.com/FG-AI4H/oci-platform/issues/644)         |
 | Commercial-use badge + filter                                                                           | ✅ Live    | PR [#156](https://github.com/FG-AI4H/oci-platform/pull/156) (#119) |
 | Access-tier badge on dataset detail                                                                     | ✅ Live    | PR [#154](https://github.com/FG-AI4H/oci-platform/pull/154) (#115) |
 | WHO health-priority filter on catalog list                                                              | 🚧 Planned | [#121](https://github.com/FG-AI4H/oci-platform/issues/121)         |

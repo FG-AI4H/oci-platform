@@ -510,6 +510,13 @@ export class ApiStack extends cdk.Stack {
           // var is harmless on prod but useful to keep parameterised.
           OCI_DATASETS_BUCKET: props.datasetsBucket.bucketName,
           AWS_REGION: this.region,
+          // Seed profiles replayed after the demo seed (#644), from
+          // `cfg.seedProfiles`. Left out entirely when the list is empty,
+          // so the task definition of an environment without profiles is
+          // unchanged; the entrypoint treats an unset variable as "none".
+          ...(props.cfg.seedProfiles.length > 0
+            ? { OCI_SEED_PROFILES: props.cfg.seedProfiles.join(',') }
+            : {}),
         },
         secrets: {
           DB_USERNAME: ecs.Secret.fromSecretsManager(dbSecret, 'username'),
