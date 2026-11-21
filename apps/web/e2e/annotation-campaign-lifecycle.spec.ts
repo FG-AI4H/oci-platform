@@ -1,4 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
+import {
+  CampaignOutputLicenseSchema,
+  outputLicenseAllowedForTerms,
+  type CommercialUseTerms,
+} from '@oci/shared-types';
 
 /**
  * E2E coverage for the campaign lifecycle state machine (#215, slice 1).
@@ -12,11 +17,16 @@ import { test, expect, type Page } from '@playwright/test';
  * Pre-conditions:
  *   - docker compose -f infra/local/docker-compose.yml up -d
  *   - pnpm --filter @oci/database db:migrate:deploy
+ *   - pnpm --filter @oci/database db:seed:demo
  *   - pnpm --filter @oci/api dev
  *   - pnpm --filter @oci/web dev
  */
 
-const DATASET_UUID = '00000000-0000-4000-8000-00000000ca7a';
+/** Seed-data slug — PUBLIC, visible to all roles. */
+const SEED_DATASET_SLUG = 'rsna-pneumonia-2018';
+
+/** Commercial-use terms of `SEED_DATASET_SLUG` in `seed/demo.sql` (#564). */
+const SEED_DATASET_TERMS: CommercialUseTerms = 'NON_COMMERCIAL_ONLY';
 
 async function signInAs(page: Page, user: string, roles: string) {
   await page.goto('/signin?callbackUrl=%2Fdashboard');
@@ -26,12 +36,38 @@ async function signInAs(page: Page, user: string, roles: string) {
   await expect(page).toHaveURL(/\/(dashboard)?$/);
 }
 
+/**
+ * Create a DRAFT campaign through the create form as it is since #248:
+ * task kind, then the dataset typeahead (the free-text "Dataset ID"
+ * field is gone), then a tool and an output licence the dataset's terms
+ * allow. Same steps as the create flow in `annotation-campaign.spec.ts`.
+ */
 async function createDraft(page: Page, slug: string) {
   await page.goto('/annotation/campaigns/new');
   await page.getByLabel('Slug').fill(slug);
   await page.getByLabel('Name').fill(`Lifecycle ${slug}`);
-  await page.getByLabel('Dataset ID').fill(DATASET_UUID);
   await page.getByRole('radio', { name: 'Classification' }).check();
+
+  await page.getByLabel('Dataset').fill(SEED_DATASET_SLUG);
+  const listbox = page.locator('#dataset-picker-listbox');
+  await expect(listbox).toBeVisible();
+  await listbox.getByRole('option').first().click();
+  await expect(page.getByRole('button', { name: /change dataset/i })).toBeVisible();
+
+  const tool = page.getByLabel('Annotation tool');
+  const toolValue = await tool
+    .locator('option', { hasText: 'MONAI Label' })
+    .first()
+    .getAttribute('value');
+  if (!toolValue) throw new Error('No tool option matching "MONAI Label"');
+  await tool.selectOption(toolValue);
+
+  const license = CampaignOutputLicenseSchema.options.find(
+    (l) => outputLicenseAllowedForTerms(l, SEED_DATASET_TERMS) === null,
+  );
+  if (!license) throw new Error(`No output license allowed for terms ${SEED_DATASET_TERMS}`);
+  await page.getByLabel('Output license').selectOption(license);
+
   await page.getByRole('button', { name: /create draft/i }).click();
   await expect(page).toHaveURL(new RegExp(`/annotation/campaigns/${slug}$`));
 }
@@ -73,7 +109,14 @@ test.describe('annotation campaign lifecycle', () => {
     await page.getByRole('button', { name: 'Complete' }).click();
     await page.getByRole('button', { name: /confirm: complete/i }).click();
     await expect(statusBadge).toHaveText(/completed/i);
-    await expect(page.locator('dt').filter({ hasText: 'Completed' })).toBeVisible();
+    // The Tasks card has a "Completed" count of its own, there whatever
+    // the status. The audit card's row is the one that carries a time.
+    await expect(
+      page
+        .locator('dt')
+        .filter({ hasText: /^Completed$/ })
+        .locator('xpath=following-sibling::dd[1]//time'),
+    ).toBeVisible();
 
     // COMPLETED → ARCHIVED (no reason required).
     await page.getByRole('button', { name: 'Archive' }).click();
