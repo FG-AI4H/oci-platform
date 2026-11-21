@@ -193,6 +193,8 @@ Not tested, to be established by the rehearsal **[env]**:
 - what a task's sample reference contains once [#646](https://github.com/FG-AI4H/oci-platform/issues/646) is deployed;
 - the snapshot commands of step 7.
 
+To follow when it lands: the operator's decisions on held files ([#674](https://github.com/FG-AI4H/oci-platform/issues/674)) will be stored in tables of their own, tied to the dataset. They are removed with it, but the count of step 2 and the audit event of step 5 will not list them until both SQL files are extended.
+
 ## Confirmation of deletion (template)
 
 Fill every blank. Send it from the address the institution corresponded with, signed by the person responsible for the environment. It states facts only.
