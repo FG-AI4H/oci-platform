@@ -10,6 +10,20 @@
 -- changes zero rows. The one deliberate failure: Section 5 aborts the
 -- seed when the stored evaluation answer key differs from this file.
 --
+-- Published on top (#641). A replay must also leave alone what people
+-- did on the seeded objects in between; apps/api/src/seed-replay/
+-- demo-seed-replay.int.spec.ts holds this file to that. `DO NOTHING`
+-- gives it for free. The statements that update a dataset row do not,
+-- because publishing a version through the API rewrites the same
+-- columns (`croissant`, `duo_terms`, `modalities`, ...). Each of them
+-- therefore carries the same guard: no update once the dataset has a
+-- version published by anyone other than this file, which publishes as
+-- 00000000-0000-4000-8000-000000000099. From then on the published
+-- manifest is the current one and the repo no longer refreshes that
+-- dataset row. The version rows this file wrote still follow the repo;
+-- a version row published by anyone else is never rewritten, even
+-- under the same version number.
+--
 -- New demo entities go here. Conventions:
 --
 --   - One section per resource type, comment block at the top.
@@ -76,15 +90,35 @@ ON CONFLICT (slug) DO NOTHING;
 -- Idempotent backfill: existing dev clusters created before #247 hold
 -- rows with empty `modalities`. Top them up so the constraint E2E and
 -- the dataset-detail badge work without requiring a destroy-recreate.
-UPDATE "catalog"."datasets"
+--
+-- Publishing a version rewrites `modalities` from the manifest, and a
+-- manifest may declare none. So the backfill stops once someone other
+-- than this file has published on the dataset (#641, see "Published on
+-- top" in the header): an empty list is then what was published.
+UPDATE "catalog"."datasets" d
 SET "modalities" = ARRAY['X-ray']
-WHERE slug = 'rsna-pneumonia-2018' AND cardinality("modalities") = 0;
-UPDATE "catalog"."datasets"
+WHERE d.slug = 'rsna-pneumonia-2018' AND cardinality(d."modalities") = 0
+  AND NOT EXISTS (
+    SELECT 1 FROM "catalog"."dataset_versions" v
+    WHERE v.dataset_id = d.id
+      AND v.published_by_id <> '00000000-0000-4000-8000-000000000099'
+  );
+UPDATE "catalog"."datasets" d
 SET "modalities" = ARRAY['Pathology']
-WHERE slug = 'isic-2019-melanoma' AND cardinality("modalities") = 0;
-UPDATE "catalog"."datasets"
+WHERE d.slug = 'isic-2019-melanoma' AND cardinality(d."modalities") = 0
+  AND NOT EXISTS (
+    SELECT 1 FROM "catalog"."dataset_versions" v
+    WHERE v.dataset_id = d.id
+      AND v.published_by_id <> '00000000-0000-4000-8000-000000000099'
+  );
+UPDATE "catalog"."datasets" d
 SET "modalities" = ARRAY['MRI']
-WHERE slug = 'uhz-cardiac-mri-2024' AND cardinality("modalities") = 0;
+WHERE d.slug = 'uhz-cardiac-mri-2024' AND cardinality(d."modalities") = 0
+  AND NOT EXISTS (
+    SELECT 1 FROM "catalog"."dataset_versions" v
+    WHERE v.dataset_id = d.id
+      AND v.published_by_id <> '00000000-0000-4000-8000-000000000099'
+  );
 
 -- ----------------------------------------------------------------------------
 -- Section 1b — Bundled manifests WITHOUT hosted bytes (#491).
@@ -139,7 +173,13 @@ BEGIN
     commercial_use_terms = EXCLUDED.commercial_use_terms,
     duo_terms = EXCLUDED.duo_terms,
     updated_at = CURRENT_TIMESTAMP
-  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant
+    -- Not once someone has published on top of the seed (#641).
+    AND NOT EXISTS (
+      SELECT 1 FROM "catalog"."dataset_versions" v
+      WHERE v.dataset_id = "datasets".id
+        AND v.published_by_id <> '00000000-0000-4000-8000-000000000099'
+    );
 
   SELECT id INTO STRICT ds_id FROM "catalog"."datasets" WHERE slug = 'rsna-pneumonia-2018';
 
@@ -151,7 +191,9 @@ BEGIN
   )
   ON CONFLICT (dataset_id, version) DO UPDATE SET
     croissant = EXCLUDED.croissant
-  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant
+    -- Only a version row this file wrote (#641).
+    AND "dataset_versions".published_by_id = '00000000-0000-4000-8000-000000000099';
 END
 $rsna_demo$;
 
@@ -178,7 +220,13 @@ BEGIN
     conformance_version = EXCLUDED.conformance_version,
     duo_terms = EXCLUDED.duo_terms,
     updated_at = CURRENT_TIMESTAMP
-  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant
+    -- Not once someone has published on top of the seed (#641).
+    AND NOT EXISTS (
+      SELECT 1 FROM "catalog"."dataset_versions" v
+      WHERE v.dataset_id = "datasets".id
+        AND v.published_by_id <> '00000000-0000-4000-8000-000000000099'
+    );
 
   SELECT id INTO STRICT ds_id FROM "catalog"."datasets" WHERE slug = 'demo-clinical-notes-2024';
 
@@ -190,7 +238,9 @@ BEGIN
   )
   ON CONFLICT (dataset_id, version) DO UPDATE SET
     croissant = EXCLUDED.croissant
-  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant
+    -- Only a version row this file wrote (#641).
+    AND "dataset_versions".published_by_id = '00000000-0000-4000-8000-000000000099';
 END
 $notes_demo$;
 
@@ -362,7 +412,13 @@ BEGIN
     duo_terms = EXCLUDED.duo_terms,
     modalities = EXCLUDED.modalities,
     updated_at = CURRENT_TIMESTAMP
-  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant
+    -- Not once someone has published on top of the seed (#641).
+    AND NOT EXISTS (
+      SELECT 1 FROM "catalog"."dataset_versions" v
+      WHERE v.dataset_id = "datasets".id
+        AND v.published_by_id <> '00000000-0000-4000-8000-000000000099'
+    );
 
   -- Version 1.0.0 row carrying the same manifest.
   INSERT INTO "catalog"."dataset_versions" (
@@ -374,7 +430,9 @@ BEGIN
   )
   ON CONFLICT (dataset_id, version) DO UPDATE SET
     croissant = EXCLUDED.croissant
-  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant
+    -- Only a version row this file wrote (#641).
+    AND "dataset_versions".published_by_id = '00000000-0000-4000-8000-000000000099';
 
   -- Five distribution rows. Their ids match the manifest's @id values
   -- so the contentUrl paths resolve. Stamped READY because the
@@ -441,6 +499,9 @@ $oci_demo$;
 -- held by the evaluation service and is NOT seeded here.
 -- Fixture manifest: dataset + version rows refresh on conflict when the
 -- manifest content differs (see Section 3); distributions stay DO NOTHING.
+-- The "published on top" guard on the dataset row (#641) was added here
+-- by hand: generate.mjs and seed.generated.sql do not emit it yet, so
+-- keep it when merging a regenerated block.
 -- ----------------------------------------------------------------------------
 
 DO $idrid_demo$
@@ -464,7 +525,13 @@ BEGIN
     conformance_version = EXCLUDED.conformance_version,
     duo_terms = EXCLUDED.duo_terms,
     updated_at = CURRENT_TIMESTAMP
-  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant
+    -- Not once someone has published on top of the seed (#641).
+    AND NOT EXISTS (
+      SELECT 1 FROM "catalog"."dataset_versions" v
+      WHERE v.dataset_id = "datasets".id
+        AND v.published_by_id <> '00000000-0000-4000-8000-000000000099'
+    );
 
   INSERT INTO "catalog"."dataset_versions" (
     id, dataset_id, version, croissant, published_by_id, published_at
@@ -472,7 +539,9 @@ BEGIN
     ver_id, ds_id, '1.0.0', payload, '00000000-0000-4000-8000-000000000099', CURRENT_TIMESTAMP
   ) ON CONFLICT (dataset_id, version) DO UPDATE SET
     croissant = EXCLUDED.croissant
-  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant
+    -- Only a version row this file wrote (#641).
+    AND "dataset_versions".published_by_id = '00000000-0000-4000-8000-000000000099';
 
   INSERT INTO "catalog"."distributions" (
     id, dataset_version_id, croissant_id, content_url, content_type,
