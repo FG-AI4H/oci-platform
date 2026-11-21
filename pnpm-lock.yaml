@@ -668,9 +668,15 @@ importers:
       '@aws-sdk/client-cognito-identity-provider':
         specifier: ^3.1041.0
         version: 3.1041.0
+      '@aws-sdk/client-s3':
+        specifier: ^3.1041.0
+        version: 3.1048.0
       '@oci/croissant':
         specifier: workspace:*
         version: link:../packages/croissant
+      '@oci/dicom':
+        specifier: workspace:*
+        version: link:../packages/dicom
       '@oci/shared-types':
         specifier: workspace:*
         version: link:../packages/shared-types
