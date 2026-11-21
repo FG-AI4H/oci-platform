@@ -38,7 +38,7 @@ The roles are **provisioned by the bootstrap CDK stack `infra/cdk/lib/bootstrap-
 push to main
   ├─ CI (lint, test, typecheck, build, Trivy, Gitleaks, SBOM)
   └─ on green:
-     └─ deploy-dev:
+     └─ deploy-dev (not while dev is frozen, see "Deploy freeze on dev"):
         ├─ build & push docker images to ECR (with Trivy scan)
         ├─ cdk deploy oci-dev-* (no approval)
         └─ run prisma migrate deploy
@@ -56,6 +56,28 @@ manual workflow_dispatch (target=prod)
      ├─ cdk deploy oci-prod-* (broadening approval)
      └─ migrate
 ```
+
+## Deploy freeze on dev
+
+`dev` redeploys on every merge to `main`. When that must not happen, for instance while a workshop runs on `dev`, set the **repository** variable `DEPLOY_FREEZE_DEV` to `true` (Settings → Secrets and variables → Actions → Variables). It has to be a repository variable: one defined on the `dev` environment is not visible to the job that reads it.
+
+| Trigger                                         | `DEPLOY_FREEZE_DEV` | What the Deploy run does                                                                                          |
+| ----------------------------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Push to `main`                                  | unset or `false`    | Deploys `dev`, as before.                                                                                         |
+| Push to `main`                                  | `true`              | Stops in `freeze-gate` with a notice naming the commit. The other jobs are skipped; the run is green, not failed. |
+| Manual run, target `dev`, `override_freeze` off | `true`              | Fails in `freeze-gate` with an error naming the variable and the input. Nothing is deployed.                      |
+| Manual run, target `dev`, `override_freeze` on  | `true`              | Deploys `dev`, with a notice naming who overrode the freeze.                                                      |
+| Manual run, target `dev`                        | unset or `false`    | Deploys `dev`. `override_freeze` has no effect.                                                                   |
+| Manual run, target `int` or `prod`              | any                 | Unaffected. The freeze applies to `dev` only.                                                                     |
+
+Things to know:
+
+- **A frozen push leaves `dev` behind `main`.** Each stopped run carries a notice and a run summary with the commit that was not deployed. Nothing deploys it later on its own.
+- **Ending the freeze.** Set `DEPLOY_FREEZE_DEV` to `false`, then run the Deploy workflow by hand on `main` with target `dev` (or wait for the next merge). That one run carries every migration and every change merged during the freeze, so do it when nobody is using `dev`. To see what was held back: `gh run list --workflow deploy.yml --event push`, and open the runs whose only completed job is `freeze-gate`. Do not use "Re-run" on one of them to catch up: a re-run belongs to that run's commit, which is the head of `main` only if nothing was merged after it.
+- **Only `true` freezes** (in any letter case). Any other non-empty value except `false` is read as not frozen, and the run says so in a warning.
+- **A docs-only merge starts no Deploy run at all**, frozen or not, so it leaves no notice either.
+- **The freeze is a guard against accidents, not an access control.** Anyone who can run the workflow can tick `override_freeze`, and a change to `.github/workflows/deploy.yml` itself takes effect with the push that carries it.
+- A frozen push runs outside the `deploy-dev` concurrency group, so it can neither wait behind nor cancel a deploy dispatched with `override_freeze`.
 
 ## Promotion semantics
 
