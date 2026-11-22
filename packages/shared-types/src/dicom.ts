@@ -115,3 +115,113 @@ export const DicomSeriesDetailSchema = DicomSeriesSummarySchema.extend({
   instances: z.array(DicomSeriesInstanceSchema),
 });
 export type DicomSeriesDetail = z.infer<typeof DicomSeriesDetailSchema>;
+
+// ==== Operator review of held files (ADR-0026, decision 2) ================
+//
+// A DICOM file whose header carries a value de-identification normally
+// removes is held. A platform operator looks at the findings of a
+// dataset and accepts them, with a reason; a file is released when
+// every one of its findings is accepted.
+//
+//   GET  /v2/storage/dicom/held                                  datasets with held files
+//   GET  /v2/storage/datasets/:slug/dicom/findings               undecided findings
+//   POST /v2/storage/datasets/:slug/dicom/findings/decisions     accept some, with a reason
+//
+// Operators only. Until a separate role exists, that is the `admin` group.
+
+/** One finding, named the way the index names it. Never by its value. */
+export const DicomFindingRefSchema = z.object({
+  /** DICOM keyword, or a whole-file finding such as `PrivateTags`. */
+  attribute: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[A-Za-z]+$/, 'expected a DICOM keyword'),
+  /** Keyed digest of the value, as the findings list returned it. */
+  valueDigest: z.string().regex(/^[0-9a-f]{64}$/, 'expected a digest from the findings list'),
+});
+export type DicomFindingRef = z.infer<typeof DicomFindingRefSchema>;
+
+export const RecordDicomFindingDecisionRequestSchema = z.object({
+  /**
+   * Why these values do not identify anyone, in the operator's words.
+   * It is kept in the audit trail, so it must not repeat a value.
+   */
+  reason: z.string().trim().min(10, 'give a reason of at least 10 characters').max(2000),
+  findings: z.array(DicomFindingRefSchema).min(1, 'select at least one finding').max(500),
+});
+export type RecordDicomFindingDecisionRequest = z.infer<
+  typeof RecordDicomFindingDecisionRequestSchema
+>;
+
+/** A dataset with at least one held file, in the operator's queue. */
+export interface DicomHeldDatasetSummary {
+  slug: string;
+  name: string;
+  /** Files held for undecided findings. */
+  heldInstanceCount: number;
+  /** Files held because their header could not be read. No decision releases these. */
+  unreadableInstanceCount: number;
+}
+
+export interface DicomHeldDatasetList {
+  datasets: DicomHeldDatasetSummary[];
+}
+
+/** One undecided (attribute, value) of a dataset, across its held files. */
+export interface DicomUndecidedFinding extends DicomFindingRef {
+  /**
+   * The value, read from a stored file for this response and stored
+   * nowhere else. It may identify a patient: show it to the operator,
+   * never log or keep it. Null when it could not be read back.
+   */
+  value: string | null;
+  /** True when `value` is only the beginning of a longer value. */
+  valueTruncated: boolean;
+  /**
+   * True for a finding about a file as a whole (a burned-in annotation
+   * flag, private tags, content the check did not reach). Accepting it
+   * covers the files held now, and no file uploaded later.
+   */
+  wholeFile: boolean;
+  /**
+   * False when the platform will refuse to accept it: a value that
+   * could not be read back, or that is too long to be shown whole. An
+   * operator cannot vouch for what they were not shown.
+   */
+  acceptable: boolean;
+  /** Held files that carry this value. */
+  instanceCount: number;
+  /** Series those files belong to. */
+  seriesCount: number;
+}
+
+export interface DicomFindingDecisionSummary {
+  id: string;
+  reason: string;
+  decidedAt: string;
+  /** How many (attribute, value) pairs it accepted. */
+  acceptedFindingCount: number;
+}
+
+export interface DicomFindingsReview {
+  datasetSlug: string;
+  datasetName: string;
+  heldInstanceCount: number;
+  unreadableInstanceCount: number;
+  /** Undecided findings, by attribute, the most frequent first. At most 500. */
+  findings: DicomUndecidedFinding[];
+  /** How many undecided findings there are in all. */
+  totalFindings: number;
+  /** Decisions already recorded for this dataset, the latest first. */
+  decisions: DicomFindingDecisionSummary[];
+}
+
+export interface DicomFindingDecisionResult {
+  decisionId: string;
+  acceptedFindingCount: number;
+  /** Files this decision released: every finding of theirs is now accepted. */
+  releasedInstanceCount: number;
+  /** Files of the dataset still held for other findings. */
+  stillHeldInstanceCount: number;
+}

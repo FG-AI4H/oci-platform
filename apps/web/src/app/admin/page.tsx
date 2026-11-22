@@ -10,6 +10,7 @@ import {
   UserIcon,
   GlobeIcon,
   FlowIcon,
+  ShieldIcon,
 } from '@oci/ui';
 import { auth } from '../../auth';
 import { requireAdmin } from '../../lib/groups';
@@ -52,6 +53,14 @@ export default async function AdminIndexPage() {
               title="Platform settings"
               description="Site-wide parameters. Currently: maintenance banner. Tool registry (#214) + license defaults (#235) land here next."
               icon={<FlowIcon size={20} />}
+            />
+          </li>
+          <li>
+            <AdminTile
+              href="/admin/dicom"
+              title="Held images"
+              description="DICOM images held because of what their header carries. Review the findings and release what identifies nobody."
+              icon={<ShieldIcon size={20} />}
             />
           </li>
           <li>

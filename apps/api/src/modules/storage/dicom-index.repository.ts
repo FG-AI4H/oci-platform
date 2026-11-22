@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@oci/database';
-import type { DicomInstanceHeader, DicomObjectKind } from '@oci/dicom';
+import { isWholeFileFinding, type DicomInstanceHeader, type DicomObjectKind } from '@oci/dicom';
 import { DICOM_HELD_STATUSES } from '../../common/dicom-hold.js';
 import { PrismaService } from '../../prisma.service.js';
+import { lockDatasetFindings } from './repositories/dicom-review.raw.js';
 
 export type DicomCheckStatus = 'CLEAR' | 'HELD' | 'RELEASED' | 'UNREADABLE';
 
@@ -11,6 +12,11 @@ const OBJECT_KIND = {
   'multi-frame-image': 'MULTI_FRAME_IMAGE',
   other: 'OTHER',
 } as const satisfies Record<DicomObjectKind, string>;
+
+/** How a finding is named wherever one has to be matched to another. */
+export function findingKey(attribute: string, valueDigest: string): string {
+  return `${attribute}\n${valueDigest}`;
+}
 
 const INT4_MAX = 2_147_483_647;
 
@@ -49,8 +55,22 @@ export class DicomIndexRepository {
    * Record the outcome of the header check for one stored file. Keyed
    * by where the bytes live, so indexing the same file again replaces
    * its row and its findings.
+   *
+   * Returns the status stored, which is `RELEASED` instead of `HELD`
+   * when an operator has already accepted every finding of this file
+   * (ADR-0026). A finding with a value is accepted for the dataset, so
+   * a decision covers the values it names in files uploaded later. A
+   * finding about the file as a whole is accepted on one file only, so
+   * a new file that has one is always held.
    */
-  async save(record: DicomObjectRecord): Promise<void> {
+  async save(
+    record: DicomObjectRecord,
+    /** Called in the transaction when the file is stored as released. */
+    onRelease?: (
+      tx: Prisma.TransactionClient,
+      release: { decisionIds: string[]; findingCount: number },
+    ) => Promise<void>,
+  ): Promise<DicomCheckStatus> {
     const header = record.parsed?.header ?? null;
     const columns = {
       datasetId: record.datasetId,
@@ -81,30 +101,74 @@ export class DicomIndexRepository {
       indexedAt: new Date(),
     };
 
-    await this.prisma.client.$transaction(async (tx: Prisma.TransactionClient) => {
-      // Checking the same file again must not undo an operator's
-      // decision: a RELEASED file stays released as long as the check
-      // finds nothing the decision did not already cover.
-      const existing = await tx.dicomObject.findUnique({
-        where: { s3Bucket_s3Key: { s3Bucket: record.s3Bucket, s3Key: record.s3Key } },
-        select: {
-          checkStatus: true,
-          findings: { select: { attribute: true, valueDigest: true } },
-        },
-      });
-      if (existing?.checkStatus === 'RELEASED' && record.checkStatus === 'HELD') {
-        const covered = new Set(
-          existing.findings.map(
-            (f: { attribute: string; valueDigest: string }) => `${f.attribute}\n${f.valueDigest}`,
-          ),
-        );
-        if (record.findings.every((f) => covered.has(`${f.attribute}\n${f.valueDigest}`))) {
+    return this.prisma.client.$transaction(async (tx: Prisma.TransactionClient) => {
+      const where = { s3Bucket_s3Key: { s3Bucket: record.s3Bucket, s3Key: record.s3Key } };
+      /** Decision per finding of this file, for the findings that are accepted. */
+      const acceptedBy = new Map<string, string>();
+      let previousStatus: DicomCheckStatus | null = null;
+
+      if (record.checkStatus === 'HELD' && record.findings.length > 0) {
+        // Not while a decision on this dataset is being recorded: the
+        // decision would not see this file, and this file would not see
+        // the decision.
+        await lockDatasetFindings(tx, record.datasetId);
+
+        const valued = record.findings.filter((f) => !isWholeFileFinding(f.attribute));
+        if (valued.length > 0) {
+          // Accepted for the dataset, by exactly these values. Only the
+          // findings with a value are asked about: a row accepting a
+          // whole-file finding for the dataset, should one exist, is
+          // never read.
+          const rows = (await tx.dicomAcceptedFinding.findMany({
+            where: {
+              datasetId: record.datasetId,
+              attribute: { in: [...new Set(valued.map((f) => f.attribute))] },
+              valueDigest: { in: [...new Set(valued.map((f) => f.valueDigest))] },
+            },
+            select: { attribute: true, valueDigest: true, decisionId: true },
+          })) as Array<{ attribute: string; valueDigest: string; decisionId: string }>;
+          for (const row of rows) {
+            acceptedBy.set(findingKey(row.attribute, row.valueDigest), row.decisionId);
+          }
+        }
+
+        // A finding about the file as a whole is accepted on a file, never
+        // for the dataset: a new file is held for it whatever was decided
+        // on others. Only this same file, checked again, keeps what an
+        // operator accepted on it.
+        const existing = (await tx.dicomObject.findUnique({
+          where,
+          select: {
+            checkStatus: true,
+            findings: {
+              select: { attribute: true, valueDigest: true, acceptedDecisionId: true },
+            },
+          },
+        })) as {
+          checkStatus: DicomCheckStatus;
+          findings: Array<{
+            attribute: string;
+            valueDigest: string;
+            acceptedDecisionId: string | null;
+          }>;
+        } | null;
+        previousStatus = existing?.checkStatus ?? null;
+        for (const finding of existing?.findings ?? []) {
+          if (finding.acceptedDecisionId && isWholeFileFinding(finding.attribute)) {
+            acceptedBy.set(
+              findingKey(finding.attribute, finding.valueDigest),
+              finding.acceptedDecisionId,
+            );
+          }
+        }
+
+        if (record.findings.every((f) => acceptedBy.has(findingKey(f.attribute, f.valueDigest)))) {
           columns.checkStatus = 'RELEASED';
         }
       }
 
       const object = await tx.dicomObject.upsert({
-        where: { s3Bucket_s3Key: { s3Bucket: record.s3Bucket, s3Key: record.s3Key } },
+        where,
         create: { s3Bucket: record.s3Bucket, s3Key: record.s3Key, ...columns },
         update: columns,
         select: { id: true },
@@ -125,10 +189,24 @@ export class DicomIndexRepository {
             dicomObjectId: object.id,
             attribute: finding.attribute,
             valueDigest: finding.valueDigest,
+            acceptedDecisionId: isWholeFileFinding(finding.attribute)
+              ? (acceptedBy.get(findingKey(finding.attribute, finding.valueDigest)) ?? null)
+              : null,
           })),
           skipDuplicates: true,
         });
       }
+
+      // A file that becomes visible to other readers without an operator
+      // deciding at that moment still leaves a trace: which decisions
+      // covered it. Written with the row, or not at all.
+      if (columns.checkStatus === 'RELEASED' && previousStatus !== 'RELEASED' && onRelease) {
+        await onRelease(tx, {
+          decisionIds: [...new Set(acceptedBy.values())].sort(),
+          findingCount: record.findings.length,
+        });
+      }
+      return columns.checkStatus;
     });
   }
 

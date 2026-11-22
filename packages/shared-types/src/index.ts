@@ -64,17 +64,27 @@ export type {
 
 // DICOM series read endpoints (#674, ADR-0026).
 export {
+  DicomFindingRefSchema,
   DicomSeriesDetailSchema,
   DicomSeriesInstanceSchema,
   DicomSeriesListSchema,
   DicomSeriesSummarySchema,
   DicomSeriesVersionQuerySchema,
+  RecordDicomFindingDecisionRequestSchema,
 } from './dicom.js';
 export type {
+  DicomFindingDecisionResult,
+  DicomFindingDecisionSummary,
+  DicomFindingRef,
+  DicomFindingsReview,
+  DicomHeldDatasetList,
+  DicomHeldDatasetSummary,
   DicomSeriesDetail,
   DicomSeriesInstance,
   DicomSeriesList,
   DicomSeriesSummary,
+  DicomUndecidedFinding,
+  RecordDicomFindingDecisionRequest,
 } from './dicom.js';
 
 // Modality → allowed task kinds (#247). Shared between the campaign-

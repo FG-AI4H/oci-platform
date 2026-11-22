@@ -7,8 +7,16 @@ import {
   endsWithSequenceDelimiter,
   parseDicomHeader,
   type DeidentificationFinding,
+  type DicomInstanceHeader,
+  type DicomObjectKind,
 } from '@oci/dicom';
-import { DicomIndexRepository, type DicomCheckStatus } from './dicom-index.repository.js';
+import type { AuditEmitter, AuditTransactionPort } from '@oci/audit';
+import { AUDIT_EMITTER } from '../audit/audit.module.js';
+import {
+  DicomIndexRepository,
+  findingKey,
+  type DicomCheckStatus,
+} from './dicom-index.repository.js';
 import { S3ClientProvider } from './s3-client.js';
 
 /** Real headers are a few kilobytes; one read is almost always enough. */
@@ -17,6 +25,16 @@ const FIRST_READ_BYTES = 64 * 1024;
 const TAIL_BYTES = 8;
 /** Used only when OCI_ENV=local, which no deployed environment sets. */
 const LOCAL_DIGEST_KEY = 'local-dev-only-dicom-finding-digest-key';
+
+type Inspected =
+  | { kind: 'not-dicom' }
+  | { kind: 'unreadable'; reason: string }
+  | {
+      kind: 'ok';
+      header: DicomInstanceHeader;
+      objectKind: DicomObjectKind;
+      findings: readonly DeidentificationFinding[];
+    };
 
 interface RangeRead {
   bytes: Uint8Array;
@@ -44,6 +62,7 @@ export class DicomIndexService {
   constructor(
     @Inject(S3ClientProvider) private readonly s3: S3ClientProvider,
     @Inject(DicomIndexRepository) private readonly repo: DicomIndexRepository,
+    @Inject(AUDIT_EMITTER) private readonly audit: AuditEmitter,
   ) {
     const configured = process.env.OCI_DICOM_FINDING_DIGEST_KEY;
     if (configured) {
@@ -69,8 +88,91 @@ export class DicomIndexService {
     s3Bucket: string;
     s3Key: string;
   }): Promise<DicomCheckStatus | null> {
-    const { s3Bucket, s3Key } = args;
+    const inspected = await this.inspect(args.s3Bucket, args.s3Key);
 
+    if (inspected.kind === 'not-dicom') return null;
+
+    if (inspected.kind === 'unreadable') {
+      await this.repo.save({
+        ...args,
+        checkStatus: 'UNREADABLE',
+        unreadableReason: inspected.reason.slice(0, 300),
+        parsed: null,
+        findings: [],
+      });
+      // The dataset, not the key: a file name can carry an identifier.
+      this.logger.warn(`dicom-index dataset=${args.datasetId} status=UNREADABLE`);
+      return 'UNREADABLE';
+    }
+
+    const { findings } = inspected;
+    // `save` answers with the status it stored: a file whose findings
+    // an operator has already accepted for this dataset is released.
+    const checkStatus = await this.repo.save(
+      {
+        ...args,
+        checkStatus: findings.length > 0 ? 'HELD' : 'CLEAR',
+        unreadableReason: null,
+        parsed: { header: inspected.header, objectKind: inspected.objectKind },
+        findings: this.digests(findings),
+      },
+      // Nobody decides at this moment, so the audit trail says which
+      // decisions made this file visible. Counts and ids, never a value
+      // and never the file's name.
+      async (tx, release) => {
+        await this.audit.emitSync(
+          {
+            module: 'storage',
+            action: 'dicom.file_released',
+            subjectType: 'dataset',
+            subjectId: args.datasetId,
+            payload: {
+              cause: 'findings already accepted for the dataset',
+              decisionIds: release.decisionIds,
+              findingCount: release.findingCount,
+            },
+          },
+          tx as unknown as AuditTransactionPort,
+        );
+      },
+    );
+    // Counts only. A value never reaches a log, and neither does the
+    // key: a file name can carry an identifier.
+    this.logger.log(
+      `dicom-index dataset=${args.datasetId} status=${checkStatus} kind=${inspected.objectKind} findings=${findings.length}`,
+    );
+    return checkStatus;
+  }
+
+  /**
+   * The values behind the findings of one stored file, read from the
+   * file now, for the operator's review screen (ADR-0026).
+   *
+   * Keyed by `findingKey(attribute, valueDigest)`, the digest being the
+   * one the index holds, so that a caller can match a value to a finding
+   * without the value ever having been stored. The values may identify a
+   * patient: the caller shows them to an operator and keeps them nowhere.
+   * Empty when the file is no longer readable as DICOM.
+   */
+  async readFindingValues(s3Bucket: string, s3Key: string): Promise<Map<string, string>> {
+    const inspected = await this.inspect(s3Bucket, s3Key);
+    const values = new Map<string, string>();
+    if (inspected.kind !== 'ok') return values;
+    const digests = this.digests(inspected.findings);
+    inspected.findings.forEach((finding, i) => {
+      const digest = digests.at(i);
+      if (digest) values.set(findingKey(digest.attribute, digest.valueDigest), finding.value);
+    });
+    return values;
+  }
+
+  /**
+   * Read the header of a stored file and say what it is. Reads the
+   * first bytes, more of them while the header is cut short, and the
+   * last eight when compressed pixel data has to be shown to end the
+   * file. Never the pixel data.
+   */
+  private async inspect(s3Bucket: string, s3Key: string): Promise<Inspected> {
     let read = await this.readRange(s3Bucket, s3Key, `bytes=0-${FIRST_READ_BYTES - 1}`);
     // The size comes from storage, never from what the uploader claimed.
     let result = parseDicomHeader(read.bytes, { totalSize: read.totalSize });
@@ -86,20 +188,8 @@ export class DicomIndexService {
       result = parseDicomHeader(read.bytes, { totalSize: read.totalSize });
     }
 
-    if (result.kind === 'not-dicom') return null;
-
-    if (result.kind === 'unreadable') {
-      await this.repo.save({
-        ...args,
-        checkStatus: 'UNREADABLE',
-        unreadableReason: result.reason.slice(0, 300),
-        parsed: null,
-        findings: [],
-      });
-      // The dataset, not the key: a file name can carry an identifier.
-      this.logger.warn(`dicom-index dataset=${args.datasetId} status=UNREADABLE`);
-      return 'UNREADABLE';
-    }
+    if (result.kind === 'not-dicom') return { kind: 'not-dicom' };
+    if (result.kind === 'unreadable') return { kind: 'unreadable', reason: result.reason };
 
     let findings = result.findings;
     // Compressed pixel data does not say where it ends. If the file does
@@ -110,21 +200,7 @@ export class DicomIndexService {
       const tail = await this.readRange(s3Bucket, s3Key, `bytes=${start}-${read.totalSize - 1}`);
       if (!endsWithSequenceDelimiter(tail.bytes)) findings = [...findings, DATA_AFTER_PIXEL_DATA];
     }
-
-    const checkStatus: DicomCheckStatus = findings.length > 0 ? 'HELD' : 'CLEAR';
-    await this.repo.save({
-      ...args,
-      checkStatus,
-      unreadableReason: null,
-      parsed: { header: result.header, objectKind: result.objectKind },
-      findings: this.digests(findings),
-    });
-    // Counts only. A value never reaches a log, and neither does the
-    // key: a file name can carry an identifier.
-    this.logger.log(
-      `dicom-index dataset=${args.datasetId} status=${checkStatus} kind=${result.objectKind} findings=${findings.length}`,
-    );
-    return checkStatus;
+    return { kind: 'ok', header: result.header, objectKind: result.objectKind, findings };
   }
 
   /** True when the stored file is held (ADR-0026). */

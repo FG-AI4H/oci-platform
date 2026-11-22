@@ -1,11 +1,15 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../auth/auth.module.js';
+import { RolesGuard } from '../../auth/roles.guard.js';
 import { PrismaService } from '../../prisma.service.js';
 import { CatalogModule } from '../catalog/catalog.module.js';
 import { AccessRequestModule } from '../access-request/access-request.module.js';
 import { BulkDownloadService } from './bulk-download.service.js';
 import { DicomIndexRepository } from './dicom-index.repository.js';
 import { DicomIndexService } from './dicom-index.service.js';
+import { DicomReviewController } from './dicom-review.controller.js';
+import { DicomReviewRepository } from './dicom-review.repository.js';
+import { DicomReviewService } from './dicom-review.service.js';
 import { DicomSeriesController } from './dicom-series.controller.js';
 import { DicomSeriesRepository } from './dicom-series.repository.js';
 import { DicomSeriesService } from './dicom-series.service.js';
@@ -31,7 +35,7 @@ import { StorageService } from './storage.service.js';
  */
 @Module({
   imports: [AuthModule, CatalogModule, AccessRequestModule],
-  controllers: [StorageController, DicomSeriesController],
+  controllers: [StorageController, DicomSeriesController, DicomReviewController],
   providers: [
     PrismaService,
     S3ClientProvider,
@@ -41,6 +45,9 @@ import { StorageService } from './storage.service.js';
     BulkDownloadService,
     DicomSeriesRepository,
     DicomSeriesService,
+    DicomReviewRepository,
+    DicomReviewService,
+    RolesGuard,
   ],
   exports: [StorageService, BulkDownloadService],
 })

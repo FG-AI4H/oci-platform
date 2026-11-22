@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AuditEmitter } from '@oci/audit';
 import { buildPart10, ctSlice, type TestElement } from '@oci/dicom/testing';
 import type { DicomIndexRepository, DicomObjectRecord } from './dicom-index.repository.js';
 import { DicomIndexService } from './dicom-index.service.js';
@@ -43,6 +44,8 @@ let ranges: string[];
 let saved: DicomObjectRecord[];
 let svc: DicomIndexService;
 let logged: string[];
+/** The audit trail: one event per file released at upload. */
+const audit = { emitSync: vi.fn() };
 
 function s3Send(command: GetObjectCommand) {
   const { Key, Range } = command.input;
@@ -73,13 +76,17 @@ function s3Send(command: GetObjectCommand) {
 function build() {
   const s3 = { bucket: BUCKET, client: { send: vi.fn(s3Send) } };
   const repo = {
+    // Answers with the status it was given, as the repository does
+    // when no operator decision covers the findings.
     save: vi.fn(async (record: DicomObjectRecord) => {
       saved.push(record);
+      return record.checkStatus;
     }),
   };
   return new DicomIndexService(
     s3 as unknown as S3ClientProvider,
     repo as unknown as DicomIndexRepository,
+    audit as unknown as AuditEmitter,
   );
 }
 
@@ -318,6 +325,7 @@ describe('DicomIndexService fails closed', () => {
     const service = new DicomIndexService(
       s3 as unknown as S3ClientProvider,
       { save: vi.fn() } as unknown as DicomIndexRepository,
+      audit as unknown as AuditEmitter,
     );
 
     await expect(
@@ -331,6 +339,7 @@ describe('DicomIndexService fails closed', () => {
     const service = new DicomIndexService(
       s3 as unknown as S3ClientProvider,
       repo as unknown as DicomIndexRepository,
+      audit as unknown as AuditEmitter,
     );
     store('demo/1/named.dcm', ctSlice([NAME]));
 

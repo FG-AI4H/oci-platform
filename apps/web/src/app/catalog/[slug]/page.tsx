@@ -503,6 +503,18 @@ export default async function DatasetDetailPage({
                       patient id or a study date. Until a platform operator has reviewed them, only
                       the dataset&apos;s host and platform operators see these images. Other readers
                       do not see them, or a series made only of them.
+                      {isAdmin(session) ? (
+                        <>
+                          {' '}
+                          <Link
+                            href={`/admin/dicom/${detail.slug}`}
+                            className="font-medium underline underline-offset-2"
+                          >
+                            Review the findings
+                          </Link>
+                          .
+                        </>
+                      ) : null}
                     </AlertDescription>
                   </Alert>
                 ) : null}

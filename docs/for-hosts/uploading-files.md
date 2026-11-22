@@ -97,7 +97,12 @@ When an upload completes, the platform reads the header of the file. It never re
 
 **How you know.** The upload's response carries the outcome (`dicomCheckStatus`: `CLEAR`, `HELD` or `UNREADABLE`). The upload page does not show it yet. On your dataset page, the **Imaging series** card says how many images are held and marks the series they belong to. In the file list a held file looks like any other to you, and is simply missing for everyone else.
 
-**What lifts the hold.** An operator reviews the findings and records a decision. The review screen is not available yet ([#674](https://github.com/FG-AI4H/oci-platform/issues/674)); until it is, a held file stays held.
+**What lifts the hold.** A platform operator reviews what was found and records a decision with a reason; you cannot do it for your own files. A file is released when every one of its findings is accepted.
+
+- An accepted value (a study code, a shifted date) is accepted for your dataset: a file you upload later with the same value is not held for it again.
+- A finding about a file as a whole (a burned-in annotation flag, private tags) is accepted on the files the operator looked at. A file uploaded later with the same finding is held again.
+
+Tell the operator what your codes and dates are, and that the files are de-identified: it is what they have to write down. See [Reviewing held DICOM images](../for-operators/reviewing-held-dicom-images.md) for what they see.
 
 **Viewing a series.** The dataset page lists the DICOM series of the latest version under **Imaging series**. `view` opens one in the platform's own viewer: scroll through the images, change the window (with presets for CT), zoom, move, invert. Nothing is downloaded to disk and nothing can be drawn or measured: the viewer only displays. Anyone who may download from the dataset may view its series, except for held images, which only you and the operators see.
 

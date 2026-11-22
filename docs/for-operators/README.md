@@ -12,6 +12,7 @@ You're deploying or running an OCI instance. The platform is designed to run as 
 | [SES mail](./ses.md)                                                  | Domain identity, SMTP-credential rotation, DMARC tightening.                                    |
 | [Admin: users & groups](./admin-user-management.md)                   | Granting / revoking Cognito group membership (campaign-manager, host, …).                       |
 | [Admin: platform settings](./admin-platform-settings.md)              | Maintenance banner, tool registry (future), license defaults (future).                          |
+| [Reviewing held DICOM images](./reviewing-held-dicom-images.md)       | A dataset has DICOM images held for what their header carries, and you decide what is released. |
 | [Demo-data seed](./demo-seed.md)                                      | How baseline rows reach dev/int on every deploy; how to add new entities.                       |
 | [Writing annotation instructions](./annotation-instructions-guide.md) | You're a campaign manager and need to write effective per-campaign instructions for annotators. |
 | Observability _(not yet written)_                                     | What to wire to your CloudWatch / X-Ray / Grafana.                                              |
@@ -85,6 +86,7 @@ Manual `cdk deploy` from a developer laptop against `int` or `prod` is forbidden
 
 - **Rotating a Cognito user-pool client**: see [`docs/runbooks/`](../runbooks/) (TODO: add specific runbook).
 - **Restoring from snapshot**: Aurora's automated backups + the SNAPSHOT removal policy on int. Restore via CDK by changing the `clusterIdentifier` and re-deploying.
+- **Reviewing held DICOM images**: see [Reviewing held DICOM images](./reviewing-held-dicom-images.md). A DICOM file whose header carries a value de-identification normally removes is seen by its host and operators only, until an operator has decided.
 - **Recovering from a failed federation harvest**: the worker is idempotent; re-run by triggering the scheduled task. Stuck rows are visible in the admin's `/catalog/remotes` page with their `lastError`.
 
 ## Where to ask
