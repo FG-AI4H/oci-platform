@@ -37,6 +37,7 @@ import {
   describeAttribution,
   ReviewStatusBadge,
 } from '../../../../../components/evaluation/review-status-badge';
+import { SubgroupResultsCard } from '../../../../../components/evaluation/subgroup-results';
 import { ApiError, apiFetch, reauthUrl } from '../../../../../lib/api';
 
 /**
@@ -235,6 +236,11 @@ export default async function SubmissionPage({
                 <MetricList cells={cells} />
               </CardContent>
             </Card>
+          ) : null}
+
+          {/* #410: right after the overall figures, which each group reads against. */}
+          {scores && submission.subgroups ? (
+            <SubgroupResultsCard subgroups={submission.subgroups} scores={scores} />
           ) : null}
 
           {perClass ? <PerClassCard perClass={perClass} /> : null}

@@ -33,6 +33,9 @@ const RATE_FORMATTER = new Intl.NumberFormat('en-GB', {
 
 export const formatRate = (value: number) => RATE_FORMATTER.format(value);
 
+/** QWK as the pages print it: three decimals, never a percentage. */
+export const formatQwk = (value: number) => QWK_FORMATTER.format(value);
+
 /** AUC is a 0–1 figure like QWK, never a percentage. */
 const AUC_FORMATTER = new Intl.NumberFormat('en-GB', {
   minimumFractionDigits: 3,

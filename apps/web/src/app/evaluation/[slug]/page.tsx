@@ -15,6 +15,7 @@ import {
   Container,
   DefinitionItem,
   DefinitionList,
+  Field,
   Section,
   Separator,
 } from '@oci/ui';
@@ -37,6 +38,7 @@ import {
   rankSubmissions,
   ReviewStatusBadge,
 } from '../../../components/evaluation/review-status-badge';
+import { SUBGROUP_TEXT as SG } from '../../../components/evaluation/subgroup-text';
 
 /**
  * Evaluation task detail (ADR-0017, Phase C-lite). Anonymous —
@@ -132,6 +134,12 @@ export default async function EvaluationTaskDetailPage({
   // imply it placed, and numbering a provisional or legacy row would imply
   // the platform stands behind that placing. Neither is true.
   const ranked = rankSubmissions(detail.submissions);
+
+  // #410: the comparison needs two scored results of a task that reports by
+  // subgroup. Results scored before the task declared its fields simply show
+  // no breakdown on the comparison page.
+  const hasSubgroups = detail.subgroupFields.length > 0;
+  const comparable = hasSubgroups ? detail.submissions.filter((s) => s.scores !== null) : [];
 
   return (
     <>
@@ -250,6 +258,13 @@ export default async function EvaluationTaskDetailPage({
                     </span>
                   </DefinitionItem>
                 )}
+                {hasSubgroups ? (
+                  <DefinitionItem term={SG.task.fieldsTerm}>
+                    {SG.task.fields(
+                      detail.subgroupFields.map((f) => f.label.toLowerCase()).join(', '),
+                    )}
+                  </DefinitionItem>
+                ) : null}
                 <DefinitionItem term="Items">
                   <span className="tabular-nums">{detail.itemCount.toLocaleString('en-GB')}</span>{' '}
                   <span className="text-[var(--color-muted-foreground)]">
@@ -367,13 +382,22 @@ export default async function EvaluationTaskDetailPage({
                 <ol aria-label="Submissions, best first" className="space-y-4">
                   {ranked.map(({ submission, rank }) => (
                     <li key={submission.id}>
-                      <SubmissionRow submission={submission} rank={rank} task={detail} />
+                      <SubmissionRow
+                        submission={submission}
+                        rank={rank}
+                        task={detail}
+                        hasSubgroups={hasSubgroups}
+                      />
                     </li>
                   ))}
                 </ol>
               )}
             </CardContent>
           </Card>
+
+          {comparable.length >= 2 ? (
+            <CompareForm slug={detail.slug} submissions={comparable} />
+          ) : null}
 
           <Separator />
 
@@ -399,9 +423,12 @@ function SubmissionRow({
   submission,
   rank,
   task,
+  hasSubgroups,
 }: {
   submission: EvaluationSubmissionResult;
   rank: number | null;
+  /** The task reports by subgroup (#410): a scored row links to its breakdown. */
+  hasSubgroups: boolean;
   task: Pick<
     EvaluationTaskDetail,
     'slug' | 'taskKind' | 'referableThreshold' | 'positiveClassName'
@@ -470,7 +497,70 @@ function SubmissionRow({
           />
         ))}
       </dl>
+
+      {hasSubgroups && scores ? (
+        <p className="mt-4 text-sm">
+          <Link
+            href={`/evaluation/${encodeURIComponent(task.slug)}/submissions/${submission.id}#subgroups`}
+            className="rounded font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+          >
+            {SG.task.rowLink}
+            <span className="sr-only">: {submission.methodName}</span>
+          </Link>
+        </p>
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * Two scored results side by side, group by group (#410). A plain GET form:
+ * it works without JavaScript and the comparison has its own address, which a
+ * facilitator can put on a slide. The second choice defaults to the second
+ * result so the button does something useful at once.
+ */
+function CompareForm({
+  slug,
+  submissions,
+}: {
+  slug: string;
+  submissions: EvaluationSubmissionResult[];
+}) {
+  const select =
+    'block w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]';
+  const option = (s: EvaluationSubmissionResult) => (
+    <option key={s.id} value={s.id}>
+      {s.methodName} · {DATE_FORMATTER.format(new Date(s.createdAt))}
+    </option>
+  );
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle as="h2">{SG.task.compareTitle}</CardTitle>
+        <CardDescription>{SG.task.compareDescription}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form
+          method="get"
+          action={`/evaluation/${encodeURIComponent(slug)}/compare`}
+          className="grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+        >
+          <Field label={SG.task.compareFirst} htmlFor="compare-a">
+            <select id="compare-a" name="a" defaultValue={submissions[0]?.id} className={select}>
+              {submissions.map(option)}
+            </select>
+          </Field>
+          <Field label={SG.task.compareSecond} htmlFor="compare-b">
+            <select id="compare-b" name="b" defaultValue={submissions[1]?.id} className={select}>
+              {submissions.map(option)}
+            </select>
+          </Field>
+          <Button type="submit" variant="secondary">
+            {SG.task.compareSubmit}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
