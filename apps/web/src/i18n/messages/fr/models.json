@@ -129,8 +129,8 @@
   },
   "operatingEnvironment": {
     "primary-care": "Soins primaires",
-    "hospital-inpatient": "Hôpital, hospitalisation",
-    "hospital-outpatient": "Hôpital, ambulatoire",
+    "hospital-inpatient": "Hospitalisation",
+    "hospital-outpatient": "Consultations hospitalières externes",
     "emergency": "Urgences",
     "field-or-community": "Terrain ou communauté",
     "home-or-telehealth": "Domicile ou télésanté",
