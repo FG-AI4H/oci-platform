@@ -1498,6 +1498,9 @@ enum AnnotationAssignmentStatus {
   IN_PROGRESS
   SUBMITTED
   EXPIRED
+  /// The annotator gave the task back unread ("Skip", #646). Like
+  /// EXPIRED it produced no reading and frees the slot.
+  RELEASED
 
   @@schema("annotation")
 }
@@ -1551,13 +1554,14 @@ model AnnotationTaskAssignment {
   startedAt                       DateTime?                  @map("started_at")
   submittedAt                     DateTime?                  @map("submitted_at")
   expiredAt                       DateTime?                  @map("expired_at")
+  releasedAt                      DateTime?                  @map("released_at")
 
   task AnnotationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   /// One annotator can hold at most one ACTIVE assignment per
   /// (task, gate). The partial unique index in the migration enforces
-  /// the constraint excluding SUBMITTED / EXPIRED rows so re-assignment
-  /// after abandonment isn't blocked.
+  /// the constraint to PENDING / IN_PROGRESS rows so re-assignment
+  /// after abandonment or a skip isn't blocked.
   @@index([taskId, status])
   @@index([assigneeUserId, status])
   @@index([taskId, gateAtAssignment, status])

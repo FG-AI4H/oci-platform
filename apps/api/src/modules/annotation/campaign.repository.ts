@@ -8,6 +8,7 @@ import type {
   CampaignStatus as PrismaStatus,
   CampaignTaskKind as PrismaTaskKind,
 } from '@oci/database';
+import type { CampaignWorkflowConfig } from '@oci/shared-types';
 
 /**
  * Phase B.A.1 — Campaign repository. Only the create + read paths the
@@ -131,6 +132,54 @@ export class CampaignRepository {
     });
   }
 
+  /**
+   * The platform-hosted image files of one dataset version (#646):
+   * bytes in our bucket, upload complete, PNG or JPEG. Ordered by
+   * storage key so a `limit` takes a stable slice.
+   */
+  async findHostedImages(
+    datasetVersionId: string,
+  ): Promise<Array<{ s3Key: string; contentType: string }>> {
+    const rows = await this.prisma.client.distribution.findMany({
+      where: {
+        datasetVersionId,
+        storageBackend: 'S3',
+        uploadStatus: 'READY',
+        contentType: { in: [...HOSTED_IMAGE_TYPES] },
+        s3Key: { not: null },
+        s3Bucket: { not: null },
+      },
+      select: { s3Key: true, contentType: true },
+      orderBy: { s3Key: 'asc' },
+    });
+    return rows.flatMap((r) => (r.s3Key ? [{ s3Key: r.s3Key, contentType: r.contentType }] : []));
+  }
+
+  /**
+   * The hosted files a task's sample reference points at, in reading
+   * order (#646). Today a reference is the storage key of one file of a
+   * type the annotate page can show (`READABLE_SAMPLE_TYPES`); DICOM
+   * series (#674) resolve to their ordered instances here, so callers
+   * stay independent of the file type. Empty when nothing matches.
+   */
+  async findHostedSampleFiles(
+    datasetVersionId: string,
+    sampleRef: string,
+  ): Promise<Array<{ s3Bucket: string; s3Key: string; contentType: string }>> {
+    const row = await this.prisma.client.distribution.findFirst({
+      where: {
+        datasetVersionId,
+        s3Key: sampleRef,
+        storageBackend: 'S3',
+        uploadStatus: 'READY',
+        contentType: { in: [...READABLE_SAMPLE_TYPES] },
+      },
+      select: { s3Bucket: true, s3Key: true, contentType: true },
+    });
+    if (!row?.s3Bucket || !row.s3Key) return [];
+    return [{ s3Bucket: row.s3Bucket, s3Key: row.s3Key, contentType: row.contentType }];
+  }
+
   async create(args: {
     slug: string;
     name: string;
@@ -140,7 +189,7 @@ export class CampaignRepository {
     manifestVersionId: string | null;
     toolIntegrationId: string;
     outputLicense: PrismaOutputLicense;
-    workflowConfig: { nAnnotators: number };
+    workflowConfig: CampaignWorkflowConfig | { nAnnotators: number };
     createdById: string;
   }): Promise<AnnotationCampaign & { toolIntegration: AnnotationToolIntegration }> {
     return this.prisma.client.annotationCampaign.create({
@@ -273,3 +322,12 @@ export class CampaignRepository {
     });
   }
 }
+
+/** Image types `tasks/from-dataset` makes one task per file of (#646). */
+export const HOSTED_IMAGE_TYPES = ['image/png', 'image/jpeg'] as const;
+
+/**
+ * File types a task's sample can be served as (#646). DICOM (#674)
+ * joins this list; nothing else in the sample path names a type.
+ */
+export const READABLE_SAMPLE_TYPES = [...HOSTED_IMAGE_TYPES] as const;

@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Textarea } from '@oci/ui';
 import type { AnnotationGateState, TaskSummary } from '@oci/shared-types';
+import { SeedFromDatasetForm } from './seed-from-dataset-form';
 import { seedTasksAction, type SeedTasksState } from './tasks-actions';
 
 const initial: SeedTasksState = { status: 'idle' };
@@ -70,9 +71,17 @@ export function TasksCard({ slug, tasks, canSeed }: TasksCardProps) {
       ) : (
         <p className="text-sm text-[var(--color-muted-foreground)]">
           No tasks seeded yet.{' '}
-          {canSeed ? 'Paste sample references below to start the queue.' : null}
+          {canSeed
+            ? "Create them from the dataset's files, or paste sample references below."
+            : null}
         </p>
       )}
+
+      {canSeed ? (
+        <div className="border-t border-[var(--color-border)] pt-5">
+          <SeedFromDatasetForm slug={slug} />
+        </div>
+      ) : null}
 
       {canSeed ? (
         <form action={formAction} className="space-y-3 border-t border-[var(--color-border)] pt-5">
@@ -91,7 +100,7 @@ export function TasksCard({ slug, tasks, canSeed }: TasksCardProps) {
           <Field
             label="Seed sample references"
             htmlFor="field-sample-refs"
-            hint="One reference per line. Free-form strings today (e.g. dataset-slug/sample-001). The catalog ↔ annotation linkage (#223) will turn these into real S3 keys."
+            hint="One reference per line, for samples that are not hosted image files. Hosted images are easier to add with the button above."
           >
             <Textarea
               id="field-sample-refs"

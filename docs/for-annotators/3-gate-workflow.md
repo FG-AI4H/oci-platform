@@ -46,13 +46,15 @@ For `N=1` campaigns (single-rater shortcut), the task goes straight to `COMPLETE
 
 Tasks land here when gate-1 annotators disagreed. The platform routes the task to a member of `arbitration-annotator`. As an arbitrator you see:
 
-- The original `N` gate-1 submissions (now de-blinded — you need to see the disagreement).
+- The image, in the same viewer as gate 1.
+- The original `N` gate-1 answers with their comments, without who gave them: you see the disagreement, not the people.
 - The campaign instructions (and any per-task notes).
-- The same annotation tool as gate-1.
 
-You produce a single arbitration label. Two outcomes:
+You are never one of the task's gate-1 readers: the platform does not give you a task you read, even if you hold both groups.
 
-1. **You can resolve it** — submit your label. The task transitions to `COMPLETED` with your label as final.
+You produce a single arbitration label, chosen from the campaign's answers, and the reason for it. Two outcomes:
+
+1. **You can resolve it** — submit the final label with your reason. The task transitions to `COMPLETED`; the final label and the reason are stored and exported.
 2. **You can't** (the disagreement is irreducible — e.g. expert opinion needed, instructions don't cover this edge case) — escalate. The task transitions to `AWAITING_EXPERT`.
 
 You can also `SKIP` with a reason if the task is unfit for the campaign (image quality, PHI leakage, etc.).

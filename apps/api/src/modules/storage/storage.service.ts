@@ -326,6 +326,27 @@ export class StorageService {
   }
 
   /**
+   * Presign a short-lived GET for one hosted object, for a caller that
+   * has already decided the requester may see it (the annotation module
+   * hands a reader the image of their own task, #646). Served inline,
+   * with no file name in the response headers.
+   */
+  async signHostedRead(args: {
+    bucket: string;
+    key: string;
+    contentType: string;
+    ttlSeconds: number;
+  }): Promise<string> {
+    const cmd = new GetObjectCommand({
+      Bucket: args.bucket,
+      Key: args.key,
+      ResponseContentType: args.contentType,
+      ResponseContentDisposition: 'inline',
+    });
+    return this.presign(cmd, args.ttlSeconds);
+  }
+
+  /**
    * THE gate for handing out dataset bytes. Extracted verbatim from
    * `getDownloadUrl` so the bulk-download path (`GET /v2/catalog/
    * datasets/:slug/download`, `BulkDownloadService`) enforces the same

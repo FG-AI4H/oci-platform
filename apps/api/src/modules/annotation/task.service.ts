@@ -18,17 +18,20 @@ import type {
   CampaignTaskKind,
   GateTransitionAction,
   PullNextResponse,
+  ReleaseAssignmentResponse,
   SeedTaskItem,
+  SeedTasksFromDatasetResponse,
   SeedTasksResponse,
   SubmitAssignmentResponse,
   TaskSummary,
 } from '@oci/shared-types';
-import { evaluateCompleteness } from '@oci/shared-types';
+import { evaluateCompleteness, labelSubmissionProblems } from '@oci/shared-types';
 // ANNOTATION_GATE_ROLES is the canonical gate → group mapping shared
 // with the web; `roleForGate` is the local typed accessor.
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { CampaignRepository } from './campaign.repository.js';
+import { readClassificationLabels } from './campaign.service.js';
 import { evaluateGate1Predicate } from './gate-irr-predicate.js';
 import { lookupGateTransition } from './gate-state-machine.js';
 import {
@@ -73,19 +76,7 @@ export class TaskService {
   }): Promise<SeedTasksResponse> {
     const campaign = await this.campaigns.findBySlug(args.slug);
     if (!campaign) throw new NotFoundException(`Campaign '${args.slug}' not found`);
-
-    // Tasks can only be seeded once the campaign is past DRAFT.
-    // Allowing seed at READY lets a manager pre-load work before
-    // calling `start`; seeding at DRAFT would risk losing the tasks
-    // if the manager reverts.
-    if (campaign.status === 'DRAFT' || campaign.status === 'ARCHIVED') {
-      throw new ConflictException(
-        `Cannot seed tasks while campaign is ${campaign.status}; transition to READY or RUNNING first`,
-      );
-    }
-    if (campaign.status === 'COMPLETED') {
-      throw new ConflictException('Cannot seed tasks on a COMPLETED campaign');
-    }
+    assertCanSeed(campaign.status);
 
     // Normalise the union shape: a string ref is implicitly a non-gold
     // sample. Gold rows MUST carry a label — the supervisor IRR-vs-
@@ -111,6 +102,60 @@ export class TaskService {
       `seed: campaign=${campaign.slug} created=${result.created} skipped=${result.skipped} n=${n} gold=${goldCount}`,
     );
     return result;
+  }
+
+  /**
+   * One task per platform-hosted PNG / JPEG file of the campaign's
+   * pinned dataset version (#646). The sample reference is the file's
+   * storage key, so the annotate page can find the bytes again.
+   * Idempotent: a file that already has a task is `skipped`. `prefix`
+   * matches the file name; `limit` takes the first files in key order.
+   * A dry run reports the counts and creates nothing, for the manager's
+   * confirmation step.
+   */
+  async seedFromDataset(args: {
+    slug: string;
+    prefix?: string;
+    limit?: number;
+    dryRun: boolean;
+  }): Promise<SeedTasksFromDatasetResponse> {
+    const campaign = await this.campaigns.findBySlug(args.slug);
+    if (!campaign) throw new NotFoundException(`Campaign '${args.slug}' not found`);
+    assertCanSeed(campaign.status);
+    if (!campaign.manifestVersionId) {
+      throw new ConflictException(
+        'The campaign has no pinned dataset version, so there are no files to create tasks from',
+      );
+    }
+
+    const prefix = args.prefix?.trim() ?? '';
+    const images = (await this.campaigns.findHostedImages(campaign.manifestVersionId)).filter((f) =>
+      fileNameOf(f.s3Key).startsWith(prefix),
+    );
+    const picked = args.limit !== undefined ? images.slice(0, args.limit) : images;
+    const refs = picked.map((f) => f.s3Key);
+
+    if (args.dryRun) {
+      const existing = await this.tasks.countExistingSampleRefs(campaign.id, refs);
+      return {
+        matched: refs.length,
+        created: refs.length - existing,
+        skipped: existing,
+        dryRun: true,
+      };
+    }
+    if (refs.length === 0) return { matched: 0, created: 0, skipped: 0, dryRun: false };
+
+    const n = this.requireNAnnotators(campaign.workflowConfig);
+    const result = await this.tasks.seedTasks(
+      campaign.id,
+      n,
+      refs.map((sampleRef) => ({ sampleRef })),
+    );
+    this.logger.log(
+      `seed-from-dataset: campaign=${campaign.slug} matched=${refs.length} created=${result.created} skipped=${result.skipped}`,
+    );
+    return { matched: refs.length, ...result, dryRun: false };
   }
 
   /**
@@ -158,6 +203,35 @@ export class TaskService {
       const submittedCount = submittedByKey.get(key) ?? 0;
       return toTaskSummary(row, submittedCount);
     });
+  }
+
+  // --- Current (read-only) ----------------------------------------------
+
+  /**
+   * The caller's in-flight assignment for this campaign at their gate,
+   * or null. Reserves nothing: the annotate page reads this on open and
+   * only "Start" pulls a task (#646), so visiting the page doesn't hold
+   * a slot other annotators could be reading.
+   */
+  async current(args: {
+    slug: string;
+    user: CognitoAccessTokenPayload;
+    userGroups: readonly string[];
+  }): Promise<PullNextResponse> {
+    const campaign = await this.campaigns.findBySlug(args.slug);
+    if (!campaign) throw new NotFoundException(`Campaign '${args.slug}' not found`);
+    const gate = this.gateFromGroups(args.userGroups);
+    if (!gate) {
+      throw new ForbiddenException(
+        'Caller has no annotation role group (annotator / arbitration-annotator / expert-reviewer)',
+      );
+    }
+    const existing = await this.tasks.findActiveAssignmentForUser({
+      campaignId: campaign.id,
+      gate,
+      assigneeUserId: cognitoSubAsUuid(args.user.sub),
+    });
+    return { assignment: existing ? toAssignmentSummary(existing, existing.task) : null };
   }
 
   // --- Next (router) -----------------------------------------------------
@@ -226,8 +300,8 @@ export class TaskService {
       // Bias-prevention 1.5× cap (ADR-0009 Decision 1 Predicate 4).
       // The router refuses to give this caller another independent
       // reading if doing so would push their per-campaign share above
-      // the soft ceiling. EXPIRED rows are excluded (abandonment
-      // doesn't burden the cap per ADR-0009 + #229). When the cap
+      // the soft ceiling. EXPIRED and RELEASED rows are excluded
+      // (abandonment and skips don't burden the cap per ADR-0009 + #229). When the cap
       // binds the task stays in the queue for another annotator. The
       // cap shares out independent readings only; arbitration and
       // expert review are single-reader gates it doesn't govern.
@@ -270,6 +344,48 @@ export class TaskService {
     });
   }
 
+  // --- Release (skip) ----------------------------------------------------
+
+  /**
+   * The assignee gives the task back unread (#646). The slot reopens
+   * at once for other annotators, and the router offers the caller
+   * other tasks before this one. Only the assignee may release, and
+   * only an assignment still in flight.
+   */
+  async release(args: {
+    assignmentId: string;
+    user: CognitoAccessTokenPayload;
+  }): Promise<ReleaseAssignmentResponse> {
+    const callerUserId = cognitoSubAsUuid(args.user.sub);
+    return this.tasks.inTransaction(async (tasks, tx) => {
+      const assignment = await tasks.findAssignmentById(args.assignmentId);
+      if (!assignment) throw new NotFoundException(`Assignment '${args.assignmentId}' not found`);
+      if (assignment.assigneeUserId !== callerUserId) {
+        throw new ForbiddenException('Assignment belongs to a different user');
+      }
+      if (assignment.status !== 'PENDING' && assignment.status !== 'IN_PROGRESS') {
+        throw new ConflictException(
+          `Assignment is ${assignment.status}; only an assignment in progress can be released`,
+        );
+      }
+      const campaign = await this.campaigns.findById(assignment.task.campaignId);
+      const released = await this.abandonment.release({
+        row: assignment,
+        campaignSlug: campaign?.slug ?? 'unknown',
+        tasks,
+        tx,
+      });
+      if (!released) {
+        throw new ConflictException('Assignment was submitted or expired while being released');
+      }
+      return {
+        assignmentId: assignment.id,
+        taskId: assignment.taskId,
+        releasedAt: new Date().toISOString(),
+      };
+    });
+  }
+
   // --- Submit ------------------------------------------------------------
 
   async submit(args: {
@@ -291,6 +407,9 @@ export class TaskService {
     if (assignment.status === 'EXPIRED') {
       throw new ConflictException('Assignment expired due to abandonment timeout; pull a new task');
     }
+    if (assignment.status === 'RELEASED') {
+      throw new ConflictException('Assignment was released; pull a new task');
+    }
     if (assignment.gateAtAssignment !== assignment.task.gateState) {
       // Task moved on while the caller was working. Slice 2 surfaces
       // a 409; slice 3 may auto-rollover with a notification.
@@ -300,6 +419,14 @@ export class TaskService {
     }
     if (assignment.task.gateState === 'COMPLETED' || assignment.task.gateState === 'SKIPPED') {
       throw new ConflictException(`Task is ${assignment.task.gateState}; submissions closed`);
+    }
+    // The router never gives an arbiter a task they read (#646); this
+    // holds the line for an assignment made before that rule.
+    if (
+      assignment.task.gateState === 'AWAITING_ARBITRATION' &&
+      (await this.tasks.hasReadTask(assignment.task.id, callerUserId))
+    ) {
+      throw new ForbiddenException('An arbiter cannot settle a task they read');
     }
 
     // Completeness check (#231). Read the parent campaign once for
@@ -325,6 +452,25 @@ export class TaskService {
             'Submission must acknowledge the current instructions version before it can be persisted',
           requiredInstructionsVersion,
           acknowledgedInstructionsVersion: ack,
+          campaignSlug: campaignForSubmit?.slug ?? null,
+        });
+      }
+    }
+    // A campaign with declared labels takes only `{ label, comment }`
+    // with one of them (#646), at every gate. The arbiter also gives
+    // the reason for the final label, stored with it as `reason`.
+    const labels =
+      campaignForSubmit?.taskKind === 'CLASSIFICATION'
+        ? readClassificationLabels(campaignForSubmit.workflowConfig)
+        : null;
+    if (labels) {
+      const problems = labelSubmissionProblems(labels, args.submission, {
+        reasonRequired: assignment.task.gateState === 'AWAITING_ARBITRATION',
+      });
+      if (problems.length > 0) {
+        throw new UnprocessableEntityException({
+          message: 'Submission does not match the campaign labels',
+          reasons: problems,
           campaignSlug: campaignForSubmit?.slug ?? null,
         });
       }
@@ -523,6 +669,27 @@ export class TaskService {
  * default an annotator gone for two days stops holding others back.
  */
 const ACTIVE_WINDOW_TIMEOUTS = 2;
+
+/**
+ * Tasks are seeded once the campaign is past DRAFT. Allowing seed at
+ * READY lets a manager pre-load work before calling `start`; seeding
+ * at DRAFT would risk losing the tasks if the manager reverts.
+ */
+function assertCanSeed(status: string): void {
+  if (status === 'DRAFT' || status === 'ARCHIVED') {
+    throw new ConflictException(
+      `Cannot seed tasks while campaign is ${status}; transition to READY or RUNNING first`,
+    );
+  }
+  if (status === 'COMPLETED') {
+    throw new ConflictException('Cannot seed tasks on a COMPLETED campaign');
+  }
+}
+
+/** The file name at the end of a storage key. */
+function fileNameOf(key: string): string {
+  return key.slice(key.lastIndexOf('/') + 1);
+}
 
 function gateActionForSubmittedRole(role: string): GateTransitionAction | null {
   if (role === 'annotator') return 'independent-submitted';

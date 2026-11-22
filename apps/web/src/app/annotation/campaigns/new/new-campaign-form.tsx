@@ -103,6 +103,7 @@ export function NewCampaignForm({
   const toolError = fieldError(state, 'toolIntegrationId');
   const taskError = fieldError(state, 'taskKind');
   const nError = fieldError(state, 'nAnnotators');
+  const labelsError = fieldError(state, 'labels');
 
   const initialTask = (echoed?.taskKind as CampaignTaskKind | undefined) ?? null;
   const [taskKind, setTaskKind] = useState<CampaignTaskKind | null>(initialTask);
@@ -337,6 +338,49 @@ export function NewCampaignForm({
           )}
         </select>
       </Field>
+
+      {/* A CLASSIFICATION campaign declares its answers here (#646). */}
+      {taskKind === 'CLASSIFICATION' ? (
+        <fieldset className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
+          <legend className="px-1 text-sm font-medium">Labels readers choose from</legend>
+          <Field
+            label="Labels"
+            htmlFor="field-labels"
+            required
+            hint="One per line, in the order readers see them (2–9; the number keys 1–9 pick them). Write the text readers see, or value | text to set the stored value yourself, e.g. 0 | No DR."
+            error={labelsError}
+          >
+            <Textarea
+              id="field-labels"
+              name="labels"
+              rows={6}
+              required
+              defaultValue={echoed?.labels ?? ''}
+              invalid={!!labelsError}
+              aria-invalid={!!labelsError || undefined}
+              aria-describedby={labelsError ? 'field-labels-err' : undefined}
+            />
+          </Field>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="cannotAssess"
+              defaultChecked={echoed?.cannotAssess ?? false}
+              className="mt-0.5 accent-[var(--color-primary)]"
+            />
+            <span>Offer &ldquo;Cannot assess&rdquo; (key 0) after the labels</span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="allowComment"
+              defaultChecked={echoed?.allowComment ?? false}
+              className="mt-0.5 accent-[var(--color-primary)]"
+            />
+            <span>Let readers add a comment</span>
+          </label>
+        </fieldset>
+      ) : null}
 
       <div className="space-y-3">
         <div className="grid gap-5 sm:grid-cols-2">

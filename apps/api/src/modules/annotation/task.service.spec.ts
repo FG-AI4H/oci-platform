@@ -107,6 +107,7 @@ function assignmentRow(
 interface CampaignsMock {
   findBySlug: ReturnType<typeof vi.fn>;
   findById: ReturnType<typeof vi.fn>;
+  findHostedImages: ReturnType<typeof vi.fn>;
 }
 
 interface TasksMock {
@@ -122,18 +123,23 @@ interface TasksMock {
   markAssignmentSubmitted: ReturnType<typeof vi.fn>;
   countSubmittedAssignmentsAtGate: ReturnType<typeof vi.fn>;
   submissionPayloadsAtGate: ReturnType<typeof vi.fn>;
+  hasReadTask: ReturnType<typeof vi.fn>;
   updateGateState: ReturnType<typeof vi.fn>;
   setAssignmentStatus: ReturnType<typeof vi.fn>;
   findTaskById: ReturnType<typeof vi.fn>;
   annotatorGoldPairs: ReturnType<typeof vi.fn>;
   countGoldSamplesInCampaign: ReturnType<typeof vi.fn>;
+  countExistingSampleRefs: ReturnType<typeof vi.fn>;
 }
 
 const TX = { tx: true };
 
 let campaigns: CampaignsMock;
 let tasks: TasksMock;
-let abandonment: { expireStaleForCampaign: ReturnType<typeof vi.fn> };
+let abandonment: {
+  expireStaleForCampaign: ReturnType<typeof vi.fn>;
+  release: ReturnType<typeof vi.fn>;
+};
 let service: TaskService;
 
 beforeEach(() => {
@@ -148,6 +154,7 @@ beforeEach(() => {
       taskKind: 'CLASSIFICATION',
       workflowConfig: { nAnnotators: 3 },
     }),
+    findHostedImages: vi.fn().mockResolvedValue([]),
   };
   tasks = {
     // Pass-through: the transaction-bound repository is this mock.
@@ -175,13 +182,18 @@ beforeEach(() => {
     submissionPayloadsAtGate: vi
       .fn()
       .mockResolvedValue([{ label: 'a' }, { label: 'b' }, { label: 'c' }]),
+    hasReadTask: vi.fn().mockResolvedValue(false),
     updateGateState: vi.fn(),
     setAssignmentStatus: vi.fn(),
     findTaskById: vi.fn(),
     annotatorGoldPairs: vi.fn().mockResolvedValue([]),
     countGoldSamplesInCampaign: vi.fn().mockResolvedValue(0),
+    countExistingSampleRefs: vi.fn().mockResolvedValue(0),
   };
-  abandonment = { expireStaleForCampaign: vi.fn().mockResolvedValue(0) };
+  abandonment = {
+    expireStaleForCampaign: vi.fn().mockResolvedValue(0),
+    release: vi.fn().mockResolvedValue(true),
+  };
   service = new TaskService(
     campaigns as unknown as CampaignRepository,
     tasks as unknown as TaskRepository,
@@ -256,6 +268,80 @@ describe('TaskService.seed', () => {
 });
 
 // --- annotatorQuality (#291) ------------------------------------------------
+
+describe('TaskService.seedFromDataset (#646)', () => {
+  const IMAGES = [
+    { s3Key: 'ds/u1/IDRiD_001.jpg', contentType: 'image/jpeg' },
+    { s3Key: 'ds/u2/IDRiD_002.jpg', contentType: 'image/jpeg' },
+    { s3Key: 'ds/u3/other_003.png', contentType: 'image/png' },
+  ];
+
+  function campaignWithVersion(versionId: string | null = 'dv-1') {
+    return { ...runningCampaign(3), manifestVersionId: versionId };
+  }
+
+  beforeEach(() => {
+    campaigns.findBySlug.mockResolvedValue(campaignWithVersion());
+    campaigns.findHostedImages.mockResolvedValue(IMAGES);
+  });
+
+  it('creates one task per hosted image of the pinned version, keyed by storage key', async () => {
+    tasks.seedTasks.mockResolvedValue({ created: 3, skipped: 0 });
+
+    const out = await service.seedFromDataset({ slug: 'pilot', dryRun: false });
+
+    expect(campaigns.findHostedImages).toHaveBeenCalledWith('dv-1');
+    expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [
+      { sampleRef: 'ds/u1/IDRiD_001.jpg' },
+      { sampleRef: 'ds/u2/IDRiD_002.jpg' },
+      { sampleRef: 'ds/u3/other_003.png' },
+    ]);
+    expect(out).toEqual({ matched: 3, created: 3, skipped: 0, dryRun: false });
+  });
+
+  it('is idempotent: a second run skips the files that already have tasks', async () => {
+    tasks.seedTasks.mockResolvedValue({ created: 0, skipped: 3 });
+
+    const out = await service.seedFromDataset({ slug: 'pilot', dryRun: false });
+
+    expect(out).toEqual({ matched: 3, created: 0, skipped: 3, dryRun: false });
+  });
+
+  it('a dry run counts what it would create and creates nothing', async () => {
+    tasks.countExistingSampleRefs.mockResolvedValue(1);
+
+    const out = await service.seedFromDataset({ slug: 'pilot', dryRun: true });
+
+    expect(tasks.seedTasks).not.toHaveBeenCalled();
+    expect(out).toEqual({ matched: 3, created: 2, skipped: 1, dryRun: true });
+  });
+
+  it('applies the file-name prefix and the limit', async () => {
+    tasks.seedTasks.mockResolvedValue({ created: 1, skipped: 0 });
+
+    await service.seedFromDataset({ slug: 'pilot', prefix: 'IDRiD_', limit: 1, dryRun: false });
+
+    expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [
+      { sampleRef: 'ds/u1/IDRiD_001.jpg' },
+    ]);
+  });
+
+  it('409s when the campaign pins no dataset version', async () => {
+    campaigns.findBySlug.mockResolvedValue(campaignWithVersion(null));
+
+    await expect(service.seedFromDataset({ slug: 'pilot', dryRun: false })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('refuses to seed a DRAFT campaign', async () => {
+    campaigns.findBySlug.mockResolvedValue({ ...campaignWithVersion(), status: 'DRAFT' });
+
+    await expect(service.seedFromDataset({ slug: 'pilot', dryRun: true })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+});
 
 describe('TaskService.annotatorQuality', () => {
   it('returns a null score when the annotator has scored no gold samples', async () => {
@@ -606,6 +692,239 @@ describe('TaskService.pullNext', () => {
 
 // --- submit (gate state machine) -------------------------------------------
 
+describe('TaskService.current (#646)', () => {
+  beforeEach(() => {
+    campaigns.findBySlug.mockResolvedValue(runningCampaign(1));
+  });
+
+  it("returns the caller's in-flight assignment without reserving anything", async () => {
+    const task = taskRow();
+    tasks.findActiveAssignmentForUser.mockResolvedValue({ ...assignmentRow(), task });
+
+    const result = await service.current({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(result.assignment?.id).toBe('asn-1');
+    expect(tasks.findNextEligibleTask).not.toHaveBeenCalled();
+    expect(tasks.createAssignment).not.toHaveBeenCalled();
+    expect(tasks.inTransaction).not.toHaveBeenCalled();
+  });
+
+  it('returns null and creates nothing when the caller holds no task', async () => {
+    tasks.findActiveAssignmentForUser.mockResolvedValue(null);
+
+    const result = await service.current({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(result.assignment).toBeNull();
+    expect(tasks.createAssignment).not.toHaveBeenCalled();
+  });
+
+  it('403s when the caller has no annotation-role group', async () => {
+    await expect(
+      service.current({ slug: 'pilot', user: userPayload(ANNOTATOR_SUB), userGroups: ['host'] }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe('TaskService.release (#646)', () => {
+  function held(overrides: Partial<AnnotationTaskAssignment> = {}) {
+    return { ...assignmentRow(overrides), task: taskRow() };
+  }
+
+  beforeEach(() => {
+    campaigns.findById.mockResolvedValue(runningCampaign(1));
+  });
+
+  it("releases the caller's own in-flight assignment in one transaction", async () => {
+    const row = held();
+    tasks.findAssignmentById.mockResolvedValue(row);
+
+    const result = await service.release({
+      assignmentId: 'asn-1',
+      user: userPayload(ANNOTATOR_SUB),
+    });
+
+    expect(tasks.inTransaction).toHaveBeenCalledTimes(1);
+    expect(abandonment.release).toHaveBeenCalledWith({
+      row,
+      campaignSlug: 'pilot',
+      tasks,
+      tx: TX,
+    });
+    expect(result).toEqual(expect.objectContaining({ assignmentId: 'asn-1', taskId: 'task-1' }));
+  });
+
+  it('403s when the assignment belongs to someone else', async () => {
+    tasks.findAssignmentById.mockResolvedValue(held());
+
+    await expect(
+      service.release({ assignmentId: 'asn-1', user: userPayload(ARBITER_SUB) }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(abandonment.release).not.toHaveBeenCalled();
+  });
+
+  it('404s on an unknown assignment', async () => {
+    tasks.findAssignmentById.mockResolvedValue(null);
+
+    await expect(
+      service.release({ assignmentId: 'asn-x', user: userPayload(ANNOTATOR_SUB) }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it.each(['SUBMITTED', 'EXPIRED', 'RELEASED'] as const)(
+    '409s on a %s assignment',
+    async (status) => {
+      tasks.findAssignmentById.mockResolvedValue(held({ status }));
+
+      await expect(
+        service.release({ assignmentId: 'asn-1', user: userPayload(ANNOTATOR_SUB) }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(abandonment.release).not.toHaveBeenCalled();
+    },
+  );
+
+  it('409s when a parallel submit wins the race', async () => {
+    tasks.findAssignmentById.mockResolvedValue(held());
+    abandonment.release.mockResolvedValue(false);
+
+    await expect(
+      service.release({ assignmentId: 'asn-1', user: userPayload(ANNOTATOR_SUB) }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+});
+
+describe('TaskService.submit — campaign labels (#646)', () => {
+  const LABELLED = {
+    id: 'cmp-1',
+    slug: 'pilot',
+    taskKind: 'CLASSIFICATION',
+    currentInstructionsVersion: null,
+    workflowConfig: {
+      nAnnotators: 1,
+      classificationLabels: {
+        labels: [
+          { value: 'normal', display: 'Normal' },
+          { value: 'abnormal', display: 'Abnormal' },
+        ],
+        cannotAssess: true,
+        allowComment: false,
+      },
+    },
+  };
+
+  beforeEach(() => {
+    campaigns.findById.mockResolvedValue(LABELLED);
+    tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task: taskRow() });
+    tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
+    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+  });
+
+  it('refuses a label the campaign did not declare', async () => {
+    await expect(
+      service.submit({
+        assignmentId: 'asn-1',
+        submission: { label: 'pneumonia' },
+        user: userPayload(ANNOTATOR_SUB),
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    expect(tasks.markAssignmentSubmitted).not.toHaveBeenCalled();
+  });
+
+  it('refuses a comment when the campaign takes none', async () => {
+    await expect(
+      service.submit({
+        assignmentId: 'asn-1',
+        submission: { label: 'normal', comment: 'looks fine' },
+        user: userPayload(ANNOTATOR_SUB),
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  it.each(['normal', 'cannot-assess'])('accepts the declared answer %s', async (label) => {
+    await service.submit({
+      assignmentId: 'asn-1',
+      submission: { label },
+      user: userPayload(ANNOTATOR_SUB),
+    });
+    expect(tasks.markAssignmentSubmitted).toHaveBeenCalledWith(
+      expect.objectContaining({ submission: { label } }),
+    );
+  });
+
+  it('refuses a reason from a reader at the independent step', async () => {
+    await expect(
+      service.submit({
+        assignmentId: 'asn-1',
+        submission: { label: 'normal', reason: 'because' },
+        user: userPayload(ANNOTATOR_SUB),
+      }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+  });
+
+  describe('at arbitration', () => {
+    beforeEach(() => {
+      tasks.findAssignmentById.mockResolvedValue({
+        ...assignmentRow({
+          gateAtAssignment: 'AWAITING_ARBITRATION',
+          assigneeRole: 'arbitration-annotator',
+        }),
+        task: taskRow({ gateState: 'AWAITING_ARBITRATION', nAnnotatorsRequired: 3 }),
+      });
+    });
+
+    it.each([{}, { reason: '' }, { reason: '   ' }])(
+      'refuses a final label without a reason (%o)',
+      async (extra) => {
+        await expect(
+          service.submit({
+            assignmentId: 'asn-1',
+            submission: { label: 'abnormal', ...extra },
+            user: userPayload(ANNOTATOR_SUB),
+          }),
+        ).rejects.toBeInstanceOf(UnprocessableEntityException);
+        expect(tasks.markAssignmentSubmitted).not.toHaveBeenCalled();
+      },
+    );
+
+    it('refuses a final label the campaign did not declare', async () => {
+      await expect(
+        service.submit({
+          assignmentId: 'asn-1',
+          submission: { label: 'pneumonia', reason: 'clear on the image' },
+          user: userPayload(ANNOTATOR_SUB),
+        }),
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    });
+
+    it('stores the final label with its reason', async () => {
+      const submission = { label: 'abnormal', reason: 'Haemorrhage visible at the macula' };
+      await service.submit({ assignmentId: 'asn-1', submission, user: userPayload(ANNOTATOR_SUB) });
+      expect(tasks.markAssignmentSubmitted).toHaveBeenCalledWith(
+        expect.objectContaining({ submission }),
+      );
+    });
+
+    it('refuses an arbiter who read the task', async () => {
+      tasks.hasReadTask.mockResolvedValue(true);
+      await expect(
+        service.submit({
+          assignmentId: 'asn-1',
+          submission: { label: 'abnormal', reason: 'x' },
+          user: userPayload(ANNOTATOR_SUB),
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(tasks.markAssignmentSubmitted).not.toHaveBeenCalled();
+    });
+  });
+});
+
 describe('TaskService.submit', () => {
   it('N=1: independent submission completes the task in one step', async () => {
     const task = taskRow({ nAnnotatorsRequired: 1 });
@@ -788,6 +1107,21 @@ describe('TaskService.submit', () => {
         user: userPayload(ANNOTATOR_SUB),
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('409s when submitting a released (skipped) assignment', async () => {
+    tasks.findAssignmentById.mockResolvedValue({
+      ...assignmentRow({ status: 'RELEASED' }),
+      task: taskRow(),
+    });
+    await expect(
+      service.submit({
+        assignmentId: 'asn-1',
+        submission: { label: 'x' },
+        user: userPayload(ANNOTATOR_SUB),
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tasks.markAssignmentSubmitted).not.toHaveBeenCalled();
   });
 
   it('409s when re-submitting an already-submitted assignment', async () => {
