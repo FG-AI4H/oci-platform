@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Input, Textarea } from '@oci/ui';
 import { createDatasetAction, type CreateDatasetState } from './actions';
 
@@ -8,17 +9,12 @@ const initial: CreateDatasetState = { status: 'idle' };
 
 type Visibility = 'PRIVATE' | 'RESTRICTED' | 'PUBLIC';
 
-const VISIBILITY_OPTIONS: ReadonlyArray<{ value: Visibility; title: string; hint: string }> = [
-  { value: 'PRIVATE', title: 'Private', hint: 'Only you and admins can see this draft.' },
-  {
-    value: 'RESTRICTED',
-    title: 'Restricted',
-    hint: 'Visible after an access request is approved.',
-  },
-  { value: 'PUBLIC', title: 'Public', hint: 'Listed in the catalog and crawlable.' },
-];
+// Titles and hints are in the `CatalogNew` messages (`form.visibility.*`).
+const VISIBILITY_OPTIONS: ReadonlyArray<Visibility> = ['PRIVATE', 'RESTRICTED', 'PUBLIC'];
 
 export function NewDatasetForm() {
+  const t = useTranslations('CatalogNew');
+  const tCommon = useTranslations('Common');
   const [state, action, pending] = useActionState(createDatasetAction, initial);
   const echoed = state.status === 'error' ? state.values : undefined;
   const visibilityDefault: Visibility =
@@ -34,16 +30,17 @@ export function NewDatasetForm() {
     <form action={action} className="space-y-5" aria-busy={pending || undefined}>
       {state.status === 'error' ? (
         <Alert tone="danger">
-          <AlertTitle>Could not create dataset</AlertTitle>
+          <AlertTitle>{t('form.errorTitle')}</AlertTitle>
           <AlertDescription>{state.message}</AlertDescription>
         </Alert>
       ) : null}
 
       <Field
-        label="Slug"
+        label={t('form.slugLabel')}
         htmlFor="field-slug"
         required
-        hint="lower-case, hyphenated, 3–80 chars (e.g. rsna-pneumonia-2018)"
+        requiredLabel={tCommon('required')}
+        hint={t('form.slugHint')}
         error={slugError}
       >
         <Input
@@ -62,10 +59,11 @@ export function NewDatasetForm() {
       </Field>
 
       <Field
-        label="Name"
+        label={t('form.nameLabel')}
         htmlFor="field-name"
         required
-        hint="Human-readable title shown in catalog cards and Schema.org Dataset.name."
+        requiredLabel={tCommon('required')}
+        hint={t.rich('form.nameHint', { code: (chunks) => <code>{chunks}</code> })}
         error={nameError}
       >
         <Input
@@ -80,9 +78,9 @@ export function NewDatasetForm() {
       </Field>
 
       <Field
-        label="Description"
+        label={t('form.descriptionLabel')}
         htmlFor="field-description"
-        hint="Optional. Markdown isn't parsed yet — plain text only."
+        hint={t('form.descriptionHint')}
         error={descError}
       >
         <Textarea
@@ -97,27 +95,27 @@ export function NewDatasetForm() {
       </Field>
 
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">Initial visibility</legend>
-        <p className="text-xs text-[var(--color-muted-foreground)]">
-          Drafts default to private. Change later from the dataset page.
-        </p>
+        <legend className="text-sm font-medium">{t('form.visibilityLegend')}</legend>
+        <p className="text-xs text-[var(--color-muted-foreground)]">{t('form.visibilityHelp')}</p>
         <div className="grid gap-2 sm:grid-cols-3">
-          {VISIBILITY_OPTIONS.map((opt) => (
+          {VISIBILITY_OPTIONS.map((visibility) => (
             <label
-              key={opt.value}
+              key={visibility}
               className="flex flex-col gap-0.5 rounded-md border border-[var(--color-border)] p-3 text-sm cursor-pointer transition-colors has-[:checked]:border-[var(--color-primary)] has-[:checked]:bg-[var(--color-primary-soft)]/40 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--color-ring)]"
             >
               <span className="flex items-center gap-2">
                 <input
                   type="radio"
                   name="visibility"
-                  value={opt.value}
-                  defaultChecked={opt.value === visibilityDefault}
+                  value={visibility}
+                  defaultChecked={visibility === visibilityDefault}
                   className="accent-[var(--color-primary)]"
                 />
-                <span className="font-medium">{opt.title}</span>
+                <span className="font-medium">{t(`form.visibility.${visibility}.title`)}</span>
               </span>
-              <span className="text-xs text-[var(--color-muted-foreground)] ps-6">{opt.hint}</span>
+              <span className="text-xs text-[var(--color-muted-foreground)] ps-6">
+                {t(`form.visibility.${visibility}.hint`)}
+              </span>
             </label>
           ))}
         </div>
@@ -125,7 +123,7 @@ export function NewDatasetForm() {
 
       <div className="flex items-center justify-end gap-2 pt-2">
         <Button type="submit" disabled={pending}>
-          {pending ? 'Creating…' : 'Create draft'}
+          {pending ? t('form.creating') : t('form.submit')}
         </Button>
       </div>
     </form>

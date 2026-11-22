@@ -1,0 +1,38 @@
+{
+  "metaTitle": "Paramètres — Plateforme OCI",
+  "metaDescription": "Gérez vos préférences d’affichage : thème, densité, langue.",
+  "title": "Paramètres",
+  "lede": "Préférences d’affichage propres à votre compte. Elles sont enregistrées dans votre compte et vous suivent d’un appareil à l’autre.",
+  "appearanceTitle": "Apparence",
+  "appearanceDescription": "Thème, densité et langue. Enregistrés dans <code>identity.user_preferences</code>.",
+  "theme": {
+    "legend": "Thème",
+    "help": "Choisissez l’apparence de la plateforme. <strong>Système</strong> suit le réglage de votre appareil ; <strong>Clair</strong> et <strong>Sombre</strong> l’emportent sur lui.",
+    "groupLabel": "Mode sombre",
+    "system": "Système",
+    "systemDescription": "Suivre le réglage de l’appareil",
+    "light": "Clair",
+    "lightDescription": "Toujours clair",
+    "dark": "Sombre",
+    "darkDescription": "Toujours sombre"
+  },
+  "density": {
+    "legend": "Densité",
+    "help": "Espacement confortable, ou compact pour les écrans riches en tableaux.",
+    "comfortable": "Confortable",
+    "comfortableDescription": "Espacement par défaut",
+    "compact": "Compact",
+    "compactDescription": "Lignes plus serrées, plus de contenu à l’écran"
+  },
+  "language": {
+    "legend": "Langue",
+    "help": "La langue de l’interface. Enregistrée dans votre compte, elle s’applique sur tous les appareils où vous vous connectez. Le contenu des jeux de données reste dans sa langue d’origine.",
+    "browser": "Suivre mon navigateur",
+    "other": "{tag} (pas encore d’interface dans cette langue)"
+  },
+  "save": "Enregistrer les préférences",
+  "saving": "Enregistrement…",
+  "saved": "Préférences enregistrées.",
+  "signIn": "Connectez-vous pour modifier vos préférences.",
+  "invalidShape": "Format des préférences non valide."
+}

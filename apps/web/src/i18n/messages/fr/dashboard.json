@@ -1,0 +1,35 @@
+{
+  "eyebrow": "Session authentifiée",
+  "title": "Tableau de bord",
+  "lede": "Identité associée au jeton de votre session NextAuth, lue en direct côté serveur depuis <code>/v2/me</code>.",
+  "queue": {
+    "title": "File d’annotation",
+    "description": "Votre rôle Cognito vous permet de prendre des tâches d’annotation dans les campagnes en cours (RUNNING). Prenez la prochaine tâche disponible depuis la liste des campagnes.",
+    "browse": "Voir les campagnes"
+  },
+  "principal": {
+    "title": "Identité",
+    "description": "Attributs du jeton d’accès Cognito, vérifiés par le contrôle aws-jwt-verify de l’API.",
+    "username": "Nom d’utilisateur",
+    "subject": "Identifiant (sub)",
+    "groups": "Groupes",
+    "noGroups": "Aucun groupe attribué"
+  },
+  "token": {
+    "title": "Jeton",
+    "description": "Attributs et expiration du jeton d’accès Cognito. Reconnectez-vous si un avertissement s’affiche ici.",
+    "use": "Usage",
+    "scope": "Portée",
+    "expires": "Expiration",
+    "expired": "expiré",
+    "inMinutes": "expire dans {minutes} min",
+    "inHours": "expire dans {hours} h",
+    "inHoursMinutes": "expire dans {hours} h {minutes} min"
+  },
+  "security": {
+    "title": "Note de sécurité",
+    "description": "Les jetons ne sont visibles que du serveur. Le conteneur web les transmet à <code>/v2/*</code> par TLS ; ils ne parviennent jamais à votre navigateur."
+  },
+  "apiStatus": "L’API a répondu {status}",
+  "apiUnreachable": "API injoignable"
+}

@@ -1,0 +1,38 @@
+{
+  "metaTitle": "Settings — OCI Platform",
+  "metaDescription": "Manage your UI preferences: theme, density, language.",
+  "title": "Settings",
+  "lede": "Per-user UI preferences. These are saved to your account and follow you across devices.",
+  "appearanceTitle": "Appearance",
+  "appearanceDescription": "Theme, density, and language. Stored in <code>identity.user_preferences</code>.",
+  "theme": {
+    "legend": "Theme",
+    "help": "Choose how the platform should look. <strong>System</strong> follows your device setting; <strong>Light</strong> and <strong>Dark</strong> override it.",
+    "groupLabel": "Dark mode",
+    "system": "System",
+    "systemDescription": "Follow OS preference",
+    "light": "Light",
+    "lightDescription": "Always light",
+    "dark": "Dark",
+    "darkDescription": "Always dark"
+  },
+  "density": {
+    "legend": "Density",
+    "help": "Comfortable spacing or compact for table-heavy workflows.",
+    "comfortable": "Comfortable",
+    "comfortableDescription": "Default spacing",
+    "compact": "Compact",
+    "compactDescription": "Tighter rows, more on screen"
+  },
+  "language": {
+    "legend": "Language",
+    "help": "The language of the interface. Saved to your account, so it applies on every device you sign in from. Dataset content stays in the language it was written in.",
+    "browser": "Follow my browser",
+    "other": "{tag} (no interface in this language yet)"
+  },
+  "save": "Save preferences",
+  "saving": "Saving…",
+  "saved": "Preferences saved.",
+  "signIn": "Sign in to change your preferences.",
+  "invalidShape": "Invalid preferences shape."
+}

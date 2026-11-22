@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type KeyboardEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import type { AccessTier } from '@oci/shared-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@oci/ui';
 import { ManifestWizard } from './manifest-wizard';
@@ -21,12 +22,10 @@ interface Props {
 
 type Mode = 'wizard' | 'paste';
 
-const MODES: Array<{ id: Mode; label: string }> = [
-  { id: 'wizard', label: 'Wizard' },
-  { id: 'paste', label: 'I already have a manifest' },
-];
+const MODES: readonly Mode[] = ['wizard', 'paste'];
 
 export function PublishMode({ slug, suggestedVersion, visibility, accessTier }: Props) {
+  const t = useTranslations('Publish');
   const [mode, setMode] = useState<Mode>('wizard');
 
   // Real tabs: arrow keys move between them, Home/End jump, and each tab
@@ -43,36 +42,36 @@ export function PublishMode({ slug, suggestedVersion, visibility, accessTier }: 
     e.preventDefault();
     const target = MODES.at(next);
     if (!target) return;
-    setMode(target.id);
-    document.getElementById(`publish-mode-tab-${target.id}`)?.focus();
+    setMode(target);
+    document.getElementById(`publish-mode-tab-${target}`)?.focus();
   }
 
   return (
     <div className="space-y-6">
       <div
         role="tablist"
-        aria-label="Manifest entry mode"
+        aria-label={t('mode.label')}
         className="inline-flex rounded-md border border-[var(--color-border)] bg-[var(--color-subtle)] p-1 text-sm"
       >
         {MODES.map((m, i) => (
           <button
-            key={m.id}
+            key={m}
             type="button"
             role="tab"
-            id={`publish-mode-tab-${m.id}`}
-            aria-selected={mode === m.id}
-            aria-controls={`publish-mode-panel-${m.id}`}
-            tabIndex={mode === m.id ? 0 : -1}
-            onClick={() => setMode(m.id)}
+            id={`publish-mode-tab-${m}`}
+            aria-selected={mode === m}
+            aria-controls={`publish-mode-panel-${m}`}
+            tabIndex={mode === m ? 0 : -1}
+            onClick={() => setMode(m)}
             onKeyDown={(e) => onKeyDown(e, i)}
             className={
               'rounded px-3 py-1.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
-              (mode === m.id
+              (mode === m
                 ? 'bg-[var(--color-card)] font-medium text-[var(--color-foreground)] shadow-[var(--shadow-sm)]'
                 : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]')
             }
           >
-            {m.label}
+            {m === 'wizard' ? t('mode.wizard') : t('mode.paste')}
           </button>
         ))}
       </div>
@@ -92,11 +91,8 @@ export function PublishMode({ slug, suggestedVersion, visibility, accessTier }: 
         ) : (
           <Card className="max-w-3xl">
             <CardHeader>
-              <CardTitle>Paste a manifest</CardTitle>
-              <CardDescription>
-                The same validation runs as in the wizard; the paste form is for hosts who already
-                hold a Croissant manifest.
-              </CardDescription>
+              <CardTitle>{t('mode.pasteTitle')}</CardTitle>
+              <CardDescription>{t('mode.pasteDescription')}</CardDescription>
             </CardHeader>
             <CardContent>
               <PublishVersionForm slug={slug} suggestedVersion={suggestedVersion} />

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 
 /**
  * Three-tab switcher for the manifest section (PR L.2). Inline state,
@@ -11,16 +12,10 @@ import { useState, type ReactNode } from 'react';
  * boundary is just the tab list + visibility toggle.
  */
 
-interface Tab {
-  id: 'summary' | 'full' | 'raw';
-  label: string;
-}
+type TabId = 'summary' | 'full' | 'raw';
 
-const TABS: ReadonlyArray<Tab> = [
-  { id: 'summary', label: 'Summary' },
-  { id: 'full', label: 'Full manifest' },
-  { id: 'raw', label: 'Raw JSON' },
-];
+/** Labels come from `Dataset.manifest.tabs.<id>`. */
+const TABS: ReadonlyArray<TabId> = ['summary', 'full', 'raw'];
 
 interface Props {
   summary: ReactNode;
@@ -29,30 +24,31 @@ interface Props {
 }
 
 export function ManifestTabs({ summary, full, raw }: Props) {
-  const [active, setActive] = useState<Tab['id']>('summary');
+  const t = useTranslations('Dataset');
+  const [active, setActive] = useState<TabId>('summary');
 
   return (
     <div className="space-y-4">
       <div
         role="tablist"
-        aria-label="Manifest view"
+        aria-label={t('manifest.tabsLabel')}
         className="inline-flex rounded-md border border-[var(--color-border)] bg-[var(--color-subtle)] p-1 text-sm"
       >
-        {TABS.map((t) => (
+        {TABS.map((id) => (
           <button
-            key={t.id}
+            key={id}
             type="button"
             role="tab"
-            aria-selected={active === t.id}
-            onClick={() => setActive(t.id)}
+            aria-selected={active === id}
+            onClick={() => setActive(id)}
             className={
               'rounded px-3 py-1.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
-              (active === t.id
+              (active === id
                 ? 'bg-[var(--color-card)] font-medium text-[var(--color-foreground)] shadow-[var(--shadow-sm)]'
                 : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]')
             }
           >
-            {t.label}
+            {t(`manifest.tabs.${id}`)}
           </button>
         ))}
       </div>

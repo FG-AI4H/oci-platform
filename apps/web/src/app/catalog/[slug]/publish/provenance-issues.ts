@@ -1,12 +1,21 @@
 import type { AccessTier } from '@oci/shared-types';
-import { PROVENANCE_REQUIREMENTS, type Obligation, type RequirementId } from '@oci/croissant';
+import { PROVENANCE_REQUIREMENTS, type RequirementId } from '@oci/croissant';
 
 /**
  * Shaping of `provenance.*` validator issues for the publish wizard
  * (bio-prov v0.2, #496, #519). Pure module — imported by the server action and
  * by the client-side step, so both render the same headline for the same
  * issue: "H5 · Ethics approval (IRB) is required for a SENSITIVE dataset".
+ *
+ * `headline` is the English rendering. The wizard shows the headline in the
+ * interface language (#654) from the structured fields (`requirementId`,
+ * `code`, `kind`, `level`, `tier`) through `translateProvenanceHeadline`
+ * (`useProvenanceHeadline` in `provenance-step.tsx`); its English messages
+ * say exactly what `headline` says, which the spec checks.
  */
+
+/** What the validator found, from the code's second segment. */
+export type ProvenanceIssueKind = 'missing' | 'deprecated' | 'mismatch' | 'invalid';
 
 /** One `provenance.*` issue, ready to render inline on the wizard. */
 export interface ProvenanceIssue {
@@ -17,7 +26,11 @@ export interface ProvenanceIssue {
   /** RFC 6901 pointer into the normalised manifest. */
   path: string;
   level: 'error' | 'warning';
-  /** "H5 · Ethics approval (IRB) is required for a SENSITIVE dataset". */
+  /** `invalid` covers every code that is not missing, deprecated or a mismatch. */
+  kind: ProvenanceIssueKind;
+  /** The access tier the obligations were applied for. */
+  tier: AccessTier;
+  /** "H5 · Ethics approval (IRB) is required for a SENSITIVE dataset" (English). */
   headline: string;
   /** The validator's own message, for the detail line. */
   detail: string;
@@ -41,13 +54,6 @@ export const REQUIREMENT_LABEL: Readonly<Record<RequirementId, string>> = {
   A3: 'Annotation write-back receipt references',
 };
 
-/** How the wizard words an obligation next to a field group. */
-export const OBLIGATION_LABEL: Readonly<Record<Obligation, string>> = {
-  MUST: 'Required',
-  SHOULD: 'Recommended',
-  MAY: 'Optional',
-};
-
 const REQUIREMENT_IDS = new Set<string>(PROVENANCE_REQUIREMENTS.map((r) => r.id));
 
 /**
@@ -69,6 +75,12 @@ export function requirementIdOf(code: string): RequirementId | null {
   return REQUIREMENT_IDS.has(id) ? (id as RequirementId) : null;
 }
 
+/** `provenance.<kind>.…` → the kind the headline is worded from. */
+export function issueKindOf(code: string): ProvenanceIssueKind {
+  const kind = code.split('.')[1];
+  return kind === 'missing' || kind === 'deprecated' || kind === 'mismatch' ? kind : 'invalid';
+}
+
 /**
  * Turn one validator issue into the wizard's inline shape. `level` is the
  * level the validator reported; the headline's wording follows it
@@ -85,7 +97,7 @@ export function describeProvenanceIssue(
   const label =
     requirementLabel ?? DEPRECATION_LABEL.get(issue.code) ?? 'Provenance profile opt-in';
   const prefix = id ? `${id} · ` : '';
-  const kind = issue.code.split('.')[1];
+  const kind = issueKindOf(issue.code);
   let headline: string;
   if (kind === 'missing') {
     const obligation = issue.level === 'error' ? 'required' : 'recommended';
@@ -102,7 +114,71 @@ export function describeProvenanceIssue(
     code: issue.code,
     path: issue.path ?? '',
     level: issue.level,
+    kind,
+    tier,
     headline,
     detail: issue.message,
   };
+}
+
+/** The fields of a `ProvenanceIssue` its headline is worded from. */
+export type ProvenanceHeadlineInput = Pick<
+  ProvenanceIssue,
+  'requirementId' | 'code' | 'kind' | 'level' | 'tier'
+>;
+
+/** The `Provenance` message keys a headline is built from. */
+export type ProvenanceHeadlineKey =
+  | `requirement.${RequirementId}`
+  | 'issue.deprecatedMarker'
+  | 'issue.deprecatedActivityKind'
+  | 'issue.optIn'
+  | 'issue.withId'
+  | 'issue.missingRequired'
+  | 'issue.missingRecommended'
+  | 'issue.deprecated'
+  | 'issue.mismatch'
+  | 'issue.invalid'
+  | `tierName.${AccessTier}`;
+
+/** `t` for the `Provenance` namespace, narrowed to the headline keys. */
+export type ProvenanceHeadlineTranslator = (
+  key: ProvenanceHeadlineKey,
+  values?: Record<string, string>,
+) => string;
+
+/**
+ * The headline in the interface language (#654), from the structured
+ * fields. With the English catalogue it equals `headline`.
+ */
+export function translateProvenanceHeadline(
+  t: ProvenanceHeadlineTranslator,
+  issue: ProvenanceHeadlineInput,
+): string {
+  const label = issue.requirementId
+    ? t(`requirement.${issue.requirementId}`)
+    : issue.code === 'provenance.deprecated.marker'
+      ? t('issue.deprecatedMarker')
+      : issue.code === 'provenance.deprecated.activityKind'
+        ? t('issue.deprecatedActivityKind')
+        : t('issue.optIn');
+  const values = { label, tier: t(`tierName.${issue.tier}`) };
+  let headline: string;
+  switch (issue.kind) {
+    case 'missing':
+      headline =
+        issue.level === 'error'
+          ? t('issue.missingRequired', values)
+          : t('issue.missingRecommended', values);
+      break;
+    case 'deprecated':
+      headline = t('issue.deprecated', values);
+      break;
+    case 'mismatch':
+      headline = t('issue.mismatch', values);
+      break;
+    default:
+      headline = t('issue.invalid', values);
+  }
+  return issue.requirementId ? t('issue.withId', { id: issue.requirementId, headline }) : headline;
 }

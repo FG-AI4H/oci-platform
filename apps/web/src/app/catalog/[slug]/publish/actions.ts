@@ -2,6 +2,8 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { getLocale, getTranslations } from 'next-intl/server';
+import { zodParseParams } from '../../../../i18n/zod';
 import { z } from 'zod';
 import {
   AccessTierSchema,
@@ -58,16 +60,19 @@ export type PublishVersionState =
       values?: PublishVersionValues;
     };
 
-const FormSchema = z.object({
-  slug: DatasetSlugSchema,
-  version: PublishDatasetVersionRequestSchema.shape.version,
-  notes: z
-    .string()
-    .max(4000)
-    .optional()
-    .transform((v) => (v && v.length > 0 ? v : null)),
-  manifest: z.string().min(2, 'paste or upload a Croissant manifest JSON'),
-});
+/** Built per request: the manifest message is in the request's language. */
+function formSchema(manifestRequired: string) {
+  return z.object({
+    slug: DatasetSlugSchema,
+    version: PublishDatasetVersionRequestSchema.shape.version,
+    notes: z
+      .string()
+      .max(4000)
+      .optional()
+      .transform((v) => (v && v.length > 0 ? v : null)),
+    manifest: z.string().min(2, manifestRequired),
+  });
+}
 
 /**
  * Server action for `/catalog/<slug>/publish`. Parses the JSON
@@ -81,9 +86,10 @@ export async function publishVersionAction(
   _prev: PublishVersionState,
   formData: FormData,
 ): Promise<PublishVersionState> {
+  const t = await getTranslations('Publish');
   const session = await sessionForAction();
   if (!session?.user || !isHost(session)) {
-    return { status: 'error', message: 'Only hosts can publish dataset versions.' };
+    return { status: 'error', message: t('errors.onlyHostsPublish') };
   }
 
   const raw = {
@@ -98,7 +104,10 @@ export async function publishVersionAction(
     manifest: raw.manifest,
   };
 
-  const parsed = FormSchema.safeParse(raw);
+  const parsed = formSchema(t('errors.manifestRequired')).safeParse(
+    raw,
+    zodParseParams(await getLocale()),
+  );
   if (!parsed.success) {
     const fieldErrors = new Map<string, string>();
     for (const issue of parsed.error.issues) {
@@ -107,7 +116,7 @@ export async function publishVersionAction(
     }
     return {
       status: 'error',
-      message: 'Please correct the errors below.',
+      message: t('errors.correctErrors'),
       fieldErrors,
       values: echoed,
     };
@@ -119,15 +128,17 @@ export async function publishVersionAction(
   } catch (err) {
     return {
       status: 'error',
-      message: 'Manifest is not valid JSON.',
-      fieldErrors: new Map([['manifest', err instanceof Error ? err.message : 'parse error']]),
+      message: t('errors.manifestNotJson'),
+      fieldErrors: new Map([
+        ['manifest', err instanceof Error ? err.message : t('errors.parseError')],
+      ]),
       values: echoed,
     };
   }
 
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (!base) {
-    return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
+    return { status: 'error', message: t('errors.apiBaseUrlMissing') };
   }
   const res = await fetchAsUser(
     `${base}/v2/catalog/datasets/${encodeURIComponent(parsed.data.slug)}/versions`,
@@ -150,7 +161,8 @@ export async function publishVersionAction(
     if (body && Array.isArray(body.issues)) {
       return {
         status: 'invalid-manifest',
-        message: typeof body.message === 'string' ? body.message : 'Manifest validation failed.',
+        message:
+          typeof body.message === 'string' ? body.message : t('errors.manifestValidationFailed'),
         conformance: typeof body.conformance === 'string' ? body.conformance : 'unknown',
         issues: body.issues as ManifestIssue[],
         values: echoed,
@@ -215,19 +227,22 @@ export async function preflightProvenanceAction(
   manifestJson: string,
   accessTier: string,
 ): Promise<ProvenancePreflightState> {
+  // Called on a debounce while the host types: resolve the language (a
+  // preferences read) only when an error message needs it.
+  const t = () => getTranslations('Publish');
   const session = await sessionForAction();
   if (!session?.user || !isHost(session)) {
-    return { status: 'error', message: 'Only hosts can publish dataset versions.' };
+    return { status: 'error', message: (await t())('errors.onlyHostsPublish') };
   }
   const parsed = PreflightSchema.safeParse({ manifest: manifestJson, accessTier });
   if (!parsed.success) {
-    return { status: 'error', message: 'Could not check provenance: invalid request.' };
+    return { status: 'error', message: (await t())('errors.preflightInvalid') };
   }
   let manifest: unknown;
   try {
     manifest = JSON.parse(parsed.data.manifest);
   } catch {
-    return { status: 'error', message: 'Could not check provenance: manifest is not valid JSON.' };
+    return { status: 'error', message: (await t())('errors.preflightNotJson') };
   }
 
   const tier = parsed.data.accessTier;

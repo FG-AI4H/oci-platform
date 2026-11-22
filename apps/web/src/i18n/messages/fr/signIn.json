@@ -1,0 +1,21 @@
+{
+  "metaTitle": "Connexion — Plateforme OCI",
+  "title": "Connexion",
+  "descriptionLocal": "Mode de développement local : choisissez un utilisateur et des rôles pour ouvrir une session sur la pile en cours d’exécution.",
+  "descriptionCognito": "Utilisez votre compte Cognito pour accéder à la plateforme OCI.",
+  "expired": "Votre session a expiré. Connectez-vous de nouveau pour continuer.",
+  "failed": "Échec de la connexion ({error}). Réessayez.",
+  "policies": "En vous connectant, vous acceptez les règles de traitement des données de la plateforme GI-AI4H.",
+  "cognitoButton": "Continuer avec Cognito",
+  "cognitoHint": "Vous allez être redirigé vers la page de connexion Cognito de votre organisation.",
+  "local": {
+    "failedTitle": "Échec de la connexion",
+    "failedMessage": "Échec de la connexion : {type}",
+    "user": "Utilisateur",
+    "userHint": "Texte libre. Un identifiant au format UUID correspond directement à identity.users.id ; les autres sont dérivés de façon déterministe (PR D).",
+    "roles": "Rôles",
+    "rolesHint": "Séparés par des virgules. Essayez host, admin, participant, regulator, supervisor.",
+    "submit": "Se connecter (développement local)",
+    "submitting": "Connexion…"
+  }
+}

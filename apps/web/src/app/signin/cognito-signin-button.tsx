@@ -1,4 +1,5 @@
 import { Button } from '@oci/ui';
+import { getTranslations } from 'next-intl/server';
 import { cognitoSignInAction } from './actions';
 
 interface Props {
@@ -11,16 +12,15 @@ interface Props {
  * the user is bounced to Cognito's hosted UI and back via
  * `/api/auth/callback/cognito`.
  */
-export function CognitoSignInButton({ callbackUrl }: Props) {
+export async function CognitoSignInButton({ callbackUrl }: Props) {
+  const t = await getTranslations('SignIn');
   return (
     <form action={cognitoSignInAction} className="space-y-4">
       <input type="hidden" name="callbackUrl" value={callbackUrl} />
       <Button type="submit" className="w-full">
-        Continue with Cognito
+        {t('cognitoButton')}
       </Button>
-      <p className="text-center text-xs text-[var(--color-muted-foreground)]">
-        You&apos;ll be redirected to your organisation&apos;s Cognito sign-in.
-      </p>
+      <p className="text-center text-xs text-[var(--color-muted-foreground)]">{t('cognitoHint')}</p>
     </form>
   );
 }

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Button } from '@oci/ui';
 
 export interface CreateCampaignCtaProps {
@@ -38,6 +39,7 @@ export function CreateCampaignCta({
   authorized,
   isCampaignManager,
 }: CreateCampaignCtaProps) {
+  const t = useTranslations('Dataset');
   if (!isCampaignManager || !authorized) return null;
 
   return (
@@ -45,9 +47,9 @@ export function CreateCampaignCta({
       <Button asChild variant="outline" size="sm">
         <Link
           href={`/annotation/campaigns/new?datasetSlug=${encodeURIComponent(datasetSlug)}`}
-          aria-label={`Create an annotation campaign on ${datasetSlug}`}
+          aria-label={t('campaign.createAria', { slug: datasetSlug })}
         >
-          Create annotation campaign
+          {t('campaign.create')}
         </Link>
       </Button>
     </div>

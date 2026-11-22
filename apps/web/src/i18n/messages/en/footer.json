@@ -1,0 +1,14 @@
+{
+  "about": "Open Code Infrastructure for the <abbr>GI-AI4H</abbr>. A unified surface for cataloguing health data, coordinating annotation, evaluating models, and publishing reproducible reports.",
+  "abbrTitle": "ITU-WHO-WIPO Global Initiative on AI for Health",
+  "convened": "Convened by ITU · WHO · WIPO.",
+  "platform": "Platform",
+  "catalog": "Catalog",
+  "models": "Models",
+  "dashboard": "Dashboard",
+  "resources": "Resources",
+  "source": "Source on GitHub",
+  "itu": "ITU FG-AI4H",
+  "croissant": "Croissant 1.1",
+  "copyright": "© {year} OCI Platform contributors. BSD-3-Clause licensed."
+}

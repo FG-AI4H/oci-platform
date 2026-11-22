@@ -17,6 +17,9 @@ export interface FieldProps {
    *  label and propagates `required` to the underlying control via the
    *  caller. (We don't auto-clone — the control is opaque here.) */
   required?: boolean;
+  /** Screen-reader text after the label of a required field, in the
+   *  page's language. Defaults to the English "required". */
+  requiredLabel?: string;
   /** The control: `<Input>`, `<Textarea>`, or any custom control. */
   children: ReactNode;
   className?: string;
@@ -34,7 +37,16 @@ export interface FieldProps {
  *            aria-describedby={errors.slug ? 'slug-err' : undefined} />
  *   </Field>
  */
-export function Field({ label, htmlFor, hint, error, required, children, className }: FieldProps) {
+export function Field({
+  label,
+  htmlFor,
+  hint,
+  error,
+  required,
+  requiredLabel = 'required',
+  children,
+  className,
+}: FieldProps) {
   const errId = error ? `${htmlFor}-err` : undefined;
   return (
     <div className={cn('space-y-1.5', className)}>
@@ -45,7 +57,7 @@ export function Field({ label, htmlFor, hint, error, required, children, classNa
             *
           </span>
         ) : null}
-        {required ? <span className="sr-only"> required</span> : null}
+        {required ? <span className="sr-only"> {requiredLabel}</span> : null}
       </label>
       {children}
       {hint && !error ? (

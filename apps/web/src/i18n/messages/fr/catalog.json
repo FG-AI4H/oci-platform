@@ -1,0 +1,138 @@
+{
+  "metaTitle": "Catalogue — OCI Platform",
+  "metaDescription": "Découvrez les jeux de données sélectionnés par les groupes thématiques de GI-AI4H, avec la provenance et le consentement suivis de bout en bout.",
+  "eyebrow": "Catalogue",
+  "heading": "Jeux de données",
+  "resultCount": "{count, plural, one {<num>{total}</num> jeu de données} other {<num>{total}</num> jeux de données}}",
+  "resultCountMatching": "{count, plural, one {<num>{total}</num> jeu de données} other {<num>{total}</num> jeux de données}} correspondant à <query>« {q} »</query>",
+  "myDatasets": "Mes jeux de données",
+  "newDataset": "Nouveau jeu de données",
+  "intro": "Parcourez le catalogue sélectionné par GI-AI4H. Chaque jeu de données est accompagné d’un manifeste Croissant 1.1 avec les métadonnées de santé RAI + BIOCroissant ; les jeux de données restreints nécessitent une approbation avant tout téléchargement.",
+  "search": {
+    "label": "Rechercher des jeux de données",
+    "placeholder": "Rechercher par nom, slug ou description",
+    "submit": "Rechercher"
+  },
+  "error": {
+    "title": "Catalogue indisponible",
+    "unreachable": "Impossible de joindre l’API du catalogue"
+  },
+  "filters": {
+    "title": "Filtres",
+    "activeCount": "{count, plural, one {# actif} other {# actifs}}",
+    "selectedHint": "(sélectionné — activer pour retirer le filtre)",
+    "unselectedHint": "(activer pour filtrer)"
+  },
+  "facets": {
+    "modality": "Modalité d’imagerie",
+    "bodyRegion": "Région anatomique",
+    "condition": "Maladie / pathologie",
+    "anonymization": "Anonymisation",
+    "license": "Licence",
+    "duo": "Utilisation des données (DUO)",
+    "commercialUse": "Usage commercial"
+  },
+  "modalities": {
+    "xRay": "Radiographie",
+    "ct": "Scanner (TDM)",
+    "mri": "IRM",
+    "ultrasound": "Échographie",
+    "fundus": "Fond d’œil",
+    "pathology": "Anatomopathologie"
+  },
+  "bodyRegions": {
+    "chest": "Thorax",
+    "retina": "Rétine",
+    "brain": "Cerveau",
+    "abdomen": "Abdomen",
+    "skin": "Peau",
+    "cardiovascular": "Cardiovasculaire"
+  },
+  "conditions": {
+    "pneumonia": "Pneumonie",
+    "diabeticRetinopathy": "Rétinopathie diabétique",
+    "cancer": "Cancer",
+    "tuberculosis": "Tuberculose",
+    "covid19": "COVID-19",
+    "cardiacArrhythmia": "Arythmie cardiaque"
+  },
+  "anonymization": {
+    "IDENTIFIED": "Identifié",
+    "LIMITED": "Jeu de données limité",
+    "DEIDENTIFIED": "Dé-identifié (pseudonymisé)",
+    "ANONYMIZED": "Anonymisé"
+  },
+  "commercial": {
+    "OK": "Usage commercial autorisé",
+    "NON_COMMERCIAL_ONLY": "Usage non commercial uniquement",
+    "CASE_BY_CASE": "Au cas par cas"
+  },
+  "chips": {
+    "applied": "Filtres appliqués",
+    "removeFilter": "Retirer le filtre",
+    "clearAll": "Tout effacer",
+    "modality": "Modalité : {value}",
+    "bodyRegion": "Région : {value}",
+    "condition": "Pathologie : {value}",
+    "anonymization": "Anonymisation : {value}",
+    "license": "Licence : {value}",
+    "duo": "DUO : {value}",
+    "commercial": "Usage commercial : {value}",
+    "commercialValue": {
+      "OK": "autorisé",
+      "NON_COMMERCIAL_ONLY": "non commercial uniquement",
+      "CASE_BY_CASE": "au cas par cas"
+    }
+  },
+  "results": {
+    "none": "Aucun résultat.",
+    "showing": "<range>{start}–{end}</range> sur <num>{total}</num>"
+  },
+  "sort": {
+    "label": "Trier",
+    "recent": "Plus récents",
+    "name": "Nom",
+    "oldest": "Plus anciens"
+  },
+  "pagination": {
+    "label": "Pagination",
+    "prev": "← Précédent",
+    "next": "Suivant →"
+  },
+  "source": {
+    "label": "Filtre de source",
+    "local": "Local",
+    "localHint": "Jeux de données publiés sur cette plateforme.",
+    "federated": "Fédéré",
+    "federatedHint": "Copies de jeux de données collectées dans des catalogues partenaires.",
+    "all": "Tous",
+    "allHint": "Tout — d’abord les jeux locaux, puis les jeux fédérés pour compléter la page."
+  },
+  "card": {
+    "opensUpstream": "{name} — s’ouvre sur {catalog}, le catalogue d’origine, dans un nouvel onglet",
+    "federated": "fédéré",
+    "noDescription": "Aucune description fournie.",
+    "commercialOk": "usage commercial autorisé",
+    "nonCommercial": "non commercial",
+    "fromCatalog": "depuis {catalog}",
+    "noVersion": "aucune version"
+  },
+  "visibility": {
+    "PUBLIC": "public",
+    "RESTRICTED": "restreint",
+    "PRIVATE": "privé"
+  },
+  "status": {
+    "DRAFT": "brouillon",
+    "REVIEW": "en révision",
+    "PUBLISHED": "publié",
+    "ARCHIVED": "archivé"
+  },
+  "empty": {
+    "noMatchesTitle": "Aucun résultat pour l’instant",
+    "noDatasetsTitle": "Aucun jeu de données pour l’instant",
+    "noMatchesBody": "Retirez des filtres ou élargissez votre recherche pour trouver davantage de jeux de données.",
+    "noDatasetsBody": "Le catalogue est vide dans cet environnement. Les jeux de données apparaîtront ici dès que les hôtes auront publié les premiers manifestes Croissant 1.1.",
+    "clearAllFilters": "Effacer tous les filtres"
+  }
+}

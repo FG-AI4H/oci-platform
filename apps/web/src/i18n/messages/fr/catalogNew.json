@@ -1,0 +1,46 @@
+{
+  "metaTitle": "Nouveau jeu de données — Catalogue OCI",
+  "back": "Catalogue",
+  "eyebrow": "Espace hôte",
+  "heading": "Nouveau jeu de données",
+  "intro": "Créez un brouillon. À l’étape suivante, vous joindrez un manifeste Croissant 1.1 pour publier votre première version.",
+  "slugPermanent": {
+    "title": "Le slug est définitif",
+    "body": "Le slug fait partie de l’URL de votre jeu de données dans le catalogue et de l’<code>@id</code> Croissant. Choisissez-le avec soin : un slug ne peut plus être renommé après publication."
+  },
+  "draftDetails": "Détails du brouillon",
+  "form": {
+    "errorTitle": "Impossible de créer le jeu de données",
+    "slugLabel": "Slug (identifiant d’URL)",
+    "slugHint": "minuscules, mots séparés par des tirets, 3 à 80 caractères (p. ex. rsna-pneumonia-2018)",
+    "nameLabel": "Nom",
+    "nameHint": "Titre lisible affiché sur les fiches du catalogue et dans <code>Schema.org Dataset.name</code>.",
+    "descriptionLabel": "Description",
+    "descriptionHint": "Facultatif. Le Markdown n’est pas encore interprété : texte brut uniquement.",
+    "visibilityLegend": "Visibilité initiale",
+    "visibilityHelp": "Les brouillons sont privés par défaut. Vous pourrez modifier ce réglage depuis la page du jeu de données.",
+    "visibility": {
+      "PRIVATE": {
+        "title": "Privé",
+        "hint": "Seuls vous et les administrateurs pouvez voir ce brouillon."
+      },
+      "RESTRICTED": {
+        "title": "Restreint",
+        "hint": "Visible après l’approbation d’une demande d’accès."
+      },
+      "PUBLIC": {
+        "title": "Public",
+        "hint": "Listé dans le catalogue et indexable par les moteurs de recherche."
+      }
+    },
+    "creating": "Création…",
+    "submit": "Créer le brouillon"
+  },
+  "errors": {
+    "onlyHosts": "Seuls les hôtes peuvent créer des jeux de données.",
+    "apiBaseUrlMissing": "NEXT_PUBLIC_API_BASE_URL n’est pas défini dans l’environnement web.",
+    "slugTaken": "Le slug « {slug} » est déjà pris.",
+    "slugTakenField": "déjà pris",
+    "unexpectedShape": "L’API a renvoyé un jeu de données de forme inattendue."
+  }
+}

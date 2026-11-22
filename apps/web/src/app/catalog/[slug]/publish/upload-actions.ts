@@ -1,5 +1,6 @@
 'use server';
 
+import { getTranslations } from 'next-intl/server';
 import { z } from 'zod';
 import {
   CompleteUploadRequestSchema,
@@ -62,18 +63,23 @@ async function call<T>(
   build: (uploadsUrl: string) => ApiCall | null,
   read: (res: Response) => Promise<T>,
 ): Promise<UploadCallResult<T>> {
+  // Resolving the language costs a preferences read; only an error
+  // message needs it, and the part-URL action runs once per part.
+  const t = () => getTranslations('Publish');
   const session = await sessionForAction();
   if (!session?.user || !isHost(session)) {
-    return { ok: false, error: 'Only hosts can upload files.' };
+    return { ok: false, error: (await t())('errors.onlyHostsUpload') };
   }
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!base) return { ok: false, error: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
+  if (!base) return { ok: false, error: (await t())('errors.apiBaseUrlMissing') };
 
   const slug = DatasetSlugSchema.safeParse(slugRaw);
   const request = slug.success
     ? build(`${base}/v2/catalog/datasets/${encodeURIComponent(slug.data)}/uploads`)
     : null;
-  if (!slug.success || request === null) return { ok: false, error: 'Invalid upload request.' };
+  if (!slug.success || request === null) {
+    return { ok: false, error: (await t())('errors.invalidUploadRequest') };
+  }
 
   const res = await fetchAsUser(
     request.url,

@@ -63,7 +63,8 @@ test.describe('manifest tabs (PR L.2)', () => {
     await tablist.getByRole('tab', { name: 'Raw JSON' }).click();
     // The toplevel object is rendered as `<details open>`; its
     // summary contains the count.
-    const summaries = page.locator('summary');
+    // Scoped to the page body: the site header has a menu disclosure too (#743).
+    const summaries = page.locator('main summary');
     await expect(summaries.first()).toBeVisible();
   });
 });

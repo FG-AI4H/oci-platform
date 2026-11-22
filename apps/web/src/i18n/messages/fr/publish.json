@@ -1,0 +1,192 @@
+{
+  "metaTitle": "Publier une version — Catalogue OCI",
+  "page": {
+    "catalogUnreachable": "Impossible de joindre l’API du catalogue",
+    "catalogUnavailable": "Catalogue indisponible",
+    "eyebrow": "Espace hôte",
+    "title": "Publier une nouvelle version",
+    "intro": "Décrivez le jeu de données une fois dans le formulaire guidé, ou collez un manifeste Croissant 1.1 que vous avez déjà. Dans les deux cas, la plateforme le valide selon Croissant, RAI, BIOCroissant et le profil de provenance bio-prov avant son entrée dans le catalogue.",
+    "factsLabel": "Jeu de données",
+    "slug": "Identifiant (slug)",
+    "visibility": "Visibilité",
+    "accessTier": "Niveau d’accès",
+    "latest": "Dernière",
+    "next": "Suivante",
+    "uploadTitle": "Téléverser des fichiers",
+    "uploadDescription": "Facultatif. Hébergez les données sur cette plateforme au lieu de faire pointer le manifeste vers une URL externe. Chaque téléversement fournit un <code>contentUrl</code> stable pour le manifeste de la version suivante."
+  },
+  "mode": {
+    "label": "Mode de saisie du manifeste",
+    "wizard": "Assistant",
+    "paste": "J’ai déjà un manifeste",
+    "pasteTitle": "Coller un manifeste",
+    "pasteDescription": "La même validation s’applique que dans l’assistant ; le formulaire de collage s’adresse aux hôtes qui disposent déjà d’un manifeste Croissant."
+  },
+  "pasteForm": {
+    "couldNotPublish": "Publication impossible",
+    "version": "Version",
+    "versionHint": "Semver MAJEURE.MINEURE.CORRECTIF (p. ex. 1.0.0). Suffixes de préversion acceptés.",
+    "notes": "Notes",
+    "notesHint": "Facultatif. Qu’est-ce qui a changé depuis la version précédente ?",
+    "manifest": "Manifeste Croissant",
+    "required": "obligatoire",
+    "manifestHint": "Collez le JSON-LD ici, ou téléversez un fichier <code>.json</code> pour remplir le champ.",
+    "uploadManifest": "Téléverser le manifeste depuis un fichier .json",
+    "validating": "Validation…",
+    "submit": "Valider et publier",
+    "validationFailed": "Échec de la validation du manifeste ({conformance})"
+  },
+  "wizard": {
+    "stepOf": "Étape {current} sur {total}",
+    "validationFailed": "Échec de la validation du manifeste",
+    "couldNotPublish": "Publication impossible",
+    "showJson": "Afficher le JSON-LD généré jusqu’ici",
+    "back": "Retour",
+    "next": "Suivant : {step}",
+    "publishing": "Publication…",
+    "publish": "Publier la version",
+    "stepsLabel": "Étapes de l’assistant"
+  },
+  "steps": {
+    "identification": {
+      "label": "Identification",
+      "subtitle": "Nom, description, licence, version, date"
+    },
+    "creators": {
+      "label": "Créateurs",
+      "subtitle": "Auteurs et organisations contributrices"
+    },
+    "biomedical": {
+      "label": "Contexte biomédical",
+      "subtitle": "Modalité, région anatomique, pathologie, anonymisation (BioCroissant)"
+    },
+    "provenance": {
+      "label": "Provenance",
+      "subtitle": "Origine, traitement, approbation éthique, protocole d’étiquetage (bio-prov)"
+    },
+    "dataUse": {
+      "label": "Utilisation des données",
+      "subtitle": "Codes de consentement GA4GH DUO"
+    },
+    "distributions": {
+      "label": "Distributions",
+      "subtitle": "Fichiers et URL de téléchargement"
+    },
+    "review": {
+      "label": "Vérifier et publier",
+      "subtitle": "Vérifiez le manifeste Croissant généré"
+    }
+  },
+  "identification": {
+    "name": "Nom du jeu de données",
+    "description": "Description",
+    "descriptionHint": "Contenu du jeu de données, qui l’a collecté et pourquoi.",
+    "license": "Licence",
+    "licenseHint": "URL SPDX ou nom de la licence (p. ex. https://creativecommons.org/licenses/by/4.0/).",
+    "homepage": "Page d’accueil",
+    "homepageHint": "La page de référence du jeu de données (exigée par Croissant 1.0).",
+    "citeAs": "Citer comme",
+    "citeAsHint": "Facultatif. La référence bibliographique que les utilisateurs doivent citer.",
+    "version": "Version",
+    "versionHint": "Semver MAJEURE.MINEURE.CORRECTIF.",
+    "datePublished": "Date de publication",
+    "datePublishedHint": "AAAA-MM-JJ."
+  },
+  "creators": {
+    "intro": "Auteurs et organisations contributrices. Au moins un est obligatoire.",
+    "type": "Type {number}",
+    "person": "Personne",
+    "organization": "Organisation",
+    "name": "Nom",
+    "remove": "Supprimer",
+    "removeLabel": "Supprimer le créateur {number}",
+    "add": "Ajouter un créateur"
+  },
+  "biomedical": {
+    "legend": "Contexte biomédical (facultatif)",
+    "intro": "Champs BioCroissant. Ils aident les chercheurs à trouver les jeux de données correspondant à leur population d’étude et améliorent la pertinence de la recherche. Ignorez ceux qui ne s’appliquent pas.",
+    "imagingModality": "Modalité d’imagerie",
+    "imagingModalityHint": "Séparées par des virgules. P. ex. radiographie, TDM, IRM, échographie, fond d’œil.",
+    "bodyRegion": "Région anatomique",
+    "bodyRegionHint": "Séparées par des virgules. P. ex. thorax, rétine, abdomen.",
+    "diseaseCondition": "Maladie / pathologie",
+    "diseaseConditionHint": "Séparées par des virgules. P. ex. pneumonie, rétinopathie diabétique.",
+    "anonymizationLevel": "Niveau d’anonymisation",
+    "anonymizationLevelHint": "Dans quelle mesure les personnes de ce jeu de données sont identifiables. L’étape Provenance demande ce qui a été fait pour atteindre ce niveau.",
+    "notDeclared": "— non déclaré —",
+    "anonymization": {
+      "ANONYMIZED": "non réidentifiable",
+      "DEIDENTIFIED": "identifiants directs supprimés",
+      "LIMITED": "jeu de données limité (dates et lieux conservés)",
+      "IDENTIFIED": "identifiants directs présents"
+    }
+  },
+  "dataUse": {
+    "legend": "Utilisation des données (DUO)",
+    "introRestricted": "Termes de la Data Use Ontology (DUO) du GA4GH. Choisissez une autorisation (une seule) et les restrictions ou modificateurs applicables. Les hôtes de jeux de données <strong>RESTRICTED / PRIVATE</strong> doivent déclarer au moins un terme : sans cela, la publication est refusée.",
+    "introPublic": "Termes de la Data Use Ontology (DUO) du GA4GH. Choisissez une autorisation (une seule) et les restrictions ou modificateurs applicables. Les hôtes de jeux de données PUBLIC doivent déclarer au moins un terme : sans cela, la publication est refusée.",
+    "requiredTitle": "Au moins un terme DUO est obligatoire",
+    "requiredBody": "Ce jeu de données n’est pas PUBLIC. Choisissez au moins un terme ci-dessous.",
+    "permissions": "Autorisations (une seule)",
+    "restrictions": "Restrictions",
+    "modifiers": "Modificateurs"
+  },
+  "distributions": {
+    "intro": "Fichiers de cette version. Chaque entrée devient un <code>FileObject</code> Croissant. Pour des fichiers hébergés sur la plateforme, publiez une première version, téléversez le fichier avec la carte de téléversement de la page de publication, puis collez ici le <code>contentUrl</code> obtenu lorsque vous publiez la version suivante.",
+    "croissantId": "@id Croissant",
+    "croissantIdHint": "Identifiant compatible URL de ce fichier dans le manifeste.",
+    "fileName": "Nom du fichier",
+    "encodingFormat": "Format d’encodage",
+    "contentUrl": "URL du contenu",
+    "contentUrlHint": "URL externe ou chemin /v2/catalog/datasets/.../download hébergé sur la plateforme.",
+    "remove": "Supprimer",
+    "removeLabel": "Supprimer la distribution {number}",
+    "add": "Ajouter une distribution"
+  },
+  "review": {
+    "readyTitle": "Prêt à publier ?",
+    "readyBody": "La plateforme valide le manifeste ci-dessous selon Croissant 1.1 + RAI + BioCroissant + les contrôles de publication d’OCI (p. ex. DUO obligatoire hors PUBLIC). Le JSON-LD généré figure ci-dessous ; vous pouvez le copier et utiliser le formulaire de collage pour d’autres modifications si nécessaire.",
+    "name": "Nom",
+    "version": "Version",
+    "license": "Licence",
+    "creators": "Créateurs",
+    "duoTerms": "Termes DUO",
+    "none": "aucun",
+    "distributions": "Distributions",
+    "provenance": "Provenance",
+    "checking": "vérification…",
+    "complete": "complète pour {accessTier}",
+    "requiredMissing": "{count, plural, one {# élément obligatoire manquant} other {# éléments obligatoires manquants}}",
+    "recommendedMissing": "{count, plural, one {# élément recommandé manquant} other {# éléments recommandés manquants}}",
+    "showJson": "Afficher le JSON-LD généré",
+    "jsonLabel": "JSON-LD généré"
+  },
+  "preview": {
+    "label": "Manifeste généré",
+    "title": "JSON-LD généré"
+  },
+  "uploader": {
+    "howTitle": "Fonctionnement",
+    "howBody": "Les fichiers sont téléversés directement vers le stockage de la plateforme, par blocs d’environ 16 Mo. Les navigateurs gèrent de manière fiable environ 50 Go par session ; pour des jeux de données de plusieurs téraoctets, utilisez l’outil en ligne de commande (prévu — #88). Après le téléversement, collez chaque <code>contentUrl</code> ci-dessous dans le <code>distribution[]</code> de votre manifeste Croissant.",
+    "dropHere": "Déposez les fichiers ici, ou",
+    "choose": "Choisir des fichiers",
+    "chooseLabel": "Choisir les fichiers à téléverser",
+    "uploading": "Téléversement de {name}",
+    "done": "terminé",
+    "failed": "échec",
+    "cancel": "annuler"
+  },
+  "errors": {
+    "onlyHostsPublish": "Seuls les hôtes peuvent publier des versions de jeux de données.",
+    "onlyHostsUpload": "Seuls les hôtes peuvent téléverser des fichiers.",
+    "correctErrors": "Veuillez corriger les erreurs ci-dessous.",
+    "manifestRequired": "collez ou téléversez un manifeste Croissant au format JSON",
+    "manifestNotJson": "Le manifeste n’est pas un JSON valide.",
+    "parseError": "erreur d’analyse",
+    "apiBaseUrlMissing": "NEXT_PUBLIC_API_BASE_URL n’est pas défini dans l’environnement web.",
+    "manifestValidationFailed": "Échec de la validation du manifeste.",
+    "invalidUploadRequest": "Requête de téléversement invalide.",
+    "preflightInvalid": "Impossible de vérifier la provenance : requête invalide.",
+    "preflightNotJson": "Impossible de vérifier la provenance : le manifeste n’est pas un JSON valide."
+  }
+}

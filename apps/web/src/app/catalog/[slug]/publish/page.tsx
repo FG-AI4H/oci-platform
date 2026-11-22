@@ -1,5 +1,7 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -23,10 +25,13 @@ import { requireHost } from '../../../../lib/groups';
 import { FileUploader } from './file-uploader';
 import { PublishMode } from './publish-mode';
 
-export const metadata = {
-  title: 'Publish version — OCI Catalog',
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('Publish');
+  return {
+    title: t('metaTitle'),
+    robots: { index: false, follow: false },
+  };
+}
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -34,6 +39,8 @@ interface PageProps {
 
 export default async function PublishVersionPage({ params }: PageProps) {
   const { slug } = await params;
+  const t = await getTranslations('Publish');
+  const tDataset = await getTranslations('Dataset');
   const session = await auth();
   requireHost(session);
 
@@ -45,7 +52,7 @@ export default async function PublishVersionPage({ params }: PageProps) {
       revalidate: 0,
     });
   } catch (err) {
-    error = err instanceof Error ? err.message : 'Unable to reach catalog API';
+    error = err instanceof Error ? err.message : t('page.catalogUnreachable');
   }
 
   if (error) {
@@ -53,7 +60,7 @@ export default async function PublishVersionPage({ params }: PageProps) {
       <Container size="md">
         <Section spacing="md">
           <Alert tone="danger">
-            <AlertTitle>Catalog unavailable</AlertTitle>
+            <AlertTitle>{t('page.catalogUnavailable')}</AlertTitle>
             <AlertDescription>
               <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
             </AlertDescription>
@@ -78,40 +85,34 @@ export default async function PublishVersionPage({ params }: PageProps) {
             <span>{detail.name}</span>
           </Link>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Host workflow
+            {t('page.eyebrow')}
           </p>
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-            Publish a new version
-          </h1>
-          <p className="max-w-prose text-[var(--color-muted-foreground)]">
-            Describe the dataset once in the guided form, or paste a Croissant&nbsp;1.1 manifest you
-            already have. Either way the platform validates it against Croissant, RAI, BIOCroissant
-            and the bio-prov provenance profile before it goes into the catalogue.
-          </p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">{t('page.title')}</h1>
+          <p className="max-w-prose text-[var(--color-muted-foreground)]">{t('page.intro')}</p>
           {/*
            * The dataset facts this version attaches to. One row under the
            * heading, where the host reads it once, instead of a sticky
            * sidebar that took an 18rem column from the form on every step.
            */}
           <DefinitionList
-            aria-label="Dataset"
+            aria-label={t('page.factsLabel')}
             className="flex flex-wrap gap-x-8 gap-y-2 border-t border-[var(--color-border)] pt-4 text-sm"
           >
-            <DefinitionItem term="Slug" mono>
+            <DefinitionItem term={t('page.slug')} mono>
               {detail.slug}
             </DefinitionItem>
-            <DefinitionItem term="Visibility">
-              <Badge tone="neutral">{detail.visibility}</Badge>
+            <DefinitionItem term={t('page.visibility')}>
+              <Badge tone="neutral">{tDataset(`visibilityBadge.${detail.visibility}`)}</Badge>
             </DefinitionItem>
-            <DefinitionItem term="Access tier">
-              <Badge tone="neutral">{detail.accessTier}</Badge>
+            <DefinitionItem term={t('page.accessTier')}>
+              <Badge tone="neutral">{tDataset(`accessTier.${detail.accessTier}`)}</Badge>
             </DefinitionItem>
             {detail.latestVersion ? (
-              <DefinitionItem term="Latest">
+              <DefinitionItem term={t('page.latest')}>
                 <Badge tone="primary">v{detail.latestVersion}</Badge>
               </DefinitionItem>
             ) : null}
-            <DefinitionItem term="Next">
+            <DefinitionItem term={t('page.next')}>
               <Badge tone="accent">v{nextVersion}</Badge>
             </DefinitionItem>
           </DefinitionList>
@@ -137,12 +138,11 @@ export default async function PublishVersionPage({ params }: PageProps) {
           {detail.latestVersion && session?.user ? (
             <Card className="max-w-3xl">
               <CardHeader>
-                <CardTitle>Upload files</CardTitle>
+                <CardTitle>{t('page.uploadTitle')}</CardTitle>
                 <CardDescription>
-                  Optional. Host the data on this platform instead of pointing the manifest at an
-                  upstream URL. Each upload yields a stable{' '}
-                  <code className="font-mono text-xs">contentUrl</code> for the next version&apos;s
-                  manifest.
+                  {t.rich('page.uploadDescription', {
+                    code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+                  })}
                 </CardDescription>
               </CardHeader>
               <CardContent>

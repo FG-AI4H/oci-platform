@@ -1,0 +1,51 @@
+{
+  "convenedBy": "Sous l’égide de <strong>UIT · OMS · OMPI</strong> · GI-AI4H",
+  "titleLead": "Open Code Infrastructure",
+  "titleAccent": "pour une IA en santé digne de confiance",
+  "lede": "Une plateforme unique pour l’Initiative mondiale sur l’IA pour la santé : cataloguer, annoter, évaluer et rendre compte de l’IA dans les parcours cliniques et de santé publique, de bout en bout.",
+  "openDashboard": "Ouvrir le tableau de bord",
+  "browseCatalog": "Parcourir le catalogue",
+  "signInLocal": "Se connecter (développement local)",
+  "signInCognito": "Se connecter avec Cognito",
+  "stats": {
+    "datasetsLabel": "Jeux de données au catalogue",
+    "datasetsHint": "Sélectionnés par les groupes thématiques du GI-AI4H",
+    "conformanceLabel": "Conformité native",
+    "conformanceHint": "Métadonnées de santé RAI + BIOCroissant",
+    "openSourceValue": "Code source ouvert",
+    "openSourceLabel": "Sous licence BSD à 3 clauses",
+    "openSourceHint": "Reproductible et vérifiable de bout en bout"
+  },
+  "roadmapEyebrow": "Plateforme · feuille de route sur 12 à 18 mois",
+  "roadmapTitle": "Quatre chantiers, une seule chaîne de provenance",
+  "roadmapBody": "Chaque élément produit (jeu de données, annotation, évaluation, rapport) renvoie au jeu de données dont il est issu. Une autorité de réglementation peut ainsi remonter de chaque affirmation à ses preuves, et un hôte peut retirer un élément dérivé si le consentement est retiré à la source.",
+  "phaseLabel": "Phase {id} ·",
+  "phases": {
+    "A": {
+      "title": "Catalogue",
+      "description": "Découvrez des jeux de données sélectionnés par les groupes thématiques du GI-AI4H. Manifestes Croissant 1.1 + RAI + BIOCroissant, avec provenance et consentement suivis de bout en bout."
+    },
+    "B": {
+      "title": "Annotation",
+      "description": "Coordonnez l’annotation par plusieurs lecteurs, avec arbitrage des désaccords, traçabilité d’audit de niveau réglementaire et suivi de l’avancement."
+    },
+    "C": {
+      "title": "Évaluation",
+      "description": "Évaluez des modèles d’IA en santé sur des tâches de référence sans publier la vérité terrain : notation des prédictions, exécution en conteneur scellé et registre relu des méthodes d’évaluation."
+    },
+    "D": {
+      "title": "Rapports",
+      "description": "Rapports d’évaluation JSON-LD destinés aux autorités de réglementation, et un portail qui permet aux superviseurs de remonter de chaque affirmation à ses preuves."
+    }
+  },
+  "status": {
+    "live": "En service",
+    "inProgress": "En cours",
+    "planned": "Prévu"
+  },
+  "hostsTitle": "Pour les hôtes de jeux de données",
+  "hostsBody": "Publier au catalogue se fait en deux étapes : créer un jeu de données, puis joindre un manifeste Croissant 1.1. Nous validons le manifeste selon Croissant + RAI + BIOCroissant avant de copier les distributions, afin que ce qui arrive au catalogue soit lisible par machine et prêt pour l’audit.",
+  "createDataset": "Créer un jeu de données",
+  "signInToPublish": "Se connecter pour publier",
+  "readCatalog": "Parcourir le catalogue →"
+}

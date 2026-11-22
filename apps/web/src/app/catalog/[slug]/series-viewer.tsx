@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { DicomSeriesDetail } from '@oci/shared-types';
 import { Button, Dialog, EyeIcon } from '@oci/ui';
 import { DicomViewerLoader } from '../../../components/dicom-viewer/dicom-viewer-loader';
@@ -24,6 +25,7 @@ interface Props {
  * none of the viewer's script is loaded, until a reader asks for it.
  */
 export function SeriesViewButton({ slug, seriesId, title, meta }: Props) {
+  const t = useTranslations('Dataset');
   const [open, setOpen] = useState(false);
 
   // Through the web app, not the API directly: the route handler adds
@@ -40,12 +42,12 @@ export function SeriesViewButton({ slug, seriesId, title, meta }: Props) {
         variant="link"
         size="sm"
         aria-haspopup="dialog"
-        aria-label={`View ${title}`}
+        aria-label={t('series.viewAria', { title })}
         onClick={() => setOpen(true)}
         className="h-11 px-2 sm:h-8"
       >
         <EyeIcon size={14} />
-        <span>view</span>
+        <span>{t('series.view')}</span>
       </Button>
 
       {open ? (
@@ -54,7 +56,7 @@ export function SeriesViewButton({ slug, seriesId, title, meta }: Props) {
           onClose={() => setOpen(false)}
           title={title}
           description={meta}
-          closeLabel={`Close ${title}`}
+          closeLabel={t('series.closeAria', { title })}
           className="max-w-5xl"
         >
           <DicomViewerLoader loadSeries={loadSeries} label={title} />

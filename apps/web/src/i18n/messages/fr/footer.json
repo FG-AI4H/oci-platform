@@ -1,0 +1,14 @@
+{
+  "about": "Open Code Infrastructure pour le <abbr>GI-AI4H</abbr>. Un espace unique pour cataloguer les données de santé, coordonner l’annotation, évaluer les modèles et publier des rapports reproductibles.",
+  "abbrTitle": "Initiative mondiale UIT-OMS-OMPI sur l’IA pour la santé",
+  "convened": "Sous l’égide de l’UIT, de l’OMS et de l’OMPI.",
+  "platform": "Plateforme",
+  "catalog": "Catalogue",
+  "models": "Modèles",
+  "dashboard": "Tableau de bord",
+  "resources": "Ressources",
+  "source": "Code source sur GitHub",
+  "itu": "FG-AI4H de l’UIT",
+  "croissant": "Croissant 1.1",
+  "copyright": "© {year} Contributeurs de la plateforme OCI. Sous licence BSD-3-Clause."
+}

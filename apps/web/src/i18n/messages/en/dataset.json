@@ -1,0 +1,182 @@
+{
+  "metaTitle": "{slug} — OCI Catalog",
+  "catalogUnavailable": "Catalog unavailable",
+  "catalogApiUnreachable": "Unable to reach catalog API",
+  "breadcrumb": "Catalog",
+  "statusBadge": {
+    "DRAFT": "draft",
+    "REVIEW": "review",
+    "PUBLISHED": "published",
+    "ARCHIVED": "archived"
+  },
+  "visibilityBadge": {
+    "PUBLIC": "public",
+    "RESTRICTED": "restricted",
+    "PRIVATE": "private"
+  },
+  "visibilityCopy": {
+    "PUBLIC": "Listed and crawlable",
+    "RESTRICTED": "Access on request",
+    "PRIVATE": "Hosts and admins only"
+  },
+  "statusCopy": {
+    "DRAFT": "Draft: not listed and not crawlable until a version is published",
+    "REVIEW": "In review: not listed until a version is published",
+    "ARCHIVED": "Archived: no longer listed"
+  },
+  "accessTier": {
+    "OPEN": "Open access",
+    "REGISTERED": "Registered",
+    "CONTROLLED": "Controlled",
+    "SENSITIVE": "Sensitive"
+  },
+  "commercial": {
+    "OK": "Commercial OK",
+    "NON_COMMERCIAL_ONLY": "Non-commercial only",
+    "CASE_BY_CASE": "Commercial: case-by-case"
+  },
+  "publishNewVersion": "Publish a new version",
+  "publishFirstVersion": "Publish the first version",
+  "about": {
+    "title": "About this dataset",
+    "description": "<strong>Summary</strong> is a curated overview; <strong>Full manifest</strong> lists every field the host has published; <strong>Raw</strong> is the underlying record. Download the standalone manifest: <link>croissant.json</link>."
+  },
+  "summary": {
+    "conformsTo": "Conforms to",
+    "license": "License",
+    "homepage": "Homepage",
+    "keywords": "Keywords",
+    "modality": "Modality",
+    "bodyRegion": "Body region",
+    "conditions": "Conditions",
+    "anonymization": "Anonymization",
+    "commercialUse": "Commercial use",
+    "permittedUse": "Permitted use (DUO)",
+    "citeAs": "Cite as"
+  },
+  "imaging": {
+    "title": "Imaging series",
+    "description": "DICOM series in the latest version. Open one to scroll through its images and change the window, without downloading anything.",
+    "heldTitle": "{count, plural, one {# image is held} other {# images are held}}",
+    "heldBody": "Their headers carry values that de-identification normally removes, such as a patient id or a study date. Until a platform operator has reviewed them, only the dataset’s host and platform operators see these images. Other readers do not see them, or a series made only of them.",
+    "reviewFindings": "<link>Review the findings</link>.",
+    "heldAll": "held",
+    "heldSome": "{count} held",
+    "showingFirst": "Showing the first {shown} of {total} series."
+  },
+  "series": {
+    "name": "{modality} series {number}",
+    "nameNoNumber": "{modality} series",
+    "images": "{count, plural, one {# image} other {# images}}",
+    "inExam": "Exam {exam} · {name}",
+    "nthOf": "{title} ({place} of {total})",
+    "view": "view",
+    "viewAria": "View {title}",
+    "closeAria": "Close {title}"
+  },
+  "files": {
+    "title": "Files",
+    "description": "Files in the latest version. <em>Hosted</em> entries are served by OCI; <em>upstream</em> entries are kept by the original publisher and we link to them. Hosted images can be previewed without downloading.",
+    "requiresAccess": "requires access",
+    "hosted": "hosted",
+    "upstream": "upstream",
+    "noUrl": "no url",
+    "download": "download",
+    "downloadAria": "Download {file} from platform storage",
+    "open": "open",
+    "openAria": "Open {file} on upstream host (opens in new tab)"
+  },
+  "versions": {
+    "title": "Version history",
+    "description": "Each published version is immutable — manifest hashes anchor downstream evaluation reports."
+  },
+  "footer": "Manifest mirrored from upstream host. <link>Back to catalog</link>.",
+  "access": {
+    "gatedTitle": "This dataset is gated.",
+    "gatedBody": "Sign in to request access. The host reviews each request.",
+    "signInToRequest": "Sign in to request access",
+    "gatedForDataset": "Access is gated for this dataset.",
+    "fileRequestBody": "File a structured access request — the host reviews intent + IRB attestation against the dataset’s DUO permission terms.",
+    "requestAccess": "Request access",
+    "submitted": "Request submitted. The host has been notified — you’ll see the decision here and on your dashboard.",
+    "yourRequest": "Your access request",
+    "status": {
+      "PENDING": "pending",
+      "APPROVED": "approved",
+      "DENIED": "denied",
+      "REVOKED": "revoked"
+    },
+    "pendingBody": "The host is reviewing your request. You’ll see the decision on your dashboard.",
+    "approvedBody": "You can download distributions below.",
+    "deniedBody": "Your request was denied. You can file a fresh request with corrected attestations.",
+    "hostNote": "Host’s note:",
+    "revokedBody": "A previously-approved request was revoked. File a fresh request if your project now meets the revoked-condition.",
+    "seeRequests": "See your requests",
+    "fileNew": "File a new request"
+  },
+  "campaign": {
+    "create": "Create annotation campaign",
+    "createAria": "Create an annotation campaign on {slug}"
+  },
+  "bulk": {
+    "noArchiveTitle": "No archive available for this dataset",
+    "noArchiveBody": "A bulk archive only covers files whose bytes the platform holds.",
+    "title": "Download the whole dataset",
+    "sizeSuffix": " (about {size})",
+    "includedOnly": "A ZIP with the dataset’s only file{size}.",
+    "includedAll": "A ZIP with all {total} files{size}.",
+    "includedSome": "A ZIP with {included} of {total} files{size}.",
+    "unknownSize": "{count, plural, one {One of them declares no size, so the total is a lower bound.} other {# of them declare no size, so the total is a lower bound.}}",
+    "gated": "{count, plural, one {# file needs approved access — request access, then download it from the list below.} other {# files need approved access — request access, then download them from the list below.}}",
+    "upstream": "{count, plural, one {# file is hosted by the original publisher — open it from the list below.} other {# files are hosted by the original publisher — open them from the list below.}}",
+    "licenceNote": "Every archive also contains LICENSE.txt and CITATION.txt — attribution is a condition of use, so the licence and citation travel with the bytes.",
+    "notIncluded": "Not included:",
+    "downloadAll": "Download all files",
+    "includeMetadata": "Include metadata (croissant.json)",
+    "includeMetadataHint": "the full manifest: provenance, licence, field definitions"
+  },
+  "preview": {
+    "trigger": "preview",
+    "triggerAria": "Preview {file}",
+    "closeAria": "Close preview of {file}",
+    "unavailableTitle": "Preview unavailable",
+    "unavailableBody": "The image could not be loaded. It may need approved access, or the signed link may have expired — try the download link instead.",
+    "loading": "Loading preview…",
+    "alt": "Preview of {file}"
+  },
+  "manifest": {
+    "tabsLabel": "Manifest view",
+    "tabs": {
+      "summary": "Summary",
+      "full": "Full manifest",
+      "raw": "Raw JSON"
+    },
+    "none": "No manifest available.",
+    "empty": "Manifest is empty.",
+    "groups": {
+      "framing": "JSON-LD framing",
+      "rai": "Responsible AI",
+      "other": "Other"
+    }
+  },
+  "provenance": {
+    "title": "Provenance",
+    "subtitle": "Where the data came from and what was done to it (bio-prov v0.2)",
+    "source": "Source",
+    "sites": "Sites",
+    "collected": "Collected",
+    "device": "Acquisition device",
+    "deidentification": "De-identification",
+    "resultingLevel": "resulting level",
+    "ethics": "Ethics approval (IRB)",
+    "labelProtocol": "Label protocol",
+    "derivedFrom": "Derived from",
+    "deidMethod": {
+      "SAFE_HARBOR": "Safe Harbor",
+      "EXPERT_DETERMINATION": "Expert determination",
+      "PSEUDONYMISATION": "Pseudonymisation",
+      "SYNTHETIC": "Synthetic data",
+      "NONE": "None"
+    }
+  }
+}

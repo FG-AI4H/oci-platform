@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { BrandMark } from './brand-mark';
 
 /**
@@ -7,7 +8,8 @@ import { BrandMark } from './brand-mark';
  * not consumer SaaS) so it earns trust at a glance for first-time
  * visitors arriving from a Google Dataset Search hit.
  */
-export function SiteFooter() {
+export async function SiteFooter() {
+  const t = await getTranslations('Footer');
   const env = process.env.OCI_ENV ?? 'local';
   const year = new Date().getFullYear();
 
@@ -25,43 +27,42 @@ export function SiteFooter() {
             </span>
           </Link>
           <p className="max-w-md text-sm leading-relaxed text-[var(--color-muted-foreground)]">
-            Open Code Infrastructure for the{' '}
-            <abbr
-              title="ITU-WHO-WIPO Global Initiative on AI for Health"
-              className="cursor-help underline decoration-dotted underline-offset-2"
-            >
-              GI-AI4H
-            </abbr>
-            . A unified surface for cataloguing health data, coordinating annotation, evaluating
-            models, and publishing reproducible reports.
+            {t.rich('about', {
+              abbr: (chunks) => (
+                <abbr
+                  title={t('abbrTitle')}
+                  className="cursor-help underline decoration-dotted underline-offset-2"
+                >
+                  {chunks}
+                </abbr>
+              ),
+            })}
           </p>
-          <p className="text-xs text-[var(--color-muted-foreground)]">
-            Convened by ITU · WHO · WIPO.
-          </p>
+          <p className="text-xs text-[var(--color-muted-foreground)]">{t('convened')}</p>
         </div>
 
-        <FooterColumn title="Platform">
-          <FooterLink href="/catalog">Catalog</FooterLink>
-          <FooterLink href="/models">Models</FooterLink>
-          <FooterLink href="/dashboard">Dashboard</FooterLink>
+        <FooterColumn title={t('platform')}>
+          <FooterLink href="/catalog">{t('catalog')}</FooterLink>
+          <FooterLink href="/models">{t('models')}</FooterLink>
+          <FooterLink href="/dashboard">{t('dashboard')}</FooterLink>
         </FooterColumn>
 
-        <FooterColumn title="Resources">
+        <FooterColumn title={t('resources')}>
           <FooterLink href="https://github.com/FG-AI4H/oci-platform" external>
-            Source on GitHub
+            {t('source')}
           </FooterLink>
           <FooterLink href="https://www.itu.int/go/ai4h" external>
-            ITU FG-AI4H
+            {t('itu')}
           </FooterLink>
           <FooterLink href="https://mlcommons.org/datasets/" external>
-            Croissant 1.1
+            {t('croissant')}
           </FooterLink>
         </FooterColumn>
       </div>
 
       <div className="border-t border-[var(--color-border)]">
         <div className="mx-auto flex max-w-(--breakpoint-2xl) flex-col gap-2 px-4 py-4 text-xs text-[var(--color-muted-foreground)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p>© {year} OCI Platform contributors. BSD-3-Clause licensed.</p>
+          <p>{t('copyright', { year: String(year) })}</p>
           <p className="font-mono">
             env: <span className="text-[var(--color-foreground)]">{env}</span>
           </p>

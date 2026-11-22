@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useTranslations } from 'next-intl';
 import type { DicomViewerProps } from './dicom-viewer';
 
 /**
@@ -11,16 +12,21 @@ import type { DicomViewerProps } from './dicom-viewer';
  * on demand keeps them off every page that does not open a series, and
  * out of server rendering altogether.
  */
-const LazyDicomViewer = dynamic(() => import('./dicom-viewer').then((m) => m.DicomViewer), {
-  ssr: false,
-  loading: () => (
+function LoadingViewer() {
+  const t = useTranslations('DicomViewer');
+  return (
     <p
       role="status"
       className="flex h-[min(calc(100dvh-24rem),44rem)] min-h-64 items-center justify-center rounded-md bg-black text-sm text-white"
     >
-      Loading the viewer…
+      {t('loadingViewer')}
     </p>
-  ),
+  );
+}
+
+const LazyDicomViewer = dynamic(() => import('./dicom-viewer').then((m) => m.DicomViewer), {
+  ssr: false,
+  loading: () => <LoadingViewer />,
 });
 
 export function DicomViewerLoader(props: DicomViewerProps) {

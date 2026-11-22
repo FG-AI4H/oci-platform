@@ -7,8 +7,17 @@ import {
   CardTitle,
   InfoIcon,
 } from '@oci/ui';
+import { useLocale, useTranslations } from 'next-intl';
 import type { ModelFactsLabel } from '@oci/shared-types';
-import { humanise, modelClassLabel } from '../../../lib/model-card-labels';
+import { formattersFor } from '../../../i18n/format';
+import {
+  clinicalPathwayText,
+  intendedUserText,
+  medicalPurposeText,
+  modelClassText,
+  operatingEnvironmentText,
+  type ModelLabelTranslator,
+} from '../../../lib/model-card-labels';
 
 /**
  * WHO Fig. 7 Model Facts Label (#261), rendered from
@@ -19,44 +28,48 @@ import { humanise, modelClassLabel } from '../../../lib/model-card-labels';
  * so a reader can tell "not applicable" from "not known yet".
  */
 
-const DATE = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' });
-
 export function ModelFactsLabelCard({ label }: { label: ModelFactsLabel }) {
+  const t = useTranslations('Models');
+  const f = formattersFor(useLocale());
   const uses = label.usesAndDirections;
   const perf = label.validationAndPerformance;
   return (
     <Card role="region" aria-labelledby="model-facts-heading">
       <CardHeader>
         <CardTitle as="h2" id="model-facts-heading">
-          Model Facts
+          {t('facts.title')}
         </CardTitle>
         <CardDescription>
-          WHO model facts label, generated from this card on{' '}
-          {DATE.format(new Date(label.generatedAt))}.
+          {t('facts.generatedOn', { date: f.date(label.generatedAt, { dateStyle: 'medium' }) })}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <FactsSection title="Summary">
+        <FactsSection title={t('facts.summary')}>
           <p>{label.summary.text}</p>
         </FactsSection>
 
-        <FactsSection title="Mechanism">
+        <FactsSection title={t('facts.mechanism')}>
           <p>{label.mechanism.text}</p>
           <p className="mt-2 flex flex-wrap gap-1.5">
-            <Badge tone="neutral">{modelClassLabel(label.mechanism.modelClass)}</Badge>
-            {label.mechanism.generativeAi ? <Badge tone="accent">Generative AI</Badge> : null}
+            <Badge tone="neutral">{modelClassText(t, label.mechanism.modelClass)}</Badge>
+            {label.mechanism.generativeAi ? <Badge tone="accent">{t('generativeAi')}</Badge> : null}
           </p>
         </FactsSection>
 
-        <FactsSection title="Validation and performance">
+        <FactsSection title={t('facts.validation')}>
           {perf.entries.length === 0 ? (
-            <p className="text-[var(--color-muted-foreground)]">No measured performance yet.</p>
+            <p className="text-[var(--color-muted-foreground)]">{t('facts.noPerformance')}</p>
           ) : (
             <ul className="space-y-1">
               {perf.entries.map((e) => (
                 <li key={e.taskSlug}>
                   <span className="font-mono">{e.taskSlug}</span>: {e.primaryMetricLabel}{' '}
-                  <span className="tabular-nums">{e.primaryMetricValue.toFixed(3)}</span>
+                  <span className="tabular-nums">
+                    {f.number(e.primaryMetricValue, {
+                      minimumFractionDigits: 3,
+                      maximumFractionDigits: 3,
+                    })}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -66,34 +79,42 @@ export function ModelFactsLabelCard({ label }: { label: ModelFactsLabel }) {
           ) : null}
         </FactsSection>
 
-        <FactsSection title="Uses and directions">
+        <FactsSection title={t('facts.uses')}>
           <dl className="grid gap-x-4 gap-y-2 sm:grid-cols-[12rem_1fr]">
-            <Fact term="Medical purpose">{humanise(uses.medicalPurpose)}</Fact>
-            <Fact term="Intended users">{listOrDash(uses.intendedUsers)}</Fact>
-            <Fact term="Clinical pathway">
-              {uses.clinicalPathway ? humanise(uses.clinicalPathway) : '—'}
+            <Fact term={t('facts.medicalPurpose')}>
+              {medicalPurposeText(t, uses.medicalPurpose)}
             </Fact>
-            <Fact term="Operating environments">{listOrDash(uses.operatingEnvironments)}</Fact>
-            <Fact term="Target population">{uses.targetPopulation ?? '—'}</Fact>
+            <Fact term={t('facts.intendedUsers')}>
+              {listOrDash(t, uses.intendedUsers, intendedUserText)}
+            </Fact>
+            <Fact term={t('facts.clinicalPathway')}>
+              {uses.clinicalPathway ? clinicalPathwayText(t, uses.clinicalPathway) : '—'}
+            </Fact>
+            <Fact term={t('facts.operatingEnvironments')}>
+              {listOrDash(t, uses.operatingEnvironments, operatingEnvironmentText)}
+            </Fact>
+            <Fact term={t('facts.targetPopulation')}>{uses.targetPopulation ?? '—'}</Fact>
           </dl>
         </FactsSection>
 
-        <FactsSection title="Warnings">
+        <FactsSection title={t('facts.warnings')}>
           <dl className="grid gap-x-4 gap-y-2 sm:grid-cols-[12rem_1fr]">
-            <Fact term="Risk tier">{label.warnings.riskTier}</Fact>
-            <Fact term="Foreseeable misuse">{label.warnings.foreseeableMisuse}</Fact>
-            <Fact term="Contraindications">{label.warnings.contraindications || '—'}</Fact>
-            <Fact term="Known biases">
+            <Fact term={t('facts.riskTier')}>{label.warnings.riskTier}</Fact>
+            <Fact term={t('facts.foreseeableMisuse')}>{label.warnings.foreseeableMisuse}</Fact>
+            <Fact term={t('facts.contraindications')}>
+              {label.warnings.contraindications || '—'}
+            </Fact>
+            <Fact term={t('facts.knownBiases')}>
               {label.warnings.knownBiasesOrEthicalConsiderations ?? '—'}
             </Fact>
           </dl>
         </FactsSection>
 
-        <FactsSection title="Generalisability">
+        <FactsSection title={t('facts.generalisability')}>
           <p>{label.generalisability.statement}</p>
         </FactsSection>
 
-        <FactsSection title="When to discontinue use">
+        <FactsSection title={t('facts.discontinue')}>
           <p>{label.discontinueUse.statement}</p>
         </FactsSection>
 
@@ -107,7 +128,7 @@ export function ModelFactsLabelCard({ label }: { label: ModelFactsLabel }) {
               className="flex items-center gap-2 text-sm font-semibold text-[var(--color-foreground)]"
             >
               <InfoIcon size={14} aria-hidden="true" />
-              Known gaps in this label
+              {t('facts.gaps')}
             </h3>
             <ul className="mt-2 list-disc space-y-1 ps-5 text-sm text-[var(--color-muted-foreground)]">
               {label.gaps.map((g) => (
@@ -141,6 +162,10 @@ function Fact({ term, children }: { term: string; children: React.ReactNode }) {
   );
 }
 
-function listOrDash(values: string[]): string {
-  return values.length > 0 ? values.map(humanise).join(', ') : '—';
+function listOrDash(
+  t: ModelLabelTranslator,
+  values: string[],
+  text: (t: ModelLabelTranslator, value: string) => string,
+): string {
+  return values.length > 0 ? values.map((v) => text(t, v)).join(', ') : '—';
 }

@@ -1,0 +1,164 @@
+{
+  "metaTitle": "Models — OCI Platform",
+  "metaDescription": "Discover published health AI models with their intended use, regulatory status and WHO Model Facts label.",
+  "riskTier": "Risk tier {tier}",
+  "generativeAi": "Generative AI",
+  "unavailable": {
+    "title": "Model catalogue unavailable",
+    "fallback": "Unable to reach the model catalogue API"
+  },
+  "list": {
+    "eyebrow": "Catalog",
+    "heading": "Models",
+    "countPublished": "<num>{total}</num> {count, plural, one {published model} other {published models}}",
+    "countMatching": "<num>{total}</num> {count, plural, one {published model} other {published models}} matching <quoted>“{query}”</quoted>",
+    "intro": "Published health AI models with a declared intended use. Each card carries a WHO Model Facts label summarising what the model is for, how it was validated and when to stop relying on it.",
+    "noSummary": "No clinical summary provided."
+  },
+  "search": {
+    "label": "Search models",
+    "placeholder": "Search by name, developer or intended use",
+    "submit": "Search"
+  },
+  "filters": {
+    "toggle": "Filters",
+    "region": "Filters",
+    "active": "{count} active",
+    "modelClass": "Model class",
+    "jurisdiction": "Jurisdiction",
+    "selected": "(selected — activate to remove filter)",
+    "notSelected": "(activate to filter)"
+  },
+  "applied": {
+    "label": "Applied",
+    "classChip": "Class: {label}",
+    "jurisdictionChip": "Jurisdiction: {code}",
+    "remove": "Remove filter",
+    "clearAll": "Clear all"
+  },
+  "sort": {
+    "label": "Sort",
+    "region": "Sort",
+    "recent": "Most recent",
+    "name": "Name",
+    "oldest": "Oldest"
+  },
+  "results": {
+    "none": "No results.",
+    "showing": "Showing <range>{start}–{end}</range> of <all>{total}</all>"
+  },
+  "pagination": {
+    "region": "Pagination",
+    "prev": "← Prev",
+    "next": "Next →",
+    "page": "Page {current} of {total}"
+  },
+  "empty": {
+    "noMatchTitle": "No matching models",
+    "noneTitle": "No published models yet",
+    "noMatchBody": "Try fewer filters, or broaden your search.",
+    "noneBody": "Model cards appear here once they are published. Drafts and submissions under review are not listed.",
+    "clearAll": "Clear all filters"
+  },
+  "detail": {
+    "metaTitle": "{slug} — OCI Models",
+    "back": "Models",
+    "about": "About this model",
+    "developer": "Developer",
+    "contact": "Contact",
+    "modelClass": "Model class",
+    "version": "Version",
+    "medicalPurpose": "Medical purpose",
+    "bodySystem": "Body system or site",
+    "trainingDataFrom": "Training data from",
+    "regulatoryApproval": "Regulatory approval",
+    "notDeclared": "Not declared",
+    "architecture": "Architecture",
+    "biasMitigation": "Bias mitigation",
+    "factsUnavailableTitle": "Model Facts label unavailable",
+    "factsUnavailableBody": "The label for this model could not be generated right now. The card details are still accurate."
+  },
+  "facts": {
+    "title": "Model Facts",
+    "generatedOn": "WHO model facts label, generated from this card on {date}.",
+    "summary": "Summary",
+    "mechanism": "Mechanism",
+    "validation": "Validation and performance",
+    "noPerformance": "No measured performance yet.",
+    "uses": "Uses and directions",
+    "medicalPurpose": "Medical purpose",
+    "intendedUsers": "Intended users",
+    "clinicalPathway": "Clinical pathway",
+    "operatingEnvironments": "Operating environments",
+    "targetPopulation": "Target population",
+    "warnings": "Warnings",
+    "riskTier": "Risk tier",
+    "foreseeableMisuse": "Foreseeable misuse",
+    "contraindications": "Contraindications",
+    "knownBiases": "Known biases",
+    "generalisability": "Generalisability",
+    "discontinue": "When to discontinue use",
+    "gaps": "Known gaps in this label"
+  },
+  "modelClass": {
+    "classical": "Classical ML",
+    "time-series": "Time series",
+    "foundation": "Foundation model",
+    "lmm": "Large multimodal model",
+    "agent": "Agent"
+  },
+  "medicalPurpose": {
+    "screening": "Screening",
+    "diagnosis": "Diagnosis",
+    "triage": "Triage",
+    "treatment-planning": "Treatment planning",
+    "monitoring": "Monitoring",
+    "prognosis": "Prognosis",
+    "clinical-decision-support": "Clinical decision support",
+    "administrative": "Administrative",
+    "patient-education": "Patient education",
+    "research-only": "Research only",
+    "other": "Other"
+  },
+  "clinicalPathway": {
+    "standalone": "Standalone",
+    "adjunct-with-confirmation": "Adjunct with confirmation",
+    "triage-before-clinician": "Triage before clinician",
+    "screening-before-specialist": "Screening before specialist",
+    "research-only": "Research only"
+  },
+  "operatingEnvironment": {
+    "primary-care": "Primary care",
+    "hospital-inpatient": "Hospital inpatient",
+    "hospital-outpatient": "Hospital outpatient",
+    "emergency": "Emergency",
+    "field-or-community": "Field or community",
+    "home-or-telehealth": "Home or telehealth",
+    "lab": "Lab",
+    "research": "Research"
+  },
+  "intendedUser": {
+    "nurse": "Nurse",
+    "general-clinician": "General clinician",
+    "specialist": "Specialist",
+    "radiologist": "Radiologist",
+    "pathologist": "Pathologist",
+    "lab-tech": "Lab tech",
+    "patient": "Patient",
+    "researcher": "Researcher",
+    "administrator": "Administrator",
+    "other": "Other"
+  },
+  "regulatoryStatus": {
+    "none": "No regulatory approval",
+    "pending": "Approval pending",
+    "granted": "Approval granted",
+    "withdrawn": "Approval withdrawn"
+  },
+  "jurisdiction": {
+    "EU": "European Union",
+    "CH": "Switzerland",
+    "GB": "United Kingdom",
+    "US": "United States"
+  }
+}

@@ -1,0 +1,192 @@
+{
+  "metaTitle": "Publish version — OCI Catalog",
+  "page": {
+    "catalogUnreachable": "Unable to reach catalog API",
+    "catalogUnavailable": "Catalog unavailable",
+    "eyebrow": "Host workflow",
+    "title": "Publish a new version",
+    "intro": "Describe the dataset once in the guided form, or paste a Croissant 1.1 manifest you already have. Either way the platform validates it against Croissant, RAI, BIOCroissant and the bio-prov provenance profile before it goes into the catalogue.",
+    "factsLabel": "Dataset",
+    "slug": "Slug",
+    "visibility": "Visibility",
+    "accessTier": "Access tier",
+    "latest": "Latest",
+    "next": "Next",
+    "uploadTitle": "Upload files",
+    "uploadDescription": "Optional. Host the data on this platform instead of pointing the manifest at an upstream URL. Each upload yields a stable <code>contentUrl</code> for the next version’s manifest."
+  },
+  "mode": {
+    "label": "Manifest entry mode",
+    "wizard": "Wizard",
+    "paste": "I already have a manifest",
+    "pasteTitle": "Paste a manifest",
+    "pasteDescription": "The same validation runs as in the wizard; the paste form is for hosts who already hold a Croissant manifest."
+  },
+  "pasteForm": {
+    "couldNotPublish": "Could not publish",
+    "version": "Version",
+    "versionHint": "Semver MAJOR.MINOR.PATCH (e.g. 1.0.0). Pre-release suffixes allowed.",
+    "notes": "Notes",
+    "notesHint": "Optional. What changed since the previous version?",
+    "manifest": "Croissant manifest",
+    "required": "required",
+    "manifestHint": "Paste the JSON-LD here, or upload a <code>.json</code> file to populate the field.",
+    "uploadManifest": "Upload manifest from .json file",
+    "validating": "Validating…",
+    "submit": "Validate & publish",
+    "validationFailed": "Manifest validation failed ({conformance})"
+  },
+  "wizard": {
+    "stepOf": "Step {current} of {total}",
+    "validationFailed": "Manifest validation failed",
+    "couldNotPublish": "Could not publish",
+    "showJson": "Show the JSON-LD generated so far",
+    "back": "Back",
+    "next": "Next: {step}",
+    "publishing": "Publishing…",
+    "publish": "Publish version",
+    "stepsLabel": "Wizard steps"
+  },
+  "steps": {
+    "identification": {
+      "label": "Identification",
+      "subtitle": "Name, description, license, version, date"
+    },
+    "creators": {
+      "label": "Creators",
+      "subtitle": "Authors and contributing organisations"
+    },
+    "biomedical": {
+      "label": "Biomedical context",
+      "subtitle": "Modality, body region, condition, anonymisation (BioCroissant)"
+    },
+    "provenance": {
+      "label": "Provenance",
+      "subtitle": "Origin, processing, ethics approval, labelling protocol (bio-prov)"
+    },
+    "dataUse": {
+      "label": "Data use",
+      "subtitle": "GA4GH DUO consent codes"
+    },
+    "distributions": {
+      "label": "Distributions",
+      "subtitle": "Files and download URLs"
+    },
+    "review": {
+      "label": "Review & publish",
+      "subtitle": "Verify the generated Croissant manifest"
+    }
+  },
+  "identification": {
+    "name": "Dataset name",
+    "description": "Description",
+    "descriptionHint": "What’s in the dataset, who collected it, and why.",
+    "license": "License",
+    "licenseHint": "SPDX URL or licence name (e.g. https://creativecommons.org/licenses/by/4.0/).",
+    "homepage": "Homepage",
+    "homepageHint": "The dataset’s canonical landing page (Croissant 1.0 requires this).",
+    "citeAs": "Cite as",
+    "citeAsHint": "Optional. The citation string downstream consumers should use.",
+    "version": "Version",
+    "versionHint": "Semver MAJOR.MINOR.PATCH.",
+    "datePublished": "Date published",
+    "datePublishedHint": "YYYY-MM-DD."
+  },
+  "creators": {
+    "intro": "Authors and contributing organisations. At least one is required.",
+    "type": "Type {number}",
+    "person": "Person",
+    "organization": "Organization",
+    "name": "Name",
+    "remove": "Remove",
+    "removeLabel": "Remove creator {number}",
+    "add": "Add creator"
+  },
+  "biomedical": {
+    "legend": "Biomedical context (optional)",
+    "intro": "BioCroissant fields. Helps researchers find datasets matching their study population, and improves search relevance. Skip the ones that don’t apply.",
+    "imagingModality": "Imaging modality",
+    "imagingModalityHint": "One per comma. e.g. X-ray, CT, MRI, ultrasound, fundus.",
+    "bodyRegion": "Body region",
+    "bodyRegionHint": "One per comma. e.g. chest, retina, abdomen.",
+    "diseaseCondition": "Disease / condition",
+    "diseaseConditionHint": "One per comma. e.g. pneumonia, diabetic retinopathy.",
+    "anonymizationLevel": "Anonymisation level",
+    "anonymizationLevelHint": "How identifiable individuals in this dataset are. The Provenance step asks what was done to reach this level.",
+    "notDeclared": "— not declared —",
+    "anonymization": {
+      "ANONYMIZED": "not re-identifiable",
+      "DEIDENTIFIED": "direct identifiers removed",
+      "LIMITED": "limited data set (dates, locations kept)",
+      "IDENTIFIED": "direct identifiers present"
+    }
+  },
+  "dataUse": {
+    "legend": "Data use (DUO)",
+    "introRestricted": "GA4GH Data Use Ontology terms. Pick a permission (one) and any restrictions / modifiers that apply. Hosts of <strong>RESTRICTED / PRIVATE</strong> datasets must declare at least one term — the publish endpoint fail-closes without it.",
+    "introPublic": "GA4GH Data Use Ontology terms. Pick a permission (one) and any restrictions / modifiers that apply. Hosts of PUBLIC datasets must declare at least one term — the publish endpoint fail-closes without it.",
+    "requiredTitle": "At least one DUO term required",
+    "requiredBody": "This dataset is non-PUBLIC. Pick at least one term below.",
+    "permissions": "Permissions (pick one)",
+    "restrictions": "Restrictions",
+    "modifiers": "Modifiers"
+  },
+  "distributions": {
+    "intro": "Files in this version. Each entry becomes a Croissant <code>FileObject</code>. For platform-hosted bytes, publish a first version, upload the file via the Upload card on the publish page, and paste the resulting <code>contentUrl</code> here when you publish the next version.",
+    "croissantId": "Croissant @id",
+    "croissantIdHint": "URL-safe identifier for this file inside the manifest.",
+    "fileName": "File name",
+    "encodingFormat": "Encoding format",
+    "contentUrl": "Content URL",
+    "contentUrlHint": "Upstream URL or platform-hosted /v2/catalog/datasets/.../download path.",
+    "remove": "Remove",
+    "removeLabel": "Remove distribution {number}",
+    "add": "Add distribution"
+  },
+  "review": {
+    "readyTitle": "Ready to publish?",
+    "readyBody": "The platform validates the manifest below against Croissant 1.1 + RAI + BioCroissant + the OCI publish-time checks (e.g. DUO required for non-PUBLIC). The generated JSON-LD is below; you can copy it and use the paste form for further edits if needed.",
+    "name": "Name",
+    "version": "Version",
+    "license": "License",
+    "creators": "Creators",
+    "duoTerms": "DUO terms",
+    "none": "none",
+    "distributions": "Distributions",
+    "provenance": "Provenance",
+    "checking": "checking…",
+    "complete": "complete for {accessTier}",
+    "requiredMissing": "{count} required missing",
+    "recommendedMissing": "{count} recommended missing",
+    "showJson": "Show generated JSON-LD",
+    "jsonLabel": "Generated JSON-LD"
+  },
+  "preview": {
+    "label": "Generated manifest",
+    "title": "Generated JSON-LD"
+  },
+  "uploader": {
+    "howTitle": "How this works",
+    "howBody": "Files upload directly to platform storage in chunks of ~16 MB. Browsers handle ~50 GB per session reliably; for terabyte datasets, use the CLI (queued — #88). After upload, paste each <code>contentUrl</code> below into your Croissant manifest’s <code>distribution[]</code>.",
+    "dropHere": "Drop files here, or",
+    "choose": "Choose files",
+    "chooseLabel": "Choose files to upload",
+    "uploading": "Uploading {name}",
+    "done": "done",
+    "failed": "failed",
+    "cancel": "cancel"
+  },
+  "errors": {
+    "onlyHostsPublish": "Only hosts can publish dataset versions.",
+    "onlyHostsUpload": "Only hosts can upload files.",
+    "correctErrors": "Please correct the errors below.",
+    "manifestRequired": "paste or upload a Croissant manifest JSON",
+    "manifestNotJson": "Manifest is not valid JSON.",
+    "parseError": "parse error",
+    "apiBaseUrlMissing": "NEXT_PUBLIC_API_BASE_URL not set in web env.",
+    "manifestValidationFailed": "Manifest validation failed.",
+    "invalidUploadRequest": "Invalid upload request.",
+    "preflightInvalid": "Could not check provenance: invalid request.",
+    "preflightNotJson": "Could not check provenance: manifest is not valid JSON."
+  }
+}

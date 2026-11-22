@@ -1,4 +1,6 @@
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, Container } from '@oci/ui';
 import { auth } from '../../auth';
 import { BrandLockup } from '../../components/brand-mark';
@@ -6,11 +8,14 @@ import { safeCallbackUrl } from '../../lib/safe-callback-url';
 import { CognitoSignInButton } from './cognito-signin-button';
 import { LocalSignInForm } from './local-signin-form';
 
-export const metadata = {
-  title: 'Sign in — OCI Platform',
-  // Auth flow lives behind a sign-in surface; not useful to crawl.
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('SignIn');
+  return {
+    title: t('metaTitle'),
+    // Auth flow lives behind a sign-in surface; not useful to crawl.
+    robots: { index: false, follow: false },
+  };
+}
 
 interface SearchParams {
   callbackUrl?: string;
@@ -25,7 +30,7 @@ export default async function SignInPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const session = await auth();
+  const [session, t] = await Promise.all([auth(), getTranslations('SignIn')]);
   const callbackUrl = safeCallbackUrl(params.callbackUrl);
 
   const expired = params.reason === 'expired';
@@ -47,11 +52,9 @@ export default async function SignInPage({
 
         <Card>
           <CardHeader>
-            <CardTitle as="h1">Sign in</CardTitle>
+            <CardTitle as="h1">{t('title')}</CardTitle>
             <CardDescription>
-              {isLocal
-                ? 'Local dev mode — pick any user and role set to mint a session against the running stack.'
-                : 'Use your Cognito account to access the OCI Platform.'}
+              {isLocal ? t('descriptionLocal') : t('descriptionCognito')}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -60,7 +63,7 @@ export default async function SignInPage({
                 role="status"
                 className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] px-3 py-2 text-sm"
               >
-                Your session has expired. Sign in again to continue.
+                {t('expired')}
               </p>
             ) : null}
             {params.error ? (
@@ -68,7 +71,7 @@ export default async function SignInPage({
                 role="alert"
                 className="mb-4 rounded-md border border-[var(--color-danger)]/40 bg-[var(--color-danger-soft)] px-3 py-2 text-sm"
               >
-                Sign-in failed ({params.error}). Try again.
+                {t('failed', { error: params.error })}
               </p>
             ) : null}
             {isLocal ? (
@@ -80,7 +83,7 @@ export default async function SignInPage({
         </Card>
 
         <p className="mt-6 text-center text-xs text-[var(--color-muted-foreground)]">
-          Signing in agrees to the GI-AI4H platform&apos;s data-handling policies.
+          {t('policies')}
         </p>
       </div>
     </Container>

@@ -1,4 +1,6 @@
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Card,
   CardContent,
@@ -13,11 +15,14 @@ import { auth } from '../../auth';
 import { apiFetch } from '../../lib/api';
 import { PreferencesForm } from './preferences-form';
 
-export const metadata = {
-  title: 'Settings — OCI Platform',
-  description: 'Manage your UI preferences: theme, density, language.',
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('Settings');
+  return {
+    title: t('metaTitle'),
+    description: t('metaDescription'),
+    robots: { index: false, follow: false },
+  };
+}
 
 const FALLBACK: UserPreferences = {
   darkMode: 'system',
@@ -43,24 +48,25 @@ export default async function SettingsPage({
     })) ?? FALLBACK;
 
   const params = await searchParams;
+  const t = await getTranslations('Settings');
   const savedFlag = params.saved === '1';
 
   return (
     <Container>
       <Section>
         <header className="mb-8 space-y-2">
-          <h1 className="text-display tracking-tight text-[var(--color-foreground)]">Settings</h1>
-          <p className="max-w-2xl text-base text-[var(--color-muted-foreground)]">
-            Per-user UI preferences. These are saved to your account and follow you across devices.
-          </p>
+          <h1 className="text-display tracking-tight text-[var(--color-foreground)]">
+            {t('title')}
+          </h1>
+          <p className="max-w-2xl text-base text-[var(--color-muted-foreground)]">{t('lede')}</p>
         </header>
 
         <div className="max-w-2xl">
           <Card>
             <CardHeader>
-              <CardTitle>Appearance</CardTitle>
+              <CardTitle>{t('appearanceTitle')}</CardTitle>
               <CardDescription>
-                Theme, density, and language. Stored in <code>identity.user_preferences</code>.
+                {t.rich('appearanceDescription', { code: (chunks) => <code>{chunks}</code> })}
               </CardDescription>
             </CardHeader>
             <CardContent>

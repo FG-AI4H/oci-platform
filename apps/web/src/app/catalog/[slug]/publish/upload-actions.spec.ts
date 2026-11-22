@@ -7,6 +7,16 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('../../../../lib/session-recovery', () => ({ sessionForAction: mocks.sessionForAction }));
 vi.mock('../../../../lib/api-action', () => ({ fetchAsUser: mocks.fetchAsUser }));
+// The actions translate their messages; outside a Next request there is no
+// locale, so answer from the English catalogue (the strings asserted below).
+vi.mock('next-intl/server', async () => {
+  const { createTranslator } = await import('next-intl');
+  const { default: messages } = await import('../../../../i18n/messages/en');
+  return {
+    getTranslations: async (namespace: 'Publish') =>
+      createTranslator({ locale: 'en', messages, namespace }),
+  };
+});
 
 import {
   abortUploadAction,

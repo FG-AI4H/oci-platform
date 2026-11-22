@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription, AlertTitle, Button, Dialog, EyeIcon } from '@oci/ui';
 
 interface Props {
@@ -30,6 +31,7 @@ interface Props {
  * unmount as well as on close, so this stays accessible.
  */
 export function ImagePreviewButton({ filename, src, meta }: Props) {
+  const t = useTranslations('Dataset');
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -46,12 +48,12 @@ export function ImagePreviewButton({ filename, src, meta }: Props) {
         variant="link"
         size="sm"
         aria-haspopup="dialog"
-        aria-label={`Preview ${filename}`}
+        aria-label={t('preview.triggerAria', { file: filename })}
         onClick={openPreview}
         className="h-11 px-2 sm:h-8"
       >
         <EyeIcon size={14} />
-        <span>preview</span>
+        <span>{t('preview.trigger')}</span>
       </Button>
 
       {open ? (
@@ -60,22 +62,19 @@ export function ImagePreviewButton({ filename, src, meta }: Props) {
           onClose={() => setOpen(false)}
           title={filename}
           description={meta}
-          closeLabel={`Close preview of ${filename}`}
+          closeLabel={t('preview.closeAria', { file: filename })}
         >
           <div className="flex min-h-40 items-center justify-center">
             {failed ? (
               <Alert tone="danger" className="w-full">
-                <AlertTitle as="h3">Preview unavailable</AlertTitle>
-                <AlertDescription>
-                  The image could not be loaded. It may need approved access, or the signed link may
-                  have expired — try the download link instead.
-                </AlertDescription>
+                <AlertTitle as="h3">{t('preview.unavailableTitle')}</AlertTitle>
+                <AlertDescription>{t('preview.unavailableBody')}</AlertDescription>
               </Alert>
             ) : (
               <>
                 {!loaded ? (
                   <p role="status" className="text-sm text-[var(--color-muted-foreground)]">
-                    Loading preview…
+                    {t('preview.loading')}
                   </p>
                 ) : null}
                 {/*
@@ -86,7 +85,7 @@ export function ImagePreviewButton({ filename, src, meta }: Props) {
                  */}
                 <img
                   src={src}
-                  alt={`Preview of ${filename}`}
+                  alt={t('preview.alt', { file: filename })}
                   onLoad={() => setLoaded(true)}
                   onError={() => setFailed(true)}
                   className={

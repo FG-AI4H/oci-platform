@@ -1,0 +1,14 @@
+{
+  "primaryNav": "Primary",
+  "catalog": "Catalog",
+  "models": "Models",
+  "evaluation": "Evaluation",
+  "annotation": "Annotation",
+  "inbox": "Inbox",
+  "admin": "Admin",
+  "dashboard": "Dashboard",
+  "settings": "Settings",
+  "signOut": "Sign out",
+  "menu": "Menu",
+  "signedInAs": "Signed in as {name}"
+}
