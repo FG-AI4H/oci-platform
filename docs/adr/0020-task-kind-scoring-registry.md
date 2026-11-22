@@ -87,6 +87,24 @@ Consequences of that shape, all deliberate:
 - `CLASSIFICATION` lands with this ADR. `SEGMENTATION`, `DETECTION` and `SPAN_EXTRACTION` are
   declared as planned and rejected at dispatch until each has a scorer.
 
+## Amendments
+
+- **2026-11-22 — `BINARY_DIAGNOSTIC` added ([#650](https://github.com/FG-AI4H/oci-platform/issues/650)).**
+  One finding, present (1) or absent (0). Reports the four confusion counts, prevalence,
+  sensitivity, specificity, both predictive values and accuracy, each with a Wilson 95% interval,
+  plus coverage; ordered by balanced accuracy (null, and sorted with unscored rows, when the
+  scored items hold one reference class only). A predictions file may carry an optional `score`
+  in [0, 1] per row, accepted for this kind only and refused for the others; AUC with a stratified
+  percentile-bootstrap 95% interval (2,000 resamples, fixed seed; above 10,000 scored items the
+  resample count shrinks to a fixed work budget, never below 200, and is reported with the result,
+  because scoring runs inside the request) is reported only when every scored item has one. The
+  task states its positive class in words (`positiveClassName`, a new nullable column, required
+  when a binary task is created). The sealed-run output contract is
+  **unchanged**: `SealedRunResultSchema.predictions` stays `itemId -> integer`, so a sealed run of
+  a binary task is scored without AUC. A per-item real number would widen the channel out of the
+  sandbox from roughly one bit per item to a float per item, and is not added without its own
+  review (#414).
+
 ## Alternatives considered
 
 - **Keep one scorer and widen `EvaluationScores`** with the union of all metrics — rejected: the
