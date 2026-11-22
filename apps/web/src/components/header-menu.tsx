@@ -2,16 +2,39 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
+import type { RowBreakpoint } from './site-header-links';
+
+// Whole class names, so Tailwind finds them in the source.
+function hideFromClass(breakpoint: RowBreakpoint): string {
+  switch (breakpoint) {
+    case 'xl':
+      return 'xl:hidden';
+    case '2xl':
+      return '2xl:hidden';
+    case 'never':
+      return '';
+  }
+}
 
 /**
- * The header's navigation below the `xl` breakpoint (#743): a
+ * The header's navigation below the `xl` breakpoint (#743), or below
+ * `2xl` or at every width when a caller's links need it (#776): a
  * disclosure instead of a row of links that runs into the account area
  * at tablet width, French labels being the longest. A native
  * `<details>`, so it opens without script; the script only closes it
  * once a link has been followed, since the header stays mounted across
  * navigations.
  */
-export function HeaderMenu({ label, children }: { label: string; children: ReactNode }) {
+export function HeaderMenu({
+  label,
+  hideFrom,
+  children,
+}: {
+  label: string;
+  /** The breakpoint from which the header shows its links in a row instead. */
+  hideFrom: RowBreakpoint;
+  children: ReactNode;
+}) {
   const ref = useRef<HTMLDetailsElement>(null);
   const pathname = usePathname();
 
@@ -40,7 +63,7 @@ export function HeaderMenu({ label, children }: { label: string; children: React
   }, []);
 
   return (
-    <details ref={ref} className="group relative xl:hidden">
+    <details ref={ref} className={`group relative ${hideFromClass(hideFrom)}`}>
       <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] [&::-webkit-details-marker]:hidden">
         <svg
           aria-hidden="true"
