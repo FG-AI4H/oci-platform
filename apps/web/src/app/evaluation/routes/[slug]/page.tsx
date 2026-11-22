@@ -6,6 +6,7 @@ import {
   AlertDescription,
   AlertTitle,
   ArrowLeftIcon,
+  ArrowRightIcon,
   Badge,
   Card,
   CardContent,
@@ -18,13 +19,16 @@ import {
   Section,
   Separator,
 } from '@oci/ui';
-import type {
-  DisclosureProfile,
-  EvaluationRouteResponse,
-  OperationalEnvelope,
-  RouteVersionResponse,
-  ThreatModel,
+import {
+  RouteReviewStatusSchema,
+  type DisclosureProfile,
+  type EvaluationRouteResponse,
+  type OperationalEnvelope,
+  type RoutePermissionsResponse,
+  type RouteVersionResponse,
+  type ThreatModel,
 } from '@oci/shared-types';
+import { auth } from '../../../../auth';
 import { apiFetch } from '../../../../lib/api';
 import {
   describeAttribution,
@@ -43,6 +47,9 @@ import {
   sortVersionsLatestFirst,
   TRUST_ANCHOR_LABEL,
 } from '../../../../components/evaluation/route-labels';
+import { readRoutePermissions } from '../permissions';
+import { ReviewForm } from './review-form';
+import { DECLARE_LINK_TEXT, REVIEW_TEXT, statusWord } from './strings';
 
 /**
  * Evaluation method detail (#487, WP5 / ADR-0018). Anonymous —
@@ -55,8 +62,16 @@ import {
  * The review outcome sits at the top of each version block because it is
  * what decides whether that version's results are published.
  *
- * Read-only. Declaring a version and reviewing it are staff actions that
- * stay on the API until a later issue gives them a form.
+ * Signed in, the page also offers what the caller may do (#649), as
+ * `GET /v2/evaluation/routes/:slug/permissions` reports it: an evaluation
+ * reviewer who did not submit the method reviews a version at the end of its
+ * block, after reading its declarations; the method's submitter withdraws a
+ * version there, and declares a new one on its own page. Signed out, or if
+ * the permissions cannot be read, the page stays the public read-only view.
+ *
+ * Only the latest decision and its rationale are shown: the API keeps one
+ * outcome per version and does not expose who recorded it, so the page
+ * names no reviewer.
  */
 
 const DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' });
@@ -71,10 +86,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function EvaluationRouteDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
+  const query = await searchParams;
 
   let route: EvaluationRouteResponse | null = null;
   let error: string | null = null;
@@ -105,6 +123,10 @@ export default async function EvaluationRouteDetailPage({
   if (!route) notFound();
 
   const versions = sortVersionsLatestFirst(route.versions);
+  const session = await auth();
+  const access = await readRoutePermissions(route.slug, session);
+  const permissions = access.status === 'ok' ? access.permissions : null;
+  const banner = bannerFor(versions, query);
 
   return (
     <>
@@ -142,6 +164,37 @@ export default async function EvaluationRouteDetailPage({
 
       <Container size="xl">
         <Section spacing="md" className="space-y-8">
+          {banner ? (
+            <div role="status">
+              <Alert tone="success">
+                <AlertDescription>{banner}</AlertDescription>
+              </Alert>
+            </div>
+          ) : null}
+          {access.status === 'unavailable' ? (
+            <Alert tone="warning">
+              <AlertDescription>{REVIEW_TEXT.permissionsUnavailable}</AlertDescription>
+            </Alert>
+          ) : null}
+          {permissions?.canDeclareVersion ? (
+            <Card>
+              <CardHeader>
+                <CardTitle as="h2">{DECLARE_LINK_TEXT.heading}</CardTitle>
+                <CardDescription>
+                  {permissions.isSubmitter ? DECLARE_LINK_TEXT.body : DECLARE_LINK_TEXT.bodyAdmin}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link
+                  href={`/evaluation/routes/${route.slug}/versions/new`}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[var(--color-primary)] px-4 text-sm font-medium text-[var(--color-primary-foreground)] hover:bg-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] sm:h-10"
+                >
+                  {DECLARE_LINK_TEXT.link}
+                  <ArrowRightIcon size={14} />
+                </Link>
+              </CardContent>
+            </Card>
+          ) : null}
           <Card>
             <CardHeader>
               <CardTitle as="h2">About this method</CardTitle>
@@ -202,7 +255,13 @@ export default async function EvaluationRouteDetailPage({
             </p>
           ) : (
             versions.map((version) => (
-              <VersionBlock key={version.id} routeSlug={route.slug} version={version} />
+              <VersionBlock
+                key={version.id}
+                routeSlug={route.slug}
+                methodName={route.name}
+                version={version}
+                permissions={permissions}
+              />
             ))
           )}
 
@@ -225,22 +284,66 @@ export default async function EvaluationRouteDetailPage({
   );
 }
 
+/**
+ * The confirmation after a decision or a declaration, from the query the
+ * action redirected with. Shown only when it matches the version as it is
+ * now, so a crafted link cannot make the page claim a decision.
+ */
+function bannerFor(
+  versions: RouteVersionResponse[],
+  query: Record<string, string | string[] | undefined>,
+): string | null {
+  const recorded = typeof query.recorded === 'string' ? query.recorded : null;
+  const to = RouteReviewStatusSchema.safeParse(query.to);
+  if (recorded && to.success) {
+    const version = versions.find((v) => v.version === recorded);
+    if (version && version.reviewStatus === to.data) {
+      return REVIEW_TEXT.recordedBanner(version.version, statusWord(to.data));
+    }
+  }
+  const declared = typeof query.declared === 'string' ? query.declared : null;
+  if (declared) {
+    const version = versions.find((v) => v.version === declared);
+    if (version && version.reviewStatus === 'DECLARED') {
+      return REVIEW_TEXT.declaredBanner(version.version);
+    }
+  }
+  return null;
+}
+
 function VersionBlock({
   routeSlug,
+  methodName,
   version,
+  permissions,
 }: {
   routeSlug: string;
+  methodName: string;
   version: RouteVersionResponse;
+  permissions: RoutePermissionsResponse | null;
 }) {
   const headingId = `version-${version.id}`;
   const attribution = attributionForVersion(routeSlug, version);
   const { description: reviewDescription } = describeAttribution(attribution);
+  const mine = permissions?.versions.find((v) => v.version === version.version) ?? null;
+  const allowed = mine?.allowedTransitions ?? [];
+  const mode = permissions?.isSubmitter ? 'withdraw' : 'review';
+  const barred =
+    mine?.reviewBar === 'SUBMITTED_BY_YOU'
+      ? REVIEW_TEXT.barredSubmitted
+      : mine?.reviewBar === 'DECLARED_BY_YOU'
+        ? REVIEW_TEXT.barredDeclared
+        : null;
 
   return (
-    <section aria-labelledby={headingId} className="space-y-6">
+    <section
+      id={headingId}
+      aria-labelledby={`${headingId}-title`}
+      className="scroll-mt-24 space-y-6"
+    >
       <header className="space-y-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h2 id={headingId} className="text-2xl font-semibold tracking-tight">
+          <h2 id={`${headingId}-title`} className="text-2xl font-semibold tracking-tight">
             Version <span className="font-mono tabular-nums">{version.version}</span>
           </h2>
           {/* The sentence behind the badge is printed just below, so the
@@ -270,11 +373,29 @@ function VersionBlock({
         {version.reviewNotes ? (
           <div className="max-w-2xl rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-4 text-sm">
             <h3 className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
-              Review notes
+              {REVIEW_TEXT.reviewRecord}
             </h3>
             <p className="mt-1 whitespace-pre-wrap break-words text-[var(--color-foreground)]">
               {version.reviewNotes}
             </p>
+            <p className="mt-2 text-xs text-[var(--color-muted-foreground)]">
+              {REVIEW_TEXT.reviewRecordHint}
+            </p>
+          </div>
+        ) : null}
+        {allowed.length > 0 ? (
+          <a
+            href={`#review-${version.id}`}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded text-sm font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] sm:min-h-6"
+          >
+            {mode === 'withdraw' ? REVIEW_TEXT.withdrawLink : REVIEW_TEXT.reviewLink}
+          </a>
+        ) : null}
+        {barred ? (
+          <div className="max-w-2xl">
+            <Alert tone="info">
+              <AlertDescription>{barred}</AlertDescription>
+            </Alert>
           </div>
         ) : null}
       </header>
@@ -282,6 +403,19 @@ function VersionBlock({
       <ThreatModelCard model={version.threatModel} />
       <DisclosureProfileCard profile={version.disclosureProfile} />
       <OperationalEnvelopeCard envelope={version.operationalEnvelope} />
+
+      {permissions ? (
+        <ReviewForm
+          slug={routeSlug}
+          methodName={methodName}
+          version={version.version}
+          versionId={version.id}
+          reviewStatus={version.reviewStatus}
+          allowed={allowed}
+          mode={mode}
+          replacesRationale={Boolean(version.reviewNotes)}
+        />
+      ) : null}
     </section>
   );
 }

@@ -23,7 +23,8 @@ import { RouteRegistryService } from './route-registry.service.js';
  * being the route's submitter (or `admin`), and recording a review outcome
  * requires `evaluation-reviewer` (or `admin`), except that a route's submitter
  * may withdraw it. Those checks depend on the route, so they live in the
- * service rather than in a role guard.
+ * service rather than in a role guard; `GET :slug/permissions` reports their
+ * outcome for the caller so the browser offers only what would be accepted.
  */
 @ApiTags('evaluation-routes')
 @Controller({ path: 'evaluation/routes', version: '2' })
@@ -42,6 +43,18 @@ export class RouteRegistryController {
   @ApiOkResponse({ description: 'The route.' })
   get(@Param('slug') slug: string) {
     return this.routes.getRoute(slug);
+  }
+
+  @Get(':slug/permissions')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'What the caller may do on a route: declare, review, withdraw' })
+  @ApiOkResponse({
+    description:
+      'Whether the caller may declare a version, and the statuses they may move each version to. About the caller only.',
+  })
+  @UseGuards(CognitoJwtGuard)
+  permissions(@Param('slug') slug: string, @CurrentUser() user: CognitoAccessTokenPayload) {
+    return this.routes.permissionsFor(slug, user);
   }
 
   @Post()
@@ -77,7 +90,7 @@ export class RouteRegistryController {
   @ApiOperation({ summary: 'Record a review outcome for a route version' })
   @ApiOkResponse({
     description:
-      "The updated version. 403 for the route's own submitter, except moving it to WITHDRAWN.",
+      "The updated version. 403 for the route's own submitter, except moving it to WITHDRAWN. 400 without a rationale for APPROVED, REJECTED or WITHDRAWN.",
   })
   @UseGuards(CognitoJwtGuard)
   review(

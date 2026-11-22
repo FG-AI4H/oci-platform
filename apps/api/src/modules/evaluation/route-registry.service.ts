@@ -15,6 +15,7 @@ import {
   declarationsAreFrozen,
   DisclosureProfileSchema,
   OperationalEnvelopeSchema,
+  reviewNeedsRationale,
   ThreatModelSchema,
   type CreateEvaluationRouteRequest,
   type CreateRouteVersionRequest,
@@ -22,6 +23,8 @@ import {
   type EvaluationRouteResponse,
   type OperationalEnvelope,
   type ReviewRouteVersionRequest,
+  type RoutePermissionsResponse,
+  type RouteReviewBar,
   type RouteReviewStatus,
   type RouteVersionResponse,
   type ThreatModel,
@@ -175,10 +178,8 @@ export class RouteRegistryService {
    * decided at the read boundary. A rule enforced by what we declined to store
    * cannot be revised without losing the record it was applied to.
    *
-   * Recording an outcome needs `evaluation-reviewer` (or `admin`). Review is in
-   * pairs, so whoever registered the route or declared the version may not
-   * review it, admin included. The one exception is the route's submitter
-   * moving it to WITHDRAWN: withdrawing isn't approving.
+   * Who may record which outcome is `reviewBarFor`, below. A decision that
+   * changes whether results count carries a rationale (ADR-0021).
    */
   async review(
     slug: string,
@@ -194,15 +195,12 @@ export class RouteRegistryService {
     const from = row.reviewStatus as RouteReviewStatus;
     const to = body.status;
     const actorUserId = cognitoSubAsUuid(user.sub);
-    const isRouteSubmitter = actorUserId === route.submitterUserId;
-    const submitterWithdrawing = isRouteSubmitter && to === 'WITHDRAWN';
-    if (!submitterWithdrawing) {
-      if (!isEvaluationReviewer(user)) {
-        throw new ForbiddenException('requires one of: evaluation-reviewer');
-      }
-      if (isRouteSubmitter || actorUserId === row.declaredByUserId) {
-        throw new ForbiddenException(`you submitted route ${slug}@${version} and cannot review it`);
-      }
+    const bar = reviewBarFor(user, route, row, to);
+    if (bar === 'NOT_A_REVIEWER') {
+      throw new ForbiddenException('requires one of: evaluation-reviewer');
+    }
+    if (bar !== null) {
+      throw new ForbiddenException(`you submitted route ${slug}@${version} and cannot review it`);
     }
 
     if (from === to) throw new ConflictException(`version ${version} is already ${from}`);
@@ -212,6 +210,13 @@ export class RouteRegistryService {
         allowed.length === 0
           ? `version ${version} is ${from}, which is terminal`
           : `cannot move version ${version} from ${from} to ${to}. Allowed: ${allowed.join(', ')}`,
+      );
+    }
+    // ADR-0021: a decision is published with its reason. Enforced here, not
+    // only in the browser form, so no client can record a bare verdict.
+    if (reviewNeedsRationale(to) && !(body.reviewNotes ?? '').trim()) {
+      throw new BadRequestException(
+        `a rationale (reviewNotes) is required to move a version to ${to}: it is published with the decision`,
       );
     }
 
@@ -252,6 +257,41 @@ export class RouteRegistryService {
     return row;
   }
 
+  /**
+   * What the caller may do on a route: declare a version, and move each
+   * version to which status. Computed with `reviewBarFor` and the transition
+   * table, the same rules `review` and `declareVersion` apply, so the
+   * browser offers only what the API would accept. Reports on the caller
+   * only: it never says who else submitted or reviewed anything.
+   */
+  async permissionsFor(
+    slug: string,
+    user: CognitoAccessTokenPayload,
+  ): Promise<RoutePermissionsResponse> {
+    const route = await this.repo.findRouteBySlugWithVersions(slug);
+    if (!route) throw new NotFoundException(`route '${slug}' not found`);
+    const actorUserId = cognitoSubAsUuid(user.sub);
+    const isSubmitter = route.submitterUserId !== null && route.submitterUserId === actorUserId;
+    return {
+      slug: route.slug,
+      isSubmitter,
+      canDeclareVersion: isSubmitter || isAdmin(user),
+      versions: route.versions.map((v) => {
+        const from = v.reviewStatus as RouteReviewStatus;
+        const candidates = allowedReviewTransitionsFrom(from);
+        const reviewStepOpen = candidates.some((to) => to !== 'WITHDRAWN');
+        return {
+          version: v.version,
+          reviewStatus: from,
+          allowedTransitions: candidates.filter((to) => reviewBarFor(user, route, v, to) === null),
+          // Every step other than withdrawing is barred on the same terms,
+          // so APPROVED stands for all of them.
+          reviewBar: reviewStepOpen ? reviewBarFor(user, route, v, 'APPROVED') : null,
+        };
+      }),
+    };
+  }
+
   async getRoute(slug: string): Promise<EvaluationRouteResponse> {
     const row = await this.repo.findRouteBySlugWithVersions(slug);
     if (!row) throw new NotFoundException(`route '${slug}' not found`);
@@ -278,4 +318,30 @@ function isAdmin(user: CognitoAccessTokenPayload): boolean {
 
 function isEvaluationReviewer(user: CognitoAccessTokenPayload): boolean {
   return groupsOf(user).includes('evaluation-reviewer') || isAdmin(user);
+}
+
+/**
+ * Whether `user` may move version `row` of `route` to `to`, and if not, why.
+ * Who, not when: the transition table is checked separately.
+ *
+ * Recording an outcome needs `evaluation-reviewer` (or `admin`). Review is in
+ * pairs, so whoever registered the route or declared the version may not
+ * review it, admin included. The one exception is the route's submitter
+ * moving it to WITHDRAWN: withdrawing isn't approving.
+ */
+function reviewBarFor(
+  user: CognitoAccessTokenPayload,
+  route: Pick<EvaluationRoute, 'submitterUserId'>,
+  row: Pick<RouteVersion, 'declaredByUserId'>,
+  to: RouteReviewStatus,
+): RouteReviewBar | null {
+  const actorUserId = cognitoSubAsUuid(user.sub);
+  const isRouteSubmitter = route.submitterUserId !== null && actorUserId === route.submitterUserId;
+  if (isRouteSubmitter && to === 'WITHDRAWN') return null;
+  if (!isEvaluationReviewer(user)) return 'NOT_A_REVIEWER';
+  if (isRouteSubmitter) return 'SUBMITTED_BY_YOU';
+  if (row.declaredByUserId !== null && actorUserId === row.declaredByUserId) {
+    return 'DECLARED_BY_YOU';
+  }
+  return null;
 }

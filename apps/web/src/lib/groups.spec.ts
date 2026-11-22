@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from 'next-auth';
-import { canOverseeCampaign, canReadAuditTrail, isAdmin, isHost, userGroups } from './groups';
+import {
+  canOverseeCampaign,
+  canReadAuditTrail,
+  isAdmin,
+  isEvaluationReviewer,
+  isHost,
+  userGroups,
+} from './groups';
 import { groupsFromAccessToken, subjectFromAccessToken } from './token-claims';
 
 /** The session of a caller holding this access token, as `auth.ts` describes them. */
@@ -88,6 +95,19 @@ describe('isAdmin', () => {
   });
   it('false for unauthenticated', () => {
     expect(isAdmin(null)).toBe(false);
+  });
+});
+
+describe('isEvaluationReviewer', () => {
+  it('allows evaluation reviewers and admins', () => {
+    expect(isEvaluationReviewer(s('dev:r:evaluation-reviewer'))).toBe(true);
+    expect(isEvaluationReviewer(s('dev:a:admin'))).toBe(true);
+  });
+
+  it('refuses other reviewers, participants and signed-out callers', () => {
+    expect(isEvaluationReviewer(s('dev:e:expert-reviewer'))).toBe(false);
+    expect(isEvaluationReviewer(s('dev:p:researcher'))).toBe(false);
+    expect(isEvaluationReviewer(null)).toBe(false);
   });
 });
 

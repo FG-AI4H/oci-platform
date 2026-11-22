@@ -6,7 +6,9 @@ import {
   ThreatModelSchema,
   allowedReviewTransitionsFrom,
   canReviewTransition,
+  CreateEvaluationRouteRequestSchema,
   declarationsAreFrozen,
+  reviewNeedsRationale,
   type ThreatModel,
 } from '@oci/shared-types';
 import { describe, expect, it, vi } from 'vitest';
@@ -161,5 +163,24 @@ describe('WP5 invariant 5 — at most one reference route per mode', () => {
       ),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(repo.createRoute).not.toHaveBeenCalled();
+  });
+});
+
+describe('the web app reserves its own path segments', () => {
+  it('refuses a route slug the review queue page uses', () => {
+    const body = { slug: 'reviews', name: 'Shadowed', mode: 'CONTAINER' };
+    expect(CreateEvaluationRouteRequestSchema.safeParse(body).success).toBe(false);
+    expect(
+      CreateEvaluationRouteRequestSchema.safeParse({ ...body, slug: 'reviews-tool' }).success,
+    ).toBe(true);
+  });
+});
+
+describe('ADR-0021 — which decisions carry a rationale', () => {
+  it('requires one for every outcome that decides whether results count', () => {
+    expect(reviewNeedsRationale('APPROVED')).toBe(true);
+    expect(reviewNeedsRationale('REJECTED')).toBe(true);
+    expect(reviewNeedsRationale('WITHDRAWN')).toBe(true);
+    expect(reviewNeedsRationale('UNDER_REVIEW')).toBe(false);
   });
 });

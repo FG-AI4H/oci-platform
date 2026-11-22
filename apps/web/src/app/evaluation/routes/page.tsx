@@ -15,7 +15,9 @@ import {
   ShieldIcon,
 } from '@oci/ui';
 import type { EvaluationRouteResponse } from '@oci/shared-types';
+import { auth } from '../../../auth';
 import { apiFetch } from '../../../lib/api';
+import { isEvaluationReviewer } from '../../../lib/groups';
 import { ReviewStatusBadge } from '../../../components/evaluation/review-status-badge';
 import {
   attributionForVersion,
@@ -23,6 +25,8 @@ import {
   describeProvider,
   latestVersion,
 } from '../../../components/evaluation/route-labels';
+import { awaitingReview } from './queue';
+import { LIST_REVIEW_TEXT } from './strings';
 
 /**
  * Evaluation methods list (#487, WP5 / ADR-0018). Read-only, anonymous:
@@ -38,6 +42,10 @@ import {
  * The list endpoint already carries the full versions array, so the latest
  * version and its review status are read straight off the list DTO rather
  * than fanning out one detail fetch per card.
+ *
+ * An evaluation reviewer (or admin) also sees how many versions wait for a
+ * decision and the way to the review queue (#649). Everyone else sees the
+ * public page unchanged.
  */
 
 export const metadata = {
@@ -58,6 +66,9 @@ export default async function EvaluationRoutesPage() {
   }
 
   const count = routes?.length ?? 0;
+  const reviewer = isEvaluationReviewer(await auth());
+  const queue = routes ? awaitingReview(routes) : null;
+  const waiting = queue ? queue.underReview.length + queue.declared.length : 0;
 
   return (
     <Container>
@@ -91,6 +102,23 @@ export default async function EvaluationRoutesPage() {
             mean the same thing here.
           </p>
         </header>
+
+        {reviewer && routes ? (
+          <div className="mb-6">
+            <Alert tone="info">
+              <AlertTitle as="h2">{LIST_REVIEW_TEXT.heading}</AlertTitle>
+              <AlertDescription>
+                {LIST_REVIEW_TEXT.body(waiting)}{' '}
+                <Link
+                  href="/evaluation/routes/reviews"
+                  className="font-medium underline underline-offset-2"
+                >
+                  {LIST_REVIEW_TEXT.link}
+                </Link>
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : null}
 
         {error ? (
           <Alert tone="danger">
