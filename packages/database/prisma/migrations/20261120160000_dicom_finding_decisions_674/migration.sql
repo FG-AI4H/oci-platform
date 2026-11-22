@@ -6,9 +6,17 @@
 -- the keyed one `dicom_findings` already holds. A stored file is
 -- released when every one of its findings is accepted for its dataset.
 --
--- Additive: two tables, nothing existing is altered. Nothing reads or
--- writes them yet. They ship ahead of the code that does, because a
--- deploy rolls the API out before it runs migrations.
+-- That holds for findings with a value (a patient id, a date): accepted
+-- for the dataset, they also cover the same value in a file uploaded
+-- later. A finding about a file as a whole (a burned-in annotation
+-- flag, private tags) says nothing about the content, so it is accepted
+-- on the files an operator looked at and on no other: that is the new
+-- nullable column `dicom_findings.accepted_decision_id`.
+--
+-- Additive: two tables, and one nullable column with its index on an
+-- existing table. Nothing reads or writes them yet. They ship ahead of
+-- the code that does, because a deploy rolls the API out before it runs
+-- migrations.
 
 -- CreateTable
 CREATE TABLE "catalog"."dicom_finding_decisions" (
@@ -46,3 +54,12 @@ ALTER TABLE "catalog"."dicom_finding_decisions" ADD CONSTRAINT "dicom_finding_de
 
 -- AddForeignKey
 ALTER TABLE "catalog"."dicom_accepted_findings" ADD CONSTRAINT "dicom_accepted_findings_decision_id_fkey" FOREIGN KEY ("decision_id") REFERENCES "catalog"."dicom_finding_decisions"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AlterTable
+ALTER TABLE "catalog"."dicom_findings" ADD COLUMN "accepted_decision_id" UUID;
+
+-- CreateIndex
+CREATE INDEX "dicom_findings_accepted_decision_id_idx" ON "catalog"."dicom_findings"("accepted_decision_id");
+
+-- AddForeignKey
+ALTER TABLE "catalog"."dicom_findings" ADD CONSTRAINT "dicom_findings_accepted_decision_id_fkey" FOREIGN KEY ("accepted_decision_id") REFERENCES "catalog"."dicom_finding_decisions"("id") ON DELETE SET NULL ON UPDATE CASCADE;
