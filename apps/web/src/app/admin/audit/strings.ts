@@ -57,7 +57,6 @@ export const AUDIT_PAGE = {
   colSequence: 'Seq.',
   colObject: 'Object',
   colActor: 'Actor',
-  colHash: 'Record hash',
   openTimeline: (type: string, id: string) => `Timeline of ${type} ${id}`,
   none: 'No event matches these filters.',
   older: 'Older events',

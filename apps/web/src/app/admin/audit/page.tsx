@@ -19,7 +19,7 @@ import {
 } from '@oci/shared-types';
 import { auth } from '../../../auth';
 import { AuditEventDetails, AuditTimeline } from '../../../components/audit/audit-timeline';
-import { actorText, formatOccurredAt, shortHash } from '../../../components/audit/audit-format';
+import { actorText, formatOccurredAt } from '../../../components/audit/audit-format';
 import { fetchAsUser } from '../../../lib/api-action';
 import { isAdmin, requireAuditReader } from '../../../lib/groups';
 import {
@@ -95,16 +95,7 @@ export default async function AuditTrailPage({
         </header>
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
-          <div className="min-w-0 space-y-8">
-            <FilterForm filters={filters} actorView={actorView} />
-            {objectView ? (
-              <ObjectTimeline filters={filters} loaded={loaded} />
-            ) : (
-              <EventList filters={filters} cursor={cursor} loaded={loaded} />
-            )}
-          </div>
-
-          <aside className="space-y-8">
+          <aside className="space-y-8 lg:order-2">
             <section aria-labelledby="verify-heading" className="space-y-3">
               <h2 id="verify-heading" className="text-lg font-semibold">
                 {T.verifyHeading}
@@ -132,6 +123,14 @@ export default async function AuditTrailPage({
               </div>
             </section>
           </aside>
+          <div className="min-w-0 space-y-8 lg:order-1">
+            <FilterForm filters={filters} actorView={actorView} />
+            {objectView ? (
+              <ObjectTimeline filters={filters} loaded={loaded} />
+            ) : (
+              <EventList filters={filters} cursor={cursor} loaded={loaded} />
+            )}
+          </div>
         </div>
       </Section>
     </Container>
@@ -356,10 +355,6 @@ function EventRow({ event, filters }: { event: AuditEventView; filters: PageFilt
       <p className="text-sm">
         <span className="text-[var(--color-muted-foreground)]">{T.colActor}: </span>
         <span className="break-all">{actorText(event.actor)}</span>
-        <span className="text-[var(--color-muted-foreground)]">
-          {' · '}
-          {T.colHash} {shortHash(event.recordHash)}
-        </span>
       </p>
       <AuditEventDetails event={event} />
     </li>
