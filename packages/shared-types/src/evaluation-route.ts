@@ -158,6 +158,29 @@ export function declarationsAreFrozen(status: RouteReviewStatus): boolean {
   return status !== 'DECLARED';
 }
 
+/**
+ * Review outcomes that decide whether a version's results count. Each is
+ * recorded with a rationale, which is published with the decision
+ * (ADR-0021). Beginning a review (`UNDER_REVIEW`) decides nothing, so its
+ * note stays optional.
+ */
+export const REVIEW_STATUSES_REQUIRING_RATIONALE: ReadonlyArray<RouteReviewStatus> = [
+  'APPROVED',
+  'REJECTED',
+  'WITHDRAWN',
+];
+
+export function reviewNeedsRationale(to: RouteReviewStatus): boolean {
+  return REVIEW_STATUSES_REQUIRING_RATIONALE.includes(to);
+}
+
+/**
+ * Path segments under `/evaluation/routes/` that the web app uses for its own
+ * pages (the review queue). A route with one of these slugs could not be
+ * reached, so it is refused at registration.
+ */
+export const RESERVED_ROUTE_SLUGS: ReadonlyArray<string> = ['reviews'];
+
 // ---------------------------------------------------------------------------
 // API shapes
 // ---------------------------------------------------------------------------
@@ -168,7 +191,8 @@ export const CreateEvaluationRouteRequestSchema = z
       .string()
       .min(3)
       .max(120)
-      .regex(/^[a-z0-9-]+$/),
+      .regex(/^[a-z0-9-]+$/)
+      .refine((slug) => !RESERVED_ROUTE_SLUGS.includes(slug), 'this slug is reserved'),
     name: z.string().min(1).max(200),
     /** Execution family. `ENCRYPTED` is Track B (WP8), open 2026-11-01. */
     mode: z.enum(['PREDICTIONS', 'CONTAINER', 'ENCRYPTED']),
@@ -192,11 +216,52 @@ export type CreateRouteVersionRequest = z.infer<typeof CreateRouteVersionRequest
 export const ReviewRouteVersionRequestSchema = z
   .object({
     status: RouteReviewStatusSchema,
-    /** Reviewer-facing outcome text. Published alongside results per the spec. */
+    /**
+     * The rationale, published with the decision (ADR-0021). Required for
+     * the statuses in `REVIEW_STATUSES_REQUIRING_RATIONALE`; the service
+     * refuses a blank one with a 400. It replaces the version's previous
+     * rationale.
+     */
     reviewNotes: z.string().max(8000).nullable().optional(),
   })
   .strict();
 export type ReviewRouteVersionRequest = z.infer<typeof ReviewRouteVersionRequestSchema>;
+
+/**
+ * Why the caller may not record a review outcome on a version: they hold no
+ * reviewer role, or they registered the route or declared the version
+ * (review is in pairs).
+ */
+export const RouteReviewBarSchema = z.enum(['NOT_A_REVIEWER', 'SUBMITTED_BY_YOU', 'DECLARED_BY_YOU']);
+export type RouteReviewBar = z.infer<typeof RouteReviewBarSchema>;
+
+/**
+ * `GET /v2/evaluation/routes/:slug/permissions` — what the signed-in caller
+ * may do on a route, computed by the same rules the write endpoints apply,
+ * so the browser shows only the actions the API would accept. It says
+ * nothing about anyone but the caller.
+ */
+export const RoutePermissionsResponseSchema = z.object({
+  slug: z.string(),
+  /** True when the caller registered the route. */
+  isSubmitter: z.boolean(),
+  /** The route's submitter, or `admin`. */
+  canDeclareVersion: z.boolean(),
+  versions: z.array(
+    z.object({
+      version: z.string(),
+      reviewStatus: RouteReviewStatusSchema,
+      /** The statuses the caller may move this version to now. */
+      allowedTransitions: z.array(RouteReviewStatusSchema),
+      /**
+       * Why the caller may not review this version, when a review step is
+       * still open on it and they are barred from it. Null otherwise.
+       */
+      reviewBar: RouteReviewBarSchema.nullable(),
+    }),
+  ),
+});
+export type RoutePermissionsResponse = z.infer<typeof RoutePermissionsResponseSchema>;
 
 export const RouteVersionResponseSchema = z.object({
   id: z.string().uuid(),
