@@ -1,4 +1,9 @@
-import type { PredictionRow, SubmissionValidationReport } from '@oci/shared-types';
+import type {
+  EvaluationTaskKindDb,
+  PredictionRow,
+  SubmissionValidationReport,
+} from '@oci/shared-types';
+import { BINARY_DIAGNOSTIC_TEXT as BD } from './binary-diagnostic-text';
 
 /**
  * Turns the API's validation report into what the submit page prints under
@@ -18,7 +23,7 @@ import type { PredictionRow, SubmissionValidationReport } from '@oci/shared-type
 export const MAX_LISTED_ITEM_IDS = 20;
 
 export interface FormatProblem {
-  key: 'duplicates' | 'unknown' | 'labels' | 'other';
+  key: 'duplicates' | 'unknown' | 'labels' | 'scores' | 'other';
   title: string;
   detail: string;
   /** The first identifiers concerned; `itemIdCount` says how many there are. */
@@ -39,12 +44,19 @@ export interface FormatReportView {
   problems: FormatProblem[];
   /** Task items the file has no row for. Allowed: they lower coverage. */
   missing: { itemIds: string[]; count: number };
+  /**
+   * For a task that takes scores (#650): one sentence on whether the result
+   * can include an AUC. `null` for every other kind, and when no line of the
+   * file belongs to the task (that problem is reported on its own).
+   * Informational only — a file with some scores missing is still valid.
+   */
+  scoreNote: string | null;
 }
 
 export function buildFormatReport(args: {
   report: SubmissionValidationReport;
   predictions: readonly PredictionRow[];
-  task: { itemIds: readonly string[]; numClasses: number };
+  task: { itemIds: readonly string[]; numClasses: number; taskKind: EvaluationTaskKindDb };
 }): FormatReportView {
   const { report, predictions, task } = args;
 
@@ -85,6 +97,22 @@ export function buildFormatReport(args: {
           ...ids,
         });
         break;
+      case 'PAYLOAD_SHAPE':
+        // The one way this check fails today: a score sent to a task that
+        // takes none. Decided from the file itself (a task without scores, a
+        // row with one), not from the API's wording; anything else falls back
+        // to the API's own text.
+        problems.push(
+          task.taskKind !== 'BINARY_DIAGNOSTIC' && predictions.some((p) => p.score !== undefined)
+            ? {
+                key: 'scores',
+                title: BD.formatCheck.scoresRefusedTitle,
+                detail: BD.formatCheck.scoresRefusedDetail,
+                ...ids,
+              }
+            : { key: 'other', title: 'Check failed', detail: check.detail, ...ids },
+        );
+        break;
       default:
         problems.push({ key: 'other', title: 'Check failed', detail: check.detail, ...ids });
     }
@@ -100,5 +128,26 @@ export function buildFormatReport(args: {
     recognised,
     problems,
     missing: { itemIds: missing.slice(0, MAX_LISTED_ITEM_IDS), count: missing.length },
+    scoreNote:
+      task.taskKind === 'BINARY_DIAGNOSTIC' ? scoreNoteFor(predictions, task.itemIds) : null,
   };
+}
+
+/**
+ * Whether the result can include an AUC, from the file and the task's public
+ * identifiers alone: AUC needs a score on every line that is scored, and a
+ * line is scored when its identifier belongs to the task. `null` when no line
+ * belongs to the task: there is nothing to say about scores until there is.
+ */
+function scoreNoteFor(
+  predictions: readonly PredictionRow[],
+  itemIds: readonly string[],
+): string | null {
+  const taskIds = new Set(itemIds);
+  const matched = predictions.filter((p) => taskIds.has(p.imageId));
+  if (matched.length === 0) return null;
+  const unscored = matched.filter((p) => p.score === undefined).length;
+  if (unscored === 0) return BD.formatCheck.allScored;
+  if (unscored === matched.length) return BD.formatCheck.noneScored;
+  return BD.formatCheck.someUnscored(unscored.toLocaleString('en-GB'));
 }

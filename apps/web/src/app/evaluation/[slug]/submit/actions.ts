@@ -141,7 +141,21 @@ export async function submitPredictionsAction(
     return fail('The file is too large.', { fileError, fileName });
   }
 
-  const parsed = parsePredictionsFile(await file.text());
+  // The task first: whether the file may carry a score column depends on its
+  // kind (#650). Public read, no token. If the service cannot be reached, the
+  // file is still read (leniently, a score column allowed) so its own problems
+  // are reported, as they were before the task was needed for reading it.
+  let task: EvaluationTaskDetail | null = null;
+  let unreachable = false;
+  try {
+    task = await apiFetch<EvaluationTaskDetail>(taskPath, { revalidate: 0 });
+  } catch {
+    unreachable = true;
+  }
+
+  const parsed = parsePredictionsFile(await file.text(), {
+    allowScore: task ? task.taskKind === 'BINARY_DIAGNOSTIC' : true,
+  });
   if (!parsed.ok) {
     const count = parsed.issueCount;
     return fail('The file could not be read. Nothing was sent for scoring.', {
@@ -158,15 +172,12 @@ export async function submitPredictionsAction(
     });
   }
 
-  // ---- the format check (no token) ------------------------------------------
-
-  let task: EvaluationTaskDetail | null;
-  try {
-    task = await apiFetch<EvaluationTaskDetail>(taskPath, { revalidate: 0 });
-  } catch {
+  if (unreachable) {
     return fail('The scoring service could not be reached. Try again in a moment.', { fileName });
   }
   if (!task) return fail('This evaluation task does not exist.', { fileName });
+
+  // ---- the format check (no token) ------------------------------------------
 
   const report = await checkFormat(`${base}${taskPath}/submissions`, {
     methodName: values.methodName || UNNAMED_CHECK,

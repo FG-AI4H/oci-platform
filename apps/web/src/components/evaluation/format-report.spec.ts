@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { buildFormatReport, MAX_LISTED_ITEM_IDS } from './format-report';
 import { metricCells } from './metrics';
 
-const TASK = { itemIds: ['img_a', 'img_b', 'img_c', 'img_d'], numClasses: 2 };
+const TASK = {
+  itemIds: ['img_a', 'img_b', 'img_c', 'img_d'],
+  numClasses: 2,
+  taskKind: 'CLASSIFICATION' as const,
+};
+const BINARY_TASK = { ...TASK, taskKind: 'BINARY_DIAGNOSTIC' as const };
 
 function check(
   name: SubmissionValidationCheck['name'],
@@ -46,6 +51,7 @@ describe('buildFormatReport (#645)', () => {
       recognised: 2,
       problems: [],
       missing: { itemIds: ['img_b', 'img_d'], count: 2 },
+      scoreNote: null,
     });
   });
 
@@ -92,7 +98,7 @@ describe('buildFormatReport (#645)', () => {
     const view = buildFormatReport({
       report: report([check('PAYLOAD_SHAPE', true)], 1),
       predictions: [row('img_00')],
-      task: { itemIds, numClasses: 2 },
+      task: { itemIds, numClasses: 2, taskKind: 'CLASSIFICATION' },
     });
     expect(view.missing.itemIds).toHaveLength(MAX_LISTED_ITEM_IDS);
     expect(view.missing.count).toBe(49);
@@ -173,5 +179,167 @@ describe('metricCells (#645)', () => {
     const cells = metricCells({ taskKind: 'CLASSIFICATION', referableThreshold: 1 }, null);
     expect(cells[0]?.label).toBe('Macro F1');
     expect(cells.every((c) => c.value === null)).toBe(true);
+  });
+});
+
+describe('buildFormatReport — scores (#650)', () => {
+  it('restates a refused score in the reader’s terms', () => {
+    const view = buildFormatReport({
+      report: report(
+        [
+          {
+            name: 'PAYLOAD_SHAPE',
+            ok: false,
+            detail:
+              '1 prediction row(s) carry a score. This task takes one label per item and no score; remove the score values.',
+            itemIds: ['img_a'],
+            itemIdCount: 1,
+          },
+        ],
+        1,
+      ),
+      predictions: [{ imageId: 'img_a', grade: 1, score: 0.4 }],
+      task: TASK,
+    });
+    expect(view.problems).toEqual([
+      expect.objectContaining({
+        key: 'scores',
+        title: 'Scores this task does not take',
+        itemIds: ['img_a'],
+      }),
+    ]);
+    expect(view.scoreNote).toBeNull();
+  });
+
+  it.each([
+    [
+      [
+        { imageId: 'img_a', grade: 1, score: 0.9 },
+        { imageId: 'img_b', grade: 0, score: 0.2 },
+        { imageId: 'img_zz', grade: 0 },
+      ],
+      'Every matched line has a score, so the result can include an AUC: it is reported when the scored items include both positive and negative cases.',
+    ],
+    [
+      [row('img_a'), row('img_b')],
+      'No line has a score, so the result will not include an AUC. That is allowed.',
+    ],
+    [
+      [{ imageId: 'img_a', grade: 1, score: 0.9 }, row('img_b')],
+      '1 matched line has no score, so the result will not include an AUC. That is allowed; add a score to every line to get one.',
+    ],
+  ])('says whether a binary result will include an AUC (%#)', (predictions, note) => {
+    const view = buildFormatReport({
+      report: report([check('PAYLOAD_SHAPE', true)], 2),
+      predictions,
+      task: BINARY_TASK,
+    });
+    expect(view.ok).toBe(true);
+    expect(view.scoreNote).toBe(note);
+  });
+});
+
+describe('buildFormatReport — no score note without a matched line (#650)', () => {
+  it('says nothing about scores when no line belongs to the task', () => {
+    const view = buildFormatReport({
+      report: report([check('ITEM_IDS_RECOGNISED', false, ['zz'])], 0),
+      predictions: [{ imageId: 'zz', grade: 1, score: 0.9 }],
+      task: BINARY_TASK,
+    });
+    expect(view.scoreNote).toBeNull();
+  });
+});
+
+describe('metricCells — binary finding (#650)', () => {
+  const p = (
+    numerator: number,
+    denominator: number,
+    estimate: number,
+    lower: number,
+    upper: number,
+  ) => ({
+    estimate,
+    lower,
+    upper,
+    numerator,
+    denominator,
+  });
+  const metrics = {
+    truePositives: 40,
+    falsePositives: 5,
+    trueNegatives: 45,
+    falseNegatives: 10,
+    prevalence: p(50, 100, 0.5, 0.4038, 0.5962),
+    sensitivity: p(40, 50, 0.8, 0.6696, 0.8876),
+    specificity: p(45, 50, 0.9, 0.7864, 0.9565),
+    positivePredictiveValue: p(40, 45, 0.8889, 0.765, 0.9516),
+    negativePredictiveValue: p(45, 55, 0.8182, 0.6967, 0.8981),
+    accuracy: p(85, 100, 0.85, 0.7672, 0.9069),
+    balancedAccuracy: 0.85,
+    auc: null,
+    coverage: 1,
+  };
+  const task = {
+    taskKind: 'BINARY_DIAGNOSTIC' as const,
+    referableThreshold: 1,
+    positiveClassName: 'Pneumothorax present',
+  };
+
+  it('names every metric in full, with its interval and what it rests on', () => {
+    const cells = metricCells(task, { kind: 'BINARY_DIAGNOSTIC', metrics });
+    expect(cells.map((c) => c.label)).toEqual([
+      'Balanced accuracy',
+      'Sensitivity',
+      'Specificity',
+      'Positive predictive value',
+      'Negative predictive value',
+      'Area under the ROC curve (AUC)',
+      'Accuracy',
+      'Prevalence',
+      'Coverage',
+    ]);
+    const sensitivity = cells[1];
+    expect(sensitivity?.value).toBe('80%');
+    expect(sensitivity?.interval?.text).toBe('95% CI 67% to 88.8%');
+    expect(sensitivity?.basis).toBe('40 of 50');
+    expect(sensitivity?.explanation).toContain('Pneumothorax present');
+  });
+
+  it('says why AUC is missing on a scored submission, and leaves it blank on an unscored one', () => {
+    const scored = metricCells(task, { kind: 'BINARY_DIAGNOSTIC', metrics });
+    expect(scored.find((c) => c.key === 'auc')?.absent?.label).toBe('Not reported');
+    const unscored = metricCells(task, null);
+    expect(unscored.every((c) => c.value === null && !c.absent)).toBe(true);
+  });
+
+  it('formats AUC on a 0 to 1 scale, not as a percentage', () => {
+    const cells = metricCells(task, {
+      kind: 'BINARY_DIAGNOSTIC',
+      metrics: {
+        ...metrics,
+        auc: { estimate: 0.875, lower: 0.5, upper: 1, resamples: 2000, seed: 650 },
+      },
+    });
+    const auc = cells.find((c) => c.key === 'auc');
+    expect(auc?.value).toBe('0.875');
+    expect(auc?.interval?.text).toBe('95% CI 0.500 to 1.000');
+  });
+
+  it('keeps the task page row to the headline, the four rates and AUC', () => {
+    expect(metricCells(task, null, 'row')).toHaveLength(6);
+  });
+
+  it('falls back to "Finding present" when the task names no positive class', () => {
+    const cells = metricCells({ ...task, positiveClassName: null }, null);
+    expect(cells[1]?.explanation).toContain('Finding present');
+  });
+
+  it('shows a not-estimable balanced accuracy in words, never as 0%', () => {
+    const cells = metricCells(task, {
+      kind: 'BINARY_DIAGNOSTIC',
+      metrics: { ...metrics, specificity: null, balancedAccuracy: null },
+    });
+    expect(cells[0]?.value).toBeNull();
+    expect(cells[0]?.absent?.label).toBe('Not estimable');
   });
 });

@@ -344,6 +344,9 @@ function FormatReport({
             {n(report.taskItemCount)} items in this task.
           </p>
 
+          {/* Binary-finding tasks only: whether the result will include an AUC. */}
+          {report.scoreNote ? <p>{report.scoreNote}</p> : null}
+
           {report.problems.map((problem) => (
             <ReportSection key={problem.key} title={problem.title} count={problem.itemIdCount}>
               <p>{problem.detail}</p>

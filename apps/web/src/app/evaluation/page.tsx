@@ -15,6 +15,7 @@ import {
   ShieldIcon,
 } from '@oci/ui';
 import type { EvaluationTaskKindDb, EvaluationTaskSummary } from '@oci/shared-types';
+import { BINARY_DIAGNOSTIC_TEXT as BD } from '../../components/evaluation/binary-diagnostic-text';
 import { apiFetch } from '../../lib/api';
 
 /**
@@ -38,6 +39,7 @@ export const metadata = {
 const TASK_KIND_LABEL: Record<EvaluationTaskKindDb, string> = {
   GRADING: 'Grading',
   CLASSIFICATION: 'Classification',
+  BINARY_DIAGNOSTIC: BD.taskKindLabel,
 };
 
 export default async function EvaluationTasksPage() {

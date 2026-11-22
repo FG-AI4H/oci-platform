@@ -25,7 +25,12 @@ import type {
   SubmissionStatus,
 } from '@oci/shared-types';
 import { apiFetch } from '../../../lib/api';
-import { metricCells, TASK_KIND_LABEL } from '../../../components/evaluation/metrics';
+import { BINARY_DIAGNOSTIC_TEXT as BD } from '../../../components/evaluation/binary-diagnostic-text';
+import {
+  metricCells,
+  TASK_KIND_LABEL,
+  type MetricCell,
+} from '../../../components/evaluation/metrics';
 import {
   describeAttribution,
   isPublishedResult,
@@ -118,6 +123,7 @@ export default async function EvaluationTaskDetailPage({
 
   const topLabel = detail.numClasses - 1;
   const isGrading = detail.taskKind === 'GRADING';
+  const isBinary = detail.taskKind === 'BINARY_DIAGNOSTIC';
   const submitHref = `/evaluation/${encodeURIComponent(detail.slug)}/submit` as const;
   const scoredCount = detail.submissions.filter((s) => s.scores !== null).length;
   const publishedCount = detail.submissions.filter((s) => isPublishedResult(s.attribution)).length;
@@ -176,7 +182,9 @@ export default async function EvaluationTaskDetailPage({
               <CardDescription>
                 {isGrading
                   ? 'What is being scored, on which dataset, and where the referable cut-off sits.'
-                  : 'What is being scored, on which dataset, and which labels a prediction may take.'}
+                  : isBinary
+                    ? BD.about.description
+                    : 'What is being scored, on which dataset, and which labels a prediction may take.'}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -219,6 +227,18 @@ export default async function EvaluationTaskDetailPage({
                         counts as non-referable.
                       </span>
                     </DefinitionItem>
+                  </>
+                ) : isBinary ? (
+                  // The published metric configuration states the positive
+                  // class in words (#650): it is what sensitivity and the
+                  // positive predictive value are about.
+                  <>
+                    <DefinitionItem term={BD.about.positiveClassTerm}>
+                      {detail.positiveClassName
+                        ? BD.about.positiveClass(detail.positiveClassName)
+                        : BD.about.positiveClassMissing}
+                    </DefinitionItem>
+                    <DefinitionItem term={BD.about.classesTerm}>{BD.about.classes}</DefinitionItem>
                   </>
                 ) : (
                   <DefinitionItem term="Classes">
@@ -308,7 +328,11 @@ export default async function EvaluationTaskDetailPage({
             <CardHeader>
               <CardTitle as="h2">Results</CardTitle>
               <CardDescription>
-                {detail.taskKind === 'CLASSIFICATION' ? (
+                {isBinary ? (
+                  <>
+                    {BD.results.ordering} {BD.results.intervals}
+                  </>
+                ) : detail.taskKind === 'CLASSIFICATION' ? (
                   <>
                     Ordered best first by <strong>macro F1</strong> — the mean per-class F1 over the
                     classes this evaluation set contains, so a model that ignores a rare class
@@ -378,7 +402,10 @@ function SubmissionRow({
 }: {
   submission: EvaluationSubmissionResult;
   rank: number | null;
-  task: Pick<EvaluationTaskDetail, 'slug' | 'taskKind' | 'referableThreshold'>;
+  task: Pick<
+    EvaluationTaskDetail,
+    'slug' | 'taskKind' | 'referableThreshold' | 'positiveClassName'
+  >;
 }) {
   const { scores, attribution } = submission;
   const note = STATUS_NOTE[submission.status];
@@ -426,12 +453,18 @@ function SubmissionRow({
         <p className="mt-2 text-sm text-[var(--color-muted-foreground)]">{attributionNote}</p>
       ) : null}
 
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-5">
-        {metricCells(task, scores).map((cell, i) => (
+      <dl
+        className={
+          'mt-4 grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 ' +
+          // A binary row's cells carry an interval line; three columns keep
+          // each label and each interval on one line and the values aligned.
+          (task.taskKind === 'BINARY_DIAGNOSTIC' ? '' : 'lg:grid-cols-5')
+        }
+      >
+        {metricCells(task, scores, 'row').map((cell, i) => (
           <Metric
-            key={cell.label}
-            label={cell.label}
-            value={cell.value}
+            key={cell.key}
+            cell={cell}
             headline={i === 0}
             className={i === 0 ? 'col-span-2 sm:col-span-1' : undefined}
           />
@@ -492,23 +525,23 @@ function AttributionLine({
 
 /**
  * One metric cell. `value === null` renders an em dash — the case for a
- * PENDING or FAILED submission, which carries no scores at all.
+ * PENDING or FAILED submission, which carries no scores at all — or, on a
+ * scored binary result, the short reason the figure is absent. A binary rate
+ * also carries its 95% interval on a second line.
  */
 function Metric({
-  label,
-  value,
+  cell,
   headline,
   className,
 }: {
-  label: string;
-  value: string | null;
+  cell: MetricCell;
   headline?: boolean;
   className?: string;
 }) {
   return (
     <div className={className}>
       <dt className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
-        {label}
+        {cell.label}
       </dt>
       <dd
         className={
@@ -516,13 +549,24 @@ function Metric({
           (headline ? 'text-3xl' : 'text-lg')
         }
       >
-        {value ?? (
-          <>
-            <span aria-hidden="true">—</span>
-            <span className="sr-only">Not scored</span>
-          </>
-        )}
+        {cell.value ??
+          (cell.absent ? (
+            <span className="text-sm font-medium text-[var(--color-muted-foreground)]">
+              {cell.absent.label}
+            </span>
+          ) : (
+            <>
+              <span aria-hidden="true">—</span>
+              <span className="sr-only">Not scored</span>
+            </>
+          ))}
       </dd>
+      {cell.interval ? (
+        <dd className="mt-0.5 text-xs tabular-nums text-[var(--color-muted-foreground)]">
+          <span aria-hidden="true">{cell.interval.text}</span>
+          <span className="sr-only">{cell.interval.spoken}</span>
+        </dd>
+      ) : null}
     </div>
   );
 }

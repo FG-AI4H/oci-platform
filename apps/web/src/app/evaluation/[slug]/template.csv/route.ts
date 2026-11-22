@@ -39,7 +39,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   }
 
   const semicolon = new URL(req.url).searchParams.get('sep') === 'semicolon';
-  const csv = predictionsTemplateCsv(task.itemIds, semicolon ? ';' : ',');
+  // A binary-finding task also takes an optional score per item (#650).
+  const csv = predictionsTemplateCsv(task.itemIds, semicolon ? ';' : ',', {
+    withScore: task.taskKind === 'BINARY_DIAGNOSTIC',
+  });
 
   return new NextResponse(csv, {
     status: 200,

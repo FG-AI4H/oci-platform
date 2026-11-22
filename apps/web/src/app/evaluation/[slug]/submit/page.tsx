@@ -17,6 +17,8 @@ import {
 } from '@oci/ui';
 import type { EvaluationTaskDetail, ScoredSubmissionQuotaSummary } from '@oci/shared-types';
 import { auth } from '../../../../auth';
+import { BINARY_DIAGNOSTIC_TEXT as BD } from '../../../../components/evaluation/binary-diagnostic-text';
+import { positiveClassOf } from '../../../../components/evaluation/metrics';
 import { describeQuota } from '../../../../components/evaluation/quota-text';
 import { ApiError, apiFetch } from '../../../../lib/api';
 import { SubmitPredictionsForm, type ScoringAccess } from './submit-form';
@@ -105,6 +107,15 @@ export default async function SubmitPredictionsPage({
   const n = (value: number) => value.toLocaleString('en-GB');
   // Two real identifiers make the example recognisable next to the template.
   const exampleIds = task.itemIds.slice(0, 2);
+  const isBinary = task.taskKind === 'BINARY_DIAGNOSTIC';
+  const itemsText = `${n(task.itemCount)} ${task.itemCount === 1 ? 'item' : 'items'}`;
+  // A binary task's example shows the optional score column filled in.
+  const exampleLines = isBinary
+    ? [
+        'item_id,label,score',
+        ...exampleIds.map((id, i) => `${id},${i % 2},${i % 2 ? '0.83' : '0.12'}`),
+      ]
+    : ['item_id,label', ...exampleIds.map((id, i) => `${id},${Math.min(i, topLabel)}`)];
 
   return (
     <Container size="md">
@@ -141,9 +152,9 @@ export default async function SubmitPredictionsPage({
                 <CardHeader>
                   <StepTitle step={1}>Get the template</StepTitle>
                   <CardDescription>
-                    A spreadsheet file with one line for each of the {n(task.itemCount)}{' '}
-                    {task.itemCount === 1 ? 'item' : 'items'} in this task, and an empty column for
-                    your labels.
+                    {isBinary
+                      ? BD.submit.templateDescription(itemsText)
+                      : `A spreadsheet file with one line for each of the ${itemsText} in this task, and an empty column for your labels.`}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -169,28 +180,37 @@ export default async function SubmitPredictionsPage({
                 <CardHeader>
                   <StepTitle step={2}>Fill in the labels</StepTitle>
                   <CardDescription>
-                    In the <code className="font-mono text-xs">label</code> column, type a whole
-                    number from 0 to {n(topLabel)} for each item.{' '}
-                    {task.taskKind === 'GRADING' ? (
-                      <>
-                        The number is the grade; {n(task.referableThreshold)} or more counts as
-                        referable.
-                      </>
+                    {isBinary ? (
+                      BD.submit.fillIn(positiveClassOf(task))
                     ) : (
-                      <>Each number stands for one of the {n(task.numClasses)} classes.</>
+                      <>
+                        In the <code className="font-mono text-xs">label</code> column, type a whole
+                        number from 0 to {n(topLabel)} for each item.{' '}
+                        {task.taskKind === 'GRADING' ? (
+                          <>
+                            The number is the grade; {n(task.referableThreshold)} or more counts as
+                            referable.
+                          </>
+                        ) : (
+                          <>Each number stands for one of the {n(task.numClasses)} classes.</>
+                        )}
+                      </>
                     )}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {/* The optional score is its own paragraph, so the one thing
+                      everyone must do (the label) is not buried under it. */}
+                  {isBinary ? (
+                    <p className="max-w-prose text-sm text-[var(--color-muted-foreground)]">
+                      {BD.submit.scoreHint}
+                    </p>
+                  ) : null}
                   <pre
                     aria-label="Example of a filled-in file"
                     className="overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-4 font-mono text-xs text-[var(--color-foreground)]"
                   >
-                    {[
-                      'item_id,label',
-                      ...exampleIds.map((id, i) => `${id},${Math.min(i, topLabel)}`),
-                      '…',
-                    ].join('\n')}
+                    {[...exampleLines, '…'].join('\n')}
                   </pre>
                   <ul className="list-disc space-y-1 ps-5 text-sm text-[var(--color-muted-foreground)]">
                     <li>Do not change the identifiers or the first line.</li>
