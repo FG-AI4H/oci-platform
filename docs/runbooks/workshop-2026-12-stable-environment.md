@@ -199,8 +199,10 @@ TASK=$(aws ecs run-task --launch-type FARGATE --started-by workshop-restore \
   --query 'tasks[0].taskArn' --output text)
 aws ecs wait tasks-stopped --cluster "$(echo "$SPEC" | jq -r .cluster)" --tasks "$TASK"
 aws ecs describe-tasks --cluster "$(echo "$SPEC" | jq -r .cluster)" --tasks "$TASK" \
-  --query 'tasks[0].containers[0].[exitCode,reason]' --output text   # 0 means applied
+  --query "tasks[0].containers[?name=='migrate'].[exitCode,reason] | [0]" --output text   # 0 means applied
 ```
+
+The `migrate` container is named in the query on purpose: AWS GuardDuty adds a monitoring container to every task, which always exits 0 and is sometimes listed first.
 
 If the role may not start the task, the fallback is the Deploy workflow run by hand with `override_freeze`. It does a `cdk deploy` first, so afterwards check the host in both secrets again (the two lines in R4).
 

@@ -64,7 +64,7 @@ echo "$TASK"
 ```bash
 aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK"
 aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK" \
-  --query 'tasks[0].containers[0].exitCode' --output text
+  --query "tasks[0].containers[?name=='migrate'].exitCode | [0]" --output text
 aws logs get-log-events --log-group-name /oci/dev/api \
   --log-stream-name "migrate/migrate/${TASK##*/}" --query 'events[].message' --output text
 ```
@@ -74,6 +74,8 @@ aws logs get-log-events --log-group-name /oci/dev/api \
 | `0`       | It ran. A dry run says `rolled back, nothing was changed`; an applied run says `APPLIED ... and recorded as run <id>`                                                            |
 | `1`       | The statement failed or the database was unreachable. Rolled back, nothing changed, unless the line says `MAY HAVE BEEN COMMITTED`. The line starting `one-off: FAILED` says why |
 | `2`       | Refused before anything ran. The line starting `one-off: REFUSED` says why                                                                                                       |
+
+**Read the exit code of the `migrate` container, by name.** The task also holds a monitoring container that AWS GuardDuty adds to every task, which always exits 0 and is sometimes listed first. Reading the first container instead of `migrate` reported a refused run as `0` on `dev`. The last line of the log says the same thing in words, and is the one to keep in the record.
 
 The output shows the run's id, the statement and its sha256, the environment and database, each parameter, every row the statement returned and every notice it raised. The two people compare it with what they expect. **If the sha256 printed is not the one you computed, stop:** the image does not hold the text you reviewed.
 
