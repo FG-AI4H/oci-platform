@@ -280,6 +280,11 @@ try {
   await client.query(`SET LOCAL application_name = 'oci-one-off'`);
   await client.query(`SET LOCAL statement_timeout = '10min'`);
   await client.query(`SET LOCAL lock_timeout = '15s'`);
+  // UTC whatever the server or the role says. audit_events.occurred_at
+  // has no time zone: its default takes the session's clock, and the
+  // chain trigger hashes it as formatted in the session's zone. Anything
+  // but UTC records the wrong time and a hash no verifier reproduces.
+  await client.query(`SET LOCAL TIME ZONE 'UTC'`);
   // The run id, for a statement that records itself (the sample deletion
   // does), so that its record points at this run's.
   await client.query(`SELECT set_config('oci.one_off_run', $1, true)`, [run]);
