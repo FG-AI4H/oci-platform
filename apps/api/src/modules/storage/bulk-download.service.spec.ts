@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 import {
   ConflictException,
   ForbiddenException,
+  Logger,
   NotFoundException,
   PayloadTooLargeException,
 } from '@nestjs/common';
@@ -481,6 +482,108 @@ describe('BulkDownloadService.buildZip', () => {
 
     await collect(stream);
     expect(s3.client.send).toHaveBeenCalledTimes(2);
+  });
+});
+
+// The HTTP-level behaviour (truncated response, server keeps serving) is in
+// bulk-download.stream-errors.spec.ts; these pin the stream contract.
+describe('BulkDownloadService.buildZip — failures (#772)', () => {
+  let logError: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    prisma.client.distribution.findMany.mockResolvedValue([
+      row({ id: 'r1', s3Key: 'idrid/r1/a.jpg' }),
+      row({ id: 'r2', s3Key: 'idrid/r2/b.jpg' }),
+    ]);
+    logError = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    logError.mockRestore();
+  });
+
+  const keyOf = (cmd: unknown) => (cmd as { input: { Key: string } }).input.Key;
+
+  it('destroys the archive stream and logs once when an object cannot be opened', async () => {
+    s3.client.send.mockImplementation((cmd: unknown) =>
+      keyOf(cmd) === 'idrid/r2/b.jpg'
+        ? Promise.reject(new Error('connect ECONNREFUSED'))
+        : Promise.resolve({ Body: Readable.from([Buffer.from('bytes')]) }),
+    );
+
+    await expect(collect(svc.buildZip(await plan()))).rejects.toMatchObject({
+      code: 'ERR_STREAM_PREMATURE_CLOSE',
+    });
+    expect(logError).toHaveBeenCalledTimes(1);
+    expect(String(logError.mock.calls[0]?.[0])).toBe(
+      'bulk download idrid: could not open s3://test-bucket/idrid/r2/b.jpg; response aborted',
+    );
+  });
+
+  it('destroys the archive stream and logs once when an object stream errors mid-read', async () => {
+    const failing = new Readable({ read() {} });
+    failing.push(Buffer.from('partial'));
+    setTimeout(() => failing.destroy(new Error('socket reset')), 5);
+    s3.client.send.mockResolvedValue({ Body: failing });
+
+    await expect(collect(svc.buildZip(await plan()))).rejects.toMatchObject({
+      code: 'ERR_STREAM_PREMATURE_CLOSE',
+    });
+    expect(logError).toHaveBeenCalledTimes(1);
+    expect(String(logError.mock.calls[0]?.[0])).toContain('lost s3://test-bucket/idrid/r1/a.jpg');
+    // Stopped at the failing entry.
+    expect(s3.client.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats an object stream that closes without ending as a failure', async () => {
+    const closing = new Readable({ read() {} });
+    closing.push(Buffer.from('partial'));
+    setTimeout(() => closing.destroy(), 5);
+    s3.client.send.mockResolvedValue({ Body: closing });
+
+    await expect(collect(svc.buildZip(await plan()))).rejects.toMatchObject({
+      code: 'ERR_STREAM_PREMATURE_CLOSE',
+    });
+    expect(logError).toHaveBeenCalledTimes(1);
+    expect(String(logError.mock.calls[0]?.[0])).toContain('lost s3://test-bucket/idrid/r1/a.jpg');
+  });
+
+  it('passes an abort signal to GetObject and fires it when the consumer goes away', async () => {
+    let signal: AbortSignal | undefined;
+    s3.client.send.mockImplementation((_cmd: unknown, opts?: { abortSignal?: AbortSignal }) => {
+      signal = opts?.abortSignal;
+      return new Promise(() => undefined);
+    });
+
+    const stream = svc.buildZip(await plan());
+    stream.resume();
+    await vi.waitFor(() => expect(s3.client.send).toHaveBeenCalledTimes(1));
+    stream.destroy();
+
+    await vi.waitFor(() => expect(signal?.aborted).toBe(true));
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it('destroys an object body that arrives after the consumer went away', async () => {
+    const late = new Readable({ read() {} });
+    let deliver: (() => void) | undefined;
+    s3.client.send.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          deliver = () => resolve({ Body: late });
+        }),
+    );
+
+    const stream = svc.buildZip(await plan());
+    stream.resume();
+    await vi.waitFor(() => expect(deliver).toBeDefined());
+    stream.destroy();
+    await new Promise((r) => setImmediate(r));
+    deliver?.();
+
+    await vi.waitFor(() => expect(late.destroyed).toBe(true));
+    expect(s3.client.send).toHaveBeenCalledTimes(1);
+    expect(logError).not.toHaveBeenCalled();
   });
 });
 
