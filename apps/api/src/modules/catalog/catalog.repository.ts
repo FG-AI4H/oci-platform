@@ -397,6 +397,13 @@ export class CatalogRepository {
     })) as DatasetRow;
   }
 
+  async findIdAndNameBySlug(slug: string): Promise<{ id: string; name: string } | null> {
+    return (await this.prisma.client.dataset.findUnique({
+      where: { slug },
+      select: { id: true, name: true },
+    })) as { id: string; name: string } | null;
+  }
+
   async findIdAndHostBySlug(slug: string): Promise<{
     id: string;
     hostId: string;

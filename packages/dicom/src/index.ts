@@ -9,6 +9,8 @@ export {
   IDENTIFYING_ATTRIBUTES,
   MAX_SEQUENCE_DEPTH,
   SEQUENCE_DEPTH_EXCEEDED,
+  WHOLE_FILE_FINDING_ATTRIBUTES,
+  isWholeFileFinding,
   sortFindings,
 } from './findings.js';
 export { groupIntoSeries, orderInstances } from './series.js';

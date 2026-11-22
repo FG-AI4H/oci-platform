@@ -1,3 +1,4 @@
+import type { AuditEmitter } from '@oci/audit';
 import { randomUUID } from 'node:crypto';
 import { S3Client } from '@aws-sdk/client-s3';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
@@ -269,7 +270,12 @@ describe.skipIf(!dockerAvailable)('exposure of a PRIVATE dataset against Postgre
       prismaService,
       catalog,
       accessRequests,
-      new DicomIndexService(s3, new DicomIndexRepository(prismaService)),
+      new DicomIndexService(
+        s3,
+        new DicomIndexRepository(prismaService),
+        // This spec uploads nothing, so nothing is released at upload.
+        {} as unknown as AuditEmitter,
+      ),
     );
     bulk = new BulkDownloadService(s3, prismaService, catalog, storage);
     series = new DicomSeriesService(new DicomSeriesRepository(prismaService), storage, catalog);

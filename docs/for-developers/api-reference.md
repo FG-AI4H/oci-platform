@@ -177,6 +177,26 @@ Response: `DicomSeriesDetail` — the fields of the list entry, plus `{ datasetS
 
 Both responses are sent with `Cache-Control: no-store`.
 
+### Operator review of held files _(admin)_
+
+Three routes for the review of held files. Admin only, on every route: the dataset's host is not admitted as such. None is cached. See [Reviewing held DICOM images](../for-operators/reviewing-held-dicom-images.md) for the rules these implement.
+
+**`GET /v2/storage/dicom/held`** returns `DicomHeldDatasetList`: the datasets with held files, `{ slug, name, heldInstanceCount, unreadableInstanceCount }`, the most held first.
+
+**`GET /v2/storage/datasets/:slug/dicom/findings`** returns `DicomFindingsReview`: the undecided findings of a dataset, one per (attribute, value), with `instanceCount` and `seriesCount`, plus the decisions already recorded. It writes nothing. Each finding carries:
+
+- `attribute` and `valueDigest`: how the finding is named. The digest is keyed; it is not a hash of the value alone.
+- `value`: read from a stored file for this response and stored nowhere. **It may identify a patient.** Do not log or keep it. `null` when it could not be read back; cut to 1,000 characters with `valueTruncated: true` when longer.
+- `wholeFile`: `true` for a finding about the file as a whole (`PrivateTags`, `BurnedInAnnotation`, `SequenceDepthExceeded`, `DataAfterPixelData`).
+- `acceptable`: `false` when a decision naming it will be refused.
+
+**`POST /v2/storage/datasets/:slug/dicom/findings/decisions`** takes `{ reason, findings: [{ attribute, valueDigest }] }` and returns `201` with `DicomFindingDecisionResult`: `{ decisionId, acceptedFindingCount, releasedInstanceCount, stillHeldInstanceCount }`. In one transaction it records the decision, releases every held file whose findings are now all accepted, and writes the audit event.
+
+- A finding with a value is accepted for the dataset and also covers files uploaded later. A whole-file finding is accepted on the files held at that moment only.
+- Only findings that are undecided on a held file of this dataset are accepted; others in the request are left out. `409` when none is.
+- `422` when a selected value cannot be read back from storage or is too long to be shown whole. Nothing is recorded.
+- Uploads with findings and decisions on the same dataset are serialised, so a file indexed while a decision is recorded is covered by it.
+
 ## Certification (#117)
 
 ### `GET /v2/certification/quizzes/:type`

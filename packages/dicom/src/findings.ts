@@ -42,6 +42,25 @@ const BURNED_IN_ANNOTATION = '00280301';
  * Past this depth the walk stops and says so with a finding: content
  * that was not looked at must never pass as clean.
  */
+/**
+ * Findings about a file as a whole. What they carry says nothing about
+ * the content of the file: every file with a burned-in annotation flag
+ * has the same "value", and so do all files with private tags in the
+ * same groups. A reviewer who accepts one has judged the files they
+ * looked at, not the next one: an acceptance of these must never be
+ * carried over to a file nobody examined (ADR-0026).
+ */
+export const WHOLE_FILE_FINDING_ATTRIBUTES: readonly string[] = [
+  'PrivateTags',
+  'BurnedInAnnotation',
+  'SequenceDepthExceeded',
+  'DataAfterPixelData',
+];
+
+export function isWholeFileFinding(attribute: string): boolean {
+  return WHOLE_FILE_FINDING_ATTRIBUTES.includes(attribute);
+}
+
 export const MAX_SEQUENCE_DEPTH = 8;
 
 /**

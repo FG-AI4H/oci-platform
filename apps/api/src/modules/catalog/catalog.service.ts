@@ -62,6 +62,15 @@ export class CatalogService {
     return this.repo.findIdAndHostBySlug(slug);
   }
 
+  /**
+   * Internal lookup for sibling modules that act on a dataset on behalf
+   * of a platform operator. No visibility filter: callers must have
+   * established that the caller is an operator.
+   */
+  async findNameBySlug(slug: DatasetSlug): Promise<{ id: string; name: string } | null> {
+    return this.repo.findIdAndNameBySlug(slug);
+  }
+
   async list(
     query: ListDatasetsQuery,
     user?: CognitoAccessTokenPayload,
