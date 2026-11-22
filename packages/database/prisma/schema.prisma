@@ -673,10 +673,11 @@ model Dataset {
   accessRequests      AccessRequest[]
   annotationCampaigns AnnotationCampaign[]
 
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  dicomObjects DicomObject[]
-  dicomSeries  DicomSeries[]
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  dicomObjects          DicomObject[]
+  dicomSeries           DicomSeries[]
+  dicomFindingDecisions DicomFindingDecision[]
 
   @@index([visibility, status])
   @@index([hostId])
@@ -809,6 +810,55 @@ model DicomObject {
   @@schema("catalog")
 }
 
+/// An operator's decision on de-identification findings of a dataset
+/// (#674, ADR-0026): these populated attributes, with these values, are
+/// accepted, for this reason. The values themselves are not here: a
+/// decision names them by the same keyed digest `dicom_findings` holds.
+/// A decision is never edited or deleted; a later one adds to it.
+///
+/// It accepts in two ways. A finding with a value (a patient id, a
+/// date) is accepted for the dataset, in `dicom_accepted_findings`, and
+/// so covers the same value in a file uploaded later. A finding about
+/// a file as a whole is accepted on the files held at that moment, in
+/// `dicom_findings.accepted_decision_id`, and on no other.
+model DicomFindingDecision {
+  id          String   @id @default(uuid()) @db.Uuid
+  datasetId   String   @map("dataset_id") @db.Uuid
+  /// Why the operator accepted the findings, in their own words.
+  reason      String
+  /// Soft FK → identity.users.id. The operator.
+  decidedById String   @map("decided_by_id") @db.Uuid
+  decidedAt   DateTime @default(now()) @map("decided_at") @db.Timestamptz(6)
+
+  dataset         Dataset                @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  accepted        DicomAcceptedFinding[]
+  acceptedOnFiles DicomFinding[]
+
+  @@index([datasetId, decidedAt])
+  @@map("dicom_finding_decisions")
+  @@schema("catalog")
+}
+
+/// One (attribute, value digest) a decision accepts, for one dataset.
+/// A stored file is released when every one of its findings has a row
+/// here for its dataset. `datasetId` is repeated from the decision so
+/// that this lookup is one index read, and so that a finding is
+/// accepted at most once per dataset.
+model DicomAcceptedFinding {
+  id          String @id @default(uuid()) @db.Uuid
+  decisionId  String @map("decision_id") @db.Uuid
+  datasetId   String @map("dataset_id") @db.Uuid
+  attribute   String
+  valueDigest String @map("value_digest")
+
+  decision DicomFindingDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+
+  @@unique([datasetId, attribute, valueDigest])
+  @@index([decisionId])
+  @@map("dicom_accepted_findings")
+  @@schema("catalog")
+}
+
 /// One row per DICOM series of a dataset (#674, ADR-0026). It gives the
 /// series an id of the platform's own, so that a route and, later, an
 /// annotation task can point at a series without carrying a DICOM UID
@@ -834,17 +884,27 @@ model DicomSeries {
 /// `valueDigest` is a keyed digest (HMAC-SHA-256), enough to tell
 /// whether a later file carries a value an operator has already judged.
 model DicomFinding {
-  id            String @id @default(uuid()) @db.Uuid
-  dicomObjectId String @map("dicom_object_id") @db.Uuid
+  id                 String  @id @default(uuid()) @db.Uuid
+  dicomObjectId      String  @map("dicom_object_id") @db.Uuid
   /// DICOM keyword, or a finding about the whole file (PrivateTags,
   /// BurnedInAnnotation, DataAfterPixelData, SequenceDepthExceeded).
-  attribute     String
-  valueDigest   String @map("value_digest")
+  attribute          String
+  valueDigest        String  @map("value_digest")
+  /// Set when an operator accepted THIS finding on THIS file. Used for
+  /// findings about the file as a whole (a burned-in annotation flag,
+  /// private tags, content the check did not reach): what they say
+  /// tells nothing about the content, so accepting one on the files an
+  /// operator looked at must not cover a file uploaded later. Findings
+  /// with a value are accepted for the dataset instead, in
+  /// `dicom_accepted_findings`.
+  acceptedDecisionId String? @map("accepted_decision_id") @db.Uuid
 
-  dicomObject DicomObject @relation(fields: [dicomObjectId], references: [id], onDelete: Cascade)
+  dicomObject      DicomObject           @relation(fields: [dicomObjectId], references: [id], onDelete: Cascade)
+  acceptedDecision DicomFindingDecision? @relation(fields: [acceptedDecisionId], references: [id], onDelete: SetNull)
 
   @@unique([dicomObjectId, attribute, valueDigest])
   @@index([attribute, valueDigest])
+  @@index([acceptedDecisionId])
   @@map("dicom_findings")
   @@schema("catalog")
 }
@@ -1884,12 +1944,12 @@ model Submission {
 
   task EvaluationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  @@index([taskId])
   /// One EvalAI submission pk = one OCI submission. Makes seam intake
   /// idempotent, so a forwarder retrying a timed-out POST cannot spend a
   /// second scored slot for the same entry. NULLs are distinct in Postgres, so
   /// directly-submitted rows (both columns null) are unconstrained.
   @@unique([externalChallengeId, externalSubmissionId], map: "submissions_external_ref_key")
+  @@index([taskId])
   @@map("submissions")
   @@schema("evaluation")
 }
