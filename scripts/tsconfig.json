@@ -8,6 +8,6 @@
     "sourceMap": false,
     "types": ["node"]
   },
-  "include": ["*.ts", "provisioning/**/*.ts", "radiology-workshop/**/*.ts"],
+  "include": ["*.ts", "provisioning/**/*.ts", "radiology-workshop/**/*.ts", "exam-intake/**/*.ts"],
   "exclude": ["node_modules"]
 }
