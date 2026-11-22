@@ -7,11 +7,17 @@ import { AuditController } from './audit.controller.js';
 
 type Handler = 'list' | 'verify' | 'exportCsv' | 'exportJson';
 const HANDLERS: Handler[] = ['list', 'verify', 'exportCsv', 'exportJson'];
+const METHODS = new Map<Handler, unknown>(
+  HANDLERS.map((name) => [
+    name,
+    Object.getOwnPropertyDescriptor(AuditController.prototype, name)?.value,
+  ]),
+);
 
 function ctx(handler: Handler, groups: string[] | undefined): ExecutionContext {
   const user = groups === undefined ? {} : { 'cognito:groups': groups };
   return {
-    getHandler: () => AuditController.prototype[handler],
+    getHandler: () => METHODS.get(handler),
     getClass: () => AuditController,
     switchToHttp: () => ({ getRequest: () => ({ user }) }),
   } as unknown as ExecutionContext;
