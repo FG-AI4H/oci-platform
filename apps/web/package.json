@@ -11,7 +11,7 @@
     "test": "vitest run --passWithNoTests",
     "e2e:session": "playwright test -c playwright.session.config.ts",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf .next .turbo"
+    "clean": "rm -rf .next .turbo tsconfig.tsbuildinfo"
   },
   "dependencies": {
     "@cornerstonejs/core": "5.19.4",

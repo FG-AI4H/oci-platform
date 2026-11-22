@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo tsconfig.tsbuildinfo"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

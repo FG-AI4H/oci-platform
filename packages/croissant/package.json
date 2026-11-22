@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "clean": "rm -rf dist .turbo"
+    "clean": "rm -rf dist .turbo tsconfig.tsbuildinfo"
   },
   "dependencies": {
     "@oci/shared-types": "workspace:*",
