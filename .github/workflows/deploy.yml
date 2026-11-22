@@ -277,14 +277,14 @@ jobs:
           package-manager-cache: false
 
       - name: Configure AWS via OIDC
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/gha-oci-deploy-${{ inputs.target || 'dev' }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login ECR
         id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@7290e214a610b32bc0eef81748948b6d466a8783 # v2.2.0
 
       # Per-image source-path filter. If none of an image's source paths
       # changed since the diff base (previous commit on main for `push`,
@@ -297,7 +297,7 @@ jobs:
       - name: Detect per-image source changes
         id: changes
         if: github.event_name == 'push'
-        uses: dorny/paths-filter@v4
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           base: ${{ github.event.before }}
           filters: |
@@ -391,7 +391,7 @@ jobs:
       # --platform linux/arm64 build is a no-op architecturally.
       - name: Setup Docker Buildx
         if: steps.decide.outputs.api == 'true' || steps.decide.outputs.web == 'true' || steps.decide.outputs.ingest == 'true' || steps.decide.outputs.migrate == 'true' || steps.decide.outputs.smtp_relay == 'true'
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Compute image tags for build
         id: meta
@@ -460,9 +460,20 @@ jobs:
       # linux/amd64 child in the manifest and fails.
       # Trivy is skipped when the image was reused — it was already
       # scanned at the prior deploy of the same content.
+      #
+      # Every third-party action in this workflow is pinned to a full
+      # commit SHA, with its release in the trailing comment (#740): these
+      # jobs hold the deploy role, so a moving ref would run whatever is on
+      # that ref with it. trivy-action v0.36.0 installs Trivy v0.70.0 by
+      # default; `version` keeps the scanner on v0.76.2, the release the
+      # action's `master` installed when the pin was taken, so pinning does
+      # not downgrade the scan. Bump the SHA and `version` together. The
+      # install script downloads the Trivy tarball from get.trivy.dev (the
+      # checksum comes from GitHub): if that host stops resolving, as it did
+      # on 2026-11-03/04, the scan fails with curl exit code 6.
       - name: Trivy image scan (API)
         if: steps.decide.outputs.api == 'true'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_PLATFORM: linux/arm64
         with:
@@ -470,10 +481,11 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           ignore-unfixed: true
+          version: 'v0.76.2'
 
       - name: Trivy image scan (Web)
         if: steps.decide.outputs.web == 'true'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_PLATFORM: linux/arm64
         with:
@@ -481,10 +493,11 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           ignore-unfixed: true
+          version: 'v0.76.2'
 
       - name: Trivy image scan (Migrate)
         if: steps.decide.outputs.migrate == 'true'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_PLATFORM: linux/arm64
         with:
@@ -492,10 +505,11 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           ignore-unfixed: true
+          version: 'v0.76.2'
 
       - name: Trivy image scan (SMTP relay)
         if: steps.decide.outputs.smtp_relay == 'true'
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         env:
           TRIVY_PLATFORM: linux/arm64
         with:
@@ -503,6 +517,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '1'
           ignore-unfixed: true
+          version: 'v0.76.2'
 
       # Resolve the URIs cdk-deploy will pass to the relevant stacks.
       # With ECR-aware decide, the SHA tag is always present after this
@@ -542,7 +557,7 @@ jobs:
         run: pnpm --filter "./packages/**" build && pnpm --filter "./infra/cdk" build
 
       - name: Configure AWS via OIDC
-        uses: aws-actions/configure-aws-credentials@v6
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/gha-oci-deploy-${{ inputs.target || 'dev' }}
           aws-region: ${{ env.AWS_REGION }}
