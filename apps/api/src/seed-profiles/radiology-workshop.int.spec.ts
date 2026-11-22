@@ -4,9 +4,11 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { PrismaClient } from '@oci/database';
-import { SubmitPredictionsRequestSchema } from '@oci/shared-types';
+import { DatasetSlugSchema, SubmitPredictionsRequestSchema } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CatalogRepository } from '../modules/catalog/catalog.repository.js';
+import { CatalogService } from '../modules/catalog/catalog.service.js';
 import { EvalQueueProvider } from '../modules/evaluation/eval-queue.js';
 import { EvaluationRepository } from '../modules/evaluation/evaluation.repository.js';
 import { EvaluationService } from '../modules/evaluation/evaluation.service.js';
@@ -43,6 +45,8 @@ const DATASET = 'nih-chestxray14-workshop';
 const TASK = 'nih-chestxray14-finding';
 const CAMPAIGN = 'nih-chestxray14-reading';
 const WEAK_BAND = '60+';
+/** The user the seed files publish as. */
+const SEED_OWNER = '00000000-0000-4000-8000-000000000099';
 
 const read = (file: string) => readFileSync(file, 'utf8');
 const profileSql = read(path.join(PROFILE_DIR, 'seed.sql'));
@@ -73,6 +77,25 @@ const metadata = rows(`fixtures/${DATASET}/metadata.csv`).map(
 const reference = new Map(
   rows('reference-labels.hidden.csv').map(([id = '', label = '']) => [id, Number(label)]),
 );
+
+/**
+ * The rows that differ between two snapshots, by table and slug or id, without
+ * their content (a manifest runs to kilobytes). Empty when nothing was written.
+ */
+function changedRows(before: readonly string[], after: readonly string[]): string[] {
+  const name = (line: string): string => {
+    const [table = ''] = line.split(' ', 1);
+    const slug = /"slug": ?"([^"]+)"/.exec(line)?.[1];
+    const id = /"id": ?"([^"]+)"/.exec(line)?.[1];
+    return `${table} ${slug ?? id ?? line.slice(0, 80)}`;
+  };
+  const was = new Set(before);
+  const now = new Set(after);
+  return [
+    ...before.filter((line) => !now.has(line)).map((line) => `- ${name(line)}`),
+    ...after.filter((line) => !was.has(line)).map((line) => `+ ${name(line)}`),
+  ].sort();
+}
 
 function user(): CognitoAccessTokenPayload {
   return { sub: randomUUID() } as unknown as CognitoAccessTokenPayload;
@@ -599,6 +622,67 @@ describe.skipIf(!dockerAvailable)(
         expect(await lines()).toEqual(before);
         replaySeedFile(db.url, profileSql);
         expect(await lines()).toEqual(before);
+      });
+    });
+
+    // #738: the profile is replayed on every deploy where it is switched on, so
+    // it must leave alone what people published on its dataset in between. Same
+    // rule as the demo seed (#641, demo-seed-replay.int.spec.ts). Last in the
+    // file: these cases leave the dataset with a version the seed did not write.
+    describe('after people used it', () => {
+      const admin = {
+        sub: randomUUID(),
+        'cognito:groups': ['admin'],
+      } as unknown as CognitoAccessTokenPayload;
+
+      it('keeps a version an administrator published on the dataset as the current manifest', async () => {
+        const catalog = new CatalogService(
+          new CatalogRepository({ client: prisma } as unknown as PrismaService),
+        );
+        const seeded = (await prisma.dataset.findUniqueOrThrow({ where: { slug: DATASET } }))
+          .croissant as Record<string, unknown>;
+        const revised = {
+          ...seeded,
+          version: '1.1.0',
+          description: `${String(seeded.description)} Revised during the workshop.`,
+        };
+        await catalog.publishVersion(
+          DatasetSlugSchema.parse(DATASET),
+          { version: '1.1.0', croissant: revised, notes: 'workshop revision' },
+          admin,
+        );
+
+        const before = await lines();
+        replaySeedFile(db.url, profileSql);
+        expect(changedRows(before, await lines())).toEqual([]);
+
+        const ds = await prisma.dataset.findUniqueOrThrow({
+          where: { slug: DATASET },
+          include: { versions: { orderBy: { version: 'asc' } } },
+        });
+        expect(ds.croissant).toEqual(revised);
+        expect(ds.versions.map((v) => [v.version, v.publishedById])).toEqual([
+          ['1.0.0', SEED_OWNER],
+          ['1.1.0', admin.sub],
+        ]);
+        // The seed's own version row still carries the repository's manifest.
+        expect(ds.versions[0]?.croissant).toEqual(seeded);
+      });
+
+      it('does not rewrite a 1.0.0 that someone other than the seed published', async () => {
+        // The campaign pins the seed's version row (ON DELETE RESTRICT), so the
+        // row is taken over in place: a 1.0.0 row with another publisher, as on
+        // a dataset that existed before the profile was switched on.
+        const ds = await prisma.dataset.findUniqueOrThrow({ where: { slug: DATASET } });
+        const own = { name: 'Chest X-ray slice, as the host published it' };
+        await prisma.datasetVersion.update({
+          where: { datasetId_version: { datasetId: ds.id, version: '1.0.0' } },
+          data: { publishedById: admin.sub, croissant: own },
+        });
+
+        const before = await lines();
+        replaySeedFile(db.url, profileSql);
+        expect(changedRows(before, await lines())).toEqual([]);
       });
     });
   },
