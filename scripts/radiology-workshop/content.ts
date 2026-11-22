@@ -135,6 +135,33 @@ export function campaignDescription(selection: Selection): string {
   return selection.standIn ? `Synthetic stand-in images, not diagnostic. ${text}` : text;
 }
 
+/**
+ * The subgroup fields the evaluation task reports results by (#410): the two
+ * public fields of the selection, with the words the result page shows. The
+ * value codes are the ones in the selection and the metadata file.
+ */
+export function subgroupFields() {
+  return [
+    {
+      key: 'sex',
+      label: 'Sex',
+      values: [
+        { value: 'F', label: 'Female' },
+        { value: 'M', label: 'Male' },
+      ],
+    },
+    {
+      key: 'ageBand',
+      label: 'Age band',
+      values: [
+        { value: '18-39', label: '18 to 39' },
+        { value: '40-59', label: '40 to 59' },
+        { value: '60+', label: '60 and over' },
+      ],
+    },
+  ];
+}
+
 export function evaluationTaskName(selection: Selection): string {
   // The task is CLASSIFICATION and the platform has no names for classes, so
   // the name carries what each number means: it is shown on the task page and

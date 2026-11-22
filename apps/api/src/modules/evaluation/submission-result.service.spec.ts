@@ -62,6 +62,7 @@ function makeRepo(row: Partial<SubmissionResultContextRow> = {}) {
           numClasses: 5,
           referableThreshold: 2,
           groundTruth: GROUND_TRUTH,
+          subgroups: null,
         }
       : null,
   );

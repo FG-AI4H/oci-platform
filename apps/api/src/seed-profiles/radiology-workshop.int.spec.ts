@@ -170,6 +170,20 @@ describe.skipIf(!dockerAvailable)(
           ['CLASSIFICATION', 2, 1, DATASET],
         );
         expect(Object.keys(task.groundTruth as object)).toHaveLength(200);
+        // #410: results by sex and by age band, with each item's values taken
+        // from the same selection as the public metadata file.
+        expect(
+          (task.subgroupFields as { key: string; values: { value: string }[] }[]).map((f) => [
+            f.key,
+            f.values.map((v) => v.value),
+          ]),
+        ).toEqual([
+          ['sex', ['F', 'M']],
+          ['ageBand', ['18-39', '40-59', '60+']],
+        ]);
+        expect(task.subgroupValues).toEqual(
+          Object.fromEntries(metadata.map((m) => [m.imageId, { sex: m.sex, ageBand: m.band }])),
+        );
 
         const campaign = await prisma.annotationCampaign.findUniqueOrThrow({
           where: { slug: CAMPAIGN },
@@ -257,6 +271,61 @@ describe.skipIf(!dockerAvailable)(
       });
     });
 
+    describe('subgroup values (#410)', () => {
+      it('are written once onto a task seeded before they existed', async () => {
+        // The task as a database migrated before #410 holds it: no field, no map.
+        replaySeedFile(
+          db.url,
+          `UPDATE "evaluation"."evaluation_tasks" SET subgroup_fields = '[]', subgroup_values = NULL WHERE slug = '${TASK}';`,
+        );
+        expect(
+          (await prisma.evaluationTask.findUniqueOrThrow({ where: { slug: TASK } })).subgroupValues,
+        ).toBeNull();
+        replaySeedFile(db.url, profileSql);
+        const task = await prisma.evaluationTask.findUniqueOrThrow({ where: { slug: TASK } });
+        expect(Object.keys(task.subgroupValues as object)).toHaveLength(200);
+        const before = await lines();
+        replaySeedFile(db.url, profileSql);
+        expect(await lines()).toEqual(before);
+      });
+
+      it('fail the seed, naming item ids only, when the stored values differ', async () => {
+        const task = await prisma.evaluationTask.findUniqueOrThrow({ where: { slug: TASK } });
+        const stored = task.subgroupValues as Record<string, { sex: string; ageBand: string }>;
+        const [victim = ''] = Object.keys(stored);
+        const tampered = Object.fromEntries(
+          Object.entries(stored).map(([id, v]) => [
+            id,
+            id === victim ? { ...v, ageBand: v.ageBand === '60+' ? '18-39' : '60+' } : v,
+          ]),
+        );
+        await prisma.evaluationTask.update({
+          where: { slug: TASK },
+          data: { subgroupValues: tampered },
+        });
+        try {
+          const before = await lines();
+          let message = '';
+          try {
+            replaySeedFile(db.url, profileSql);
+          } catch (error) {
+            const failure = error as { stdout?: Buffer; stderr?: Buffer; message?: string };
+            message = `${String(failure.stdout ?? '')}${String(failure.stderr ?? '')}${failure.message ?? ''}`;
+          }
+          expect(message).toContain(
+            `subgroup_values differ from the ${PROFILE} seed profile for item ids [${victim}]`,
+          );
+          expect(message).not.toContain('ageBand');
+          expect(await lines()).toEqual(before);
+        } finally {
+          await prisma.evaluationTask.update({
+            where: { slug: TASK },
+            data: { subgroupValues: stored },
+          });
+        }
+      });
+    });
+
     describe('teaching files, scored by the evaluation service', () => {
       // The task is CLASSIFICATION with class 0 = absent and 1 = present, so the
       // recall of class 1 is the sensitivity and the recall of class 0 the
@@ -278,6 +347,8 @@ describe.skipIf(!dockerAvailable)(
       const idsWhere = (keep: (m: (typeof metadata)[number]) => boolean) =>
         new Set(metadata.filter(keep).map((m) => m.imageId));
 
+      const submissionIds: { a: string; b: string } = { a: '', b: '' };
+
       it('models A and B get exactly the same overall result', async () => {
         const [a, b] = await Promise.all(
           ['model-a.csv', 'model-b.csv'].map((file) =>
@@ -292,6 +363,8 @@ describe.skipIf(!dockerAvailable)(
           ),
         );
         expect(a?.scores).toEqual(b?.scores);
+        submissionIds.a = a?.id ?? '';
+        submissionIds.b = b?.id ?? '';
         expect(a?.scores).toMatchObject({
           kind: 'CLASSIFICATION',
           metrics: {
@@ -345,6 +418,38 @@ describe.skipIf(!dockerAvailable)(
             0.03,
           );
         }
+      });
+
+      it('the result page breaks both down by subgroup: B drops for patients aged 60 and over, A does not (#410)', async () => {
+        const a = await evaluation.getSubmissionDetail(TASK, submissionIds.a);
+        const b = await evaluation.getSubmissionDetail(TASK, submissionIds.b);
+        const accuracyBy = (detail: typeof a, field: string) =>
+          Object.fromEntries(
+            (detail.subgroups?.fields.find((f) => f.key === field)?.cells ?? []).map((c) => [
+              c.value,
+              c.status === 'REPORTED' && c.metrics.kind === 'CLASSIFICATION'
+                ? { accuracy: c.metrics.accuracy, items: c.scoredCount }
+                : c.status,
+            ]),
+          );
+
+        // Nothing is withheld: every group holds 66 items or more.
+        expect(a.subgroups?.minCellSize).toBe(11);
+        expect(accuracyBy(b, 'ageBand')).toEqual({
+          '18-39': { accuracy: 0.9851, items: 67 },
+          '40-59': { accuracy: 0.9848, items: 66 },
+          '60+': { accuracy: 0.7313, items: 67 },
+        });
+        // Model A: even across the bands, 60 and over included.
+        expect(accuracyBy(a, 'ageBand')).toEqual({
+          '18-39': { accuracy: 0.8955, items: 67 },
+          '40-59': { accuracy: 0.9091, items: 66 },
+          '60+': { accuracy: 0.8955, items: 67 },
+        });
+        // By sex the two models look alike: the breakdown has to be the right one.
+        const bySex = { accuracy: 0.9, items: 100 };
+        expect(accuracyBy(a, 'sex')).toEqual({ F: bySex, M: bySex });
+        expect(accuracyBy(b, 'sex')).toEqual({ F: bySex, M: bySex });
       });
 
       it('model C is refused by the format check, with what to fix', async () => {

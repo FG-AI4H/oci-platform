@@ -10,7 +10,11 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Prisma } from '@oci/database';
-import { GradingScoresSchema, TaskKindScoresSchema } from '@oci/shared-types';
+import {
+  GradingScoresSchema,
+  MIN_SUBGROUP_CELL_SIZE,
+  TaskKindScoresSchema,
+} from '@oci/shared-types';
 import type {
   CreateEvaluationTaskRequest,
   EvaluationSubmissionDetail,
@@ -56,6 +60,8 @@ import {
 } from './submission-validation.js';
 import { ScoringError } from './scoring.js';
 import { primaryMetricOf, scoreByKind } from './scoring-registry.js';
+import { parseSubgroupResults } from './subgroup-config.js';
+import { scoreSubgroups } from './subgroup-scoring.js';
 
 /**
  * Refusal text for an anonymous SCORED submission (WP6).
@@ -189,6 +195,9 @@ export class EvaluationService {
       // keys; there is no label in `t` to leak here.
       itemIds: t.itemIds,
       itemCount: t.itemIds.length,
+      // #410 — the declared fields only. Which item has which value is held
+      // like the answer key and is not part of `t`.
+      subgroupFields: t.subgroupFields,
       submissions,
     };
   }
@@ -230,6 +239,9 @@ export class EvaluationService {
       mode: row.mode,
       status: row.status,
       scores: parseScores(row.scores),
+      // #410 — stored already suppressed: the same object for every reader,
+      // submitter and administrator included (ADR-0030).
+      subgroups: parseSubgroupResults(row.subgroupScores),
       attribution: attributionFor(row),
       failure: failed
         ? {
@@ -349,6 +361,21 @@ export class EvaluationService {
       throw err;
     }
 
+    // Results by subgroup (#410), from the same validated payload, OUTSIDE the
+    // try above on purpose: the labels have now been consulted, so nothing
+    // from here on may turn into a FAILED row (a free oracle query, see
+    // `consumesScoredQuota`). A throw here is a server fault: it surfaces as a
+    // 500 and writes nothing, so the caller learns nothing either.
+    const subgroupScores = scoreSubgroups({
+      kind: ctx.taskKind,
+      groundTruth: ctx.groundTruth,
+      predictions,
+      itemScores: Object.keys(itemScores).length > 0 ? itemScores : undefined,
+      config: { numClasses: ctx.numClasses, referableThreshold: ctx.referableThreshold },
+      subgroups: ctx.subgroups,
+      minCellSize: MIN_SUBGROUP_CELL_SIZE,
+    });
+
     // Seam submissions are attributed to the reference route here, because the
     // seam's response contract reports the route and whether its result counts
     // as published. Direct participant submissions are left unattributed on
@@ -367,6 +394,7 @@ export class EvaluationService {
       submittedBy,
       status: 'SCORED',
       scores,
+      subgroupScores,
       error: null,
       routeId: ref?.routeId ?? null,
       routeVersion: ref?.version ?? null,
@@ -454,6 +482,7 @@ export class EvaluationService {
       await this.repo.applyResult(created.id, {
         status: 'FAILED',
         scores: null,
+        subgroupScores: null,
         error: participantFacingFailureMessage('INTERNAL_ERROR'),
         failureCode: 'INTERNAL_ERROR',
         durationMs: null,
@@ -547,6 +576,8 @@ export class EvaluationService {
         // for every other kind, so this is null exactly when it does not apply.
         positiveClassName: body.positiveClassName ?? null,
         groundTruth: body.groundTruth,
+        // Validated against the answer key by the request schema (#410).
+        subgroups: body.subgroups ?? null,
       });
       return {
         id: created.id,

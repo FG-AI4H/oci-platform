@@ -1855,6 +1855,15 @@ model EvaluationTask {
   /// HIDDEN ground truth: a JSON map `{ imageId: integerLabel }`. Held
   /// server-side; NEVER serialised to a read DTO or a distribution.
   groundTruth        Json               @map("ground_truth")
+  /// Subgroup fields the task reports results by (#410, ADR-0030): a JSON
+  /// array `[{ key, label, values: [{ value, label }] }]`. Public metric
+  /// configuration, published with the task. `[]` when none are declared.
+  subgroupFields     Json               @default("[]") @map("subgroup_fields")
+  /// Each item's subgroup values: `{ itemId: { fieldKey: value } }`, for
+  /// exactly the items of `groundTruth`. Held server-side beside the answer
+  /// key and NEVER serialised to a read DTO: per item, these values are
+  /// quasi-identifiers. Null when no field is declared.
+  subgroupValues     Json?              @map("subgroup_values")
 
   submissions Submission[]
 
@@ -1867,24 +1876,29 @@ model EvaluationTask {
 
 /// One scored (or failed) submission against an `EvaluationTask`.
 model Submission {
-  id          String           @id @default(uuid()) @db.Uuid
+  id             String           @id @default(uuid()) @db.Uuid
   /// FK → evaluation.evaluation_tasks.id.
-  taskId      String           @map("task_id") @db.Uuid
+  taskId         String           @map("task_id") @db.Uuid
   /// Display name of the method / model being evaluated.
-  methodName  String           @map("method_name")
+  methodName     String           @map("method_name")
   /// Soft FK → identity.users.id (UUIDv5 from the Cognito sub). Null for
   /// anonymous / system submissions.
-  submittedBy String?          @map("submitted_by") @db.Uuid
-  mode        SubmissionMode   @default(PREDICTIONS)
-  status      SubmissionStatus @default(PENDING)
+  submittedBy    String?          @map("submitted_by") @db.Uuid
+  mode           SubmissionMode   @default(PREDICTIONS)
+  status         SubmissionStatus @default(PENDING)
   /// Computed metrics (`EvaluationScores` shape). Null until SCORED.
-  scores      Json?
+  scores         Json?
+  /// Results by subgroup (#410, ADR-0030), computed with `scores` at scoring
+  /// time and stored AFTER small-cell suppression: a withheld cell is stored
+  /// without metrics or counts, so what is stored is what is published. Null
+  /// when the task declared no subgroup field, or for a row scored before.
+  subgroupScores Json?            @map("subgroup_scores")
   /// Human-readable failure reason. Set only when status = FAILED. For a
   /// sealed run (Mode 2) this is the PARTICIPANT-FACING text derived from
   /// `failureCode` alone — never the worker's operator detail, which is an
   /// exfiltration channel and stays in the logs
   /// (sealed-execution-contract §6).
-  error       String?
+  error          String?
 
   // ---- Sealed-run dispatch + outbox (Mode 2 / CONTAINER, WP3) ----------
   // All nullable and all null for Mode 1 (PREDICTIONS) rows, which are

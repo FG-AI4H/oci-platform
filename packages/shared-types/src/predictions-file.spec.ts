@@ -316,6 +316,8 @@ describe('EvaluationSubmissionDetailSchema (#645)', () => {
     },
     methodName: 'm',
     mode: 'PREDICTIONS',
+    // No breakdown (#410): the task declares no subgroup field.
+    subgroups: null,
     viewerIsSubmitter: false,
     createdAt: '2026-11-20T00:00:00.000Z',
   };
