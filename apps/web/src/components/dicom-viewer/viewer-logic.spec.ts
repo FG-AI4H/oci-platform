@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { DicomViewSchema } from '@oci/shared-types';
 import {
   CT_PRESETS,
   PAN_STEP,
   actionForKey,
   clampIndex,
   classifyLoadFailure,
+  currentView,
   describeTransferSyntax,
   dragWindow,
   exactFromVoiRange,
@@ -12,6 +14,7 @@ import {
   matchingPreset,
   mergeRefreshedAddresses,
   sameInstances,
+  sameView,
   toVoiRange,
   usableLifetimeMs,
   wheelSteps,
@@ -245,5 +248,69 @@ describe('describeTransferSyntax', () => {
     );
     expect(describeTransferSyntax('1.2.3.4')).toBe('1.2.3.4');
     expect(describeTransferSyntax(null)).toBe('not stated in the file');
+  });
+});
+
+describe('the view stored with an answer', () => {
+  const ids = [
+    '00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000002',
+    '00000000-0000-4000-8000-000000000003',
+  ];
+  const state = {
+    distributionIds: ids,
+    index: 1,
+    drawnIndex: 1,
+    failed: new Set<number>(),
+    window: { width: 80, center: 40 },
+    inverted: false,
+  };
+
+  it('names the image drawn by its distribution and its place in the stack, from 1', () => {
+    const view = currentView(state);
+    expect(view).toEqual({
+      distributionId: ids[1],
+      position: 2,
+      imageCount: 3,
+      window: { width: 80, center: 40 },
+      inverted: false,
+    });
+    // What the viewer reports is what an answer accepts.
+    expect(DicomViewSchema.safeParse(view).success).toBe(true);
+    expect(currentView({ ...state, index: 2, drawnIndex: 2, inverted: true })).toMatchObject({
+      distributionId: ids[2],
+      position: 3,
+      inverted: true,
+    });
+    expect(currentView({ ...state, window: null })?.window).toBeNull();
+  });
+
+  it('reports nothing while the picture is not the image asked for', () => {
+    // Still loading: the canvas holds the previous image under a stand-in.
+    expect(currentView({ ...state, index: 2, drawnIndex: 1 })).toBeNull();
+    // Could not be loaded.
+    expect(currentView({ ...state, failed: new Set([1]) })).toBeNull();
+    // Nothing known about the stack yet.
+    expect(currentView({ ...state, distributionIds: [] })).toBeNull();
+  });
+
+  it('does not keep a reference to the window it was given', () => {
+    const window = { width: 80, center: 40 };
+    const view = currentView({ ...state, window });
+    window.width = 400;
+    expect(view?.window).toEqual({ width: 80, center: 40 });
+  });
+
+  it('tells a change of image, window or inversion from the same screen', () => {
+    const view = currentView(state);
+    expect(sameView(view, currentView(state))).toBe(true);
+    expect(sameView(null, null)).toBe(true);
+    expect(sameView(view, null)).toBe(false);
+    expect(sameView(view, currentView({ ...state, index: 0, drawnIndex: 0 }))).toBe(false);
+    expect(sameView(view, currentView({ ...state, window: { width: 81, center: 40 } }))).toBe(
+      false,
+    );
+    expect(sameView(view, currentView({ ...state, window: null }))).toBe(false);
+    expect(sameView(view, currentView({ ...state, inverted: true }))).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { manifestWizardInputToCroissant } from '@oci/croissant';
+import { DicomViewSchema, type DicomSeriesDetail, type DicomSeriesList } from '@oci/shared-types';
 // The Part 10 writer of the header-reading package's own tests. Reached
 // by path, not through the package: the web app does not depend on
 // `@oci/dicom`, and this file has no import of its own.
@@ -288,6 +289,53 @@ test.describe('DICOM viewer on the dataset page', () => {
     await expect(windowReadout(page)).toHaveText('W 70 · L 40');
   });
 
+  test('the view an answer stores follows the image drawn, the window and inversion', async ({
+    page,
+  }) => {
+    test.skip(seedFailure !== null, `local stack not available for seeding: ${seedFailure}`);
+    // The display order, as the API gives it. The files were uploaded
+    // last to first, so this is not the upload order.
+    const { series } = await api<DicomSeriesList>(`/v2/storage/datasets/${SLUG}/dicom/series`);
+    const ct = series.find((s) => s.seriesNumber === 1);
+    if (!ct) throw new Error('CT series 1 not indexed');
+    const detail = await api<DicomSeriesDetail>(`/v2/storage/dicom/series/${ct.id}`);
+    const ids = detail.instances.map((instance) => instance.distributionId);
+    expect(ids).toHaveLength(IMAGES);
+
+    await openSeries(page, 'CT series 1');
+    await expect(page.getByTestId('dicom-status')).toHaveText(`All ${IMAGES} images loaded`, {
+      timeout: 60_000,
+    });
+    const viewport = page.getByTestId('dicom-viewport');
+    const view = async (): Promise<unknown> => {
+      const raw = await viewport.getAttribute('data-view');
+      return raw === null ? null : (JSON.parse(raw) as unknown);
+    };
+
+    await expect.poll(view).toEqual({
+      distributionId: ids[0],
+      position: 1,
+      imageCount: IMAGES,
+      window: { width: 80, center: 40 },
+      inverted: false,
+    });
+    expect(DicomViewSchema.safeParse(await view()).success).toBe(true);
+
+    await viewport.focus();
+    await page.keyboard.press('End');
+    await expect(counter(page)).toHaveText(`${IMAGES} / ${IMAGES}`);
+    await expect.poll(view).toMatchObject({ distributionId: ids[IMAGES - 1], position: IMAGES });
+    await page.keyboard.press('PageUp');
+    await expect.poll(view).toMatchObject({ distributionId: ids[1], position: 2 });
+
+    await page.getByRole('button', { name: 'Subdural', exact: true }).click();
+    await expect(windowReadout(page)).toHaveText('W 200 · L 75');
+    await expect.poll(view).toMatchObject({ position: 2, window: { width: 200, center: 75 } });
+
+    await page.getByRole('button', { name: 'Invert', exact: true }).click();
+    await expect.poll(view).toMatchObject({ inverted: true });
+  });
+
   test('zoom, move and invert change the picture, and reset restores it', async ({ page }) => {
     await openSeries(page, 'CT series 1');
     await expect(page.getByTestId('dicom-status')).toHaveText(`All ${IMAGES} images loaded`, {
@@ -464,10 +512,13 @@ test.describe('DICOM viewer on the dataset page', () => {
       await page.keyboard.press('ArrowDown');
       await expect(counter(page)).toHaveText(`7 / ${IMAGES}`);
       await expect(standIn).toHaveText('Image 7 could not be loaded');
+      // No image is on screen, so none may be recorded as seen.
+      await expect(viewport).not.toHaveAttribute('data-view');
 
       await page.keyboard.press('ArrowDown');
       await expect(counter(page)).toHaveText(`8 / ${IMAGES}`);
       await expect(standIn).toHaveCount(0);
+      await expect(viewport).toHaveAttribute('data-view', /"position":8,/);
 
       await page.getByTestId('dicom-slider').fill('7');
       await expect(counter(page)).toHaveText(`7 / ${IMAGES}`);

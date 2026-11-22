@@ -11,7 +11,7 @@ import {
 } from '@cornerstonejs/core';
 import { init as dicomImageLoaderInit, wadouri } from '@cornerstonejs/dicom-image-loader';
 import { Enums as MetadataEnums, metaData } from '@cornerstonejs/metadata';
-import type { DicomSeriesDetail } from '@oci/shared-types';
+import type { DicomSeriesDetail, DicomView } from '@oci/shared-types';
 import { Alert, AlertDescription, AlertTitle, Button } from '@oci/ui';
 import {
   CT_PRESETS,
@@ -20,6 +20,7 @@ import {
   actionForKey,
   clampIndex,
   classifyLoadFailure,
+  currentView,
   describeTransferSyntax,
   dragWindow,
   exactFromVoiRange,
@@ -27,6 +28,7 @@ import {
   matchingPreset,
   mergeRefreshedAddresses,
   sameInstances,
+  sameView,
   toVoiRange,
   usableLifetimeMs,
   wheelSteps,
@@ -64,6 +66,13 @@ export interface DicomViewerProps {
   loadSeries: () => Promise<DicomSeriesDetail>;
   /** Names the image for assistive technology, e.g. "CT series 3". */
   label: string;
+  /**
+   * Told what the reader has on screen each time it changes: the image
+   * drawn, its place in the stack, the window and inversion. Null while
+   * the picture is not the image asked for. An answer form stores the
+   * last one as the answer's `view`.
+   */
+  onViewChange?: (view: DicomView | null) => void;
 }
 
 type Phase = 'starting' | 'ready' | 'failed';
@@ -117,7 +126,7 @@ function releaseImages(): void {
   }
 }
 
-export function DicomViewer({ loadSeries, label }: DicomViewerProps) {
+export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProps) {
   const reactId = useId();
   const helpId = `${reactId}-help`;
   const elementRef = useRef<HTMLDivElement>(null);
@@ -131,6 +140,8 @@ export function DicomViewer({ loadSeries, label }: DicomViewerProps) {
   const [phase, setPhase] = useState<Phase>('starting');
   const [failure, setFailure] = useState<Failure | null>(null);
   const [count, setCount] = useState(0);
+  /** The distribution of each image, in stack order. */
+  const [distributionIds, setDistributionIds] = useState<readonly string[]>([]);
   /** The image asked for. */
   const [index, setIndex] = useState(0);
   /** The image the canvas really shows. Behind `index` while one loads. */
@@ -181,6 +192,9 @@ export function DicomViewer({ loadSeries, label }: DicomViewerProps) {
       const failed = new Set<number>();
       countRef.current = imageIds.length;
       setCount(imageIds.length);
+      // Renewed addresses never change these: a renewal whose
+      // instances differ stops the viewer.
+      setDistributionIds(series.instances.map((instance) => instance.distributionId));
       setModality(series.modality);
 
       const failDecoder = (position: number) =>
@@ -489,6 +503,29 @@ export function DicomViewer({ loadSeries, label }: DicomViewerProps) {
         ? `Loading image ${index + 1}…`
         : null;
 
+  const view =
+    ready && !failure
+      ? currentView({
+          distributionIds,
+          index,
+          drawnIndex,
+          failed: failedPositions,
+          window: windowSetting,
+          inverted,
+        })
+      : null;
+  // Told once per change, not once per render.
+  const reportedView = useRef<DicomView | null>(null);
+  const onViewChangeRef = useRef(onViewChange);
+  useEffect(() => {
+    onViewChangeRef.current = onViewChange;
+  }, [onViewChange]);
+  useEffect(() => {
+    if (sameView(reportedView.current, view)) return;
+    reportedView.current = view;
+    onViewChangeRef.current?.(view);
+  });
+
   return (
     <div className="space-y-3">
       {failure ? (
@@ -510,6 +547,7 @@ export function DicomViewer({ loadSeries, label }: DicomViewerProps) {
           aria-label={ready ? `${label}, image ${index + 1} of ${count}` : `${label}, loading`}
           aria-describedby={helpId}
           data-testid="dicom-viewport"
+          data-view={view ? JSON.stringify(view) : undefined}
           onKeyDown={(event) => {
             const action = actionForKey(event.key, event.shiftKey);
             if (!action || event.altKey || event.ctrlKey || event.metaKey) return;

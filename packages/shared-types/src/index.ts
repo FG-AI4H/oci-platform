@@ -81,6 +81,7 @@ export {
   DicomSeriesListSchema,
   DicomSeriesSummarySchema,
   DicomSeriesVersionQuerySchema,
+  DicomViewSchema,
   RecordDicomFindingDecisionRequestSchema,
 } from './dicom.js';
 export type {
@@ -95,6 +96,7 @@ export type {
   DicomSeriesList,
   DicomSeriesSummary,
   DicomUndecidedFinding,
+  DicomView,
   RecordDicomFindingDecisionRequest,
 } from './dicom.js';
 
