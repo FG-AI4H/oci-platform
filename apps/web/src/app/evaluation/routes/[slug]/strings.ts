@@ -70,7 +70,8 @@ export const REVIEW_TEXT = {
     'Beginning a review decides nothing, so a note is optional. If you write one, it is published.',
   replacesPrevious: 'It replaces the rationale published now.',
   continue: 'Continue',
-  confirmHeadingPrefix: 'Confirm:',
+  confirmHeading: (action: string, version: string, method: string) =>
+    `Confirm: ${action.toLowerCase()} ${version} of ${method}`,
   confirmLead: 'Check before you confirm. Nothing is recorded until you do.',
   publishedAs: 'Published with the decision:',
   noNote: 'No note.',

@@ -43,9 +43,14 @@ export function ReviewForm(props: Props) {
   );
   const [rationale, setRationale] = useState<string>(echoed?.rationale ?? '');
   const [seenState, setSeenState] = useState(state);
+  // Counts the answers from the server. The form is mounted anew for each:
+  // after a form action the browser resets the form, which unticks a radio
+  // React still believes ticked.
+  const [answer, setAnswer] = useState(0);
   if (state !== seenState) {
     // A new answer from the server: take the values it echoes.
     setSeenState(state);
+    setAnswer((n) => n + 1);
     if (state.status !== 'confirm' && state.values) {
       setDecision(state.values.decision);
       setRationale(state.values.rationale);
@@ -55,16 +60,21 @@ export function ReviewForm(props: Props) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   const confirmRef = useRef<HTMLHeadingElement>(null);
   const alertRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    // Move focus with the step, so a keyboard or screen-reader user lands
-    // on what changed: the confirmation, or the reason it was refused.
-    if (state.status === 'confirm') confirmRef.current?.focus();
-    else if (state.status === 'error') alertRef.current?.focus();
-    else if (state.status === 'idle' && state.values) headingRef.current?.focus();
-  }, [state]);
-
+  const decisionRef = useRef<HTMLFieldSetElement>(null);
   const ids = useId();
   const rationaleId = `${ids}-rationale`;
+  useEffect(() => {
+    // Move focus with the step, so a keyboard or screen-reader user lands
+    // on what changed: the confirmation, the reason it was refused, or the
+    // field to correct.
+    if (state.status === 'confirm') confirmRef.current?.focus();
+    else if (state.status === 'error' && state.message) alertRef.current?.focus();
+    else if (state.status === 'error' && state.decisionError) {
+      decisionRef.current?.querySelector('input')?.focus();
+    } else if (state.status === 'error') document.getElementById(rationaleId)?.focus();
+    else if (state.status === 'idle' && state.values) headingRef.current?.focus();
+  }, [state, rationaleId]);
+
   const decisionErrorId = `${ids}-decision-err`;
 
   // Nothing is open to this caller and nothing to report: no form.
@@ -84,7 +94,7 @@ export function ReviewForm(props: Props) {
     const text = decisionText(state.to);
     const choice = choices.find((c) => c.to === state.to);
     const destructive = state.to === 'REJECTED' || state.to === 'WITHDRAWN';
-    const confirmHeading = `${REVIEW_TEXT.confirmHeadingPrefix} ${(choice?.label ?? text.label).toLowerCase()} version ${version} of ${methodName}`;
+    const confirmHeading = REVIEW_TEXT.confirmHeading(text.confirm, version, methodName);
     return (
       <section
         id={`review-${versionId}`}
@@ -150,8 +160,11 @@ export function ReviewForm(props: Props) {
   }
 
   const error = state.status === 'error' ? state : null;
-  const needsRationale = decision !== '' && reviewNeedsRationale(decision as RouteReviewStatus);
-  const optionalNote = decision === 'UNDER_REVIEW';
+  // An echoed decision no longer on offer (the version moved on) is not
+  // the current choice.
+  const current = choices.find((c) => c.to === decision)?.to ?? null;
+  const needsRationale = current === null || reviewNeedsRationale(current);
+  const optionalNote = current === 'UNDER_REVIEW';
 
   return (
     <section
@@ -178,11 +191,6 @@ export function ReviewForm(props: Props) {
             <AlertDescription>{error.message}</AlertDescription>
           </Alert>
         </div>
-      ) : error ? (
-        // A form error: the field messages say what to fix.
-        <div ref={alertRef} tabIndex={-1} className="sr-only">
-          {[error.decisionError, error.rationaleError].filter(Boolean).join(' ')}
-        </div>
       ) : null}
 
       {choices.length === 0 ? (
@@ -192,9 +200,10 @@ export function ReviewForm(props: Props) {
           <Textarea aria-label={REVIEW_TEXT.rationaleLabel} readOnly rows={4} value={rationale} />
         </div>
       ) : (
-        <form action={action} className="mt-5 space-y-5">
+        <form key={answer} action={action} className="mt-5 space-y-5">
           {hidden}
           <fieldset
+            ref={decisionRef}
             className="space-y-2"
             aria-describedby={error?.decisionError ? decisionErrorId : undefined}
           >

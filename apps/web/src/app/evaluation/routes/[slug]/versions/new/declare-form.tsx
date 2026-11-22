@@ -54,7 +54,8 @@ export function DeclareForm({ slug, existingVersions, start }: Props) {
   const [answer, setAnswer] = useState(0);
   const [seen, setSeen] = useState(state);
   if (seen !== state) {
-    // Remount the fields so they show what the server echoed.
+    // Remount the form so it shows what the server echoed: after an action
+    // the browser resets the form, which would empty the controlled fields.
     setSeen(state);
     setAnswer((n) => n + 1);
   }
@@ -64,7 +65,7 @@ export function DeclareForm({ slug, existingVersions, start }: Props) {
   }, [state]);
 
   return (
-    <form action={action} className="space-y-8" noValidate>
+    <form key={answer} action={action} className="space-y-8" noValidate>
       <input type="hidden" name="slug" value={slug} />
       {state.status === 'error' ? (
         <div ref={alertRef} tabIndex={-1} className="focus:outline-none">
@@ -74,7 +75,7 @@ export function DeclareForm({ slug, existingVersions, start }: Props) {
           </Alert>
         </div>
       ) : null}
-      <Fields key={answer} draft={draft} errors={errors} existingVersions={existingVersions} />
+      <Fields draft={draft} errors={errors} existingVersions={existingVersions} />
       <div className="flex justify-end">
         <Button type="submit" disabled={pending} className="h-11 w-full sm:h-10 sm:w-auto">
           {pending ? DECLARE_TEXT.submitting : DECLARE_TEXT.submit}
