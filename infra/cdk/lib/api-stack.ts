@@ -205,6 +205,31 @@ export class ApiStack extends cdk.Stack {
       },
     ]);
 
+    // Key for the pseudonyms a `regulator` sees in the audit trail
+    // (#653, #775): `ps-` + a keyed HMAC-SHA256 of each person's id. The
+    // API needs at least 32 characters (audit-pseudonym.ts); without a
+    // key a deployed environment shows a regulator every actor as
+    // `withheld`. Generated here, read only by the API task.
+    //
+    // Not rotated, on purpose: a new key changes every pseudonym, so
+    // exports a regulator already holds could no longer be matched person
+    // by person with new ones. RETAIN outside dev for the same reason:
+    // losing the key also loses the way to answer a lawful request to
+    // re-identify a pseudonym in an earlier export.
+    const auditPseudonymKey = new secretsmanager.Secret(this, 'AuditPseudonymKey', {
+      description: `OCI ${props.cfg.envName}: key for the pseudonyms regulators see in the audit trail (OCI_AUDIT_PSEUDONYM_KEY). Do not rotate: every pseudonym would change.`,
+      generateSecretString: { passwordLength: 64, excludePunctuation: true },
+      removalPolicy:
+        props.cfg.envName === 'dev' ? cdk.RemovalPolicy.DESTROY : cdk.RemovalPolicy.RETAIN,
+    });
+    NagSuppressions.addResourceSuppressions(auditPseudonymKey, [
+      {
+        id: 'AwsSolutions-SMG4',
+        reason:
+          'Rotation would change every audit-trail pseudonym, so exports already given to a regulator could no longer be matched with new ones (#775). The key protects pseudonyms, not access to any system.',
+      },
+    ]);
+
     const fargate = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'ApiService', {
       cluster: this.cluster,
       cpu: props.cfg.fargate.cpu,
@@ -309,6 +334,7 @@ export class ApiStack extends cdk.Stack {
         // like the migrate task does.
         secrets: {
           OCI_DICOM_FINDING_DIGEST_KEY: ecs.Secret.fromSecretsManager(dicomFindingDigestKey),
+          OCI_AUDIT_PSEUDONYM_KEY: ecs.Secret.fromSecretsManager(auditPseudonymKey),
           DB_USERNAME: ecs.Secret.fromSecretsManager(props.database.secret!, 'username'),
           DB_PASSWORD: ecs.Secret.fromSecretsManager(props.database.secret!, 'password'),
           DB_HOST: ecs.Secret.fromSecretsManager(props.database.secret!, 'host'),

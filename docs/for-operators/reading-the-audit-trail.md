@@ -17,11 +17,11 @@ Someone in both groups is treated as an `admin`.
 
 ### The pseudonymisation key
 
-A pseudonym is the first 96 bits of HMAC-SHA256 over the identifier, with a key the platform holds: `OCI_AUDIT_PSEUDONYM_KEY`, at least 32 characters, read from Secrets Manager on a deployed environment.
+A pseudonym is the first 96 bits of HMAC-SHA256 over the identifier, with a key the platform holds: `OCI_AUDIT_PSEUDONYM_KEY`, at least 32 characters. On a deployed environment CDK generates it once (64 letters and digits), keeps it in Secrets Manager and gives it to the API task only; see `docs/deployment.md`.
 
 - Without the key, a pseudonym cannot be computed from a guessed identifier or turned back into one.
 - The key is never logged, returned or written to the trail. The API logs only whether it is configured.
-- **Changing the key changes every pseudonym.** Exports made before and after can no longer be matched person by person. Do not rotate it while an authority is working with exports.
+- **Changing the key changes every pseudonym.** Exports made before and after can no longer be matched person by person. For that reason the key is never rotated.
 - **Re-identification** is done by whoever holds the key, by computing the pseudonym of each user id. That is how a lawful request to identify a pseudonym is answered; it is not a feature of the page.
 - If the key is not set on a deployed environment, a regulator sees actors as **withheld**, never in clear. `OCI_ENV=local` uses a fixed development key.
 
