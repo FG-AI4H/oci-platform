@@ -86,6 +86,29 @@ export function clampIndex(index: number, count: number): number {
   return Math.max(0, Math.min(count - 1, Math.round(index)));
 }
 
+/**
+ * The next image to fetch: the one nearest the image on screen that is
+ * neither loaded nor being fetched, after it first and then before it,
+ * one step further each time. A reader who jumps into a series that is
+ * still arriving then finds its neighbours there, where loading in
+ * stack order would only reach them last. Null when nothing is left.
+ */
+export function nextToLoad(
+  current: number,
+  count: number,
+  taken: ReadonlySet<number>,
+): number | null {
+  if (count <= 0) return null;
+  const from = clampIndex(current, count);
+  for (let distance = 0; distance < count; distance += 1) {
+    const after = from + distance;
+    if (after < count && !taken.has(after)) return after;
+    const before = from - distance;
+    if (distance > 0 && before >= 0 && !taken.has(before)) return before;
+  }
+  return null;
+}
+
 export const ZOOM_STEP = 1.2;
 /** Screen pixels moved by one press of an arrow with Shift, or one move button. */
 export const PAN_STEP = 24;

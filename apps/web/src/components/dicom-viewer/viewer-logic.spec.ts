@@ -13,6 +13,7 @@ import {
   fromVoiRange,
   matchingPreset,
   mergeRefreshedAddresses,
+  nextToLoad,
   sameInstances,
   sameView,
   toVoiRange,
@@ -312,5 +313,44 @@ describe('the view stored with an answer', () => {
     );
     expect(sameView(view, currentView({ ...state, window: null }))).toBe(false);
     expect(sameView(view, currentView({ ...state, inverted: true }))).toBe(false);
+  });
+});
+
+describe('which image to fetch next', () => {
+  const order = (current: number, count: number, taken: number[] = []) => {
+    const done = new Set(taken);
+    const out: number[] = [];
+    for (let next = nextToLoad(current, count, done); next !== null; ) {
+      out.push(next);
+      done.add(next);
+      next = nextToLoad(current, count, done);
+    }
+    return out;
+  };
+
+  it('from the first image, the stack in order', () => {
+    expect(order(0, 6, [0])).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('after a jump, the neighbours first, after then before, one step further each time', () => {
+    expect(order(5, 9, [0, 1, 2])).toEqual([5, 6, 4, 7, 3, 8]);
+    // The image on screen itself first, if it is not there yet.
+    expect(nextToLoad(5, 9, new Set([0]))).toBe(5);
+  });
+
+  it('near an end, the other side only', () => {
+    expect(order(8, 9, [0, 8])).toEqual([7, 6, 5, 4, 3, 2, 1]);
+    expect(order(0, 4, [0])).toEqual([1, 2, 3]);
+  });
+
+  it('skips what is loaded or on its way, and stops when nothing is left', () => {
+    expect(nextToLoad(3, 6, new Set([3, 4]))).toBe(2);
+    expect(nextToLoad(3, 6, new Set([0, 1, 2, 3, 4, 5]))).toBeNull();
+    expect(nextToLoad(0, 0, new Set())).toBeNull();
+  });
+
+  it('takes a position outside the stack as its nearest end', () => {
+    expect(nextToLoad(40, 5, new Set())).toBe(4);
+    expect(nextToLoad(-3, 5, new Set())).toBe(0);
   });
 });

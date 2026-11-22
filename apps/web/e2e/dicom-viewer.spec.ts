@@ -10,7 +10,7 @@ import { ctSlice } from '../../../packages/dicom/src/test-support/build-part10';
  * E2E for the built-in DICOM viewer on the dataset page (#674, ADR-0026).
  *
  * The spec seeds what it needs through the upload API: a PUBLIC dataset
- * with a 12-image CT series and a series in a transfer syntax the
+ * with a 12-image CT series, a 60-image one, and a series in a transfer syntax the
  * viewer has no decoder for. Every file is synthetic, generated here;
  * no patient data and no downloaded fixture. The slug is `e2e-…`, so
  * the suite's global setup removes it on the next run.
@@ -27,6 +27,9 @@ const SIZE = 64;
 const IMAGES = 12;
 const CT_SERIES = '1.2.826.0.1.3680043.8.498.674.81';
 const VIDEO_SERIES = '1.2.826.0.1.3680043.8.498.674.82';
+/** Long enough that a jump lands where in-order loading would arrive last. */
+const LONG_SERIES = '1.2.826.0.1.3680043.8.498.674.83';
+const LONG_IMAGES = 60;
 
 /** Air, a soft-tissue disc with a dense rim, and a ring that grows with the slice. */
 function phantom(n: number): Uint8Array {
@@ -147,6 +150,9 @@ test.beforeAll(async () => {
       // MPEG-2 video: a transfer syntax the viewer has no decoder for.
       await upload(`video-${n}.dcm`, slice(VIDEO_SERIES, 2, n, '1.2.840.10008.1.2.4.100'));
     }
+    for (let n = 1; n <= LONG_IMAGES; n += 1) {
+      await upload(`long-${String(n).padStart(2, '0')}.dcm`, slice(LONG_SERIES, 3, n));
+    }
   } catch (err) {
     seedFailure = err instanceof Error ? err.message : String(err);
   }
@@ -175,10 +181,12 @@ test.describe('DICOM viewer on the dataset page', () => {
     const rows = page
       .getByRole('listitem')
       .filter({ has: page.getByRole('button', { name: /^View / }) });
-    await expect(rows).toHaveCount(2);
+    await expect(rows).toHaveCount(3);
     await expect(rows.nth(0)).toContainText('CT series 1');
     await expect(rows.nth(0)).toContainText(`${IMAGES} images · ${SIZE} × ${SIZE}`);
     await expect(rows.nth(1)).toContainText('CT series 2');
+    await expect(rows.nth(2)).toContainText('CT series 3');
+    await expect(rows.nth(2)).toContainText(`${LONG_IMAGES} images`);
     await expect(page.getByText('1.2.826.0.1.3680043', { exact: false })).toHaveCount(0);
     // Nothing is held, so nothing is said about held images.
     await expect(page.getByText(/held/)).toHaveCount(0);
@@ -567,6 +575,68 @@ test.describe('DICOM viewer on the dataset page', () => {
       await expect(counter(page)).toHaveText(`1 / ${IMAGES}`);
       await expect(dialog.getByRole('alert')).toContainText('images could not be loaded');
       await expect(dialog.getByText('The viewer could not start')).toHaveCount(0);
+    });
+  });
+
+  test.describe('on a slow link', () => {
+    const storageOrigin = new URL(process.env.S3_PUBLIC_ENDPOINT ?? 'http://localhost:9000').origin;
+    const longFile = (url: URL) =>
+      url.origin === storageOrigin ? /\/long-(\d+)\.dcm$/.exec(url.pathname) : null;
+
+    test('after a jump, the images around the one on screen arrive next', async ({
+      page,
+      context,
+    }) => {
+      test.skip(seedFailure !== null, `local stack not available for seeding: ${seedFailure}`);
+      // Every file takes 400 ms, so the series is still arriving when the
+      // reader jumps.
+      await context.route(
+        (url) => longFile(url) !== null,
+        async (route) => {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          await route.continue();
+        },
+      );
+      let jumped = false;
+      /** The images fetched after the jump, in the order they were asked for. */
+      const fetchedAfterJump: number[] = [];
+      page.on('request', (request) => {
+        const match = longFile(new URL(request.url()));
+        if (match && jumped) fetchedAfterJump.push(Number(match[1]));
+      });
+
+      await openSeries(page, 'CT series 3');
+      await expect(counter(page)).toHaveText(`1 / ${LONG_IMAGES}`, { timeout: 60_000 });
+      jumped = true;
+      await page.getByTestId('dicom-slider').fill('50');
+      await expect(counter(page)).toHaveText(`50 / ${LONG_IMAGES}`);
+
+      await expect.poll(() => fetchedAfterJump.length).toBeGreaterThanOrEqual(6);
+      // In stack order these would be images 8 to 13.
+      for (const image of fetchedAfterJump.slice(0, 6)) {
+        expect(Math.abs(image - 50), `image ${image} fetched right after the jump`).toBeLessThan(4);
+      }
+      // The reader steps around image 50 while the rest of the series is
+      // still on its way.
+      const standIn = page.getByTestId('dicom-stand-in');
+      await expect(standIn).toHaveCount(0, { timeout: 10_000 });
+      const viewport = page.getByTestId('dicom-viewport');
+      await viewport.focus();
+      await page.keyboard.press('ArrowDown');
+      await expect(counter(page)).toHaveText(`51 / ${LONG_IMAGES}`);
+      await expect(standIn).toHaveCount(0, { timeout: 2_000 });
+      await page.keyboard.press('ArrowUp');
+      await page.keyboard.press('ArrowUp');
+      await expect(counter(page)).toHaveText(`49 / ${LONG_IMAGES}`);
+      await expect(standIn).toHaveCount(0, { timeout: 2_000 });
+
+      // And all of it arrives in the end.
+      await expect(page.getByTestId('dicom-status')).toHaveText(
+        `All ${LONG_IMAGES} images loaded`,
+        {
+          timeout: 60_000,
+        },
+      );
     });
   });
 });
