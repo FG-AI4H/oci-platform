@@ -96,6 +96,10 @@ Not verified by the spike: the deployed environment (real object storage and its
 - **[ADR-0007](./0007-annotation-tool-integration-contract.md)** unchanged — the built-in viewer is outside the contract.
 - **[ADR-0008](./0008-annotation-persistence-and-provenance.md)** unchanged — how the built-in viewer is named in provenance is settled with #646.
 
+## Amendments to this ADR
+
+- **22 November 2026, the list of decision 2** ([#745](https://github.com/FG-AI4H/oci-platform/issues/745)). Four attributes of the kinds already listed were missing from the table in code and are added: other patient names (`OtherPatientNames`), the content date (`ContentDate`), the acquisition date and time (`AcquisitionDateTime`), and the date the file was created (`InstanceCreationDate`). A file uploaded from then on that carries one is held for it like for any other finding. Files indexed before are not checked again: the check runs when an upload completes, and a file released earlier stays released.
+
 ## References
 
 - [#674](https://github.com/FG-AI4H/oci-platform/issues/674), [#646](https://github.com/FG-AI4H/oci-platform/issues/646), [#658](https://github.com/FG-AI4H/oci-platform/issues/658), [#221](https://github.com/FG-AI4H/oci-platform/issues/221), [#640](https://github.com/FG-AI4H/oci-platform/issues/640)

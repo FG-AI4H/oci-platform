@@ -8,6 +8,7 @@ import {
   ctSlice,
   type TestElement,
 } from './test-support/build-part10.js';
+import { IDENTIFYING_ATTRIBUTES, sortFindings } from './findings.js';
 import type { ParseDicomHeaderResult } from './types.js';
 
 const FIXTURES = fileURLToPath(new URL('../fixtures/rider-lung-ct/', import.meta.url));
@@ -207,6 +208,66 @@ describe('de-identification findings (all values invented)', () => {
       tag: '00100010',
       value: 'Example^Patient',
     });
+  });
+
+  it('reports every attribute of the list, by the tag the list gives it', () => {
+    // One file carrying all of them. A tag mistyped in the table, or an
+    // attribute the walk does not reach, shows here.
+    const result = parseWhole(
+      ctSlice(
+        IDENTIFYING_ATTRIBUTES.map(({ tag, attribute }) => ({
+          tag,
+          vr: 'LO' as const,
+          value: `invented-${attribute}`,
+        })),
+      ),
+    );
+
+    expect(ok(result).findings).toEqual(
+      sortFindings(
+        IDENTIFYING_ATTRIBUTES.map(({ tag, attribute }) => ({
+          attribute,
+          tag,
+          value: `invented-${attribute}`,
+        })),
+      ),
+    );
+  });
+
+  it('counts another name of the patient, and the dates of the acquisition and of the file, as identifying', () => {
+    // Added on 22 November 2026 (#745): the same kinds as the patient
+    // name and the study, series and acquisition dates already listed.
+    const result = parseWhole(
+      ctSlice([
+        { tag: '00080012', vr: 'DA', value: '20200103' },
+        { tag: '00080023', vr: 'DA', value: '20200102' },
+        { tag: '0008002a', vr: 'DT', value: '20200102101500' },
+        { tag: '00101001', vr: 'PN', value: 'Example^Other' },
+      ]),
+    );
+
+    expect(ok(result).findings).toEqual([
+      { attribute: 'AcquisitionDateTime', tag: '0008002a', value: '20200102101500' },
+      { attribute: 'ContentDate', tag: '00080023', value: '20200102' },
+      { attribute: 'InstanceCreationDate', tag: '00080012', value: '20200103' },
+      { attribute: 'OtherPatientNames', tag: '00101001', value: 'Example^Other' },
+    ]);
+  });
+
+  it('has no duplicate and only well-formed tags in its list', () => {
+    const tags = IDENTIFYING_ATTRIBUTES.map((entry) => entry.tag);
+    const names = IDENTIFYING_ATTRIBUTES.map((entry) => entry.attribute);
+    expect(new Set(tags).size).toBe(tags.length);
+    expect(new Set(names).size).toBe(names.length);
+    for (const tag of tags) expect(tag).toMatch(/^[0-9a-f]{8}$/);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'OtherPatientNames',
+        'ContentDate',
+        'AcquisitionDateTime',
+        'InstanceCreationDate',
+      ]),
+    );
   });
 
   it('does not report an attribute that is present but empty', () => {

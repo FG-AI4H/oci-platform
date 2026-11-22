@@ -39,6 +39,10 @@ const KINDS: ReadonlyMap<string, FindingKind> = new Map([
     },
   ],
   [
+    'OtherPatientNames',
+    { label: 'Other patient names', hint: 'A code is fine. A name is not.', hasValue: true },
+  ],
+  [
     'PatientBirthDate',
     {
       label: 'Patient birth date',
@@ -107,6 +111,30 @@ const KINDS: ReadonlyMap<string, FindingKind> = new Map([
     'AcquisitionDate',
     {
       label: 'Acquisition date',
+      hint: 'A shifted date is fine. The real date is not.',
+      hasValue: true,
+    },
+  ],
+  [
+    'ContentDate',
+    {
+      label: 'Content date',
+      hint: 'A shifted date is fine. The real date is not.',
+      hasValue: true,
+    },
+  ],
+  [
+    'AcquisitionDateTime',
+    {
+      label: 'Acquisition date and time',
+      hint: 'A shifted date is fine. The real date, or the real time with it, is not.',
+      hasValue: true,
+    },
+  ],
+  [
+    'InstanceCreationDate',
+    {
+      label: 'File creation date',
       hint: 'A shifted date is fine. The real date is not.',
       hasValue: true,
     },
