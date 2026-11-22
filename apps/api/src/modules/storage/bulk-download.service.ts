@@ -246,9 +246,64 @@ export class BulkDownloadService {
    * object is opened lazily (`addReadStreamLazy`) only when yazl
    * reaches that entry, so exactly one object body is in flight at a
    * time regardless of how many files the dataset has.
+   *
+   * Failure handling (#772). Once the first byte is out, the status line
+   * is committed, so a storage failure can only truncate the download.
+   * Two event sources can fail: the ZipFile itself (yazl emits `error`
+   * when an entry's stream cannot be opened) and each S3 object body
+   * (its `error` is NOT forwarded by yazl's internal `pipe`). Node kills
+   * the process on an `error` event nobody listens to, so both get a
+   * listener here. On the first failure we log once, cancel any
+   * GetObject in flight, destroy the open object bodies and destroy the
+   * returned stream; Fastify then destroys the socket (headers already
+   * sent) or answers 500 (not yet sent). The returned stream is
+   * destroyed WITHOUT an error object so the storage error, which can
+   * name the endpoint, never reaches the client or a generic handler.
+   *
+   * The client hanging up is the other way out: Fastify destroys the
+   * returned stream, and its `close` triggers the same release, without
+   * an error log — nothing on our side failed.
    */
   buildZip(plan: BulkDownloadPlan): Readable {
     const zip = new ZipFile();
+    const output = zip.outputStream as Readable;
+
+    let state: 'streaming' | 'done' | 'failed' | 'client-gone' = 'streaming';
+    let current: BulkDownloadEntry | null = null;
+    const bodies = new Set<Readable>();
+    const pendingOpens = new AbortController();
+
+    const release = (): void => {
+      pendingOpens.abort();
+      for (const body of bodies) body.destroy();
+      bodies.clear();
+    };
+
+    const fail = (
+      err: unknown,
+      entry: BulkDownloadEntry | null,
+      phase: 'open' | 'read' | 'archive',
+    ): void => {
+      // Errors after the first are fallout of our own destroy() calls.
+      if (state !== 'streaming') return;
+      state = 'failed';
+      const what =
+        phase === 'open' ? 'could not open' : phase === 'read' ? 'lost' : 'archive error on';
+      const target = entry ? `s3://${entry.s3Bucket}/${entry.s3Key}` : 'an object';
+      this.logger.error(
+        `bulk download ${plan.slug}: ${what} ${target}; response aborted`,
+        err instanceof Error ? err.stack : String(err),
+      );
+      release();
+      output.destroy();
+    };
+
+    zip.on('error', (err: Error) => fail(err, current, 'archive'));
+    output.on('close', () => {
+      if (state !== 'streaming') return;
+      state = output.readableEnded ? 'done' : 'client-gone';
+      release();
+    });
 
     // Notices first so they land at the head of the archive — present
     // even if a later object stream dies mid-download. LICENSE.txt and
@@ -271,29 +326,51 @@ export class BulkDownloadService {
       // a mismatch; without it, sizes go in the data descriptor and the
       // truth from S3 wins.
       zip.addReadStreamLazy(entry.filename, (cb) => {
-        this.openObject(entry).then(
-          (stream) => cb(null, stream),
-          (err: unknown) => {
-            this.logger.error(
-              `bulk download ${plan.slug}: failed to open s3://${entry.s3Bucket}/${entry.s3Key}`,
-              err instanceof Error ? err.stack : String(err),
-            );
-            cb(err, Readable.from([]));
+        current = entry;
+        this.openObject(entry, pendingOpens.signal).then(
+          (body) => {
+            // Listener first: even a body we discard below can still
+            // emit `error` once destroyed.
+            body.on('error', (err: Error) => fail(err, entry, 'read'));
+            if (state !== 'streaming') {
+              body.destroy();
+              return;
+            }
+            bodies.add(body);
+            body.once('close', () => {
+              bodies.delete(body);
+              if (current === entry) current = null;
+              // A body that closes without ending and without an error
+              // would otherwise park yazl on this entry forever.
+              if (!body.readableEnded) {
+                fail(new Error('object stream closed before it ended'), entry, 'read');
+              }
+            });
+            cb(null, body);
           },
+          // On failure yazl is never called back: it stays parked on this
+          // entry and is dropped with the destroyed output stream.
+          (err: unknown) => fail(err, entry, 'open'),
         );
       });
     }
 
     zip.end();
-    return zip.outputStream as Readable;
+    return output;
   }
 
   // ----- helpers ---------------------------------------------------
 
-  private async openObject(entry: BulkDownloadEntry): Promise<Readable> {
+  private async openObject(entry: BulkDownloadEntry, abortSignal: AbortSignal): Promise<Readable> {
     const out = await this.s3.client.send(
       new GetObjectCommand({ Bucket: entry.s3Bucket, Key: entry.s3Key }),
+      { abortSignal },
     );
+    // `Body` is the raw HTTP response because the client is built with
+    // `responseChecksumValidation: 'WHEN_REQUIRED'` (s3-client.ts). With
+    // response checksums on, the SDK wraps it in a stream that does not
+    // forward the socket's errors, and buildZip's listeners would need
+    // to watch the wrapped source too.
     const body: unknown = out.Body;
     if (!(body instanceof Readable)) {
       throw new Error(`S3 returned a non-stream body for ${entry.s3Key}`);
