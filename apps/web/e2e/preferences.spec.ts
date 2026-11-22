@@ -56,22 +56,35 @@ test.describe('settings — preferences', () => {
     await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.+/);
   });
 
-  test('locale field accepts BCP-47 tags and rejects garbage', async ({ page }) => {
+  // The language is a list of the interface languages since #654; the
+  // server still validates whatever arrives, so a forged value is refused.
+  test('language list saves an interface language and the server rejects garbage', async ({
+    page,
+  }) => {
     await signInAs(page, `prefs-locale-${Date.now()}`, 'host');
     await page.goto('/settings');
 
-    const localeField = page.getByLabel('Language');
-    await localeField.fill('not-a-tag-because-too-many-parts-1234567890');
+    const localeField = page.getByRole('combobox', { name: 'Language' });
+    await localeField.evaluate((select: HTMLSelectElement) => {
+      select.add(new Option('forged', 'not-a-tag-because-too-many-parts-1234567890'));
+    });
+    await localeField.selectOption('not-a-tag-because-too-many-parts-1234567890');
     await page.getByRole('button', { name: /save preferences/i }).click();
 
     // Validation surfaces inline; the page does not navigate.
     await expect(page).toHaveURL(/\/settings$/);
     await expect(page.getByText(/correct the errors/i)).toBeVisible();
 
-    // Now a valid tag — should save.
-    await localeField.fill('fr-CH');
+    // Now French: it saves, and the page comes back in French.
+    await localeField.selectOption('fr');
     await page.getByRole('button', { name: /save preferences/i }).click();
     await expect(page).toHaveURL(/\/settings\?saved=1/);
-    await expect(page.getByLabel('Language')).toHaveValue('fr-CH');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+    await expect(page.getByRole('combobox', { name: 'Langue' })).toHaveValue('fr');
+
+    // Back to following the browser, for a clean row.
+    await page.getByRole('combobox', { name: 'Langue' }).selectOption('');
+    await page.getByRole('button', { name: /enregistrer les préférences/i }).click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   });
 });

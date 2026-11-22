@@ -1,11 +1,33 @@
 import { describe, expect, it } from 'vitest';
+import { createTranslator } from 'next-intl';
 import { validate } from '@oci/croissant';
+import en from '../../../../i18n/messages/en';
+import fr from '../../../../i18n/messages/fr';
 import {
   describeProvenanceIssue,
   isProvenanceCode,
   requirementIdOf,
+  translateProvenanceHeadline,
   REQUIREMENT_LABEL,
+  type ProvenanceIssue,
 } from './provenance-issues';
+
+/** One issue per headline shape, for the translation checks. */
+function sampleIssues(): ProvenanceIssue[] {
+  const raw: Array<{ code: string; level: 'error' | 'warning'; tier: 'OPEN' | 'SENSITIVE' }> = [
+    { code: 'provenance.missing.H5', level: 'error', tier: 'SENSITIVE' },
+    { code: 'provenance.missing.H3', level: 'warning', tier: 'OPEN' },
+    { code: 'provenance.mismatch.H4.anonymizationLevel', level: 'error', tier: 'OPEN' },
+    { code: 'provenance.invalid.P2.endedAtTime', level: 'error', tier: 'OPEN' },
+    { code: 'provenance.invalid.H6b', level: 'error', tier: 'OPEN' },
+    { code: 'provenance.deprecated.marker', level: 'warning', tier: 'OPEN' },
+    { code: 'provenance.deprecated.activityKind', level: 'warning', tier: 'OPEN' },
+    { code: 'provenance.optIn', level: 'warning', tier: 'OPEN' },
+  ];
+  return raw.map((r) =>
+    describeProvenanceIssue({ code: r.code, path: '/x', message: 'm', level: r.level }, r.tier),
+  );
+}
 
 describe('provenance-issues (#496, #519)', () => {
   it('names the requirement from the code and leaves the deprecation notices unnamed', () => {
@@ -109,6 +131,30 @@ describe('provenance-issues (#496, #519)', () => {
       const shaped = describeProvenanceIssue(issue, 'SENSITIVE');
       expect(shaped.requirementId, issue.code).not.toBeNull();
       expect(shaped.headline).toMatch(/^[PH]\d[a-z]? · .+ is required for a SENSITIVE dataset$/);
+    }
+  });
+
+  it('words the headline from the English catalogue exactly as `headline` does (#654)', () => {
+    const t = createTranslator({ locale: 'en', messages: en, namespace: 'Provenance' });
+    for (const issue of sampleIssues()) {
+      expect(translateProvenanceHeadline(t, issue), issue.code).toBe(issue.headline);
+    }
+    for (const id of Object.keys(REQUIREMENT_LABEL) as Array<keyof typeof REQUIREMENT_LABEL>) {
+      // eslint-disable-next-line security/detect-object-injection
+      expect(t(`requirement.${id}`)).toBe(REQUIREMENT_LABEL[id]);
+    }
+  });
+
+  it('words every headline shape in French, keeping the id and naming the tier in French', () => {
+    const t = createTranslator({ locale: 'fr', messages: fr, namespace: 'Provenance' });
+    const h5 = translateProvenanceHeadline(t, sampleIssues()[0]!);
+    expect(h5).toBe(
+      'H5 · Approbation éthique (IRB, comité d’éthique institutionnel) : obligatoire pour un jeu de données sensible',
+    );
+    for (const issue of sampleIssues()) {
+      const text = translateProvenanceHeadline(t, issue);
+      expect(text).not.toBe(issue.headline);
+      expect(text).not.toMatch(/Provenance\.|issue\.|requirement\./);
     }
   });
 });

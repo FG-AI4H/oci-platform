@@ -1,5 +1,7 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -25,7 +27,6 @@ import type {
   AccessTier,
   CommercialUseTerms,
   DatasetDetail,
-  DatasetStatus,
   DatasetVisibility,
   DicomSeriesList,
 } from '@oci/shared-types';
@@ -38,7 +39,8 @@ import {
   summariseBulkDownload,
 } from '../../../lib/dataset-files';
 import { datasetJsonLd } from '../../../lib/dataset-jsonld';
-import { heldImageCount, seriesRows } from '../../../lib/dicom-series';
+import { heldImageCount, seriesRows, type SeriesWords } from '../../../lib/dicom-series';
+import { getFormatters } from '../../../i18n/server';
 import { siteUrl } from '../../../lib/site-url';
 import { isAdmin, isCampaignManager } from '../../../lib/groups';
 import { isHostOfDataset } from '../../../lib/identity';
@@ -58,20 +60,6 @@ const visibilityTone: Record<DatasetVisibility, 'success' | 'info' | 'warning'> 
   PRIVATE: 'info',
 };
 
-const visibilityCopy: Record<DatasetVisibility, string> = {
-  PUBLIC: 'Listed and crawlable',
-  RESTRICTED: 'Access on request',
-  PRIVATE: 'Hosts and admins only',
-};
-
-/** What the visibility means while the row is not PUBLISHED: nothing yet. */
-const statusCopy: Record<DatasetStatus, string | null> = {
-  DRAFT: 'Draft: not listed and not crawlable until a version is published',
-  REVIEW: 'In review: not listed until a version is published',
-  PUBLISHED: null,
-  ARCHIVED: 'Archived: no longer listed',
-};
-
 /**
  * Access-tier (#115) → badge tone. `OPEN` keeps a neutral/info tone so it
  * doesn't dominate the header; the higher tiers escalate visually because
@@ -83,13 +71,6 @@ const accessTierTone: Record<AccessTier, 'info' | 'warning' | 'danger' | 'neutra
   REGISTERED: 'info',
   CONTROLLED: 'warning',
   SENSITIVE: 'danger',
-};
-
-const accessTierLabel: Record<AccessTier, string> = {
-  OPEN: 'Open access',
-  REGISTERED: 'Registered',
-  CONTROLLED: 'Controlled',
-  SENSITIVE: 'Sensitive',
 };
 
 /**
@@ -104,12 +85,6 @@ const commercialTone: Record<CommercialUseTerms, 'success' | 'warning' | 'neutra
   CASE_BY_CASE: 'neutral',
 };
 
-const commercialLabel: Record<CommercialUseTerms, string> = {
-  OK: 'Commercial OK',
-  NON_COMMERCIAL_ONLY: 'Non-commercial only',
-  CASE_BY_CASE: 'Commercial: case-by-case',
-};
-
 interface CroissantPreview {
   conformsTo?: string;
   license?: unknown;
@@ -122,11 +97,14 @@ interface CroissantPreview {
   anonymizationLevel?: string;
 }
 
-const PUBLISH_DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' });
-
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
   const { slug } = await params;
-  return { title: `${slug} — OCI Catalog` };
+  const t = await getTranslations('Dataset');
+  return { title: t('metaTitle', { slug }) };
 }
 
 export default async function DatasetDetailPage({
@@ -140,6 +118,8 @@ export default async function DatasetDetailPage({
   const { requested } = await searchParams;
   const justRequested = requested === '1';
   const session = await auth();
+  const t = await getTranslations('Dataset');
+  const f = await getFormatters();
 
   let detail: DatasetDetail | null = null;
   let error: string | null = null;
@@ -160,7 +140,7 @@ export default async function DatasetDetailPage({
       ownRequests = (all ?? []).filter((r) => r.dataset.slug === slug);
     }
   } catch (err) {
-    error = err instanceof Error ? err.message : 'Unable to reach catalog API';
+    error = err instanceof Error ? err.message : t('catalogApiUnreachable');
   }
 
   if (error) {
@@ -168,7 +148,7 @@ export default async function DatasetDetailPage({
       <Container size="md">
         <Section spacing="md">
           <Alert tone="danger">
-            <AlertTitle>Catalog unavailable</AlertTitle>
+            <AlertTitle>{t('catalogUnavailable')}</AlertTitle>
             <AlertDescription>
               <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
             </AlertDescription>
@@ -193,7 +173,18 @@ export default async function DatasetDetailPage({
   } catch {
     dicomSeries = null;
   }
-  const seriesList = dicomSeries ? seriesRows(dicomSeries.series) : [];
+  // Series are named in the interface language; the English words are
+  // the helper's default, so English reads exactly as before.
+  const seriesWords: SeriesWords = {
+    name: (modality, number) =>
+      number === null
+        ? t('series.nameNoNumber', { modality })
+        : t('series.name', { modality, number }),
+    images: (count) => t('series.images', { count }),
+    inExam: (exam, name) => t('series.inExam', { exam, name }),
+    nthOf: (title, place, total) => t('series.nthOf', { title, place, total }),
+  };
+  const seriesList = dicomSeries ? seriesRows(dicomSeries.series, seriesWords) : [];
   const heldImages = dicomSeries ? heldImageCount(dicomSeries.series) : 0;
 
   const m = (detail.croissant ?? {}) as Record<string, unknown> & CroissantPreview;
@@ -237,7 +228,7 @@ export default async function DatasetDetailPage({
             className="inline-flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
           >
             <ArrowLeftIcon size={14} />
-            <span>Catalog</span>
+            <span>{t('breadcrumb')}</span>
           </Link>
           <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex-1 min-w-0">
@@ -255,24 +246,24 @@ export default async function DatasetDetailPage({
             </div>
             <div className="flex flex-row flex-wrap items-start gap-2 lg:flex-col lg:items-end">
               {detail.status !== 'PUBLISHED' ? (
-                <Badge tone="neutral">{detail.status.toLowerCase()}</Badge>
+                <Badge tone="neutral">{t(`statusBadge.${detail.status}`)}</Badge>
               ) : null}
               <Badge tone={visibilityTone[detail.visibility]}>
-                {detail.visibility.toLowerCase()}
+                {t(`visibilityBadge.${detail.visibility}`)}
               </Badge>
               {/* Access tier (#115). Hidden for OPEN to avoid badge clutter
                   on the most common case; visible from REGISTERED upward
                   so requesters know what assurance they'll need. */}
               {detail.accessTier !== 'OPEN' ? (
                 <Badge tone={accessTierTone[detail.accessTier]}>
-                  {accessTierLabel[detail.accessTier]}
+                  {t(`accessTier.${detail.accessTier}`)}
                 </Badge>
               ) : null}
               {/* Commercial-use band (#119). Always shown — even
                   CASE_BY_CASE — because builders need to know whether
                   to negotiate before investing in a deployment. */}
               <Badge tone={commercialTone[detail.commercialUseTerms]}>
-                {commercialLabel[detail.commercialUseTerms]}
+                {t(`commercial.${detail.commercialUseTerms}`)}
               </Badge>
               {detail.latestVersion ? <Badge tone="primary">v{detail.latestVersion}</Badge> : null}
               {detail.conformanceVersion ? (
@@ -283,14 +274,18 @@ export default async function DatasetDetailPage({
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <p className="inline-flex items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
               <ShieldIcon size={12} />
-              <span>{statusCopy[detail.status] ?? visibilityCopy[detail.visibility]}</span>
+              <span>
+                {detail.status === 'PUBLISHED'
+                  ? t(`visibilityCopy.${detail.visibility}`)
+                  : t(`statusCopy.${detail.status}`)}
+              </span>
             </p>
             {/* The host's way back into the publish flow. A draft has no
                 version yet, so the wording says what is missing. */}
             {isAdmin(session) || isHostOfDataset(session, detail.hostId) ? (
               <Button asChild size="sm" variant={detail.latestVersion ? 'outline' : 'primary'}>
                 <Link href={`/catalog/${detail.slug}/publish`}>
-                  {detail.latestVersion ? 'Publish a new version' : 'Publish the first version'}
+                  {detail.latestVersion ? t('publishNewVersion') : t('publishFirstVersion')}
                 </Link>
               </Button>
             ) : null}
@@ -325,18 +320,19 @@ export default async function DatasetDetailPage({
         <Section spacing="md" className="space-y-8">
           <Card>
             <CardHeader>
-              <CardTitle>About this dataset</CardTitle>
+              <CardTitle>{t('about.title')}</CardTitle>
               <CardDescription>
-                <strong>Summary</strong> is a curated overview; <strong>Full manifest</strong> lists
-                every field the host has published; <strong>Raw</strong> is the underlying record.
-                Download the standalone manifest:{' '}
-                <Link
-                  className="font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)]"
-                  href={`/catalog/${detail.slug}/croissant`}
-                >
-                  croissant.json
-                </Link>
-                .
+                {t.rich('about.description', {
+                  strong: (chunks) => <strong>{chunks}</strong>,
+                  link: (chunks) => (
+                    <Link
+                      className="font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)]"
+                      href={`/catalog/${detail.slug}/croissant`}
+                    >
+                      {chunks}
+                    </Link>
+                  ),
+                })}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -345,17 +341,17 @@ export default async function DatasetDetailPage({
                   <div className="space-y-6">
                     <DefinitionList>
                       {conformsTo ? (
-                        <DefinitionItem term="Conforms to" mono>
+                        <DefinitionItem term={t('summary.conformsTo')} mono>
                           {conformsTo}
                         </DefinitionItem>
                       ) : null}
                       {license ? (
-                        <DefinitionItem term="License">
+                        <DefinitionItem term={t('summary.license')}>
                           <span className="font-mono">{stringifyLicense(license)}</span>
                         </DefinitionItem>
                       ) : null}
                       {homepage ? (
-                        <DefinitionItem term="Homepage">
+                        <DefinitionItem term={t('summary.homepage')}>
                           <a
                             className="inline-flex items-center gap-1 text-[var(--color-primary)] underline underline-offset-2 break-all hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
                             href={String(homepage)}
@@ -368,7 +364,7 @@ export default async function DatasetDetailPage({
                         </DefinitionItem>
                       ) : null}
                       {keywords && keywords.length > 0 ? (
-                        <DefinitionItem term="Keywords">
+                        <DefinitionItem term={t('summary.keywords')}>
                           <span className="flex flex-wrap gap-1.5">
                             {keywords.map((k) => (
                               <Badge key={k} tone="neutral">
@@ -379,7 +375,7 @@ export default async function DatasetDetailPage({
                         </DefinitionItem>
                       ) : null}
                       {modalityNames.length > 0 ? (
-                        <DefinitionItem term="Modality">
+                        <DefinitionItem term={t('summary.modality')}>
                           <span className="flex flex-wrap gap-1.5">
                             {modalityNames.map((n) => (
                               <Badge key={n} tone="info">
@@ -390,7 +386,7 @@ export default async function DatasetDetailPage({
                         </DefinitionItem>
                       ) : null}
                       {bodyRegionNames.length > 0 ? (
-                        <DefinitionItem term="Body region">
+                        <DefinitionItem term={t('summary.bodyRegion')}>
                           <span className="flex flex-wrap gap-1.5">
                             {bodyRegionNames.map((n) => (
                               <Badge key={n} tone="info">
@@ -401,7 +397,7 @@ export default async function DatasetDetailPage({
                         </DefinitionItem>
                       ) : null}
                       {diseaseNames.length > 0 ? (
-                        <DefinitionItem term="Conditions">
+                        <DefinitionItem term={t('summary.conditions')}>
                           <span className="flex flex-wrap gap-1.5">
                             {diseaseNames.map((n) => (
                               <Badge key={n} tone="warning">
@@ -412,7 +408,7 @@ export default async function DatasetDetailPage({
                         </DefinitionItem>
                       ) : null}
                       {anonymization ? (
-                        <DefinitionItem term="Anonymization">
+                        <DefinitionItem term={t('summary.anonymization')}>
                           <Badge tone={anonymization === 'IDENTIFIED' ? 'danger' : 'success'}>
                             {anonymization}
                           </Badge>
@@ -423,10 +419,10 @@ export default async function DatasetDetailPage({
                         builders can scan terms before investing in a
                         deployment. The badge in the header gives the
                         at-a-glance band; this shows the rationale. */}
-                      <DefinitionItem term="Commercial use">
+                      <DefinitionItem term={t('summary.commercialUse')}>
                         <div className="space-y-1 text-sm">
                           <p className="font-medium">
-                            {commercialLabel[detail.commercialUseTerms]}
+                            {t(`commercial.${detail.commercialUseTerms}`)}
                           </p>
                           {detail.commercialClauses ? (
                             <p className="whitespace-pre-wrap text-[var(--color-muted-foreground)]">
@@ -436,11 +432,11 @@ export default async function DatasetDetailPage({
                         </div>
                       </DefinitionItem>
                       {detail.duoTerms.length > 0 ? (
-                        <DefinitionItem term="Permitted use (DUO)">
+                        <DefinitionItem term={t('summary.permittedUse')}>
                           <ul className="space-y-1.5 text-sm">
                             {detail.duoTerms.map((id) => {
-                              const t = lookupDuoTerm(id);
-                              if (!t) {
+                              const term = lookupDuoTerm(id);
+                              if (!term) {
                                 return (
                                   <li key={id} className="font-mono text-xs">
                                     {id}
@@ -450,12 +446,12 @@ export default async function DatasetDetailPage({
                               return (
                                 <li key={id} className="flex items-start gap-2">
                                   <Badge tone="info" className="font-mono">
-                                    {t.code}
+                                    {term.code}
                                   </Badge>
                                   <span>
-                                    <span className="font-medium">{t.label}.</span>{' '}
+                                    <span className="font-medium">{term.label}.</span>{' '}
                                     <span className="text-[var(--color-muted-foreground)]">
-                                      {t.summary}
+                                      {term.summary}
                                     </span>
                                   </span>
                                 </li>
@@ -465,7 +461,7 @@ export default async function DatasetDetailPage({
                         </DefinitionItem>
                       ) : null}
                       {citeAs ? (
-                        <DefinitionItem term="Cite as">
+                        <DefinitionItem term={t('summary.citeAs')}>
                           <pre className="whitespace-pre-wrap break-words text-xs font-mono leading-relaxed text-[var(--color-foreground)]/85">
                             {String(citeAs)}
                           </pre>
@@ -486,33 +482,28 @@ export default async function DatasetDetailPage({
           {dicomSeries && seriesList.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Imaging series</CardTitle>
-                <CardDescription>
-                  DICOM series in the latest version. Open one to scroll through its images and
-                  change the window, without downloading anything.
-                </CardDescription>
+                <CardTitle>{t('imaging.title')}</CardTitle>
+                <CardDescription>{t('imaging.description')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {heldImages > 0 ? (
                   <Alert tone="warning">
-                    <AlertTitle as="h3">
-                      {heldImages} {heldImages === 1 ? 'image is' : 'images are'} held
-                    </AlertTitle>
+                    <AlertTitle as="h3">{t('imaging.heldTitle', { count: heldImages })}</AlertTitle>
                     <AlertDescription>
-                      Their headers carry values that de-identification normally removes, such as a
-                      patient id or a study date. Until a platform operator has reviewed them, only
-                      the dataset&apos;s host and platform operators see these images. Other readers
-                      do not see them, or a series made only of them.
+                      {t('imaging.heldBody')}
                       {isAdmin(session) ? (
                         <>
                           {' '}
-                          <Link
-                            href={`/admin/dicom/${detail.slug}`}
-                            className="font-medium underline underline-offset-2"
-                          >
-                            Review the findings
-                          </Link>
-                          .
+                          {t.rich('imaging.reviewFindings', {
+                            link: (chunks) => (
+                              <Link
+                                href={`/admin/dicom/${detail.slug}`}
+                                className="font-medium underline underline-offset-2"
+                              >
+                                {chunks}
+                              </Link>
+                            ),
+                          })}
                         </>
                       ) : null}
                     </AlertDescription>
@@ -536,7 +527,9 @@ export default async function DatasetDetailPage({
                       <div className="flex shrink-0 items-center gap-2">
                         {row.held ? (
                           <Badge tone="warning">
-                            {row.held === 'all' ? 'held' : `${row.heldCount} held`}
+                            {row.held === 'all'
+                              ? t('imaging.heldAll')
+                              : t('imaging.heldSome', { count: row.heldCount })}
                           </Badge>
                         ) : null}
                         <SeriesViewButton
@@ -551,7 +544,10 @@ export default async function DatasetDetailPage({
                 </ul>
                 {dicomSeries.total > seriesList.length ? (
                   <p className="text-xs text-[var(--color-muted-foreground)]">
-                    Showing the first {seriesList.length} of {dicomSeries.total} series.
+                    {t('imaging.showingFirst', {
+                      shown: f.number(seriesList.length),
+                      total: f.number(dicomSeries.total),
+                    })}
                   </p>
                 ) : null}
               </CardContent>
@@ -561,11 +557,9 @@ export default async function DatasetDetailPage({
           {detail.distributions.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Files</CardTitle>
+                <CardTitle>{t('files.title')}</CardTitle>
                 <CardDescription>
-                  Files in the latest version. <em>Hosted</em> entries are served by OCI;{' '}
-                  <em>upstream</em> entries are kept by the original publisher and we link to them.
-                  Hosted images can be previewed without downloading.
+                  {t.rich('files.description', { em: (chunks) => <em>{chunks}</em> })}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -578,7 +572,7 @@ export default async function DatasetDetailPage({
                   gatedCount={bulk.gatedCount}
                   upstreamCount={bulk.upstreamCount}
                   totalCount={bulk.totalCount}
-                  sizeLabel={bulk.knownBytes > 0 ? formatBytes(bulk.knownBytes) : null}
+                  sizeLabel={bulk.knownBytes > 0 ? f.bytes(bulk.knownBytes) : null}
                   unknownSizeCount={bulk.unknownSizeCount}
                 />
 
@@ -592,7 +586,7 @@ export default async function DatasetDetailPage({
                     const label = d.filename ?? d.croissantId;
                     const meta = [
                       d.contentType,
-                      d.contentSizeBytes !== null ? formatBytes(d.contentSizeBytes) : null,
+                      d.contentSizeBytes !== null ? f.bytes(d.contentSizeBytes) : null,
                     ]
                       .filter((part): part is string => part !== null)
                       .join(' · ');
@@ -611,7 +605,7 @@ export default async function DatasetDetailPage({
                           <p className="text-xs text-[var(--color-muted-foreground)]">
                             {d.contentType}
                             {d.contentSizeBytes !== null
-                              ? ` · ${formatBytes(d.contentSizeBytes)}`
+                              ? ` · ${f.bytes(d.contentSizeBytes)}`
                               : null}
                             {d.contentHash ? (
                               <>
@@ -625,10 +619,10 @@ export default async function DatasetDetailPage({
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
                           {d.requiresAccess ? (
-                            <Badge tone="warning">requires access</Badge>
+                            <Badge tone="warning">{t('files.requiresAccess')}</Badge>
                           ) : platformHosted ? (
                             <>
-                              <Badge tone="success">hosted</Badge>
+                              <Badge tone="success">{t('files.hosted')}</Badge>
                               {isPreviewableImage(d) ? (
                                 <ImagePreviewButton
                                   filename={label}
@@ -638,28 +632,28 @@ export default async function DatasetDetailPage({
                               ) : null}
                               <a
                                 href={`/catalog/${detail.slug}/distributions/${d.id}/download`}
-                                aria-label={`Download ${label} from platform storage`}
+                                aria-label={t('files.downloadAria', { file: label })}
                                 className="inline-flex min-h-11 items-center gap-1 rounded px-1 text-sm font-medium text-[var(--color-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] sm:min-h-0"
                               >
-                                <span>download</span>
+                                <span>{t('files.download')}</span>
                               </a>
                             </>
                           ) : d.contentUrl ? (
                             <>
-                              <Badge tone="neutral">upstream</Badge>
+                              <Badge tone="neutral">{t('files.upstream')}</Badge>
                               <a
                                 href={d.contentUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                aria-label={`Open ${label} on upstream host (opens in new tab)`}
+                                aria-label={t('files.openAria', { file: label })}
                                 className="inline-flex min-h-11 items-center gap-1 rounded px-1 text-sm font-medium text-[var(--color-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] sm:min-h-0"
                               >
-                                <span>open</span>
+                                <span>{t('files.open')}</span>
                                 <ExternalLinkIcon size={14} />
                               </a>
                             </>
                           ) : (
-                            <Badge tone="neutral">no url</Badge>
+                            <Badge tone="neutral">{t('files.noUrl')}</Badge>
                           )}
                         </div>
                       </div>
@@ -673,11 +667,8 @@ export default async function DatasetDetailPage({
           {detail.versions.length > 1 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Version history</CardTitle>
-                <CardDescription>
-                  Each published version is immutable — manifest hashes anchor downstream evaluation
-                  reports.
-                </CardDescription>
+                <CardTitle>{t('versions.title')}</CardTitle>
+                <CardDescription>{t('versions.description')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <ol className="divide-y divide-[var(--color-border)] text-sm">
@@ -691,7 +682,7 @@ export default async function DatasetDetailPage({
                         dateTime={v.publishedAt}
                         className="text-xs text-[var(--color-muted-foreground)]"
                       >
-                        {PUBLISH_DATE_FORMATTER.format(new Date(v.publishedAt))}
+                        {f.date(v.publishedAt)}
                       </time>
                     </li>
                   ))}
@@ -703,11 +694,13 @@ export default async function DatasetDetailPage({
           <Separator />
 
           <p className="text-center text-xs text-[var(--color-muted-foreground)]">
-            Manifest mirrored from upstream host.{' '}
-            <Link href="/catalog" className="underline hover:text-[var(--color-foreground)]">
-              Back to catalog
-            </Link>
-            .
+            {t.rich('footer', {
+              link: (chunks) => (
+                <Link href="/catalog" className="underline hover:text-[var(--color-foreground)]">
+                  {chunks}
+                </Link>
+              ),
+            })}
           </p>
         </Section>
       </Container>
@@ -752,13 +745,6 @@ function stringifyLicense(license: unknown): string {
     return String((license as { name?: string }).name ?? '');
   }
   return JSON.stringify(license);
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }
 
 /**

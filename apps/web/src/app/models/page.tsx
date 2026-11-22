@@ -1,4 +1,7 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
+import { useTranslations } from 'next-intl';
 import {
   Alert,
   AlertDescription,
@@ -22,16 +25,19 @@ import type {
   ModelCardSummary,
   ModelClass,
 } from '@oci/shared-types';
+import type { Formatters } from '../../i18n/format';
+import { getFormatters } from '../../i18n/server';
 import { apiFetch } from '../../lib/api';
 import {
   JURISDICTION_OPTIONS,
   MODEL_CLASS_OPTIONS,
-  REGULATORY_STATUS_LABEL,
   REGULATORY_STATUS_TONE,
-  humanise,
-  modelClassLabel,
+  jurisdictionText,
+  medicalPurposeText,
+  modelClassText,
   normaliseJurisdiction,
   normaliseModelClass,
+  regulatoryStatusText,
 } from '../../lib/model-card-labels';
 
 /**
@@ -63,17 +69,15 @@ interface FilterState {
   page: number;
 }
 
-const SORT_OPTIONS: ReadonlyArray<{ value: ListModelCardsSort; label: string }> = [
-  { value: 'recent', label: 'Most recent' },
-  { value: 'name', label: 'Name' },
-  { value: 'oldest', label: 'Oldest' },
-];
+const SORT_OPTIONS: ReadonlyArray<ListModelCardsSort> = ['recent', 'name', 'oldest'];
 
-export const metadata = {
-  title: 'Models — OCI Platform',
-  description:
-    'Discover published health AI models with their intended use, regulatory status and WHO Model Facts label.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('Models');
+  return {
+    title: t('metaTitle'),
+    description: t('metaDescription'),
+  };
+}
 
 function parseFilters(params: SearchParams): FilterState {
   const q = params.q?.trim();
@@ -105,6 +109,7 @@ export default async function ModelsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const filters = parseFilters(await searchParams);
+  const [t, f] = await Promise.all([getTranslations('Models'), getFormatters()]);
 
   const apiQs = new URLSearchParams();
   if (filters.q) apiQs.set('q', filters.q);
@@ -122,7 +127,7 @@ export default async function ModelsPage({
       { revalidate: 0 },
     );
   } catch (err) {
-    error = err instanceof Error ? err.message : 'Unable to reach the model catalogue API';
+    error = err instanceof Error ? err.message : t('unavailable.fallback');
   }
 
   const activeFilters = (filters.modelClass ? 1 : 0) + (filters.jurisdiction ? 1 : 0);
@@ -132,44 +137,43 @@ export default async function ModelsPage({
       <Section spacing="md">
         <header className="mb-6 flex flex-col gap-3">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Catalog
+            {t('list.eyebrow')}
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Models</h1>
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+              {t('list.heading')}
+            </h1>
             {response ? (
               <p className="text-sm text-[var(--color-muted-foreground)]">
-                <span className="text-[var(--color-foreground)] font-medium tabular-nums">
-                  {response.total.toLocaleString('en-GB')}
-                </span>{' '}
-                {response.total === 1 ? 'published model' : 'published models'}
-                {filters.q ? (
-                  <>
-                    {' matching '}
-                    <span className="text-[var(--color-foreground)]">
-                      &ldquo;{filters.q}&rdquo;
+                {t.rich(filters.q ? 'list.countMatching' : 'list.countPublished', {
+                  total: f.number(response.total),
+                  count: response.total,
+                  query: filters.q ?? '',
+                  num: (chunks) => (
+                    <span className="text-[var(--color-foreground)] font-medium tabular-nums">
+                      {chunks}
                     </span>
-                  </>
-                ) : null}
+                  ),
+                  quoted: (chunks) => (
+                    <span className="text-[var(--color-foreground)]">{chunks}</span>
+                  ),
+                })}
               </p>
             ) : null}
           </div>
-          <p className="max-w-2xl text-[var(--color-muted-foreground)]">
-            Published health AI models with a declared intended use. Each card carries a WHO Model
-            Facts label summarising what the model is for, how it was validated and when to stop
-            relying on it.
-          </p>
+          <p className="max-w-2xl text-[var(--color-muted-foreground)]">{t('list.intro')}</p>
         </header>
 
         <form action="/models" method="get" role="search" className="mb-4 flex flex-wrap gap-2">
           <label htmlFor="models-search" className="sr-only">
-            Search models
+            {t('search.label')}
           </label>
           <Input
             id="models-search"
             type="search"
             name="q"
             defaultValue={filters.q ?? ''}
-            placeholder="Search by name, developer or intended use"
+            placeholder={t('search.placeholder')}
             leadingIcon={<SearchIcon size={16} />}
             wrapperClassName="min-w-0 flex-1"
           />
@@ -182,7 +186,7 @@ export default async function ModelsPage({
           {filters.sort !== 'recent' ? (
             <input type="hidden" name="sort" value={filters.sort} />
           ) : null}
-          <Button type="submit">Search</Button>
+          <Button type="submit">{t('search.submit')}</Button>
         </form>
 
         <AppliedFilters filters={filters} />
@@ -192,8 +196,10 @@ export default async function ModelsPage({
             {/* Same disclosure pattern as /catalog: facets collapse below lg. */}
             <details className="group rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] lg:hidden">
               <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-4 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] [&::-webkit-details-marker]:hidden">
-                Filters
-                {activeFilters > 0 ? <Badge tone="primary">{activeFilters} active</Badge> : null}
+                {t('filters.toggle')}
+                {activeFilters > 0 ? (
+                  <Badge tone="primary">{t('filters.active', { count: activeFilters })}</Badge>
+                ) : null}
                 <span
                   aria-hidden="true"
                   className="ms-auto text-[var(--color-muted-foreground)] motion-safe:transition-transform group-open:rotate-180"
@@ -210,10 +216,10 @@ export default async function ModelsPage({
             </div>
           </div>
           <div className="min-w-0">
-            <SortToolbar filters={filters} response={response} />
+            <SortToolbar filters={filters} response={response} f={f} />
             {error ? (
               <Alert tone="danger">
-                <AlertTitle>Model catalogue unavailable</AlertTitle>
+                <AlertTitle>{t('unavailable.title')}</AlertTitle>
                 <AlertDescription>
                   <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">
                     {error}
@@ -242,11 +248,15 @@ export default async function ModelsPage({
 }
 
 function FilterPanel({ filters }: { filters: FilterState }) {
+  const t = useTranslations('Models');
   return (
-    <aside aria-label="Filters" className="space-y-5">
+    <aside aria-label={t('filters.region')} className="space-y-5">
       <FacetSection
-        title="Model class"
-        options={MODEL_CLASS_OPTIONS}
+        title={t('filters.modelClass')}
+        options={MODEL_CLASS_OPTIONS.map((o) => ({
+          value: o.value,
+          label: modelClassText(t, o.value),
+        }))}
         selected={filters.modelClass}
         toggleHref={(v) =>
           buildUrl(filters, {
@@ -256,8 +266,11 @@ function FilterPanel({ filters }: { filters: FilterState }) {
         }
       />
       <FacetSection
-        title="Jurisdiction"
-        options={JURISDICTION_OPTIONS}
+        title={t('filters.jurisdiction')}
+        options={JURISDICTION_OPTIONS.map((value) => ({
+          value,
+          label: jurisdictionText(t, value),
+        }))}
         selected={filters.jurisdiction}
         toggleHref={(v) =>
           buildUrl(filters, { jurisdiction: filters.jurisdiction === v ? null : v, page: 1 })
@@ -278,6 +291,7 @@ function FacetSection({
   selected: string | null;
   toggleHref: (value: string) => string;
 }) {
+  const t = useTranslations('Models');
   return (
     <fieldset className="min-w-0 space-y-2">
       <legend className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
@@ -310,7 +324,8 @@ function FacetSection({
                 />
                 <span className="truncate">{opt.label}</span>
                 <span className="sr-only">
-                  {isSelected ? ' (selected — activate to remove filter)' : ' (activate to filter)'}
+                  {' '}
+                  {isSelected ? t('filters.selected') : t('filters.notSelected')}
                 </span>
               </Link>
             </li>
@@ -322,16 +337,17 @@ function FacetSection({
 }
 
 function AppliedFilters({ filters }: { filters: FilterState }) {
+  const t = useTranslations('Models');
   const chips: Array<{ label: string; href: string }> = [];
   if (filters.modelClass) {
     chips.push({
-      label: `Class: ${modelClassLabel(filters.modelClass)}`,
+      label: t('applied.classChip', { label: modelClassText(t, filters.modelClass) }),
       href: buildUrl(filters, { modelClass: null, page: 1 }),
     });
   }
   if (filters.jurisdiction) {
     chips.push({
-      label: `Jurisdiction: ${filters.jurisdiction}`,
+      label: t('applied.jurisdictionChip', { code: filters.jurisdiction }),
       href: buildUrl(filters, { jurisdiction: null, page: 1 }),
     });
   }
@@ -340,7 +356,7 @@ function AppliedFilters({ filters }: { filters: FilterState }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
       <span className="text-xs uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-        Applied
+        {t('applied.label')}
       </span>
       {chips.map((c) => (
         <Link
@@ -350,14 +366,14 @@ function AppliedFilters({ filters }: { filters: FilterState }) {
         >
           <span>{c.label}</span>
           <span aria-hidden="true">×</span>
-          <span className="sr-only">Remove filter</span>
+          <span className="sr-only">{t('applied.remove')}</span>
         </Link>
       ))}
       <Link
         href={buildUrl(filters, { modelClass: null, jurisdiction: null, page: 1 })}
         className="text-xs font-medium text-[var(--color-muted-foreground)] underline-offset-2 hover:underline"
       >
-        Clear all
+        {t('applied.clearAll')}
       </Link>
     </div>
   );
@@ -366,43 +382,45 @@ function AppliedFilters({ filters }: { filters: FilterState }) {
 function SortToolbar({
   filters,
   response,
+  f,
 }: {
   filters: FilterState;
   response: ListModelCardsResponse | null;
+  f: Formatters;
 }) {
+  const t = useTranslations('Models');
   if (!response) return null;
   const start = (response.page - 1) * response.pageSize + 1;
   const end = start + response.items.length - 1;
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm">
       <p className="text-[var(--color-muted-foreground)]">
-        {response.items.length === 0 ? (
-          <>No results.</>
-        ) : (
-          <>
-            Showing{' '}
-            <span className="text-[var(--color-foreground)] tabular-nums">
-              {start}–{end}
-            </span>{' '}
-            of{' '}
-            <span className="text-[var(--color-foreground)] tabular-nums">
-              {response.total.toLocaleString('en-GB')}
-            </span>
-          </>
-        )}
+        {response.items.length === 0
+          ? t('results.none')
+          : t.rich('results.showing', {
+              start: f.number(start),
+              end: f.number(end),
+              total: f.number(response.total),
+              range: (chunks) => (
+                <span className="text-[var(--color-foreground)] tabular-nums">{chunks}</span>
+              ),
+              all: (chunks) => (
+                <span className="text-[var(--color-foreground)] tabular-nums">{chunks}</span>
+              ),
+            })}
       </p>
       <div className="flex items-center gap-2">
-        <span className="text-xs text-[var(--color-muted-foreground)]">Sort</span>
+        <span className="text-xs text-[var(--color-muted-foreground)]">{t('sort.label')}</span>
         <nav
-          aria-label="Sort"
+          aria-label={t('sort.region')}
           className="inline-flex rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-0.5 text-xs"
         >
           {SORT_OPTIONS.map((opt) => {
-            const isActive = filters.sort === opt.value;
+            const isActive = filters.sort === opt;
             return (
               <Link
-                key={opt.value}
-                href={buildUrl(filters, { sort: opt.value, page: 1 })}
+                key={opt}
+                href={buildUrl(filters, { sort: opt, page: 1 })}
                 aria-current={isActive ? 'page' : undefined}
                 className={
                   'rounded px-2.5 py-1 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
@@ -411,7 +429,7 @@ function SortToolbar({
                     : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]')
                 }
               >
-                {opt.label}
+                {t(`sort.${opt}`)}
               </Link>
             );
           })}
@@ -428,6 +446,7 @@ function Pagination({
   filters: FilterState;
   response: ListModelCardsResponse;
 }) {
+  const t = useTranslations('Models');
   const { totalPages } = response;
   const current = filters.page;
   if (totalPages <= 1 && current <= 1) return null;
@@ -436,32 +455,32 @@ function Pagination({
 
   return (
     <nav
-      aria-label="Pagination"
+      aria-label={t('pagination.region')}
       className="mt-10 flex flex-wrap items-center justify-center gap-3 text-sm"
     >
       {prev ? (
         <Button asChild variant="outline" size="sm">
           <Link href={prev} rel="prev">
-            ← Prev
+            {t('pagination.prev')}
           </Link>
         </Button>
       ) : (
         <Button variant="outline" size="sm" disabled>
-          ← Prev
+          {t('pagination.prev')}
         </Button>
       )}
       <span className="tabular-nums text-[var(--color-muted-foreground)]">
-        Page {current} of {totalPages}
+        {t('pagination.page', { current, total: totalPages })}
       </span>
       {next ? (
         <Button asChild variant="outline" size="sm">
           <Link href={next} rel="next">
-            Next →
+            {t('pagination.next')}
           </Link>
         </Button>
       ) : (
         <Button variant="outline" size="sm" disabled>
-          Next →
+          {t('pagination.next')}
         </Button>
       )}
     </nav>
@@ -469,6 +488,7 @@ function Pagination({
 }
 
 function ModelCardTile({ m }: { m: ModelCardSummary }) {
+  const t = useTranslations('Models');
   return (
     <Link
       href={`/models/${m.slug}`}
@@ -491,17 +511,17 @@ function ModelCardTile({ m }: { m: ModelCardSummary }) {
             <p className="text-sm text-[var(--color-muted-foreground)]">{m.modelDeveloper}</p>
           ) : null}
           <CardDescription className="line-clamp-3 min-h-[3.5rem]">
-            {m.clinicalSummary ?? <em>No clinical summary provided.</em>}
+            {m.clinicalSummary ?? <em>{t('list.noSummary')}</em>}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-1.5 border-t border-[var(--color-border)] pt-4 text-xs">
-          <Badge tone="neutral">{modelClassLabel(m.modelClass)}</Badge>
-          <Badge tone="neutral">{humanise(m.medicalPurpose)}</Badge>
-          <Badge tone="info">Risk tier {m.riskTier}</Badge>
-          {m.generativeAi ? <Badge tone="accent">Generative AI</Badge> : null}
+          <Badge tone="neutral">{modelClassText(t, m.modelClass)}</Badge>
+          <Badge tone="neutral">{medicalPurposeText(t, m.medicalPurpose)}</Badge>
+          <Badge tone="info">{t('riskTier', { tier: m.riskTier })}</Badge>
+          {m.generativeAi ? <Badge tone="accent">{t('generativeAi')}</Badge> : null}
           {m.regulatoryApprovalStatus ? (
             <Badge tone={REGULATORY_STATUS_TONE[m.regulatoryApprovalStatus]}>
-              {REGULATORY_STATUS_LABEL[m.regulatoryApprovalStatus]}
+              {regulatoryStatusText(t, m.regulatoryApprovalStatus)}
             </Badge>
           ) : null}
         </CardContent>
@@ -511,6 +531,7 @@ function ModelCardTile({ m }: { m: ModelCardSummary }) {
 }
 
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
+  const t = useTranslations('Models');
   return (
     <div className="rounded-xl border border-dashed border-[var(--color-border-strong)] bg-[var(--color-subtle)] p-12 text-center">
       <span
@@ -520,17 +541,15 @@ function EmptyState({ hasFilters }: { hasFilters: boolean }) {
         <SparkIcon size={20} />
       </span>
       <h2 className="mt-4 text-lg font-semibold">
-        {hasFilters ? 'No matching models' : 'No published models yet'}
+        {hasFilters ? t('empty.noMatchTitle') : t('empty.noneTitle')}
       </h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-[var(--color-muted-foreground)]">
-        {hasFilters
-          ? 'Try fewer filters, or broaden your search.'
-          : 'Model cards appear here once they are published. Drafts and submissions under review are not listed.'}
+        {hasFilters ? t('empty.noMatchBody') : t('empty.noneBody')}
       </p>
       {hasFilters ? (
         <div className="mt-5">
           <Button asChild variant="outline" size="sm">
-            <Link href="/models">Clear all filters</Link>
+            <Link href="/models">{t('empty.clearAll')}</Link>
           </Button>
         </div>
       ) : null}

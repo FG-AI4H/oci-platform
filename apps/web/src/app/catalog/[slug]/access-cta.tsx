@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Badge } from '@oci/ui';
 import type { AccessRequestStatus, AccessRequestSummary, DatasetDetail } from '@oci/shared-types';
 
@@ -70,6 +71,7 @@ export function AccessCta({
   isPrivilegedForDataset,
   justRequested = false,
 }: Props) {
+  const t = useTranslations('Dataset');
   if (detail.status !== 'PUBLISHED') return null;
   if (!needsAccessGate(detail)) return null;
   if (isPrivilegedForDataset) return null;
@@ -77,15 +79,13 @@ export function AccessCta({
   if (!isAuthenticated) {
     return (
       <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-4">
-        <p className="text-sm font-medium">This dataset is gated.</p>
-        <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-          Sign in to request access. The host reviews each request.
-        </p>
+        <p className="text-sm font-medium">{t('access.gatedTitle')}</p>
+        <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">{t('access.gatedBody')}</p>
         <Link
           href={`/signin?callbackUrl=${encodeURIComponent(`/catalog/${detail.slug}/request-access`)}`}
           className="mt-3 inline-flex items-center justify-center rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] shadow-[var(--shadow-sm)] hover:bg-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
         >
-          Sign in to request access
+          {t('access.signInToRequest')}
         </Link>
       </div>
     );
@@ -100,16 +100,15 @@ export function AccessCta({
     // Authenticated, gated, no prior request → primary CTA.
     return (
       <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-4">
-        <p className="text-sm font-medium">Access is gated for this dataset.</p>
+        <p className="text-sm font-medium">{t('access.gatedForDataset')}</p>
         <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-          File a structured access request — the host reviews intent + IRB attestation against the
-          dataset's DUO permission terms.
+          {t('access.fileRequestBody')}
         </p>
         <Link
           href={`/catalog/${detail.slug}/request-access`}
           className="mt-3 inline-flex items-center justify-center rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] shadow-[var(--shadow-sm)] hover:bg-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
         >
-          Request access
+          {t('access.requestAccess')}
         </Link>
       </div>
     );
@@ -123,41 +122,39 @@ export function AccessCta({
           role="status"
           className="rounded-md border border-[var(--color-success)] bg-[var(--color-success-soft)] px-4 py-3 text-sm text-[var(--color-success)]"
         >
-          Request submitted. The host has been notified — you&apos;ll see the decision here and on
-          your dashboard.
+          {t('access.submitted')}
         </div>
       ) : null}
       <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium">Your access request</p>
-          <Badge tone={STATUS_TONE[latest.status]}>{latest.status.toLowerCase()}</Badge>
+          <p className="text-sm font-medium">{t('access.yourRequest')}</p>
+          <Badge tone={STATUS_TONE[latest.status]}>{t(`access.status.${latest.status}`)}</Badge>
         </div>
         {latest.status === 'PENDING' ? (
           <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-            The host is reviewing your request. You&apos;ll see the decision on your dashboard.
+            {t('access.pendingBody')}
           </p>
         ) : null}
         {latest.status === 'APPROVED' ? (
           <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-            You can download distributions below.
+            {t('access.approvedBody')}
           </p>
         ) : null}
         {latest.status === 'DENIED' ? (
           <>
             <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-              Your request was denied. You can file a fresh request with corrected attestations.
+              {t('access.deniedBody')}
             </p>
             {latest.decisionNote ? (
               <p className="mt-2 rounded-md bg-[var(--color-subtle)] p-2 text-xs">
-                <span className="font-medium">Host&apos;s note:</span> {latest.decisionNote}
+                <span className="font-medium">{t('access.hostNote')}</span> {latest.decisionNote}
               </p>
             ) : null}
           </>
         ) : null}
         {latest.status === 'REVOKED' ? (
           <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-            A previously-approved request was revoked. File a fresh request if your project now
-            meets the revoked-condition.
+            {t('access.revokedBody')}
           </p>
         ) : null}
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
@@ -165,14 +162,14 @@ export function AccessCta({
             href="/dashboard/access-requests"
             className="font-medium text-[var(--color-primary)] underline underline-offset-2"
           >
-            See your requests
+            {t('access.seeRequests')}
           </Link>
           {latest.status === 'DENIED' || latest.status === 'REVOKED' ? (
             <Link
               href={`/catalog/${detail.slug}/request-access`}
               className="font-medium text-[var(--color-primary)] underline underline-offset-2"
             >
-              File a new request
+              {t('access.fileNew')}
             </Link>
           ) : null}
         </div>

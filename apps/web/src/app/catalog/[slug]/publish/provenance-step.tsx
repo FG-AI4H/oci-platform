@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Alert,
   AlertDescription,
@@ -26,7 +27,11 @@ import {
   type RequirementId,
 } from '@oci/croissant';
 import { preflightProvenanceAction, type ProvenancePreflightState } from './actions';
-import { OBLIGATION_LABEL, type ProvenanceIssue } from './provenance-issues';
+import {
+  translateProvenanceHeadline,
+  type ProvenanceHeadlineInput,
+  type ProvenanceIssue,
+} from './provenance-issues';
 
 /**
  * Provenance step of the manifest wizard (bio-prov v0.2, #496).
@@ -59,6 +64,8 @@ export function useProvenancePreflight(
   accessTier: AccessTier,
   enabled: boolean,
 ): ProvenancePreflightState {
+  const t = useTranslations('Provenance');
+  const failed = t('preflight.failed');
   const [state, setState] = useState<ProvenancePreflightState>({ status: 'idle' });
   const seq = useRef(0);
 
@@ -72,15 +79,29 @@ export function useProvenancePreflight(
         },
         () => {
           if (seq.current === ticket) {
-            setState({ status: 'error', message: 'Could not check provenance. Try again.' });
+            setState({ status: 'error', message: failed });
           }
         },
       );
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [manifestJson, accessTier, enabled]);
+  }, [manifestJson, accessTier, enabled, failed]);
 
   return state;
+}
+
+/**
+ * The issue headline in the interface language (#654): "H5 · Ethics
+ * approval (IRB, institutional review board) is required for a SENSITIVE
+ * dataset". The English messages match `describeProvenanceIssue`'s
+ * `headline` word for word; use this wherever a headline is shown.
+ */
+export function useProvenanceHeadline(): (issue: ProvenanceHeadlineInput) => string {
+  const t = useTranslations('Provenance');
+  return useCallback(
+    (issue: ProvenanceHeadlineInput) => translateProvenanceHeadline(t, issue),
+    [t],
+  );
 }
 
 /** Summary counts for the review step and the top-of-step alert. */
@@ -128,12 +149,6 @@ function obligationTone(o: Obligation): 'warning' | 'info' | 'neutral' {
   }
 }
 
-function obligationLabel(o: Obligation): string {
-  // `o` is a member of the closed Obligation union.
-  // eslint-disable-next-line security/detect-object-injection
-  return OBLIGATION_LABEL[o];
-}
-
 interface Props {
   provenance: ManifestWizardProvenance;
   anonymizationLevel: ManifestWizardInput['anonymizationLevel'];
@@ -155,6 +170,7 @@ export function ProvenanceStep({
   preflight,
   onChange,
 }: Props) {
+  const t = useTranslations('Provenance');
   const obligations = useMemo<Obligations>(() => {
     const normalized = normalize(manifest) as Record<string, unknown>;
     const out = {} as Record<RequirementId, Obligation>;
@@ -185,12 +201,12 @@ export function ProvenanceStep({
 
   return (
     <fieldset className="space-y-6">
-      <legend className="sr-only">Provenance</legend>
+      <legend className="sr-only">{t('legend')}</legend>
       <p className="text-xs text-[var(--color-muted-foreground)]">
-        Where the data came from, what was done to it, under what authority, and how the labels were
-        produced (bio-prov v0.2). Markers follow the obligations for a <strong>{accessTier}</strong>{' '}
-        dataset, the access tier this dataset already has. Fill what you can; the check below names
-        what is still missing.
+        {t.rich('intro', {
+          tier: t(`tierName.${accessTier}`),
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
       </p>
 
       <PreflightSummary state={preflight} errors={errors} warnings={warnings} tier={accessTier} />
@@ -198,21 +214,21 @@ export function ProvenanceStep({
       {/* ---- 1. Where did the data come from? ------------------------------ */}
       <Group
         id="wiz-prov-origin"
-        title="Where did the data come from?"
+        title={t('origin.title')}
         blocks={[
           {
             key: 'organisation',
-            title: 'Source organisation',
+            title: t('origin.organisation'),
             ids: ['P1'],
             obligations,
             issues: issuesById,
             children: (
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field
-                  label="Organisation name"
+                  label={t('origin.orgName')}
                   htmlFor="wiz-prov-org-name"
                   required={isMust('P1')}
-                  hint="The institution the data is attributed to."
+                  hint={t('origin.orgNameHint')}
                   error={err('sourceOrganization.name')}
                 >
                   <Input
@@ -225,9 +241,9 @@ export function ProvenanceStep({
                   />
                 </Field>
                 <Field
-                  label="Organisation identifier"
+                  label={t('origin.orgId')}
                   htmlFor="wiz-prov-org-id"
-                  hint="Recommended: a ROR (Research Organization Registry) IRI or the institution's URL."
+                  hint={t('origin.orgIdHint')}
                   error={err('sourceOrganization.id')}
                 >
                   <Input
@@ -247,7 +263,7 @@ export function ProvenanceStep({
           },
           {
             key: 'sites',
-            title: 'Source sites',
+            title: t('origin.sites'),
             ids: ['H1'],
             obligations,
             issues: issuesById,
@@ -262,16 +278,16 @@ export function ProvenanceStep({
           },
           {
             key: 'derived',
-            title: 'Derived from another dataset',
+            title: t('origin.derived'),
             ids: ['P3'],
             obligations,
             issues: issuesById,
-            markerSuffix: 'when derived',
+            markerSuffix: t('whenDerived'),
             children: (
               <Field
-                label="Upstream dataset IRI"
+                label={t('origin.derivedIri')}
                 htmlFor="wiz-prov-derived"
-                hint="Only for a slice, downsample or re-annotation of an existing dataset. A DOI IRI is preferred (https://doi.org/…). Leave blank for a primary collection."
+                hint={t('origin.derivedHint')}
                 error={err('derivedFrom')}
               >
                 <Input
@@ -291,21 +307,21 @@ export function ProvenanceStep({
       {/* ---- 2. What was done to it? --------------------------------------- */}
       <Group
         id="wiz-prov-processing"
-        title="What was done to it?"
+        title={t('processing.title')}
         blocks={[
           {
             key: 'collection',
-            title: p.derivedFrom.trim() ? 'Derivation activity' : 'Collection activity',
+            title: p.derivedFrom.trim() ? t('processing.derivation') : t('processing.collection'),
             ids: ['P2', 'P4'],
             obligations,
             issues: issuesById,
             children: (
               <div className="space-y-3">
                 <Field
-                  label="Activity"
+                  label={t('processing.activity')}
                   htmlFor="wiz-prov-act-name"
                   required={isMust('P2')}
-                  hint="One sentence, e.g. “Prospective collection of fundus photographs at two sites”."
+                  hint={t('processing.activityHint')}
                   error={err('collection.name')}
                 >
                   <Input
@@ -317,10 +333,10 @@ export function ProvenanceStep({
                 </Field>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field
-                    label="Started"
+                    label={t('processing.started')}
                     htmlFor="wiz-prov-act-start"
                     required={isMust('P2')}
-                    hint="YYYY-MM-DD."
+                    hint={t('processing.dateHint')}
                     error={err('collection.startedAt')}
                   >
                     <Input
@@ -334,10 +350,10 @@ export function ProvenanceStep({
                     />
                   </Field>
                   <Field
-                    label="Ended"
+                    label={t('processing.ended')}
                     htmlFor="wiz-prov-act-end"
                     required={isMust('P2')}
-                    hint="YYYY-MM-DD."
+                    hint={t('processing.dateHint')}
                     error={err('collection.endedAt')}
                   >
                     <Input
@@ -352,12 +368,10 @@ export function ProvenanceStep({
                   </Field>
                 </div>
                 <Field
-                  label="Run by"
+                  label={t('processing.runBy')}
                   htmlFor="wiz-prov-act-agent"
                   hint={
-                    isMust('P4')
-                      ? 'Required: the organisation, person or software that ran the activity. Blank means the source organisation.'
-                      : 'The organisation, person or software that ran the activity. Blank means the source organisation.'
+                    isMust('P4') ? t('processing.runByHintRequired') : t('processing.runByHint')
                   }
                   error={err('collection.agentName')}
                 >
@@ -379,26 +393,23 @@ export function ProvenanceStep({
                       set('collection', { ...p.collection, agentIsSoftware: e.target.checked })
                     }
                   />
-                  <span>
-                    This is software (a pipeline or export tool) acting on behalf of the source
-                    organisation
-                  </span>
+                  <span>{t('processing.isSoftware')}</span>
                 </label>
               </div>
             ),
           },
           {
             key: 'timeframe',
-            title: 'Collection timeframe',
+            title: t('processing.timeframe'),
             ids: ['H2'],
             obligations,
             issues: issuesById,
             children: (
               <Field
-                label="Timeframe, in words"
+                label={t('processing.timeframeInWords')}
                 htmlFor="wiz-prov-timeframe"
                 required={isMust('H2')}
-                hint="The human account, e.g. “March 2019 to November 2021”. The activity dates above are the machine-readable form."
+                hint={t('processing.timeframeHint')}
                 error={err('collectionTimeframe')}
               >
                 <Input
@@ -412,16 +423,20 @@ export function ProvenanceStep({
           },
           {
             key: 'device',
-            title: 'Acquisition device',
+            title: t('processing.device'),
             ids: ['H3'],
             obligations,
             issues: issuesById,
             children: (
               <div className="space-y-3">
                 <Field
-                  label="Device class"
+                  label={t('processing.deviceClass')}
                   htmlFor="wiz-prov-device-class"
-                  hint={`A DICOM modality code or GMDN (Global Medical Device Nomenclature) term, e.g. “OP (ophthalmic photography)”. ${isMust('H3') ? 'Required: this or a manufacturer below.' : 'This or a manufacturer below.'}`}
+                  hint={
+                    isMust('H3')
+                      ? t('processing.deviceClassHintRequired')
+                      : t('processing.deviceClassHint')
+                  }
                   error={err('deviceClass')}
                 >
                   <Input
@@ -433,7 +448,7 @@ export function ProvenanceStep({
                 </Field>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <Field
-                    label="Manufacturer"
+                    label={t('processing.manufacturer')}
                     htmlFor="wiz-prov-eq-make"
                     error={err('equipment.manufacturer')}
                   >
@@ -446,7 +461,11 @@ export function ProvenanceStep({
                       }
                     />
                   </Field>
-                  <Field label="Model" htmlFor="wiz-prov-eq-model" error={err('equipment.model')}>
+                  <Field
+                    label={t('processing.model')}
+                    htmlFor="wiz-prov-eq-model"
+                    error={err('equipment.model')}
+                  >
                     <Input
                       id="wiz-prov-eq-model"
                       value={p.equipment.model}
@@ -455,7 +474,7 @@ export function ProvenanceStep({
                     />
                   </Field>
                   <Field
-                    label="Software version"
+                    label={t('processing.softwareVersion')}
                     htmlFor="wiz-prov-eq-sw"
                     error={err('equipment.softwareVersion')}
                   >
@@ -470,14 +489,14 @@ export function ProvenanceStep({
                   </Field>
                 </div>
                 <p className="text-xs text-[var(--color-muted-foreground)]">
-                  Never enter a device serial number; the validator rejects it.
+                  {t('processing.noSerial')}
                 </p>
               </div>
             ),
           },
           {
             key: 'deid',
-            title: 'De-identification',
+            title: t('processing.deid'),
             ids: ['H4'],
             obligations,
             issues: issuesById,
@@ -485,10 +504,10 @@ export function ProvenanceStep({
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field
-                    label="Method"
+                    label={t('processing.method')}
                     htmlFor="wiz-prov-deid-method"
                     required={isMust('H4')}
-                    hint="The pass that produced the anonymisation level."
+                    hint={t('processing.methodHint')}
                     error={err('deidentification.method')}
                   >
                     <select
@@ -502,38 +521,40 @@ export function ProvenanceStep({
                       }
                       className={selectClass}
                     >
-                      <option value="">— not stated —</option>
+                      <option value="">{t('processing.notStated')}</option>
                       <option value="SAFE_HARBOR">
-                        Safe Harbor (HIPAA, 18 identifiers removed)
+                        {t('processing.methodOption.SAFE_HARBOR')}
                       </option>
-                      <option value="EXPERT_DETERMINATION">Expert determination</option>
+                      <option value="EXPERT_DETERMINATION">
+                        {t('processing.methodOption.EXPERT_DETERMINATION')}
+                      </option>
                       <option value="PSEUDONYMISATION">
-                        Pseudonymisation (re-identifiable via key)
+                        {t('processing.methodOption.PSEUDONYMISATION')}
                       </option>
-                      <option value="SYNTHETIC">Synthetic data</option>
-                      <option value="NONE">None (identifiers retained)</option>
+                      <option value="SYNTHETIC">{t('processing.methodOption.SYNTHETIC')}</option>
+                      <option value="NONE">{t('processing.methodOption.NONE')}</option>
                     </select>
                   </Field>
                   <Field
-                    label="Resulting level"
+                    label={t('processing.resultingLevel')}
                     htmlFor="wiz-prov-deid-level"
-                    hint="Read-only: the anonymisation level chosen on the Biomedical context step. The two must agree."
+                    hint={t('processing.resultingLevelHint')}
                   >
                     <Input
                       id="wiz-prov-deid-level"
                       readOnly
                       aria-readonly="true"
                       value={anonymizationLevel ?? ''}
-                      placeholder="not declared on the Biomedical step"
+                      placeholder={t('processing.resultingLevelPlaceholder')}
                       className="bg-[var(--color-subtle)]"
                     />
                   </Field>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field
-                    label="Completed on"
+                    label={t('processing.completedOn')}
                     htmlFor="wiz-prov-deid-date"
-                    hint="YYYY-MM-DD."
+                    hint={t('processing.dateHint')}
                     error={err('deidentification.endedAt')}
                   >
                     <Input
@@ -547,9 +568,9 @@ export function ProvenanceStep({
                     />
                   </Field>
                   <Field
-                    label="Tool"
+                    label={t('processing.tool')}
                     htmlFor="wiz-prov-deid-tool"
-                    hint="tool@version, when software ran the pass."
+                    hint={t('processing.toolHint')}
                     error={err('deidentification.toolName')}
                   >
                     <Input
@@ -571,11 +592,11 @@ export function ProvenanceStep({
       {/* ---- 3. Under what authority? -------------------------------------- */}
       <Group
         id="wiz-prov-authority"
-        title="Under what authority?"
+        title={t('authority.title')}
         blocks={[
           {
             key: 'ethics',
-            title: 'Ethics approval (IRB)',
+            title: t('authority.ethics'),
             ids: ['H5'],
             obligations,
             issues: issuesById,
@@ -583,10 +604,10 @@ export function ProvenanceStep({
               <div className="space-y-3">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field
-                    label="Approving body"
+                    label={t('authority.approvingBody')}
                     htmlFor="wiz-prov-irb-body"
                     required={isMust('H5')}
-                    hint="The ethics committee or institutional review board."
+                    hint={t('authority.approvingBodyHint')}
                     error={err('ethics.approvingBody')}
                   >
                     <Input
@@ -599,7 +620,7 @@ export function ProvenanceStep({
                     />
                   </Field>
                   <Field
-                    label="Approval number"
+                    label={t('authority.approvalNumber')}
                     htmlFor="wiz-prov-irb-number"
                     required={isMust('H5')}
                     error={err('ethics.approvalNumber')}
@@ -616,9 +637,9 @@ export function ProvenanceStep({
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field
-                    label="Approval date"
+                    label={t('authority.approvalDate')}
                     htmlFor="wiz-prov-irb-date"
-                    hint="YYYY-MM-DD."
+                    hint={t('processing.dateHint')}
                     error={err('ethics.approvalDate')}
                   >
                     <Input
@@ -631,9 +652,9 @@ export function ProvenanceStep({
                   </Field>
                 </div>
                 <Field
-                  label="Scope"
+                  label={t('authority.scope')}
                   htmlFor="wiz-prov-irb-scope"
-                  hint="Does the approval cover evaluation of third-party AI models on this data? That is the first question every data host is asked; say so here."
+                  hint={t('authority.scopeHint')}
                   error={err('ethics.approvalScope')}
                 >
                   <Textarea
@@ -653,11 +674,11 @@ export function ProvenanceStep({
       {/* ---- 4. How was the ground truth produced? ------------------------- */}
       <Group
         id="wiz-prov-labels"
-        title="How was the ground truth produced?"
+        title={t('labels.title')}
         blocks={[
           {
             key: 'protocol',
-            title: 'Label-production protocol',
+            title: t('labels.protocol'),
             ids: ['H6'],
             obligations,
             issues: issuesById,
@@ -711,6 +732,7 @@ function Group({ id, title, blocks }: { id: string; title: string; blocks: Block
 }
 
 function Block({ spec }: { spec: BlockSpec }) {
+  const t = useTranslations('Provenance');
   const obligation = strongest(spec.ids, spec.obligations);
   const issues = spec.ids.flatMap((id) => spec.issues.get(id) ?? []);
   const hasError = issues.some((i) => i.level === 'error');
@@ -727,7 +749,7 @@ function Block({ spec }: { spec: BlockSpec }) {
           <span className="font-mono">{spec.ids.join(' ')}</span>
           <span aria-hidden="true">·</span>
           <span>
-            {obligationLabel(obligation)}
+            {t(`obligation.${obligation}`)}
             {spec.markerSuffix ? ` ${spec.markerSuffix}` : ''}
           </span>
         </Badge>
@@ -739,8 +761,10 @@ function Block({ spec }: { spec: BlockSpec }) {
 }
 
 function IssueList({ issues }: { issues: ProvenanceIssue[] }) {
+  const t = useTranslations('Provenance');
+  const headlineOf = useProvenanceHeadline();
   return (
-    <ul className="space-y-1 text-xs" aria-label="Provenance check">
+    <ul className="space-y-1 text-xs" aria-label={t('issue.listLabel')}>
       {issues.map((i) => (
         <li
           key={`${i.code}:${i.path}`}
@@ -751,7 +775,7 @@ function IssueList({ issues }: { issues: ProvenanceIssue[] }) {
               : 'border-[var(--color-warning)] text-[var(--color-warning-foreground)]')
           }
         >
-          <span className="font-medium">{i.headline}</span>
+          <span className="font-medium">{headlineOf(i)}</span>
           <span className="block text-[var(--color-muted-foreground)]">{i.detail}</span>
         </li>
       ))}
@@ -770,17 +794,18 @@ function PreflightSummary({
   warnings: number;
   tier: AccessTier;
 }) {
+  const t = useTranslations('Provenance');
   if (state.status === 'idle') {
     return (
       <p className="text-xs text-[var(--color-muted-foreground)]" role="status">
-        Checking provenance against the {tier} obligations…
+        {t('preflight.checking', { tier: t(`tierName.${tier}`) })}
       </p>
     );
   }
   if (state.status === 'error') {
     return (
       <Alert tone="warning">
-        <AlertTitle as="h3">Provenance check unavailable</AlertTitle>
+        <AlertTitle as="h3">{t('preflight.unavailable')}</AlertTitle>
         <AlertDescription>{state.message}</AlertDescription>
       </Alert>
     );
@@ -788,23 +813,22 @@ function PreflightSummary({
   if (errors === 0 && warnings === 0) {
     return (
       <Alert tone="success">
-        <AlertTitle as="h3">Provenance complete for a {tier} dataset</AlertTitle>
-        <AlertDescription>Every required and recommended item is present.</AlertDescription>
+        <AlertTitle as="h3">
+          {t('preflight.completeTitle', { tier: t(`tierName.${tier}`) })}
+        </AlertTitle>
+        <AlertDescription>{t('preflight.completeBody')}</AlertDescription>
       </Alert>
     );
   }
   const parts: string[] = [];
-  if (errors > 0) parts.push(`${errors} required item${errors === 1 ? '' : 's'} missing`);
-  if (warnings > 0) parts.push(`${warnings} recommended item${warnings === 1 ? '' : 's'} missing`);
+  if (errors > 0) parts.push(t('preflight.requiredMissing', { count: errors }));
+  if (warnings > 0) parts.push(t('preflight.recommendedMissing', { count: warnings }));
   return (
     <Alert tone={errors > 0 ? 'danger' : 'warning'}>
       <AlertTitle as="h3">
-        {parts.join(', ')} for a {tier} dataset
+        {t('preflight.missingTitle', { items: parts.join(', '), tier: t(`tierName.${tier}`) })}
       </AlertTitle>
-      <AlertDescription>
-        Each block below names what it needs. You can still continue; the platform reports the same
-        items when you publish.
-      </AlertDescription>
+      <AlertDescription>{t('preflight.missingBody')}</AlertDescription>
     </Alert>
   );
 }
@@ -824,22 +848,20 @@ function SitesEditor({
   err: (path: string) => string | undefined;
   onChange: (next: ManifestWizardSourceSite[]) => void;
 }) {
+  const t = useTranslations('Provenance');
   function update(i: number, change: Partial<ManifestWizardSourceSite>) {
     onChange(sites.map((s, j) => (j === i ? { ...s, ...change } : s)));
   }
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[var(--color-muted-foreground)]">
-        One row per site that contributed records, with its ISO 3166-1 alpha-2 country code (CH, KE,
-        IN…). Subgroup reporting by site keys on this; it cannot be recovered later.
-      </p>
+      <p className="text-xs text-[var(--color-muted-foreground)]">{t('origin.sitesIntro')}</p>
       {err('sites') ? <p className="text-xs text-[var(--color-danger)]">{err('sites')}</p> : null}
       {sites.length > 0 ? (
         <ul className="space-y-2">
           {sites.map((s, i) => (
             <li key={i} className="grid gap-2 sm:grid-cols-[1fr_6rem_auto] sm:items-end">
               <Field
-                label={`Site ${i + 1}`}
+                label={t('origin.site', { n: i + 1 })}
                 htmlFor={`wiz-prov-site-${i}-name`}
                 required={required}
                 error={err(`sites.${i}.name`)}
@@ -852,7 +874,7 @@ function SitesEditor({
                 />
               </Field>
               <Field
-                label="Country"
+                label={t('origin.country')}
                 htmlFor={`wiz-prov-site-${i}-country`}
                 required={required}
                 error={err(`sites.${i}.country`)}
@@ -872,9 +894,9 @@ function SitesEditor({
                 variant="outline"
                 size="sm"
                 onClick={() => onChange(sites.filter((_, j) => j !== i))}
-                aria-label={`Remove site ${i + 1}`}
+                aria-label={t('origin.removeSite', { n: i + 1 })}
               >
-                Remove
+                {t('origin.remove')}
               </Button>
             </li>
           ))}
@@ -886,7 +908,7 @@ function SitesEditor({
         size="sm"
         onClick={() => onChange([...sites, { name: '', country: '' }])}
       >
-        Add site
+        {t('origin.addSite')}
       </Button>
     </div>
   );
@@ -905,21 +927,19 @@ function LabelProtocolEditor({
   err: (path: string) => string | undefined;
   onChange: (next: LabelProtocol) => void;
 }) {
+  const t = useTranslations('Provenance');
   const patch = (change: Partial<LabelProtocol>) => onChange({ ...lp, ...change });
   const retained =
     lp.perRaterLabelsRetained === undefined ? '' : lp.perRaterLabelsRetained ? 'yes' : 'no';
   return (
     <div className="space-y-3">
-      <p className="text-xs text-[var(--color-muted-foreground)]">
-        Version, scale and graders per item are the minimum. A single-grader reference is fine and
-        is stated as 1; undocumented provenance is what fails.
-      </p>
+      <p className="text-xs text-[var(--color-muted-foreground)]">{t('labels.intro')}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field
-          label="Protocol version"
+          label={t('labels.version')}
           htmlFor="wiz-prov-lp-version"
           required={required}
-          hint="e.g. “ICDR grading protocol 2018”."
+          hint={t('labels.versionHint')}
           error={err('labelProtocol.version')}
         >
           <Input
@@ -930,10 +950,10 @@ function LabelProtocolEditor({
           />
         </Field>
         <Field
-          label="Label scale"
+          label={t('labels.scale')}
           htmlFor="wiz-prov-lp-scale"
           required={required}
-          hint="e.g. “ICDR 0–4; referable ≥ 2”."
+          hint={t('labels.scaleHint')}
           error={err('labelProtocol.labelScale')}
         >
           <Input
@@ -946,7 +966,7 @@ function LabelProtocolEditor({
       </div>
       <div className="grid gap-3 sm:grid-cols-[8rem_1fr]">
         <Field
-          label="Graders per item"
+          label={t('labels.graders')}
           htmlFor="wiz-prov-lp-graders"
           required={required}
           error={err('labelProtocol.gradersPerItem')}
@@ -964,9 +984,9 @@ function LabelProtocolEditor({
           />
         </Field>
         <Field
-          label="Grader qualification"
+          label={t('labels.qualification')}
           htmlFor="wiz-prov-lp-qual"
-          hint="e.g. “ophthalmologist, >10 years”."
+          hint={t('labels.qualificationHint')}
           error={err('labelProtocol.graderQualification')}
         >
           <Input
@@ -978,9 +998,9 @@ function LabelProtocolEditor({
         </Field>
       </div>
       <Field
-        label="Adjudication"
+        label={t('labels.adjudication')}
         htmlFor="wiz-prov-lp-adj"
-        hint="How disagreements were settled, e.g. “third grader adjudicates disagreements”."
+        hint={t('labels.adjudicationHint')}
         error={err('labelProtocol.adjudication')}
       >
         <Input
@@ -992,9 +1012,9 @@ function LabelProtocolEditor({
       </Field>
       <div className="grid gap-3 sm:grid-cols-[1fr_8rem_1fr]">
         <Field
-          label="Inter-rater agreement metric"
+          label={t('labels.irrMetric')}
           htmlFor="wiz-prov-lp-irr-metric"
-          hint="e.g. “quadratic-weighted kappa”."
+          hint={t('labels.irrMetricHint')}
           error={err('labelProtocol.interRaterAgreement.metric')}
         >
           <Input
@@ -1007,7 +1027,7 @@ function LabelProtocolEditor({
           />
         </Field>
         <Field
-          label="Value"
+          label={t('labels.irrValue')}
           htmlFor="wiz-prov-lp-irr-value"
           error={err('labelProtocol.interRaterAgreement.value')}
         >
@@ -1029,9 +1049,9 @@ function LabelProtocolEditor({
           />
         </Field>
         <Field
-          label="Per-rater labels retained"
+          label={t('labels.retained')}
           htmlFor="wiz-prov-lp-retained"
-          hint="Whether each grader's labels are kept alongside the consensus."
+          hint={t('labels.retainedHint')}
         >
           <select
             id="wiz-prov-lp-retained"
@@ -1044,9 +1064,9 @@ function LabelProtocolEditor({
             }
             className={selectClass}
           >
-            <option value="">— not stated —</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
+            <option value="">{t('labels.notStated')}</option>
+            <option value="yes">{t('labels.yes')}</option>
+            <option value="no">{t('labels.no')}</option>
           </select>
         </Field>
       </div>

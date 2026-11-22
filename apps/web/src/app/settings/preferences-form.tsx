@@ -1,8 +1,10 @@
 'use client';
 
 import { useActionState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@oci/ui';
 import type { UserPreferences } from '@oci/shared-types';
+import { localeName, LOCALES } from '../../i18n/locales';
 import { updatePreferencesAction, type PreferencesFormState } from './actions';
 
 const INITIAL_STATE: PreferencesFormState = { status: 'idle' };
@@ -15,6 +17,7 @@ export function PreferencesForm({
   savedFlag: boolean;
 }) {
   const [state, formAction, pending] = useActionState(updatePreferencesAction, INITIAL_STATE);
+  const t = useTranslations('Settings');
 
   // Echo back the user's last attempt on validation failure so they
   // don't lose their input.
@@ -27,35 +30,42 @@ export function PreferencesForm({
           locale: initial.locale ?? '',
         };
   const fieldErrors = state.status === 'error' ? state.fieldErrors : undefined;
+  // A tag saved before the interface had languages (`de-CH`, `fr-CH`)
+  // stays selectable as it is, so saving the form does not change it.
+  const storedOther =
+    values.locale !== '' && !(LOCALES as readonly string[]).includes(values.locale)
+      ? values.locale
+      : null;
 
   return (
     <form action={formAction} className="space-y-8">
       <fieldset className="space-y-3">
-        <legend className="text-sm font-semibold text-[var(--color-foreground)]">Theme</legend>
+        <legend className="text-sm font-semibold text-[var(--color-foreground)]">
+          {t('theme.legend')}
+        </legend>
         <p className="text-sm text-[var(--color-muted-foreground)]">
-          Choose how the platform should look. <strong>System</strong> follows your device setting;{' '}
-          <strong>Light</strong> and <strong>Dark</strong> override it.
+          {t.rich('theme.help', { strong: (chunks) => <strong>{chunks}</strong> })}
         </p>
-        <div role="radiogroup" aria-label="Dark mode" className="flex flex-wrap gap-3">
+        <div role="radiogroup" aria-label={t('theme.groupLabel')} className="flex flex-wrap gap-3">
           <ThemeRadio
             name="darkMode"
             value="system"
-            label="System"
-            description="Follow OS preference"
+            label={t('theme.system')}
+            description={t('theme.systemDescription')}
             checked={values.darkMode === 'system'}
           />
           <ThemeRadio
             name="darkMode"
             value="light"
-            label="Light"
-            description="Always light"
+            label={t('theme.light')}
+            description={t('theme.lightDescription')}
             checked={values.darkMode === 'light'}
           />
           <ThemeRadio
             name="darkMode"
             value="dark"
-            label="Dark"
-            description="Always dark"
+            label={t('theme.dark')}
+            description={t('theme.darkDescription')}
             checked={values.darkMode === 'dark'}
           />
         </div>
@@ -65,23 +75,23 @@ export function PreferencesForm({
       </fieldset>
 
       <fieldset className="space-y-3">
-        <legend className="text-sm font-semibold text-[var(--color-foreground)]">Density</legend>
-        <p className="text-sm text-[var(--color-muted-foreground)]">
-          Comfortable spacing or compact for table-heavy workflows.
-        </p>
-        <div role="radiogroup" aria-label="Density" className="flex flex-wrap gap-3">
+        <legend className="text-sm font-semibold text-[var(--color-foreground)]">
+          {t('density.legend')}
+        </legend>
+        <p className="text-sm text-[var(--color-muted-foreground)]">{t('density.help')}</p>
+        <div role="radiogroup" aria-label={t('density.legend')} className="flex flex-wrap gap-3">
           <ThemeRadio
             name="density"
             value="comfortable"
-            label="Comfortable"
-            description="Default spacing"
+            label={t('density.comfortable')}
+            description={t('density.comfortableDescription')}
             checked={values.density === 'comfortable'}
           />
           <ThemeRadio
             name="density"
             value="compact"
-            label="Compact"
-            description="Tighter rows, more on screen"
+            label={t('density.compact')}
+            description={t('density.compactDescription')}
             checked={values.density === 'compact'}
           />
         </div>
@@ -91,25 +101,36 @@ export function PreferencesForm({
       </fieldset>
 
       <fieldset className="space-y-3">
-        <legend className="text-sm font-semibold text-[var(--color-foreground)]">Language</legend>
+        <legend className="text-sm font-semibold text-[var(--color-foreground)]">
+          {t('language.legend')}
+        </legend>
         <p id="locale-help" className="text-sm text-[var(--color-muted-foreground)]">
-          BCP-47 tag (e.g. <code>en</code>, <code>fr-CH</code>, <code>de-CH</code>). Leave blank to
-          follow your browser.
+          {t('language.help')}
         </p>
         <label htmlFor="locale" className="sr-only">
-          Language
+          {t('language.legend')}
         </label>
-        <input
+        {/* Keyed on the value so a saved change re-renders the select
+            with it as the default. */}
+        <select
+          key={values.locale}
           id="locale"
-          type="text"
           name="locale"
           defaultValue={values.locale}
-          placeholder="e.g. en-US"
-          autoComplete="off"
           className="w-full max-w-xs rounded-md border border-[var(--color-input)] bg-[var(--color-background)] px-3 py-2 text-sm text-[var(--color-foreground)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
           aria-invalid={fieldErrors?.has('locale') ? true : undefined}
           aria-describedby={fieldErrors?.get('locale') ? 'locale-error' : 'locale-help'}
-        />
+        >
+          <option value="">{t('language.browser')}</option>
+          {LOCALES.map((locale) => (
+            <option key={locale} value={locale} lang={locale}>
+              {localeName(locale)}
+            </option>
+          ))}
+          {storedOther ? (
+            <option value={storedOther}>{t('language.other', { tag: storedOther })}</option>
+          ) : null}
+        </select>
         {fieldErrors?.get('locale') ? (
           <p id="locale-error" className="text-sm text-[var(--color-danger)]">
             {fieldErrors.get('locale')}
@@ -130,13 +151,13 @@ export function PreferencesForm({
           role="status"
           className="rounded-md border border-[var(--color-success)] bg-[var(--color-success-soft)] px-3 py-2 text-sm text-[var(--color-success)]"
         >
-          Preferences saved.
+          {t('saved')}
         </p>
       ) : null}
 
       <div className="flex items-center justify-end gap-3 border-t border-[var(--color-border)] pt-4">
         <Button type="submit" disabled={pending}>
-          {pending ? 'Saving…' : 'Save preferences'}
+          {pending ? t('saving') : t('save')}
         </Button>
       </div>
     </form>

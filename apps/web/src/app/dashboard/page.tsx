@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -23,6 +24,7 @@ import {
   UserIcon,
 } from '@oci/ui';
 import { auth, sessionAccessToken } from '../../auth';
+import { getFormatters } from '../../i18n/server';
 import { isAnnotationWorker } from '../../lib/groups';
 
 interface MeResponse {
@@ -82,23 +84,23 @@ const groupTone = (group: string) => {
   }
 };
 
-const EXPIRES_FORMATTER = new Intl.DateTimeFormat('en-GB', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
-
 function expiryTone(minutes: number): 'success' | 'warning' | 'danger' {
   if (minutes <= 0) return 'danger';
   if (minutes < 5) return 'warning';
   return 'success';
 }
 
-function expiryLabel(minutes: number): string {
-  if (minutes <= 0) return 'expired';
-  if (minutes < 60) return `expires in ${minutes} min`;
-  const hours = Math.floor(minutes / 60);
+function expiryLabel(
+  t: Awaited<ReturnType<typeof getTranslations<'Dashboard'>>>,
+  minutes: number,
+): string {
+  if (minutes <= 0) return t('token.expired');
+  if (minutes < 60) return t('token.inMinutes', { minutes: String(minutes) });
+  const hours = String(Math.floor(minutes / 60));
   const rem = minutes % 60;
-  return rem ? `expires in ${hours}h ${rem}m` : `expires in ${hours}h`;
+  return rem
+    ? t('token.inHoursMinutes', { hours, minutes: String(rem) })
+    : t('token.inHours', { hours });
 }
 
 export default async function DashboardPage() {
@@ -108,7 +110,11 @@ export default async function DashboardPage() {
     redirect('/');
   }
 
-  const result = await fetchMe(accessToken);
+  const [result, t, f] = await Promise.all([
+    fetchMe(accessToken),
+    getTranslations('Dashboard'),
+    getFormatters(),
+  ]);
   const expiresInMin = result.ok
     ? Math.max(0, Math.round((new Date(result.data.expiresAt).getTime() - Date.now()) / 60_000))
     : null;
@@ -118,15 +124,17 @@ export default async function DashboardPage() {
       <Section spacing="md">
         <header className="mb-8">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Authenticated session
+            {t('eyebrow')}
           </p>
-          <h1 className="mt-3 text-3xl sm:text-4xl font-semibold tracking-tight">Dashboard</h1>
+          <h1 className="mt-3 text-3xl sm:text-4xl font-semibold tracking-tight">{t('title')}</h1>
           <p className="mt-3 max-w-2xl text-[var(--color-muted-foreground)]">
-            Live identity for the bearer token in your NextAuth session, fetched server-side from{' '}
-            <code className="rounded bg-[var(--color-muted)] px-1.5 py-0.5 font-mono text-xs">
-              /v2/me
-            </code>
-            .
+            {t.rich('lede', {
+              code: (chunks) => (
+                <code className="rounded bg-[var(--color-muted)] px-1.5 py-0.5 font-mono text-xs">
+                  {chunks}
+                </code>
+              ),
+            })}
           </p>
         </header>
 
@@ -140,16 +148,13 @@ export default async function DashboardPage() {
                 >
                   <FlowIcon size={18} />
                 </span>
-                <CardTitle>Annotation queue</CardTitle>
+                <CardTitle>{t('queue.title')}</CardTitle>
               </div>
-              <CardDescription>
-                Your Cognito role lets you pick up annotation work on RUNNING campaigns. Pull the
-                next eligible task from the campaign list.
-              </CardDescription>
+              <CardDescription>{t('queue.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <Button asChild variant="primary">
-                <Link href="/annotation/campaigns">Browse campaigns</Link>
+                <Link href="/annotation/campaigns">{t('queue.browse')}</Link>
               </Button>
             </CardContent>
           </Card>
@@ -166,22 +171,23 @@ export default async function DashboardPage() {
                   >
                     <UserIcon size={18} />
                   </span>
-                  <CardTitle>Principal</CardTitle>
+                  <CardTitle>{t('principal.title')}</CardTitle>
                 </div>
-                <CardDescription>
-                  Claims from the Cognito access token, verified by the API&apos;s aws-jwt-verify
-                  guard.
-                </CardDescription>
+                <CardDescription>{t('principal.description')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <DefinitionList>
-                  <DefinitionItem term="Username">{result.data.username}</DefinitionItem>
-                  <DefinitionItem term="Subject" mono>
-                    {result.data.sub}
+                  <DefinitionItem term={t('principal.username')}>
+                    <span translate="no">{result.data.username}</span>
                   </DefinitionItem>
-                  <DefinitionItem term="Groups">
+                  <DefinitionItem term={t('principal.subject')} mono>
+                    <span translate="no">{result.data.sub}</span>
+                  </DefinitionItem>
+                  <DefinitionItem term={t('principal.groups')}>
                     {result.data.groups.length === 0 ? (
-                      <span className="text-[var(--color-muted-foreground)]">None assigned</span>
+                      <span className="text-[var(--color-muted-foreground)]">
+                        {t('principal.noGroups')}
+                      </span>
                     ) : (
                       <span className="flex flex-wrap gap-1.5">
                         {result.data.groups.map((g) => (
@@ -205,35 +211,30 @@ export default async function DashboardPage() {
                   >
                     <KeyIcon size={18} />
                   </span>
-                  <CardTitle>Token</CardTitle>
+                  <CardTitle>{t('token.title')}</CardTitle>
                 </div>
-                <CardDescription>
-                  Cognito access token claims and expiry — refresh by signing back in if you see
-                  warnings here.
-                </CardDescription>
+                <CardDescription>{t('token.description')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <DefinitionList>
-                  <DefinitionItem term="Use" mono>
-                    {result.data.tokenUse}
+                  <DefinitionItem term={t('token.use')} mono>
+                    <span translate="no">{result.data.tokenUse}</span>
                   </DefinitionItem>
-                  <DefinitionItem term="Scope" mono>
-                    {result.data.scope}
+                  <DefinitionItem term={t('token.scope')} mono>
+                    <span translate="no">{result.data.scope}</span>
                   </DefinitionItem>
                 </DefinitionList>
                 <Separator />
                 <div className="space-y-2 text-sm">
                   <p className="flex items-center gap-2 text-[var(--color-muted-foreground)]">
                     <ClockIcon size={14} />
-                    <span>Expires</span>
+                    <span>{t('token.expires')}</span>
                   </p>
-                  <p className="font-mono text-xs">
-                    {EXPIRES_FORMATTER.format(new Date(result.data.expiresAt))}
-                  </p>
+                  <p className="font-mono text-xs">{f.dateTime(result.data.expiresAt)}</p>
                   {expiresInMin !== null && (
                     <Badge tone={expiryTone(expiresInMin)}>
                       <ClockIcon size={12} />
-                      <span>{expiryLabel(expiresInMin)}</span>
+                      <span>{expiryLabel(t, expiresInMin)}</span>
                     </Badge>
                   )}
                 </div>
@@ -249,12 +250,12 @@ export default async function DashboardPage() {
                   >
                     <ShieldIcon size={18} />
                   </span>
-                  <CardTitle>Security note</CardTitle>
+                  <CardTitle>{t('security.title')}</CardTitle>
                 </div>
                 <CardDescription>
-                  Bearer tokens are visible to the server only. The web container forwards them to{' '}
-                  <code className="font-mono">/v2/*</code> with TLS — they do not travel to your
-                  browser.
+                  {t.rich('security.description', {
+                    code: (chunks) => <code className="font-mono">{chunks}</code>,
+                  })}
                 </CardDescription>
               </CardHeader>
             </Card>
@@ -262,7 +263,9 @@ export default async function DashboardPage() {
         ) : (
           <Alert tone="danger">
             <AlertTitle>
-              {result.status ? `API responded ${result.status}` : 'API unreachable'}
+              {result.status
+                ? t('apiStatus', { status: String(result.status) })
+                : t('apiUnreachable')}
             </AlertTitle>
             <AlertDescription>
               <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">

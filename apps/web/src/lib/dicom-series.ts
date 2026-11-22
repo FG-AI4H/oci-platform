@@ -20,7 +20,33 @@ export interface SeriesRow {
   heldCount: number;
 }
 
-export function seriesRows(series: readonly DicomSeriesSummary[]): SeriesRow[] {
+/**
+ * The words a row is built from, so the page can name series in the
+ * interface language (#654). Defaults to English.
+ */
+export interface SeriesWords {
+  /** "CT series 3", or "CT series" when the series has no number. */
+  name(modality: string, seriesNumber: number | null): string;
+  /** "49 images". */
+  images(count: number): string;
+  /** "Exam 2 · CT series 3". */
+  inExam(exam: number, name: string): string;
+  /** "CT series (1 of 3)". */
+  nthOf(title: string, place: number, total: number): string;
+}
+
+export const ENGLISH_SERIES_WORDS: SeriesWords = {
+  name: (modality, seriesNumber) =>
+    [modality, seriesNumber === null ? 'series' : `series ${seriesNumber}`].join(' '),
+  images: (count) => `${count} ${count === 1 ? 'image' : 'images'}`,
+  inExam: (exam, name) => `Exam ${exam} · ${name}`,
+  nthOf: (title, place, total) => `${title} (${place} of ${total})`,
+};
+
+export function seriesRows(
+  series: readonly DicomSeriesSummary[],
+  words: SeriesWords = ENGLISH_SERIES_WORDS,
+): SeriesRow[] {
   // Exams are numbered in the order the list gives them. The UID itself
   // is not shown: it is long, and means nothing to a reader.
   const exams = new Map<string, number>();
@@ -30,17 +56,14 @@ export function seriesRows(series: readonly DicomSeriesSummary[]): SeriesRow[] {
   }
 
   const rows = series.map((entry): SeriesRow => {
-    const name = [
-      entry.modality ?? 'DICOM',
-      entry.seriesNumber === null ? 'series' : `series ${entry.seriesNumber}`,
-    ].join(' ');
+    const name = words.name(entry.modality ?? 'DICOM', entry.seriesNumber);
     const exam = exams.get(entry.studyInstanceUid ?? '');
-    const images = `${entry.instanceCount} ${entry.instanceCount === 1 ? 'image' : 'images'}`;
+    const images = words.images(entry.instanceCount);
     const size =
       entry.rows !== null && entry.columns !== null ? `${entry.columns} × ${entry.rows}` : null;
     return {
       id: entry.id,
-      title: exams.size > 1 && exam !== undefined ? `Exam ${exam} · ${name}` : name,
+      title: exams.size > 1 && exam !== undefined ? words.inExam(exam, name) : name,
       meta: [images, size].filter((part): part is string => part !== null).join(' · '),
       held:
         entry.heldInstanceCount === 0
@@ -64,7 +87,7 @@ export function seriesRows(series: readonly DicomSeriesSummary[]): SeriesRow[] {
     if (total < 2) return row;
     const place = (seen.get(row.title) ?? 0) + 1;
     seen.set(row.title, place);
-    return { ...row, title: `${row.title} (${place} of ${total})` };
+    return { ...row, title: words.nthOf(row.title, place, total) };
   });
 }
 

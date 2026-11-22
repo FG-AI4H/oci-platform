@@ -11,6 +11,7 @@ import {
 } from '@cornerstonejs/core';
 import { init as dicomImageLoaderInit, wadouri } from '@cornerstonejs/dicom-image-loader';
 import { Enums as MetadataEnums, metaData } from '@cornerstonejs/metadata';
+import { useTranslations } from 'next-intl';
 import type { DicomSeriesDetail, DicomView } from '@oci/shared-types';
 import { Alert, AlertDescription, AlertTitle, Button } from '@oci/ui';
 import {
@@ -33,6 +34,7 @@ import {
   toVoiRange,
   usableLifetimeMs,
   wheelSteps,
+  type CtPreset,
   type ViewerAction,
   type WindowSetting,
 } from './viewer-logic';
@@ -78,9 +80,59 @@ export interface DicomViewerProps {
 
 type Phase = 'starting' | 'ready' | 'failed';
 
-interface Failure {
-  title: string;
-  detail: string;
+/**
+ * Why the viewer gave up, as data: the words are chosen at render time,
+ * in the interface language, so the effect that loads the series does
+ * not depend on the language.
+ */
+type Failure =
+  | { kind: 'empty' }
+  | { kind: 'decoder'; position: number; transferSyntaxUid: string | null }
+  | { kind: 'open'; reason: 'address' | 'other' }
+  | { kind: 'changed' }
+  | { kind: 'start' };
+
+type Translate = ReturnType<typeof useTranslations<'DicomViewer'>>;
+
+function failureText(t: Translate, failure: Failure): { title: string; detail: string } {
+  switch (failure.kind) {
+    case 'empty':
+      return { title: t('failure.emptyTitle'), detail: t('failure.emptyDetail') };
+    case 'decoder':
+      return {
+        title: t('failure.decoderTitle'),
+        detail: t('failure.decoderDetail', {
+          position: failure.position + 1,
+          syntax:
+            failure.transferSyntaxUid === null
+              ? t('failure.transferSyntaxUnknown')
+              : describeTransferSyntax(failure.transferSyntaxUid),
+        }),
+      };
+    case 'open':
+      return {
+        title: t('failure.openTitle'),
+        detail: failure.reason === 'address' ? t('failure.openAddress') : t('failure.openNetwork'),
+      };
+    case 'changed':
+      return { title: t('failure.changedTitle'), detail: t('failure.changedDetail') };
+    case 'start':
+      return { title: t('failure.startTitle'), detail: t('failure.startDetail') };
+  }
+}
+
+/** The label of a CT preset, by its id; an unknown preset keeps its own label. */
+function presetLabel(t: Translate, preset: CtPreset): string {
+  switch (preset.id) {
+    case 'brain':
+    case 'subdural':
+    case 'bone':
+    case 'lung':
+    case 'mediastinum':
+      return t(`presets.${preset.id}`);
+    default:
+      return preset.label;
+  }
 }
 
 /** Fetches of the rest of the stack that run side by side. */
@@ -128,6 +180,7 @@ function releaseImages(): void {
 }
 
 export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProps) {
+  const t = useTranslations('DicomViewer');
   const reactId = useId();
   const helpId = `${reactId}-help`;
   const elementRef = useRef<HTMLDivElement>(null);
@@ -171,9 +224,9 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
       removers.push(() => target.removeEventListener(type, handler as EventListener, options));
     };
 
-    const fail = (title: string, detail: string) => {
+    const fail = (why: Failure) => {
       if (cancelled) return;
-      setFailure({ title, detail });
+      setFailure(why);
       setPhase('failed');
     };
 
@@ -182,7 +235,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
       let series = await loadSeries();
       if (cancelled) return;
       if (series.instances.length === 0) {
-        fail('Nothing to show', 'This series has no image you can open.');
+        fail({ kind: 'empty' });
         return;
       }
 
@@ -199,11 +252,11 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
       setModality(series.modality);
 
       const failDecoder = (position: number) =>
-        fail(
-          'The viewer cannot decode this series',
-          `Image ${position + 1} is stored as ${describeTransferSyntax(series.instances.at(position)?.transferSyntaxUid ?? null)}, ` +
-            'a compression this viewer has no decoder for. Download the files to open them in another viewer.',
-        );
+        fail({
+          kind: 'decoder',
+          position,
+          transferSyntaxUid: series.instances.at(position)?.transferSyntaxUid ?? null,
+        });
 
       // --- addresses -----------------------------------------------
       // When to renew, on the reader's own monotonic clock.
@@ -240,12 +293,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
               return loadFirst(true);
             }
           }
-          fail(
-            'The series could not be opened',
-            why === 'address'
-              ? 'Storage refused the file. It may no longer be available to you; reload the page and try again.'
-              : 'The first image could not be fetched from storage. Check your connection and try again.',
-          );
+          fail({ kind: 'open', reason: why === 'address' ? 'address' : 'other' });
           return false;
         }
       };
@@ -357,10 +405,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
           const fresh = await loadSeries().catch(() => null);
           if (cancelled || !fresh) return false;
           if (!sameInstances(series.instances, fresh.instances)) {
-            fail(
-              'The series changed',
-              'Its files are no longer the ones that were being shown. Close the viewer and open the series again.',
-            );
+            fail({ kind: 'changed' });
             return false;
           }
           series = fresh;
@@ -429,10 +474,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
     };
 
     run().catch(() => {
-      fail(
-        'The viewer could not start',
-        'The series could not be loaded. Reload the page and try again; if it keeps failing, download the files instead.',
-      );
+      fail({ kind: 'start' });
     });
 
     return () => {
@@ -503,10 +545,11 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
   const standIn = !ready
     ? null
     : failedPositions.has(index)
-      ? `Image ${index + 1} could not be loaded`
+      ? t('standInFailed', { index: index + 1 })
       : drawnIndex !== index
-        ? `Loading image ${index + 1}…`
+        ? t('standInLoading', { index: index + 1 })
         : null;
+  const failureMessage = failure ? failureText(t, failure) : null;
 
   const view =
     ready && !failure
@@ -533,10 +576,10 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
 
   return (
     <div className="space-y-3">
-      {failure ? (
+      {failureMessage ? (
         <Alert tone="danger">
-          <AlertTitle as="h3">{failure.title}</AlertTitle>
-          <AlertDescription>{failure.detail}</AlertDescription>
+          <AlertTitle as="h3">{failureMessage.title}</AlertTitle>
+          <AlertDescription>{failureMessage.detail}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -548,8 +591,12 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
           ref={elementRef}
           tabIndex={0}
           role="application"
-          aria-roledescription="image viewer"
-          aria-label={ready ? `${label}, image ${index + 1} of ${count}` : `${label}, loading`}
+          aria-roledescription={t('roleDescription')}
+          aria-label={
+            ready
+              ? t('viewportLabel', { label, index: index + 1, count })
+              : t('viewportLabelLoading', { label })
+          }
           aria-describedby={helpId}
           data-testid="dicom-viewport"
           data-view={view ? JSON.stringify(view) : undefined}
@@ -582,7 +629,10 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
                 data-testid="dicom-window"
                 className="pointer-events-none absolute end-2 top-2 rounded bg-black/60 px-1.5 py-0.5 font-mono text-sm text-white"
               >
-                W {windowSetting.width} · L {windowSetting.center}
+                {t('windowReadout', {
+                  width: windowSetting.width,
+                  center: windowSetting.center,
+                })}
               </p>
             ) : null}
             {!allLoaded ? (
@@ -590,7 +640,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
                 aria-hidden="true"
                 className="pointer-events-none absolute bottom-2 start-2 rounded bg-black/60 px-1.5 py-0.5 font-mono text-xs text-white"
               >
-                loading {loadedCount} / {count}
+                {t('loadingProgress', { loaded: loadedCount, count })}
               </p>
             ) : null}
           </>
@@ -599,7 +649,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
             className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-white"
             aria-hidden="true"
           >
-            Opening the series…
+            {t('opening')}
           </p>
         )}
       </div>
@@ -609,26 +659,23 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
         {failure
           ? ''
           : !ready
-            ? 'Opening the series'
+            ? t('status.opening')
             : allLoaded
               ? missingCount > 0
-                ? `${loadedCount} of ${count} images loaded, ${missingCount} could not be loaded`
-                : `All ${count} images loaded`
-              : 'Loading the images'}
+                ? t('status.someMissing', { loaded: loadedCount, count, missing: missingCount })
+                : t('status.allLoaded', { count })
+              : t('status.loading')}
       </p>
       {ready && allLoaded && missingCount > 0 ? (
         <Alert tone="warning">
-          <AlertDescription>
-            {missingCount} of {count} images could not be loaded. Each one says so when you reach
-            it. Close the viewer and open the series again to retry.
-          </AlertDescription>
+          <AlertDescription>{t('missingAlert', { missing: missingCount, count })}</AlertDescription>
         </Alert>
       ) : null}
 
       {!failure ? (
         <div className="space-y-3">
           <label className="flex items-center gap-3 text-sm">
-            <span className="shrink-0 font-medium">Image</span>
+            <span className="shrink-0 font-medium">{t('image')}</span>
             <input
               type="range"
               min={1}
@@ -636,7 +683,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
               step={1}
               value={index + 1}
               disabled={!ready || count < 2}
-              aria-valuetext={`Image ${index + 1} of ${count}`}
+              aria-valuetext={t('imageValueText', { index: index + 1, count })}
               onChange={(event) => perform({ type: 'goto', index: Number(event.target.value) - 1 })}
               data-testid="dicom-slider"
               className="h-11 min-w-0 flex-1 accent-[var(--color-primary)] sm:h-6"
@@ -646,7 +693,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
           <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
             <fieldset disabled={!ready} className="min-w-0 space-y-1">
               <legend className="text-xs font-medium text-[var(--color-muted-foreground)]">
-                Window
+                {t('window')}
               </legend>
               <div className="flex flex-wrap items-center gap-2">
                 {modality === 'CT'
@@ -660,18 +707,20 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
                         onClick={() => applyWindow(preset)}
                         className="h-11 sm:h-8"
                       >
-                        {preset.label}
+                        {presetLabel(t, preset)}
                       </Button>
                     ))
                   : null}
                 <WindowNumber
-                  name="Width"
+                  name="width"
+                  label={t('width')}
                   value={windowSetting?.width ?? null}
                   min={1}
                   onCommit={(width) => applyWindow({ width, center: windowSetting?.center ?? 0 })}
                 />
                 <WindowNumber
-                  name="Level"
+                  name="level"
+                  label={t('level')}
                   signed
                   value={windowSetting?.center ?? null}
                   onCommit={(center) => applyWindow({ width: windowSetting?.width ?? 1, center })}
@@ -681,41 +730,41 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
 
             <fieldset disabled={!ready} className="min-w-0 space-y-1">
               <legend className="text-xs font-medium text-[var(--color-muted-foreground)]">
-                View
+                {t('view')}
               </legend>
               <div className="flex flex-wrap items-center gap-2">
                 <ViewButton
-                  label="Zoom out"
+                  label={t('zoomOut')}
                   onClick={() => perform({ type: 'zoom', factor: 1 / ZOOM_STEP })}
                 >
                   −
                 </ViewButton>
                 <ViewButton
-                  label="Zoom in"
+                  label={t('zoomIn')}
                   onClick={() => perform({ type: 'zoom', factor: ZOOM_STEP })}
                 >
                   +
                 </ViewButton>
                 <ViewButton
-                  label="Move left"
+                  label={t('moveLeft')}
                   onClick={() => perform({ type: 'pan', dx: -PAN_STEP, dy: 0 })}
                 >
                   ←
                 </ViewButton>
                 <ViewButton
-                  label="Move up"
+                  label={t('moveUp')}
                   onClick={() => perform({ type: 'pan', dx: 0, dy: -PAN_STEP })}
                 >
                   ↑
                 </ViewButton>
                 <ViewButton
-                  label="Move down"
+                  label={t('moveDown')}
                   onClick={() => perform({ type: 'pan', dx: 0, dy: PAN_STEP })}
                 >
                   ↓
                 </ViewButton>
                 <ViewButton
-                  label="Move right"
+                  label={t('moveRight')}
                   onClick={() => perform({ type: 'pan', dx: PAN_STEP, dy: 0 })}
                 >
                   →
@@ -728,7 +777,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
                   onClick={() => perform({ type: 'invert' })}
                   className="h-11 sm:h-8"
                 >
-                  Invert
+                  {t('invert')}
                 </Button>
                 <Button
                   type="button"
@@ -737,7 +786,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
                   onClick={() => perform({ type: 'reset' })}
                   className="h-11 sm:h-8"
                 >
-                  Reset
+                  {t('reset')}
                 </Button>
               </div>
             </fieldset>
@@ -748,17 +797,18 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
               reaches content that is not displayed. */}
           <details className="text-xs text-[var(--color-muted-foreground)]">
             <summary className="inline-flex min-h-11 cursor-pointer items-center rounded font-medium text-[var(--color-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] sm:min-h-6">
-              Mouse and keyboard
+              {t('help.summary')}
             </summary>
             <div id={helpId} className="mt-1 space-y-1">
               <p className="max-w-prose">
-                <span className="font-medium">Mouse.</span> Wheel changes image, drag sets the
-                window, Shift-drag moves, right-drag zooms.
+                {t.rich('help.mouse', {
+                  strong: (chunks) => <span className="font-medium">{chunks}</span>,
+                })}
               </p>
               <p className="max-w-prose">
-                <span className="font-medium">Keyboard, with the image focused.</span> Arrows change
-                image (Page Up and Page Down by ten, Home and End for the ends), Shift-arrows move,
-                + and − zoom, I inverts, R resets.
+                {t.rich('help.keyboard', {
+                  strong: (chunks) => <span className="font-medium">{chunks}</span>,
+                })}
               </p>
             </div>
           </details>
@@ -799,12 +849,16 @@ function ViewButton({
  */
 function WindowNumber({
   name,
+  label,
   value,
   min,
   signed = false,
   onCommit,
 }: {
-  name: string;
+  /** Stable id of the field (`width`, `level`); also its test id. */
+  name: 'width' | 'level';
+  /** The field's visible name, in the interface language. */
+  label: string;
   value: number | null;
   min?: number;
   /** The value can be negative: a level often is (lung is -600). */
@@ -822,7 +876,7 @@ function WindowNumber({
   };
   return (
     <label className="flex items-center gap-1.5 text-xs">
-      <span className="text-[var(--color-muted-foreground)]">{name}</span>
+      <span className="text-[var(--color-muted-foreground)]">{label}</span>
       <input
         type="number"
         // The digits-only keypad of a phone or tablet has no minus key.
@@ -838,7 +892,7 @@ function WindowNumber({
             commit();
           }
         }}
-        data-testid={`dicom-window-${name.toLowerCase()}`}
+        data-testid={`dicom-window-${name}`}
         className="h-11 w-20 rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-2 font-mono text-sm text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] sm:h-8"
       />
     </label>

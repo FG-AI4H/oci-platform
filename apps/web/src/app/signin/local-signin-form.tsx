@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Input } from '@oci/ui';
 import { localSignInAction, type SignInState } from './actions';
 
@@ -18,6 +19,7 @@ interface Props {
  */
 export function LocalSignInForm({ callbackUrl }: Props) {
   const [state, action, pending] = useActionState(localSignInAction, initial);
+  const t = useTranslations('SignIn.local');
   return (
     <form action={action} className="space-y-4" aria-busy={pending || undefined}>
       <input type="hidden" name="callbackUrl" value={callbackUrl} />
@@ -29,16 +31,12 @@ export function LocalSignInForm({ callbackUrl }: Props) {
 
       {state.status === 'error' ? (
         <Alert tone="danger">
-          <AlertTitle as="h2">Sign-in failed</AlertTitle>
+          <AlertTitle as="h2">{t('failedTitle')}</AlertTitle>
           <AlertDescription>{state.message}</AlertDescription>
         </Alert>
       ) : null}
 
-      <Field
-        label="User"
-        htmlFor="signin-user"
-        hint="Any string. The UUID-shaped user maps cleanly to identity.users.id; non-UUIDs are derived deterministically (PR D)."
-      >
+      <Field label={t('user')} htmlFor="signin-user" hint={t('userHint')}>
         <Input
           id="signin-user"
           name="user"
@@ -49,11 +47,7 @@ export function LocalSignInForm({ callbackUrl }: Props) {
         />
       </Field>
 
-      <Field
-        label="Roles"
-        htmlFor="signin-roles"
-        hint="Comma-separated. Try host, admin, participant, regulator, supervisor."
-      >
+      <Field label={t('roles')} htmlFor="signin-roles" hint={t('rolesHint')}>
         <Input
           id="signin-roles"
           name="roles"
@@ -65,7 +59,7 @@ export function LocalSignInForm({ callbackUrl }: Props) {
       </Field>
 
       <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? 'Signing in…' : 'Sign in (local dev)'}
+        {pending ? t('submitting') : t('submit')}
       </Button>
     </form>
   );

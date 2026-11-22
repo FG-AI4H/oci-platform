@@ -1,8 +1,10 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { UploadedDistribution } from '@oci/shared-types';
 import { Alert, AlertDescription, AlertTitle, Button } from '@oci/ui';
+import { useFormatters } from '../../../../i18n/client';
 import { uploadMultipart, type UploadTransport } from '../../../../lib/multipart-upload';
 import { revalidateDatasetDetail } from './actions';
 import {
@@ -64,6 +66,8 @@ interface UploadingFile {
  *     host already has them.
  */
 export function FileUploader({ slug }: Props) {
+  const t = useTranslations('Publish');
+  const f = useFormatters();
   const [files, setFiles] = useState<UploadingFile[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -133,12 +137,11 @@ export function FileUploader({ slug }: Props) {
   return (
     <div className="space-y-4">
       <Alert>
-        <AlertTitle>How this works</AlertTitle>
+        <AlertTitle>{t('uploader.howTitle')}</AlertTitle>
         <AlertDescription>
-          Files upload directly to platform storage in chunks of ~16 MB. Browsers handle ~50 GB per
-          session reliably; for terabyte datasets, use the CLI (queued — #88). After upload, paste
-          each <code className="font-mono text-xs">contentUrl</code> below into your Croissant
-          manifest&apos;s <code className="font-mono text-xs">distribution[]</code>.
+          {t.rich('uploader.howBody', {
+            code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+          })}
         </AlertDescription>
       </Alert>
 
@@ -152,7 +155,7 @@ export function FileUploader({ slug }: Props) {
           if (e.dataTransfer.files.length > 0) handlePicked(e.dataTransfer.files);
         }}
       >
-        <p className="text-sm text-[var(--color-muted-foreground)]">Drop files here, or</p>
+        <p className="text-sm text-[var(--color-muted-foreground)]">{t('uploader.dropHere')}</p>
         <Button
           type="button"
           variant="outline"
@@ -160,14 +163,14 @@ export function FileUploader({ slug }: Props) {
           className="mt-2"
           onClick={() => inputRef.current?.click()}
         >
-          Choose files
+          {t('uploader.choose')}
         </Button>
         <input
           ref={inputRef}
           type="file"
           multiple
           className="sr-only"
-          aria-label="Choose files to upload"
+          aria-label={t('uploader.chooseLabel')}
           onChange={(e) => {
             if (e.target.files && e.target.files.length > 0) handlePicked(e.target.files);
             e.target.value = '';
@@ -186,10 +189,8 @@ export function FileUploader({ slug }: Props) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-mono text-xs">{entry.file.name}</p>
                   <p className="text-xs text-[var(--color-muted-foreground)]">
-                    {formatBytes(entry.file.size)}
-                    {entry.status === 'uploading' ? (
-                      <> · {Math.round(entry.fraction * 100)}%</>
-                    ) : null}
+                    {f.bytes(entry.file.size)}
+                    {entry.status === 'uploading' ? <> · {f.percent(entry.fraction)}</> : null}
                   </p>
                 </div>
                 <UploadStatus entry={entry} />
@@ -199,7 +200,7 @@ export function FileUploader({ slug }: Props) {
                   className="mt-2 w-full"
                   value={entry.fraction}
                   max={1}
-                  aria-label={`Uploading ${entry.file.name}`}
+                  aria-label={t('uploader.uploading', { name: entry.file.name })}
                 />
               ) : null}
               {entry.status === 'done' && entry.distribution ? (
@@ -222,8 +223,9 @@ export function FileUploader({ slug }: Props) {
 }
 
 function UploadStatus({ entry }: { entry: UploadingFile }) {
+  const t = useTranslations('Publish');
   if (entry.status === 'done')
-    return <span className="text-xs text-[var(--color-success)]">done</span>;
+    return <span className="text-xs text-[var(--color-success)]">{t('uploader.done')}</span>;
   if (entry.status === 'error')
     return (
       <button
@@ -231,7 +233,7 @@ function UploadStatus({ entry }: { entry: UploadingFile }) {
         className="text-xs text-[var(--color-danger)] underline"
         onClick={() => entry.controller.abort()}
       >
-        failed
+        {t('uploader.failed')}
       </button>
     );
   return (
@@ -240,14 +242,7 @@ function UploadStatus({ entry }: { entry: UploadingFile }) {
       className="text-xs text-[var(--color-muted-foreground)] underline"
       onClick={() => entry.controller.abort()}
     >
-      cancel
+      {t('uploader.cancel')}
     </button>
   );
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
 }

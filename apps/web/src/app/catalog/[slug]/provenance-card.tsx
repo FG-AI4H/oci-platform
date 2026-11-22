@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { Badge, DefinitionItem, DefinitionList } from '@oci/ui';
 import { extractProvenance, type ProvenanceSummary } from '@oci/croissant';
 
@@ -25,22 +26,27 @@ export function hasProvenance(summary: ProvenanceSummary): boolean {
   );
 }
 
-const DEID_METHOD_LABEL: ReadonlyMap<string, string> = new Map([
-  ['SAFE_HARBOR', 'Safe Harbor'],
-  ['EXPERT_DETERMINATION', 'Expert determination'],
-  ['PSEUDONYMISATION', 'Pseudonymisation'],
-  ['SYNTHETIC', 'Synthetic data'],
-  ['NONE', 'None'],
-]);
+/** The fixed de-identification vocabulary, labelled in `Dataset.provenance.deidMethod`. */
+const DEID_METHODS = [
+  'SAFE_HARBOR',
+  'EXPERT_DETERMINATION',
+  'PSEUDONYMISATION',
+  'SYNTHETIC',
+  'NONE',
+] as const;
+type DeidMethod = (typeof DEID_METHODS)[number];
 
-/** Fixed vocabulary lookup; unknown values fall back to the raw token. */
-function deidMethodLabel(method: string): string {
-  return DEID_METHOD_LABEL.get(method) ?? method;
+function isDeidMethod(method: string): method is DeidMethod {
+  return (DEID_METHODS as readonly string[]).includes(method);
 }
 
 export function ProvenanceCard({ manifest }: { manifest: unknown }) {
+  const t = useTranslations('Dataset');
   const summary = extractProvenance(manifest);
   if (!hasProvenance(summary)) return null;
+  // Fixed vocabulary lookup; unknown values fall back to the raw token.
+  const deidMethodLabel = (method: string): string =>
+    isDeidMethod(method) ? t(`provenance.deidMethod.${method}`) : method;
 
   return (
     <section
@@ -49,15 +55,15 @@ export function ProvenanceCard({ manifest }: { manifest: unknown }) {
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 id="provenance-card-h" className="text-sm font-semibold">
-          Provenance
+          {t('provenance.title')}
         </h3>
         <span className="text-xs text-[var(--color-muted-foreground)]">
-          Where the data came from and what was done to it (bio-prov v0.2)
+          {t('provenance.subtitle')}
         </span>
       </div>
       <DefinitionList>
         {summary.sourceOrganizations.length > 0 ? (
-          <DefinitionItem term="Source">
+          <DefinitionItem term={t('provenance.source')}>
             <ul className="space-y-0.5">
               {summary.sourceOrganizations.map((name) => (
                 <li key={name}>{name}</li>
@@ -66,7 +72,7 @@ export function ProvenanceCard({ manifest }: { manifest: unknown }) {
           </DefinitionItem>
         ) : null}
         {summary.sites.length > 0 ? (
-          <DefinitionItem term="Sites">
+          <DefinitionItem term={t('provenance.sites')}>
             <ul className="space-y-0.5">
               {summary.sites.map((s, i) => (
                 <li key={`${s.name}-${i}`} className="flex flex-wrap items-center gap-1.5">
@@ -82,14 +88,14 @@ export function ProvenanceCard({ manifest }: { manifest: unknown }) {
           </DefinitionItem>
         ) : null}
         {summary.timeframe ? (
-          <DefinitionItem term="Collected">
+          <DefinitionItem term={t('provenance.collected')}>
             <span className="font-mono text-xs">
               {summary.timeframe.start} → {summary.timeframe.end}
             </span>
           </DefinitionItem>
         ) : null}
         {summary.deviceClasses.length > 0 ? (
-          <DefinitionItem term="Acquisition device">
+          <DefinitionItem term={t('provenance.device')}>
             <span className="flex flex-wrap gap-1.5">
               {summary.deviceClasses.map((d) => (
                 <Badge key={d} tone="info">
@@ -100,13 +106,13 @@ export function ProvenanceCard({ manifest }: { manifest: unknown }) {
           </DefinitionItem>
         ) : null}
         {summary.deidentification ? (
-          <DefinitionItem term="De-identification">
+          <DefinitionItem term={t('provenance.deidentification')}>
             <span className="flex flex-wrap items-center gap-1.5">
               <span>{deidMethodLabel(summary.deidentification.method)}</span>
               <span aria-hidden="true" className="text-[var(--color-muted-foreground)]">
                 →
               </span>
-              <span className="sr-only">resulting level</span>
+              <span className="sr-only">{t('provenance.resultingLevel')}</span>
               <Badge
                 tone={
                   summary.deidentification.resultingLevel === 'IDENTIFIED' ? 'danger' : 'success'
@@ -118,7 +124,7 @@ export function ProvenanceCard({ manifest }: { manifest: unknown }) {
           </DefinitionItem>
         ) : null}
         {summary.ethicsApproval ? (
-          <DefinitionItem term="Ethics approval (IRB)">
+          <DefinitionItem term={t('provenance.ethics')}>
             <span>{summary.ethicsApproval.approvingBody}</span>
             <span className="ms-1.5 font-mono text-xs text-[var(--color-muted-foreground)]">
               {summary.ethicsApproval.approvalNumber}
@@ -126,10 +132,12 @@ export function ProvenanceCard({ manifest }: { manifest: unknown }) {
           </DefinitionItem>
         ) : null}
         {summary.labelProtocolVersion ? (
-          <DefinitionItem term="Label protocol">{summary.labelProtocolVersion}</DefinitionItem>
+          <DefinitionItem term={t('provenance.labelProtocol')}>
+            {summary.labelProtocolVersion}
+          </DefinitionItem>
         ) : null}
         {summary.derivedFrom.length > 0 ? (
-          <DefinitionItem term="Derived from">
+          <DefinitionItem term={t('provenance.derivedFrom')}>
             <ul className="space-y-0.5">
               {summary.derivedFrom.map((iri) => (
                 <li key={iri}>

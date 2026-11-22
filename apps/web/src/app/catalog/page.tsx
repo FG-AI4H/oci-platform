@@ -1,4 +1,8 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import type { ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -17,6 +21,7 @@ import {
   Section,
 } from '@oci/ui';
 import type {
+  AnonymizationLevel,
   DatasetSource,
   DatasetSummary,
   DatasetVisibility,
@@ -28,11 +33,8 @@ import { auth } from '../../auth';
 import { isHost } from '../../lib/groups';
 import { viewerUuid } from '../../lib/identity';
 import { apiFetch } from '../../lib/api';
-import {
-  ANONYMIZATION_OPTIONS,
-  anonymizationLabel,
-  normaliseAnonymizationLevel,
-} from '../../lib/catalog-filters';
+import { ANONYMIZATION_OPTIONS, normaliseAnonymizationLevel } from '../../lib/catalog-filters';
+import { getFormatters } from '../../i18n/server';
 
 /**
  * Catalog list (PR L.1, #91 — major rewrite from PR C/D's "search +
@@ -55,6 +57,9 @@ import {
  * The free-text `?q=` keeps existing FTS over name/description/
  * keywords; structured filters AND with `q`. Empty multi-value
  * facets are dropped from the URL to keep canonical link shapes.
+ *
+ * Text comes from the `Catalog` messages (#654). Facet values stay
+ * English in the URL and the API query; only their labels translate.
  */
 
 const PAGE_SIZE = 24;
@@ -77,35 +82,45 @@ interface SearchParams {
   mine?: string;
 }
 
-const SOURCE_OPTIONS: ReadonlyArray<{ value: DatasetSource; label: string; hint: string }> = [
-  { value: 'local', label: 'Local', hint: 'Datasets published on this platform.' },
-  {
-    value: 'federated',
-    label: 'Federated',
-    hint: 'Mirrors of datasets harvested from peer catalogues.',
-  },
-  { value: 'all', label: 'All', hint: 'Everything — local first, federated to fill the page.' },
-];
+// Labels and hints are in the `Catalog` messages (`source.*`).
+const SOURCE_OPTIONS = [
+  { value: 'local', label: 'source.local', hint: 'source.localHint' },
+  { value: 'federated', label: 'source.federated', hint: 'source.federatedHint' },
+  { value: 'all', label: 'source.all', hint: 'source.allHint' },
+] as const satisfies ReadonlyArray<{ value: DatasetSource; label: string; hint: string }>;
 
-const SORT_OPTIONS: ReadonlyArray<{ value: ListDatasetsSort; label: string }> = [
-  { value: 'recent', label: 'Most recent' },
-  { value: 'name', label: 'Name' },
-  { value: 'oldest', label: 'Oldest' },
-];
+// Labels are in the `Catalog` messages (`sort.*`).
+const SORT_OPTIONS: ReadonlyArray<ListDatasetsSort> = ['recent', 'name', 'oldest'];
 
 // Curated facet vocabularies. Hand-picked subsets of what's likely
 // in real-world manifests; the API search uses ILIKE so values
 // outside this list still match if hosts use them in the manifest.
-const MODALITY_OPTIONS = ['X-ray', 'CT', 'MRI', 'Ultrasound', 'Fundus', 'Pathology'];
-const BODY_REGION_OPTIONS = ['Chest', 'Retina', 'Brain', 'Abdomen', 'Skin', 'Cardiovascular'];
+// `value` reaches the URL and the API (English, as in the manifests);
+// `key` names the displayed label in the `Catalog` messages.
+const MODALITY_OPTIONS = [
+  { value: 'X-ray', key: 'xRay' },
+  { value: 'CT', key: 'ct' },
+  { value: 'MRI', key: 'mri' },
+  { value: 'Ultrasound', key: 'ultrasound' },
+  { value: 'Fundus', key: 'fundus' },
+  { value: 'Pathology', key: 'pathology' },
+] as const;
+const BODY_REGION_OPTIONS = [
+  { value: 'Chest', key: 'chest' },
+  { value: 'Retina', key: 'retina' },
+  { value: 'Brain', key: 'brain' },
+  { value: 'Abdomen', key: 'abdomen' },
+  { value: 'Skin', key: 'skin' },
+  { value: 'Cardiovascular', key: 'cardiovascular' },
+] as const;
 const CONDITION_OPTIONS = [
-  'Pneumonia',
-  'Diabetic retinopathy',
-  'Cancer',
-  'Tuberculosis',
-  'COVID-19',
-  'Cardiac arrhythmia',
-];
+  { value: 'Pneumonia', key: 'pneumonia' },
+  { value: 'Diabetic retinopathy', key: 'diabeticRetinopathy' },
+  { value: 'Cancer', key: 'cancer' },
+  { value: 'Tuberculosis', key: 'tuberculosis' },
+  { value: 'COVID-19', key: 'covid19' },
+  { value: 'Cardiac arrhythmia', key: 'cardiacArrhythmia' },
+] as const;
 const LICENSE_OPTIONS = [
   { label: 'CC-BY-4.0', value: 'creativecommons.org/licenses/by/4.0' },
   { label: 'CC-BY-NC-4.0', value: 'creativecommons.org/licenses/by-nc/4.0' },
@@ -113,7 +128,12 @@ const LICENSE_OPTIONS = [
   { label: 'MIT', value: 'MIT' },
   { label: 'Apache 2.0', value: 'Apache' },
 ];
-const ANON_OPTIONS = ANONYMIZATION_OPTIONS;
+const COMMERCIAL_OPTIONS = ['OK', 'NON_COMMERCIAL_ONLY', 'CASE_BY_CASE'] as const;
+
+/** The known anonymisation level a URL value names, or `undefined`. */
+function knownAnonymizationLevel(value: string): AnonymizationLevel | undefined {
+  return ANONYMIZATION_OPTIONS.find((o) => o.value === value)?.value;
+}
 
 function normaliseSource(value: string | undefined): DatasetSource {
   return value === 'federated' || value === 'all' ? value : 'local';
@@ -141,17 +161,13 @@ const visibilityAccent: Record<DatasetVisibility, 'success' | 'warning' | 'info'
   PRIVATE: 'info',
 };
 
-const visibilityLabel: Record<DatasetVisibility, string> = {
-  PUBLIC: 'public',
-  RESTRICTED: 'restricted',
-  PRIVATE: 'private',
-};
-
-export const metadata = {
-  title: 'Catalog — OCI Platform',
-  description:
-    'Discover datasets curated under the GI-AI4H Topic Groups, with provenance and consent tracked end-to-end.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('Catalog');
+  return {
+    title: t('metaTitle'),
+    description: t('metaDescription'),
+  };
+}
 
 interface FilterState {
   q?: string;
@@ -239,7 +255,7 @@ export default async function CatalogPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const session = await auth();
+  const [session, t, f] = await Promise.all([auth(), getTranslations('Catalog'), getFormatters()]);
   const canCreateDataset = isHost(session);
   const filters = parseFilters(params);
   // "My datasets": the API returns every status for a host's own rows,
@@ -270,33 +286,40 @@ export default async function CatalogPage({
       revalidate: 0,
     });
   } catch (err) {
-    error = err instanceof Error ? err.message : 'Unable to reach catalog API';
+    error = err instanceof Error ? err.message : t('error.unreachable');
   }
+  const formattedTotal = response ? f.number(response.totalEstimate) : '';
+  const countNumber = (chunks: ReactNode) => (
+    <span className="text-[var(--color-foreground)] font-medium tabular-nums">{chunks}</span>
+  );
 
   return (
     <Container size="wide">
       <Section spacing="md">
         <header className="mb-6 flex flex-col gap-3">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Catalog
+            {t('eyebrow')}
           </p>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Datasets</h1>
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">{t('heading')}</h1>
             <div className="flex items-center gap-4">
               {response ? (
                 <p className="text-sm text-[var(--color-muted-foreground)]">
-                  <span className="text-[var(--color-foreground)] font-medium tabular-nums">
-                    {response.totalEstimate.toLocaleString('en-GB')}
-                  </span>{' '}
-                  {response.totalEstimate === 1 ? 'dataset' : 'datasets'}
-                  {filters.q ? (
-                    <>
-                      {' matching '}
-                      <span className="text-[var(--color-foreground)]">
-                        &ldquo;{filters.q}&rdquo;
-                      </span>
-                    </>
-                  ) : null}
+                  {filters.q
+                    ? t.rich('resultCountMatching', {
+                        total: formattedTotal,
+                        count: response.totalEstimate,
+                        q: filters.q,
+                        num: countNumber,
+                        query: (chunks) => (
+                          <span className="text-[var(--color-foreground)]">{chunks}</span>
+                        ),
+                      })
+                    : t.rich('resultCount', {
+                        total: formattedTotal,
+                        count: response.totalEstimate,
+                        num: countNumber,
+                      })}
                 </p>
               ) : null}
               {canCreateDataset ? (
@@ -306,32 +329,29 @@ export default async function CatalogPage({
                       href={buildUrl(filters, { mine: !filters.mine, page: 1 })}
                       aria-pressed={filters.mine}
                     >
-                      My datasets
+                      {t('myDatasets')}
                     </Link>
                   </Button>
                   <Button asChild size="sm">
-                    <Link href="/catalog/new">New dataset</Link>
+                    <Link href="/catalog/new">{t('newDataset')}</Link>
                   </Button>
                 </>
               ) : null}
             </div>
           </div>
-          <p className="max-w-2xl text-[var(--color-muted-foreground)]">
-            Browse the GI-AI4H curated catalogue. Each dataset ships a Croissant 1.1 manifest with
-            RAI + BIOCroissant health metadata; restricted rows require approval before download.
-          </p>
+          <p className="max-w-2xl text-[var(--color-muted-foreground)]">{t('intro')}</p>
         </header>
 
         <form action="/catalog" method="get" role="search" className="mb-4 flex flex-wrap gap-2">
           <label htmlFor="catalog-search" className="sr-only">
-            Search datasets
+            {t('search.label')}
           </label>
           <Input
             id="catalog-search"
             type="search"
             name="q"
             defaultValue={filters.q ?? ''}
-            placeholder="Search by name, slug, or description"
+            placeholder={t('search.placeholder')}
             leadingIcon={<SearchIcon size={16} />}
             wrapperClassName="min-w-0 flex-1"
           />
@@ -360,7 +380,7 @@ export default async function CatalogPage({
           {filters.commercialUseTerms ? (
             <input type="hidden" name="commercialUseTerms" value={filters.commercialUseTerms} />
           ) : null}
-          <Button type="submit">Search</Button>
+          <Button type="submit">{t('search.submit')}</Button>
         </form>
 
         <SourceChips filters={filters} />
@@ -374,9 +394,11 @@ export default async function CatalogPage({
                 rail is always visible and scrolls with the page. */}
             <details className="group rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] lg:hidden">
               <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-4 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] [&::-webkit-details-marker]:hidden">
-                Filters
+                {t('filters.title')}
                 {activeFilterCount(filters) > 0 ? (
-                  <Badge tone="primary">{activeFilterCount(filters)} active</Badge>
+                  <Badge tone="primary">
+                    {t('filters.activeCount', { count: activeFilterCount(filters) })}
+                  </Badge>
                 ) : null}
                 <span
                   aria-hidden="true"
@@ -394,10 +416,10 @@ export default async function CatalogPage({
             </div>
           </div>
           <div className="min-w-0">
-            <SortToolbar filters={filters} response={response} />
+            <SortToolbar filters={filters} response={response} formattedTotal={formattedTotal} />
             {error ? (
               <Alert tone="danger">
-                <AlertTitle>Catalog unavailable</AlertTitle>
+                <AlertTitle>{t('error.title')}</AlertTitle>
                 <AlertDescription>
                   <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">
                     {error}
@@ -438,31 +460,41 @@ function activeFilterCount(filters: FilterState): number {
 }
 
 function FilterPanel({ filters }: { filters: FilterState }) {
+  const t = useTranslations('Catalog');
   // No sticky / max-height / inner overflow: seven facet groups are taller
   // than any viewport, so a sticky rail always grew its own scrollbars (#597).
   return (
-    <aside aria-label="Filters" className="space-y-5">
+    <aside aria-label={t('filters.title')} className="space-y-5">
       <FacetSection
-        title="Imaging modality"
-        options={MODALITY_OPTIONS.map((v) => ({ label: v, value: v }))}
+        title={t('facets.modality')}
+        options={MODALITY_OPTIONS.map((o) => ({ label: t(`modalities.${o.key}`), value: o.value }))}
         selected={filters.modality}
         toggleHref={(v) => toggleArrayFilter(filters, 'modality', v)}
       />
       <FacetSection
-        title="Body region"
-        options={BODY_REGION_OPTIONS.map((v) => ({ label: v, value: v }))}
+        title={t('facets.bodyRegion')}
+        options={BODY_REGION_OPTIONS.map((o) => ({
+          label: t(`bodyRegions.${o.key}`),
+          value: o.value,
+        }))}
         selected={filters.bodyRegion}
         toggleHref={(v) => toggleArrayFilter(filters, 'bodyRegion', v)}
       />
       <FacetSection
-        title="Disease / condition"
-        options={CONDITION_OPTIONS.map((v) => ({ label: v, value: v }))}
+        title={t('facets.condition')}
+        options={CONDITION_OPTIONS.map((o) => ({
+          label: t(`conditions.${o.key}`),
+          value: o.value,
+        }))}
         selected={filters.condition}
         toggleHref={(v) => toggleArrayFilter(filters, 'condition', v)}
       />
       <FacetSection
-        title="Anonymisation"
-        options={ANON_OPTIONS}
+        title={t('facets.anonymization')}
+        options={ANONYMIZATION_OPTIONS.map((o) => ({
+          label: t(`anonymization.${o.value}`),
+          value: o.value,
+        }))}
         selected={filters.anonymizationLevel ? [filters.anonymizationLevel] : []}
         toggleHref={(v) =>
           buildUrl(filters, {
@@ -472,27 +504,24 @@ function FilterPanel({ filters }: { filters: FilterState }) {
         }
       />
       <FacetSection
-        title="License"
+        title={t('facets.license')}
         options={LICENSE_OPTIONS}
         selected={filters.license}
         toggleHref={(v) => toggleArrayFilter(filters, 'license', v)}
       />
       <FacetSection
-        title="Data use (DUO)"
-        options={DUO_REGISTRY.filter((t) => t.category === 'permission').map((t) => ({
-          label: `${t.code} — ${t.label}`,
-          value: t.id,
+        title={t('facets.duo')}
+        // DUO term labels come from the ontology (English), as in the manifests.
+        options={DUO_REGISTRY.filter((term) => term.category === 'permission').map((term) => ({
+          label: `${term.code} — ${term.label}`,
+          value: term.id,
         }))}
         selected={filters.duoTerms}
         toggleHref={(v) => toggleArrayFilter(filters, 'duoTerms', v)}
       />
       <FacetSection
-        title="Commercial use"
-        options={[
-          { label: 'OK for commercial use', value: 'OK' },
-          { label: 'Non-commercial only', value: 'NON_COMMERCIAL_ONLY' },
-          { label: 'Case-by-case', value: 'CASE_BY_CASE' },
-        ]}
+        title={t('facets.commercialUse')}
+        options={COMMERCIAL_OPTIONS.map((v) => ({ label: t(`commercial.${v}`), value: v }))}
         selected={filters.commercialUseTerms ? [filters.commercialUseTerms] : []}
         toggleHref={(v) =>
           buildUrl(filters, {
@@ -523,6 +552,7 @@ function FacetSection({
   selected: string[];
   toggleHref: (value: string) => string;
 }) {
+  const t = useTranslations('Catalog');
   return (
     // `min-w-0`: fieldsets default to `min-inline-size: min-content`, which
     // let long DUO / anonymisation labels widen the rail instead of truncating.
@@ -560,7 +590,8 @@ function FacetSection({
                 />
                 <span className="truncate">{opt.label}</span>
                 <span className="sr-only">
-                  {isSelected ? ' (selected — activate to remove filter)' : ' (activate to filter)'}
+                  {' '}
+                  {isSelected ? t('filters.selectedHint') : t('filters.unselectedHint')}
                 </span>
               </Link>
             </li>
@@ -572,46 +603,59 @@ function FacetSection({
 }
 
 function AppliedFilters({ filters }: { filters: FilterState }) {
+  const t = useTranslations('Catalog');
   const chips: Array<{ label: string; href: string }> = [];
 
+  // A URL value outside the curated lists still filters; its chip shows it as typed.
   for (const v of filters.modality) {
-    chips.push({ label: `Modality: ${v}`, href: toggleArrayFilter(filters, 'modality', v) });
+    const opt = MODALITY_OPTIONS.find((o) => o.value === v);
+    chips.push({
+      label: t('chips.modality', { value: opt ? t(`modalities.${opt.key}`) : v }),
+      href: toggleArrayFilter(filters, 'modality', v),
+    });
   }
   for (const v of filters.bodyRegion) {
-    chips.push({ label: `Body: ${v}`, href: toggleArrayFilter(filters, 'bodyRegion', v) });
+    const opt = BODY_REGION_OPTIONS.find((o) => o.value === v);
+    chips.push({
+      label: t('chips.bodyRegion', { value: opt ? t(`bodyRegions.${opt.key}`) : v }),
+      href: toggleArrayFilter(filters, 'bodyRegion', v),
+    });
   }
   for (const v of filters.condition) {
-    chips.push({ label: `Condition: ${v}`, href: toggleArrayFilter(filters, 'condition', v) });
+    const opt = CONDITION_OPTIONS.find((o) => o.value === v);
+    chips.push({
+      label: t('chips.condition', { value: opt ? t(`conditions.${opt.key}`) : v }),
+      href: toggleArrayFilter(filters, 'condition', v),
+    });
   }
   if (filters.anonymizationLevel) {
+    const level = knownAnonymizationLevel(filters.anonymizationLevel);
     chips.push({
-      label: `Anonymisation: ${anonymizationLabel(filters.anonymizationLevel)}`,
+      label: t('chips.anonymization', {
+        value: level ? t(`anonymization.${level}`) : filters.anonymizationLevel,
+      }),
       href: buildUrl(filters, { anonymizationLevel: null, page: 1 }),
     });
   }
   for (const v of filters.license) {
     const opt = LICENSE_OPTIONS.find((o) => o.value === v);
     chips.push({
-      label: `License: ${opt?.label ?? v}`,
+      label: t('chips.license', { value: opt?.label ?? v }),
       href: toggleArrayFilter(filters, 'license', v),
     });
   }
   for (const v of filters.duoTerms) {
-    const t = lookupDuoTerm(v);
+    const term = lookupDuoTerm(v);
     chips.push({
-      label: `DUO: ${t?.code ?? v}`,
+      label: t('chips.duo', { value: term?.code ?? v }),
       href: toggleArrayFilter(filters, 'duoTerms', v),
     });
   }
   if (filters.commercialUseTerms) {
-    const label =
-      filters.commercialUseTerms === 'OK'
-        ? 'commercial OK'
-        : filters.commercialUseTerms === 'NON_COMMERCIAL_ONLY'
-          ? 'non-commercial only'
-          : 'case-by-case';
     chips.push({
-      label: `Commercial: ${label}`,
+      label: t('chips.commercial', {
+        value: t(`chips.commercialValue.${filters.commercialUseTerms}`),
+      }),
       href: buildUrl(filters, { commercialUseTerms: null, page: 1 }),
     });
   }
@@ -621,7 +665,7 @@ function AppliedFilters({ filters }: { filters: FilterState }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2">
       <span className="text-xs uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-        Applied
+        {t('chips.applied')}
       </span>
       {chips.map((c, i) => (
         <Link
@@ -631,7 +675,7 @@ function AppliedFilters({ filters }: { filters: FilterState }) {
         >
           <span>{c.label}</span>
           <span aria-hidden="true">×</span>
-          <span className="sr-only">Remove filter</span>
+          <span className="sr-only">{t('chips.removeFilter')}</span>
         </Link>
       ))}
       <Link
@@ -655,7 +699,7 @@ function AppliedFilters({ filters }: { filters: FilterState }) {
         }
         className="text-xs font-medium text-[var(--color-muted-foreground)] underline-offset-2 hover:underline"
       >
-        Clear all
+        {t('chips.clearAll')}
       </Link>
     </div>
   );
@@ -664,43 +708,46 @@ function AppliedFilters({ filters }: { filters: FilterState }) {
 function SortToolbar({
   filters,
   response,
+  formattedTotal,
 }: {
   filters: FilterState;
   response: ListDatasetsResponse | null;
+  /** `response.totalEstimate` formatted in the interface language. */
+  formattedTotal: string;
 }) {
+  const t = useTranslations('Catalog');
   if (!response) return null;
   const start = (filters.page - 1) * PAGE_SIZE + 1;
   const end = start + response.items.length - 1;
   return (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm">
       <p className="text-[var(--color-muted-foreground)]">
-        {response.items.length === 0 ? (
-          <>No results.</>
-        ) : (
-          <>
-            Showing{' '}
-            <span className="text-[var(--color-foreground)] tabular-nums">
-              {start}–{end}
-            </span>{' '}
-            of{' '}
-            <span className="text-[var(--color-foreground)] tabular-nums">
-              {response.totalEstimate.toLocaleString('en-GB')}
-            </span>
-          </>
-        )}
+        {response.items.length === 0
+          ? t('results.none')
+          : t.rich('results.showing', {
+              start,
+              end,
+              total: formattedTotal,
+              range: (chunks) => (
+                <span className="text-[var(--color-foreground)] tabular-nums">{chunks}</span>
+              ),
+              num: (chunks) => (
+                <span className="text-[var(--color-foreground)] tabular-nums">{chunks}</span>
+              ),
+            })}
       </p>
       <div className="flex items-center gap-2">
-        <span className="text-xs text-[var(--color-muted-foreground)]">Sort</span>
+        <span className="text-xs text-[var(--color-muted-foreground)]">{t('sort.label')}</span>
         <nav
-          aria-label="Sort"
+          aria-label={t('sort.label')}
           className="inline-flex rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-0.5 text-xs"
         >
-          {SORT_OPTIONS.map((opt) => {
-            const isActive = filters.sort === opt.value;
+          {SORT_OPTIONS.map((sort) => {
+            const isActive = filters.sort === sort;
             return (
               <Link
-                key={opt.value}
-                href={buildUrl(filters, { sort: opt.value, page: 1 })}
+                key={sort}
+                href={buildUrl(filters, { sort, page: 1 })}
                 aria-current={isActive ? 'page' : undefined}
                 className={
                   'rounded px-2.5 py-1 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
@@ -709,7 +756,7 @@ function SortToolbar({
                     : 'text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]')
                 }
               >
-                {opt.label}
+                {t(`sort.${sort}`)}
               </Link>
             );
           })}
@@ -726,6 +773,7 @@ function Pagination({
   filters: FilterState;
   response: ListDatasetsResponse;
 }) {
+  const t = useTranslations('Catalog');
   // Use the API's authoritative `totalPages` when in page mode; fall
   // back to "show prev/next only" when the API didn't compute it
   // (cursor mode, federated path).
@@ -760,18 +808,18 @@ function Pagination({
 
   return (
     <nav
-      aria-label="Pagination"
+      aria-label={t('pagination.label')}
       className="mt-10 flex flex-wrap items-center justify-center gap-2 text-sm"
     >
       {prev ? (
         <Button asChild variant="outline" size="sm">
           <Link href={prev} rel="prev">
-            ← Prev
+            {t('pagination.prev')}
           </Link>
         </Button>
       ) : (
         <Button variant="outline" size="sm" disabled>
-          ← Prev
+          {t('pagination.prev')}
         </Button>
       )}
       {numbers.map((n) =>
@@ -802,12 +850,12 @@ function Pagination({
       {next ? (
         <Button asChild variant="outline" size="sm">
           <Link href={next} rel="next">
-            Next →
+            {t('pagination.next')}
           </Link>
         </Button>
       ) : (
         <Button variant="outline" size="sm" disabled>
-          Next →
+          {t('pagination.next')}
         </Button>
       )}
     </nav>
@@ -815,6 +863,7 @@ function Pagination({
 }
 
 function DatasetCard({ d }: { d: DatasetSummary }) {
+  const t = useTranslations('Catalog');
   const isFederated = d.sourceCatalog !== null;
   const href = isFederated ? (d.originUrl ?? '#') : `/catalog/${d.slug}`;
   const linkProps = isFederated
@@ -827,7 +876,7 @@ function DatasetCard({ d }: { d: DatasetSummary }) {
       {...linkProps}
       aria-label={
         isFederated
-          ? `${d.name} — opens upstream on ${d.sourceCatalog?.name} in a new tab`
+          ? t('card.opensUpstream', { name: d.name, catalog: d.sourceCatalog?.name ?? '' })
           : undefined
       }
       className="group block h-full rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
@@ -839,15 +888,15 @@ function DatasetCard({ d }: { d: DatasetSummary }) {
               {d.name}
             </CardTitle>
             {isFederated ? (
-              <Badge tone="accent">federated</Badge>
+              <Badge tone="accent">{t('card.federated')}</Badge>
             ) : d.status !== 'PUBLISHED' ? (
-              <Badge tone="neutral">{d.status.toLowerCase()}</Badge>
+              <Badge tone="neutral">{t(`status.${d.status}`)}</Badge>
             ) : (
-              <Badge tone={visibilityTone[d.visibility]}>{visibilityLabel[d.visibility]}</Badge>
+              <Badge tone={visibilityTone[d.visibility]}>{t(`visibility.${d.visibility}`)}</Badge>
             )}
           </div>
           <CardDescription className="line-clamp-3 min-h-[3.5rem]">
-            {d.description ?? <em>No description provided.</em>}
+            {d.description ?? <em>{t('card.noDescription')}</em>}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-4 text-xs text-[var(--color-muted-foreground)]">
@@ -860,16 +909,18 @@ function DatasetCard({ d }: { d: DatasetSummary }) {
                 (`NON_COMMERCIAL_ONLY`); CASE_BY_CASE is the conservative
                 default and would noise-up every card if shown. */}
             {!isFederated && d.commercialUseTerms === 'OK' ? (
-              <Badge tone="success">commercial OK</Badge>
+              <Badge tone="success">{t('card.commercialOk')}</Badge>
             ) : !isFederated && d.commercialUseTerms === 'NON_COMMERCIAL_ONLY' ? (
-              <Badge tone="warning">non-commercial</Badge>
+              <Badge tone="warning">{t('card.nonCommercial')}</Badge>
             ) : null}
             {isFederated ? (
-              <Badge tone="neutral">from {d.sourceCatalog?.name}</Badge>
+              <Badge tone="neutral">
+                {t('card.fromCatalog', { catalog: d.sourceCatalog?.name ?? '' })}
+              </Badge>
             ) : d.latestVersion ? (
               <Badge tone="primary">v{d.latestVersion}</Badge>
             ) : (
-              <Badge tone="neutral">no version</Badge>
+              <Badge tone="neutral">{t('card.noVersion')}</Badge>
             )}
           </span>
         </CardContent>
@@ -879,8 +930,9 @@ function DatasetCard({ d }: { d: DatasetSummary }) {
 }
 
 function SourceChips({ filters }: { filters: FilterState }) {
+  const t = useTranslations('Catalog');
   return (
-    <nav aria-label="Source filter" className="mb-4 flex flex-wrap gap-2">
+    <nav aria-label={t('source.label')} className="mb-4 flex flex-wrap gap-2">
       {SOURCE_OPTIONS.map((opt) => {
         const isActive = opt.value === filters.source;
         const href = buildUrl(filters, { source: opt.value, page: 1 });
@@ -889,7 +941,7 @@ function SourceChips({ filters }: { filters: FilterState }) {
             key={opt.value}
             href={href}
             aria-current={isActive ? 'page' : undefined}
-            title={opt.hint}
+            title={t(opt.hint)}
             className={
               'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
               (isActive
@@ -897,7 +949,7 @@ function SourceChips({ filters }: { filters: FilterState }) {
                 : 'border-[var(--color-border)] bg-[var(--color-card)] text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] hover:text-[var(--color-foreground)]')
             }
           >
-            {opt.label}
+            {t(opt.label)}
           </Link>
         );
       })}
@@ -906,6 +958,7 @@ function SourceChips({ filters }: { filters: FilterState }) {
 }
 
 function EmptyState({ filters }: { filters: FilterState }) {
+  const t = useTranslations('Catalog');
   const hasFilters =
     filters.q ||
     filters.modality.length > 0 ||
@@ -924,22 +977,15 @@ function EmptyState({ filters }: { filters: FilterState }) {
         <DatabaseIcon size={20} />
       </span>
       <h2 className="mt-4 text-lg font-semibold">
-        {hasFilters ? 'No matches yet' : 'No datasets yet'}
+        {hasFilters ? t('empty.noMatchesTitle') : t('empty.noDatasetsTitle')}
       </h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-[var(--color-muted-foreground)]">
-        {hasFilters ? (
-          <>Try fewer filters, or broaden your search to find more datasets.</>
-        ) : (
-          <>
-            The catalogue is empty on this environment. Once hosts publish the first Croissant 1.1
-            manifests, they will appear here.
-          </>
-        )}
+        {hasFilters ? t('empty.noMatchesBody') : t('empty.noDatasetsBody')}
       </p>
       {hasFilters ? (
         <div className="mt-5">
           <Button asChild variant="outline" size="sm">
-            <Link href="/catalog">Clear all filters</Link>
+            <Link href="/catalog">{t('empty.clearAllFilters')}</Link>
           </Button>
         </div>
       ) : null}

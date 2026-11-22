@@ -18,22 +18,20 @@ import {
   Stat,
 } from '@oci/ui';
 import type { ListDatasetsResponse } from '@oci/shared-types';
+import { getTranslations } from 'next-intl/server';
 import { auth } from '../auth';
+import { getFormatters } from '../i18n/server';
+import { apiFetch } from '../lib/api';
 import { isHost } from '../lib/groups';
 
 // Label varies per env so the CTA matches reality. NextAuth's
 // `pages.signIn = '/signin'` (auth.ts) routes both flows through
 // the same branded page; this is just the link text.
-const signInLabel =
-  process.env.OCI_ENV === 'local' || process.env.NEXT_PUBLIC_OCI_ENV === 'local'
-    ? 'Sign in (local dev)'
-    : 'Sign in with Cognito';
-import { apiFetch } from '../lib/api';
+const isLocalSignIn =
+  process.env.OCI_ENV === 'local' || process.env.NEXT_PUBLIC_OCI_ENV === 'local';
 
 interface PhaseCard {
   id: 'A' | 'B' | 'C' | 'D';
-  title: string;
-  description: string;
   status: 'live' | 'in-progress' | 'planned';
   icon: typeof DatabaseIcon;
   accent: 'phase-a' | 'phase-b' | 'phase-c' | 'phase-d';
@@ -43,9 +41,6 @@ interface PhaseCard {
 const PHASES: PhaseCard[] = [
   {
     id: 'A',
-    title: 'Catalog',
-    description:
-      'Discover datasets curated under the GI-AI4H Topic Groups. Croissant 1.1 + RAI + BIOCroissant manifests, with provenance and consent tracked end-to-end.',
     status: 'live',
     icon: DatabaseIcon,
     accent: 'phase-a',
@@ -53,18 +48,12 @@ const PHASES: PhaseCard[] = [
   },
   {
     id: 'B',
-    title: 'Annotation',
-    description:
-      'Coordinate multi-rater annotation with conflict resolution, regulator-grade audit trails, and burndown tooling.',
     status: 'in-progress',
     icon: FlowIcon,
     accent: 'phase-b',
   },
   {
     id: 'C',
-    title: 'Evaluation',
-    description:
-      'Evaluate health AI models against benchmarking tasks without publishing the reference labels: predictions scoring, sealed-container execution, and a reviewed registry of evaluation methods.',
     status: 'in-progress',
     icon: ChartIcon,
     accent: 'phase-c',
@@ -72,22 +61,19 @@ const PHASES: PhaseCard[] = [
   },
   {
     id: 'D',
-    title: 'Reporting',
-    description:
-      'JSON-LD evaluation reports for regulators, plus a portal that lets supervisors trace every claim back to its evidence.',
     status: 'planned',
     icon: FileTextIcon,
     accent: 'phase-d',
   },
 ];
 
-const PHASE_STATUS_LABEL: Record<
+const PHASE_STATUS: Record<
   PhaseCard['status'],
-  { label: string; tone: 'success' | 'info' | 'neutral' }
+  { key: 'live' | 'inProgress' | 'planned'; tone: 'success' | 'info' | 'neutral' }
 > = {
-  live: { label: 'Live', tone: 'success' },
-  'in-progress': { label: 'In progress', tone: 'info' },
-  planned: { label: 'Planned', tone: 'neutral' },
+  live: { key: 'live', tone: 'success' },
+  'in-progress': { key: 'inProgress', tone: 'info' },
+  planned: { key: 'planned', tone: 'neutral' },
 };
 
 function phaseIconClass(id: PhaseCard['id']): string {
@@ -104,7 +90,7 @@ function phaseIconClass(id: PhaseCard['id']): string {
 }
 
 export default async function HomePage() {
-  const session = await auth();
+  const [session, t, f] = await Promise.all([auth(), getTranslations('Home'), getFormatters()]);
 
   // Best-effort: a single small server-side call for the stat strip.
   // Live (no cache) so the count tracks the catalog as datasets get
@@ -130,28 +116,30 @@ export default async function HomePage() {
         <Container>
           <div className="mx-auto max-w-3xl text-center">
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-              Convened by <span className="text-[var(--color-foreground)]">ITU · WHO · WIPO</span> ·
-              GI-AI4H
+              {t.rich('convenedBy', {
+                strong: (chunks) => (
+                  <span className="text-[var(--color-foreground)]">{chunks}</span>
+                ),
+              })}
             </p>
             <h1 className="mt-6 font-semibold text-[var(--color-foreground)] [font-size:var(--text-display)] [line-height:var(--text-display--line-height)] [letter-spacing:var(--text-display--letter-spacing)]">
-              Open Code Infrastructure
+              {t('titleLead')}
               <span className="block bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-accent)] bg-clip-text text-transparent">
-                for trustworthy health AI
+                {t('titleAccent')}
               </span>
             </h1>
             <p className="mx-auto mt-6 max-w-2xl text-base sm:text-lg text-[var(--color-muted-foreground)]">
-              A unified platform for the Global Initiative on AI for Health — catalog, annotate,
-              evaluate, and report on AI in clinical and public-health workflows, end to end.
+              {t('lede')}
             </p>
 
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
               {session?.user ? (
                 <>
                   <Button asChild size="lg">
-                    <Link href="/dashboard">Open dashboard</Link>
+                    <Link href="/dashboard">{t('openDashboard')}</Link>
                   </Button>
                   <Button asChild variant="outline" size="lg">
-                    <Link href="/catalog">Browse catalog</Link>
+                    <Link href="/catalog">{t('browseCatalog')}</Link>
                   </Button>
                 </>
               ) : (
@@ -165,10 +153,12 @@ export default async function HomePage() {
                    * picker. /signin handles both env modes uniformly.
                    */}
                   <Button asChild size="lg">
-                    <Link href="/signin?callbackUrl=%2Fdashboard">{signInLabel}</Link>
+                    <Link href="/signin?callbackUrl=%2Fdashboard">
+                      {isLocalSignIn ? t('signInLocal') : t('signInCognito')}
+                    </Link>
                   </Button>
                   <Button asChild variant="outline" size="lg">
-                    <Link href="/catalog">Browse catalog</Link>
+                    <Link href="/catalog">{t('browseCatalog')}</Link>
                   </Button>
                 </>
               )}
@@ -182,21 +172,21 @@ export default async function HomePage() {
           <div className="grid gap-8 rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] p-8 sm:grid-cols-3">
             <Stat
               icon={<DatabaseIcon size={20} />}
-              value={totalDatasets === null ? '—' : totalDatasets.toLocaleString('en-GB')}
-              label="Datasets in the catalog"
-              hint="Curated under GI-AI4H Topic Groups"
+              value={totalDatasets === null ? '—' : f.number(totalDatasets)}
+              label={t('stats.datasetsLabel')}
+              hint={t('stats.datasetsHint')}
             />
             <Stat
               icon={<ShieldIcon size={20} />}
               value="Croissant 1.1"
-              label="Native conformance"
-              hint="RAI + BIOCroissant health metadata"
+              label={t('stats.conformanceLabel')}
+              hint={t('stats.conformanceHint')}
             />
             <Stat
               icon={<GlobeIcon size={20} />}
-              value="Open source"
-              label="BSD 3-Clause licensed"
-              hint="Reproducible, end-to-end auditable"
+              value={t('stats.openSourceValue')}
+              label={t('stats.openSourceLabel')}
+              hint={t('stats.openSourceHint')}
             />
           </div>
         </Container>
@@ -206,21 +196,17 @@ export default async function HomePage() {
         <Container>
           <div className="mb-10 max-w-2xl">
             <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-              Platform · 12-18 month roadmap
+              {t('roadmapEyebrow')}
             </p>
             <h2 className="mt-3 text-2xl sm:text-3xl font-semibold tracking-tight">
-              Four workstreams, one provenance chain
+              {t('roadmapTitle')}
             </h2>
-            <p className="mt-3 text-[var(--color-muted-foreground)]">
-              Every artefact — dataset, annotation, evaluation, report — points back to the dataset
-              that fed it. So a regulator can trace any claim to its evidence, and a host can revoke
-              a downstream artefact if consent is withdrawn upstream.
-            </p>
+            <p className="mt-3 text-[var(--color-muted-foreground)]">{t('roadmapBody')}</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {PHASES.map((phase) => {
               const Icon = phase.icon;
-              const status = PHASE_STATUS_LABEL[phase.status];
+              const status = PHASE_STATUS[phase.status];
               const iconClass = phaseIconClass(phase.id);
               const card = (
                 <Card
@@ -242,14 +228,16 @@ export default async function HomePage() {
                         </span>
                         <CardTitle className="min-w-0">
                           <span className="text-xs font-medium tracking-wider text-[var(--color-muted-foreground)]">
-                            Phase {phase.id} ·{' '}
+                            {t('phaseLabel', { id: phase.id })}{' '}
                           </span>
-                          {phase.title}
+                          {t(`phases.${phase.id}.title`)}
                         </CardTitle>
                       </div>
-                      <Badge tone={status.tone}>{status.label}</Badge>
+                      <Badge tone={status.tone}>{t(`status.${status.key}`)}</Badge>
                     </div>
-                    <CardDescription className="mt-2">{phase.description}</CardDescription>
+                    <CardDescription className="mt-2">
+                      {t(`phases.${phase.id}.description`)}
+                    </CardDescription>
                   </CardHeader>
                 </Card>
               );
@@ -273,30 +261,25 @@ export default async function HomePage() {
         <Container size="lg">
           <Card tone="subtle" className="border-dashed">
             <CardHeader>
-              <CardTitle>For dataset hosts</CardTitle>
-              <CardDescription>
-                Publishing on the catalog takes two steps: create a dataset, attach a Croissant 1.1
-                manifest. We validate the manifest against Croissant + RAI + BIOCroissant before
-                mirroring distributions, so what lands in the catalog is machine-readable and
-                audit-ready.
-              </CardDescription>
+              <CardTitle>{t('hostsTitle')}</CardTitle>
+              <CardDescription>{t('hostsBody')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap items-center gap-3">
                 {isHost(session) ? (
                   <Button asChild>
-                    <Link href="/catalog/new">Create a dataset</Link>
+                    <Link href="/catalog/new">{t('createDataset')}</Link>
                   </Button>
                 ) : !session?.user ? (
                   <Button asChild>
-                    <Link href="/signin?callbackUrl=%2Fcatalog%2Fnew">Sign in to publish</Link>
+                    <Link href="/signin?callbackUrl=%2Fcatalog%2Fnew">{t('signInToPublish')}</Link>
                   </Button>
                 ) : null}
                 <Link
                   href="/catalog"
                   className="text-sm font-medium text-[var(--color-primary)] hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
                 >
-                  Read the catalog →
+                  {t('readCatalog')}
                 </Link>
               </div>
             </CardContent>

@@ -1,3 +1,5 @@
+import { useTranslations } from 'next-intl';
+
 /**
  * Tiny collapsible JSON tree viewer (PR L.2, #91-followup).
  *
@@ -140,8 +142,9 @@ function JsonNode({ k, value, defaultOpen = false }: NodeProps) {
 }
 
 export function JsonTree({ value }: { value: unknown }) {
+  const t = useTranslations('Dataset');
   if (value === null || value === undefined) {
-    return <p className="text-sm text-[var(--color-muted-foreground)]">No manifest available.</p>;
+    return <p className="text-sm text-[var(--color-muted-foreground)]">{t('manifest.none')}</p>;
   }
   return (
     <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-subtle)] p-3 font-mono text-xs leading-relaxed">

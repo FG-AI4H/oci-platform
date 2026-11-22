@@ -1,7 +1,9 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button, DownloadIcon } from '@oci/ui';
+import { useFormatters } from '../../../i18n/client';
 
 export interface BulkDownloadProps {
   slug: string;
@@ -50,19 +52,23 @@ export function BulkDownload({
   sizeLabel,
   unknownSizeCount,
 }: BulkDownloadProps) {
+  const t = useTranslations('Dataset');
+  const f = useFormatters();
   const [includeManifest, setIncludeManifest] = useState(false);
   const detailsId = useId();
   const checkboxId = useId();
 
+  // Whole sentences per branch rather than assembled fragments — only
+  // the numbers are interpolated, so these stay translatable as units.
+  const gatedSentence = (n: number) => t('bulk.gated', { count: n });
+  const upstreamSentence = (n: number) => t('bulk.upstream', { count: n });
+
   if (includedCount === 0) {
     return (
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-4 text-sm">
-        <p className="font-medium text-[var(--color-foreground)]">
-          No archive available for this dataset
-        </p>
+        <p className="font-medium text-[var(--color-foreground)]">{t('bulk.noArchiveTitle')}</p>
         <p className="mt-1 text-[var(--color-muted-foreground)]">
-          A bulk archive only covers files whose bytes the platform holds.{' '}
-          {gatedCount > 0 ? gatedSentence(gatedCount) : null}{' '}
+          {t('bulk.noArchiveBody')} {gatedCount > 0 ? gatedSentence(gatedCount) : null}{' '}
           {upstreamCount > 0 ? upstreamSentence(upstreamCount) : null}
         </p>
       </div>
@@ -70,23 +76,31 @@ export function BulkDownload({
   }
 
   const excluded = gatedCount + upstreamCount;
+  const size = sizeLabel === null ? '' : t('bulk.sizeSuffix', { size: sizeLabel });
+  const includedSentence =
+    totalCount === 1
+      ? t('bulk.includedOnly', { size })
+      : includedCount === totalCount
+        ? t('bulk.includedAll', { total: f.number(totalCount), size })
+        : t('bulk.includedSome', {
+            included: f.number(includedCount),
+            total: f.number(totalCount),
+            size,
+          });
 
   return (
     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1 text-sm" id={detailsId}>
-          <p className="font-medium text-[var(--color-foreground)]">Download the whole dataset</p>
+          <p className="font-medium text-[var(--color-foreground)]">{t('bulk.title')}</p>
           <p className="text-[var(--color-muted-foreground)]">
-            {includedSentence(includedCount, totalCount, sizeLabel)}{' '}
-            {unknownSizeCount > 0 ? unknownSizeSentence(unknownSizeCount) : null}
+            {includedSentence}{' '}
+            {unknownSizeCount > 0 ? t('bulk.unknownSize', { count: unknownSizeCount }) : null}
           </p>
-          <p className="text-[var(--color-muted-foreground)]">
-            Every archive also contains LICENSE.txt and CITATION.txt — attribution is a condition of
-            use, so the licence and citation travel with the bytes.
-          </p>
+          <p className="text-[var(--color-muted-foreground)]">{t('bulk.licenceNote')}</p>
           {excluded > 0 ? (
             <p className="text-[var(--color-muted-foreground)]">
-              Not included: {gatedCount > 0 ? gatedSentence(gatedCount) : null}{' '}
+              {t('bulk.notIncluded')} {gatedCount > 0 ? gatedSentence(gatedCount) : null}{' '}
               {upstreamCount > 0 ? upstreamSentence(upstreamCount) : null}
             </p>
           ) : null}
@@ -102,7 +116,7 @@ export function BulkDownload({
             aria-describedby={detailsId}
           >
             <DownloadIcon size={16} />
-            <span>Download all files</span>
+            <span>{t('bulk.downloadAll')}</span>
           </a>
         </Button>
       </div>
@@ -119,42 +133,12 @@ export function BulkDownload({
           className="h-4 w-4 cursor-pointer accent-[var(--color-primary)]"
         />
         <span>
-          Include metadata (croissant.json)
+          {t('bulk.includeMetadata')}
           <span className="ms-2 text-xs text-[var(--color-muted-foreground)]">
-            the full manifest: provenance, licence, field definitions
+            {t('bulk.includeMetadataHint')}
           </span>
         </span>
       </label>
     </div>
   );
-}
-
-// Whole sentences per branch rather than assembled fragments — only the
-// number is interpolated, so these stay translatable as units.
-
-function includedSentence(included: number, total: number, sizeLabel: string | null): string {
-  const size = sizeLabel === null ? '' : ` (about ${sizeLabel})`;
-  if (total === 1) return `A ZIP with the dataset's only file${size}.`;
-  if (included === total) {
-    return `A ZIP with all ${total.toLocaleString('en-GB')} files${size}.`;
-  }
-  return `A ZIP with ${included.toLocaleString('en-GB')} of ${total.toLocaleString('en-GB')} files${size}.`;
-}
-
-function unknownSizeSentence(n: number): string {
-  return n === 1
-    ? 'One of them declares no size, so the total is a lower bound.'
-    : `${n.toLocaleString('en-GB')} of them declare no size, so the total is a lower bound.`;
-}
-
-function gatedSentence(n: number): string {
-  return n === 1
-    ? '1 file needs approved access — request access, then download it from the list below.'
-    : `${n.toLocaleString('en-GB')} files need approved access — request access, then download them from the list below.`;
-}
-
-function upstreamSentence(n: number): string {
-  return n === 1
-    ? '1 file is hosted by the original publisher — open it from the list below.'
-    : `${n.toLocaleString('en-GB')} files are hosted by the original publisher — open them from the list below.`;
 }

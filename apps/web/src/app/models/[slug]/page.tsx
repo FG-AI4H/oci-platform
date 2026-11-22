@@ -1,5 +1,7 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -18,10 +20,10 @@ import {
 import type { ModelFactsLabel, PublicModelCard } from '@oci/shared-types';
 import { apiFetch } from '../../../lib/api';
 import {
-  REGULATORY_STATUS_LABEL,
   REGULATORY_STATUS_TONE,
-  humanise,
-  modelClassLabel,
+  medicalPurposeText,
+  modelClassText,
+  regulatoryStatusText,
 } from '../../../lib/model-card-labels';
 import { modelCardJsonLd } from '../../../lib/model-jsonld';
 import { siteUrl } from '../../../lib/site-url';
@@ -37,17 +39,25 @@ async function loadCard(slug: string): Promise<PublicModelCard | null> {
   return apiFetch<PublicModelCard>(`/v2/prediction/model-cards/${encodeURIComponent(slug)}`);
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
   const { slug } = await params;
-  const card = await loadCard(slug).catch(() => null);
+  const [card, t] = await Promise.all([
+    loadCard(slug).catch(() => null),
+    getTranslations('Models'),
+  ]);
   return {
-    title: `${slug} — OCI Models`,
+    title: t('detail.metaTitle', { slug }),
     ...(card?.clinicalSummary ? { description: card.clinicalSummary } : {}),
   };
 }
 
 export default async function ModelCardPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const t = await getTranslations('Models');
 
   let card: PublicModelCard | null = null;
   let label: ModelFactsLabel | null = null;
@@ -60,7 +70,7 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
       );
     }
   } catch (err) {
-    error = err instanceof Error ? err.message : 'Unable to reach the model catalogue API';
+    error = err instanceof Error ? err.message : t('unavailable.fallback');
   }
 
   if (error) {
@@ -68,7 +78,7 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
       <Container size="md">
         <Section spacing="md">
           <Alert tone="danger">
-            <AlertTitle>Model catalogue unavailable</AlertTitle>
+            <AlertTitle>{t('unavailable.title')}</AlertTitle>
             <AlertDescription>
               <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
             </AlertDescription>
@@ -98,7 +108,7 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
             className="inline-flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
           >
             <ArrowLeftIcon size={14} />
-            <span>Models</span>
+            <span>{t('detail.back')}</span>
           </Link>
           <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex-1 min-w-0">
@@ -118,12 +128,12 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
             </div>
             <div className="flex flex-row flex-wrap items-start gap-2 lg:flex-col lg:items-end">
               <Badge tone="primary">v{card.versionMajorMinorPatch}</Badge>
-              <Badge tone="neutral">{modelClassLabel(card.modelClass)}</Badge>
-              <Badge tone="info">Risk tier {ius.riskTier}</Badge>
-              {card.generativeAi ? <Badge tone="accent">Generative AI</Badge> : null}
+              <Badge tone="neutral">{modelClassText(t, card.modelClass)}</Badge>
+              <Badge tone="info">{t('riskTier', { tier: ius.riskTier })}</Badge>
+              {card.generativeAi ? <Badge tone="accent">{t('generativeAi')}</Badge> : null}
               {approval ? (
                 <Badge tone={REGULATORY_STATUS_TONE[approval.status]}>
-                  {REGULATORY_STATUS_LABEL[approval.status]}
+                  {regulatoryStatusText(t, approval.status)}
                 </Badge>
               ) : null}
             </div>
@@ -135,35 +145,41 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
         <Section spacing="md" className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
           <Card className="h-fit">
             <CardHeader>
-              <CardTitle as="h2">About this model</CardTitle>
+              <CardTitle as="h2">{t('detail.about')}</CardTitle>
             </CardHeader>
             <CardContent>
               <DefinitionList>
-                <DefinitionItem term="Developer">{card.modelDeveloper ?? '—'}</DefinitionItem>
-                <DefinitionItem term="Contact">{card.developerContact ?? '—'}</DefinitionItem>
-                <DefinitionItem term="Model class">
-                  {modelClassLabel(card.modelClass)}
+                <DefinitionItem term={t('detail.developer')}>
+                  {card.modelDeveloper ?? '—'}
                 </DefinitionItem>
-                <DefinitionItem term="Version" mono>
+                <DefinitionItem term={t('detail.contact')}>
+                  {card.developerContact ?? '—'}
+                </DefinitionItem>
+                <DefinitionItem term={t('detail.modelClass')}>
+                  {modelClassText(t, card.modelClass)}
+                </DefinitionItem>
+                <DefinitionItem term={t('detail.version')} mono>
                   {card.versionMajorMinorPatch}
                 </DefinitionItem>
-                <DefinitionItem term="Medical purpose">
+                <DefinitionItem term={t('detail.medicalPurpose')}>
                   {ius.medicalPurpose === 'other' && ius.medicalPurposeOther
                     ? ius.medicalPurposeOther
-                    : humanise(ius.medicalPurpose)}
+                    : medicalPurposeText(t, ius.medicalPurpose)}
                 </DefinitionItem>
                 {ius.bodySystemOrSite ? (
-                  <DefinitionItem term="Body system or site">{ius.bodySystemOrSite}</DefinitionItem>
+                  <DefinitionItem term={t('detail.bodySystem')}>
+                    {ius.bodySystemOrSite}
+                  </DefinitionItem>
                 ) : null}
-                <DefinitionItem term="Training data from">
+                <DefinitionItem term={t('detail.trainingDataFrom')}>
                   {card.trainingDataJurisdictions.length > 0
                     ? card.trainingDataJurisdictions.join(', ')
                     : '—'}
                 </DefinitionItem>
-                <DefinitionItem term="Regulatory approval">
+                <DefinitionItem term={t('detail.regulatoryApproval')}>
                   {approval ? (
                     <>
-                      {REGULATORY_STATUS_LABEL[approval.status]} · {approval.pathway}
+                      {regulatoryStatusText(t, approval.status)} · {approval.pathway}
                       {approval.jurisdictions.length > 0
                         ? ` · ${approval.jurisdictions.join(', ')}`
                         : null}
@@ -172,12 +188,14 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
                       ) : null}
                     </>
                   ) : (
-                    'Not declared'
+                    t('detail.notDeclared')
                   )}
                 </DefinitionItem>
-                <DefinitionItem term="Architecture">{card.architectureSummary}</DefinitionItem>
+                <DefinitionItem term={t('detail.architecture')}>
+                  {card.architectureSummary}
+                </DefinitionItem>
                 {card.biasMitigationApproaches ? (
-                  <DefinitionItem term="Bias mitigation">
+                  <DefinitionItem term={t('detail.biasMitigation')}>
                     {card.biasMitigationApproaches}
                   </DefinitionItem>
                 ) : null}
@@ -189,11 +207,8 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
             <ModelFactsLabelCard label={label} />
           ) : (
             <Alert tone="info">
-              <AlertTitle>Model Facts label unavailable</AlertTitle>
-              <AlertDescription>
-                The label for this model could not be generated right now. The card details are
-                still accurate.
-              </AlertDescription>
+              <AlertTitle>{t('detail.factsUnavailableTitle')}</AlertTitle>
+              <AlertDescription>{t('detail.factsUnavailableBody')}</AlertDescription>
             </Alert>
           )}
         </Section>

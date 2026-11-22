@@ -1,3 +1,4 @@
+import { useTranslations } from 'next-intl';
 import { DefinitionItem, DefinitionList } from '@oci/ui';
 
 /**
@@ -21,18 +22,16 @@ import { DefinitionItem, DefinitionList } from '@oci/ui';
 
 const KNOWN_PREFIXES = ['sc', 'cr', 'bio', 'rai', 'dct', 'prov', 'odrl', 'duo', 'foaf'] as const;
 
+/** Names of vocabularies, not translated; the descriptive groups are (see `groupLabel`). */
 const PREFIX_LABEL: Record<string, string> = {
   sc: 'schema.org',
   cr: 'Croissant',
   bio: 'BioCroissant',
-  rai: 'Responsible AI',
   dct: 'Dublin Core',
   prov: 'PROV-O',
   odrl: 'ODRL',
   duo: 'DUO',
   foaf: 'FOAF',
-  '@': 'JSON-LD framing',
-  other: 'Other',
 };
 
 function bucket(key: string): string {
@@ -69,9 +68,17 @@ function ValueCell({ value }: { value: unknown }) {
 }
 
 export function ManifestFullView({ manifest }: { manifest: unknown }) {
+  const t = useTranslations('Dataset');
   if (!manifest || typeof manifest !== 'object') {
-    return <p className="text-sm text-[var(--color-muted-foreground)]">No manifest available.</p>;
+    return <p className="text-sm text-[var(--color-muted-foreground)]">{t('manifest.none')}</p>;
   }
+  const groupLabel = (b: string): string => {
+    if (b === '@') return t('manifest.groups.framing');
+    if (b === 'rai') return t('manifest.groups.rai');
+    if (b === 'other') return t('manifest.groups.other');
+    // eslint-disable-next-line security/detect-object-injection
+    return PREFIX_LABEL[b] ?? b;
+  };
   const entries = Object.entries(manifest as Record<string, unknown>);
   // Filter out empty values (null, "", []) so the view doesn't drown
   // the host in "—" rows.
@@ -95,7 +102,7 @@ export function ManifestFullView({ manifest }: { manifest: unknown }) {
   const displayOrder = ['@', ...KNOWN_PREFIXES, 'other'].filter((b) => groups.has(b));
 
   if (displayOrder.length === 0) {
-    return <p className="text-sm text-[var(--color-muted-foreground)]">Manifest is empty.</p>;
+    return <p className="text-sm text-[var(--color-muted-foreground)]">{t('manifest.empty')}</p>;
   }
 
   return (
@@ -108,8 +115,7 @@ export function ManifestFullView({ manifest }: { manifest: unknown }) {
               id={`group-${b}`}
               className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]"
             >
-              {/* eslint-disable-next-line security/detect-object-injection */}
-              {PREFIX_LABEL[b] ?? b}
+              {groupLabel(b)}
             </h3>
             <DefinitionList>
               {groupEntries.map(([k, v]) => (

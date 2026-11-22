@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useRef, type ChangeEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Input, Textarea } from '@oci/ui';
 import { publishVersionAction, type PublishVersionState } from './actions';
 
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function PublishVersionForm({ slug, suggestedVersion }: Props) {
+  const t = useTranslations('Publish');
   const [state, action, pending] = useActionState(publishVersionAction, initial);
   const manifestRef = useRef<HTMLTextAreaElement>(null);
   const errorRef = useRef<HTMLDivElement>(null);
@@ -61,17 +63,17 @@ export function PublishVersionForm({ slug, suggestedVersion }: Props) {
       ) : state.status === 'error' ? (
         <div ref={errorRef} tabIndex={-1}>
           <Alert tone="danger">
-            <AlertTitle as="h2">Could not publish</AlertTitle>
+            <AlertTitle as="h2">{t('pasteForm.couldNotPublish')}</AlertTitle>
             <AlertDescription>{state.message}</AlertDescription>
           </Alert>
         </div>
       ) : null}
 
       <Field
-        label="Version"
+        label={t('pasteForm.version')}
         htmlFor="field-version"
         required
-        hint="Semver MAJOR.MINOR.PATCH (e.g. 1.0.0). Pre-release suffixes allowed."
+        hint={t('pasteForm.versionHint')}
         error={versionError}
       >
         <Input
@@ -87,9 +89,9 @@ export function PublishVersionForm({ slug, suggestedVersion }: Props) {
       </Field>
 
       <Field
-        label="Notes"
+        label={t('pasteForm.notes')}
         htmlFor="field-notes"
-        hint="Optional. What changed since the previous version?"
+        hint={t('pasteForm.notesHint')}
         error={notesError}
       >
         <Textarea
@@ -105,18 +107,18 @@ export function PublishVersionForm({ slug, suggestedVersion }: Props) {
 
       <div className="space-y-1.5">
         <label htmlFor="manifest" className="block text-sm font-medium">
-          Croissant manifest
+          {t('pasteForm.manifest')}
           <span aria-hidden="true" className="ms-0.5 text-[var(--color-danger)]">
             *
           </span>
-          <span className="sr-only"> required</span>
+          <span className="sr-only"> {t('pasteForm.required')}</span>
         </label>
         <p className="text-xs text-[var(--color-muted-foreground)]">
-          Paste the JSON-LD here, or upload a <code>.json</code> file to populate the field.
+          {t.rich('pasteForm.manifestHint', { code: (chunks) => <code>{chunks}</code> })}
         </p>
         <input
           type="file"
-          aria-label="Upload manifest from .json file"
+          aria-label={t('pasteForm.uploadManifest')}
           accept="application/json,application/ld+json,.json"
           onChange={onPickFile}
           className="block text-xs file:me-3 file:rounded-md file:border-0 file:bg-[var(--color-subtle)] file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-[var(--color-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
@@ -142,7 +144,7 @@ export function PublishVersionForm({ slug, suggestedVersion }: Props) {
 
       <div className="flex items-center justify-end gap-2 pt-2">
         <Button type="submit" disabled={pending}>
-          {pending ? 'Validating…' : 'Validate & publish'}
+          {pending ? t('pasteForm.validating') : t('pasteForm.submit')}
         </Button>
       </div>
     </form>
@@ -154,9 +156,12 @@ function ValidationPanel({
 }: {
   state: Extract<PublishVersionState, { status: 'invalid-manifest' }>;
 }) {
+  const t = useTranslations('Publish');
   return (
     <Alert tone="danger">
-      <AlertTitle as="h2">Manifest validation failed ({state.conformance})</AlertTitle>
+      <AlertTitle as="h2">
+        {t('pasteForm.validationFailed', { conformance: state.conformance })}
+      </AlertTitle>
       <AlertDescription>
         <p className="mb-2">{state.message}</p>
         <ul className="space-y-1.5 text-xs">

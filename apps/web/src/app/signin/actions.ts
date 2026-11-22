@@ -1,6 +1,7 @@
 'use server';
 
 import { AuthError } from 'next-auth';
+import { getLocale, getTranslations } from 'next-intl/server';
 import { signIn } from '../../auth';
 
 /**
@@ -32,7 +33,8 @@ export async function localSignInAction(
     // actually happens — only "real" auth errors stay caught here.
     if (err instanceof Error && err.message === 'NEXT_REDIRECT') throw err;
     if (err instanceof AuthError) {
-      return { status: 'error', message: 'Sign-in failed: ' + err.type };
+      const t = await getTranslations('SignIn.local');
+      return { status: 'error', message: t('failedMessage', { type: err.type }) };
     }
     throw err;
   }
@@ -43,8 +45,18 @@ export async function localSignInAction(
  * deployed envs. NextAuth handles the OAuth redirect to Cognito's
  * hosted UI; the user comes back to `/api/auth/callback/cognito`
  * which then 302s to `callbackUrl`.
+ *
+ * The managed login pages open in the interface language (#654): the
+ * third argument becomes query parameters on `/oauth2/authorize`, and
+ * Cognito reads `lang` there ("The language that you want to display
+ * user-interactive pages in. Managed login pages can be localized, but
+ * hosted UI (classic) pages can't." — Cognito developer guide,
+ * authorization endpoint). `en` and `fr` are both on its list. The pool
+ * domains use managed login (identity stack); a classic hosted UI would
+ * ignore the parameter and stay in English.
  */
 export async function cognitoSignInAction(formData: FormData): Promise<void> {
   const callbackUrl = String(formData.get('callbackUrl') ?? '/dashboard');
-  await signIn('cognito', { redirectTo: callbackUrl });
+  const lang = await getLocale();
+  await signIn('cognito', { redirectTo: callbackUrl }, { lang });
 }

@@ -1,6 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
+import type { AppLocale } from '../../../../i18n/locales';
+import { zodParseParams } from '../../../../i18n/zod';
 import {
   Alert,
   AlertDescription,
@@ -28,7 +31,12 @@ import {
   type PublishVersionState,
 } from './actions';
 import { describeProvenanceIssue, isProvenanceCode } from './provenance-issues';
-import { ProvenanceStep, summarisePreflight, useProvenancePreflight } from './provenance-step';
+import {
+  ProvenanceStep,
+  summarisePreflight,
+  useProvenanceHeadline,
+  useProvenancePreflight,
+} from './provenance-step';
 
 /**
  * Croissant manifest wizard (PR K, #90).
@@ -72,26 +80,24 @@ type StepId =
   | 'distributions'
   | 'review';
 
-const STEPS: Array<{ id: StepId; label: string; subtitle: string }> = [
-  {
-    id: 'identification',
-    label: 'Identification',
-    subtitle: 'Name, description, license, version, date',
-  },
-  { id: 'creators', label: 'Creators', subtitle: 'Authors and contributing organisations' },
-  {
-    id: 'biomedical',
-    label: 'Biomedical context',
-    subtitle: 'Modality, body region, condition, anonymisation (BioCroissant)',
-  },
-  {
-    id: 'provenance',
-    label: 'Provenance',
-    subtitle: 'Origin, processing, ethics approval, labelling protocol (bio-prov)',
-  },
-  { id: 'data-use', label: 'Data use', subtitle: 'GA4GH DUO consent codes' },
-  { id: 'distributions', label: 'Distributions', subtitle: 'Files and download URLs' },
-  { id: 'review', label: 'Review & publish', subtitle: 'Verify the generated Croissant manifest' },
+/** The step's message group under `Publish.steps` (its label and subtitle). */
+type StepKey =
+  | 'identification'
+  | 'creators'
+  | 'biomedical'
+  | 'provenance'
+  | 'dataUse'
+  | 'distributions'
+  | 'review';
+
+const STEPS: Array<{ id: StepId; key: StepKey }> = [
+  { id: 'identification', key: 'identification' },
+  { id: 'creators', key: 'creators' },
+  { id: 'biomedical', key: 'biomedical' },
+  { id: 'provenance', key: 'provenance' },
+  { id: 'data-use', key: 'dataUse' },
+  { id: 'distributions', key: 'distributions' },
+  { id: 'review', key: 'review' },
 ];
 
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -146,11 +152,11 @@ interface StepIssues {
   unscoped: string[];
 }
 
-function validateStep(input: ManifestWizardInput, step: StepId): StepIssues {
+function validateStep(input: ManifestWizardInput, step: StepId, locale: AppLocale): StepIssues {
   // STEP_FIELDS is a closed StepId-keyed map; the lookup is safe.
   // eslint-disable-next-line security/detect-object-injection
   const fields = new Set(STEP_FIELDS[step] as string[]);
-  const result = ManifestWizardInputSchema.safeParse(input);
+  const result = ManifestWizardInputSchema.safeParse(input, zodParseParams(locale));
   const byField = new Map<string, string>();
   const unscoped: string[] = [];
   if (result.success) return { byField, unscoped };
@@ -168,6 +174,7 @@ function validateStep(input: ManifestWizardInput, step: StepId): StepIssues {
 }
 
 export function ManifestWizard({ slug, suggestedVersion, visibility, accessTier }: Props) {
+  const t = useTranslations('Publish');
   const [input, setInput] = useState<ManifestWizardInput>(() => defaultInput(suggestedVersion));
   const [stepId, setStepId] = useState<StepId>('identification');
   const [reachedIndex, setReachedIndex] = useState(0);
@@ -175,7 +182,8 @@ export function ManifestWizard({ slug, suggestedVersion, visibility, accessTier 
   const [submitting, setSubmitting] = useState(false);
 
   const stepIndex = STEPS.findIndex((s) => s.id === stepId);
-  const issues = useMemo(() => validateStep(input, stepId), [input, stepId]);
+  const locale = useLocale();
+  const issues = useMemo(() => validateStep(input, stepId, locale), [input, stepId, locale]);
 
   // Live JSON-LD preview. Recomputed on every input change — cheap.
   const generatedManifest = useMemo(() => manifestWizardInputToCroissant(input), [input]);
@@ -236,6 +244,7 @@ export function ManifestWizard({ slug, suggestedVersion, visibility, accessTier 
   }
 
   const step = STEPS.at(stepIndex);
+  const nextStepEntry = STEPS.at(stepIndex + 1);
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[17rem_minmax(0,1fr)]">
@@ -244,15 +253,19 @@ export function ManifestWizard({ slug, suggestedVersion, visibility, accessTier 
       <div className="min-w-0 max-w-3xl space-y-6">
         <div className="space-y-1">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Step {stepIndex + 1} of {STEPS.length}
+            {t('wizard.stepOf', { current: stepIndex + 1, total: STEPS.length })}
           </p>
-          <h2 className="text-2xl font-semibold tracking-tight">{step?.label}</h2>
-          <p className="text-sm text-[var(--color-muted-foreground)]">{step?.subtitle}</p>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            {step ? t(`steps.${step.key}.label`) : null}
+          </h2>
+          <p className="text-sm text-[var(--color-muted-foreground)]">
+            {step ? t(`steps.${step.key}.subtitle`) : null}
+          </p>
         </div>
 
         {submitState.status === 'invalid-manifest' ? (
           <Alert tone="danger">
-            <AlertTitle as="h2">Manifest validation failed</AlertTitle>
+            <AlertTitle as="h2">{t('wizard.validationFailed')}</AlertTitle>
             <AlertDescription>
               <p className="mb-2">{submitState.message}</p>
               <ul className="ms-4 list-disc space-y-1 text-xs">
@@ -267,7 +280,7 @@ export function ManifestWizard({ slug, suggestedVersion, visibility, accessTier 
         ) : null}
         {submitState.status === 'error' ? (
           <Alert tone="danger">
-            <AlertTitle as="h2">Could not publish</AlertTitle>
+            <AlertTitle as="h2">{t('wizard.couldNotPublish')}</AlertTitle>
             <AlertDescription>{submitState.message}</AlertDescription>
           </Alert>
         ) : null}
@@ -311,7 +324,7 @@ export function ManifestWizard({ slug, suggestedVersion, visibility, accessTier 
         {stepId === 'review' ? null : (
           <details className="group rounded-md border border-[var(--color-border)]">
             <summary className="cursor-pointer select-none px-3 py-2 text-sm text-[var(--color-muted-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]">
-              Show the JSON-LD generated so far
+              {t('wizard.showJson')}
             </summary>
             <div className="border-t border-[var(--color-border)]">
               <PreviewPane manifest={generatedManifest} />
@@ -326,15 +339,17 @@ export function ManifestWizard({ slug, suggestedVersion, visibility, accessTier 
             onClick={prevStep}
             disabled={stepIndex === 0 || submitting}
           >
-            Back
+            {t('wizard.back')}
           </Button>
           {stepId !== 'review' ? (
             <Button type="button" size="lg" onClick={nextStep} disabled={!canAdvance}>
-              Next: {STEPS[stepIndex + 1]?.label}
+              {t('wizard.next', {
+                step: nextStepEntry ? t(`steps.${nextStepEntry.key}.label`) : '',
+              })}
             </Button>
           ) : (
             <Button type="button" size="lg" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? 'Publishing…' : 'Publish version'}
+              {submitting ? t('wizard.publishing') : t('wizard.publish')}
             </Button>
           )}
         </div>
@@ -359,8 +374,9 @@ function StepRail({
   reachedIndex: number;
   onSelect: (index: number) => void;
 }) {
+  const t = useTranslations('Publish');
   return (
-    <nav aria-label="Wizard steps" className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+    <nav aria-label={t('wizard.stepsLabel')} className="min-w-0 lg:sticky lg:top-24 lg:self-start">
       <ol className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0 lg:pb-0">
         {STEPS.map((s, i) => {
           const state = i === stepIndex ? 'current' : i <= reachedIndex ? 'done' : 'todo';
@@ -381,9 +397,9 @@ function StepRail({
           );
           const labels = (
             <span className="min-w-0">
-              <span className="block text-sm font-medium">{s.label}</span>
+              <span className="block text-sm font-medium">{t(`steps.${s.key}.label`)}</span>
               <span className="hidden text-xs text-[var(--color-muted-foreground)] lg:block">
-                {s.subtitle}
+                {t(`steps.${s.key}.subtitle`)}
               </span>
             </span>
           );
@@ -430,10 +446,18 @@ interface StepProps {
 }
 
 function IdentificationStep({ input, issues, patch }: StepProps) {
+  const t = useTranslations('Publish');
+  const tCommon = useTranslations('Common');
   return (
     <fieldset className="space-y-4">
-      <legend className="sr-only">Identification</legend>
-      <Field label="Dataset name" htmlFor="wiz-name" required error={issues.byField.get('name')}>
+      <legend className="sr-only">{t('steps.identification.label')}</legend>
+      <Field
+        label={t('identification.name')}
+        htmlFor="wiz-name"
+        required
+        requiredLabel={tCommon('required')}
+        error={issues.byField.get('name')}
+      >
         <Input
           id="wiz-name"
           required
@@ -442,10 +466,11 @@ function IdentificationStep({ input, issues, patch }: StepProps) {
         />
       </Field>
       <Field
-        label="Description"
+        label={t('identification.description')}
         htmlFor="wiz-description"
         required
-        hint="What's in the dataset, who collected it, and why."
+        requiredLabel={tCommon('required')}
+        hint={t('identification.descriptionHint')}
         error={issues.byField.get('description')}
       >
         <Textarea
@@ -457,10 +482,11 @@ function IdentificationStep({ input, issues, patch }: StepProps) {
         />
       </Field>
       <Field
-        label="License"
+        label={t('identification.license')}
         htmlFor="wiz-license"
         required
-        hint="SPDX URL or licence name (e.g. https://creativecommons.org/licenses/by/4.0/)."
+        requiredLabel={tCommon('required')}
+        hint={t('identification.licenseHint')}
         error={issues.byField.get('license')}
       >
         <Input
@@ -471,10 +497,11 @@ function IdentificationStep({ input, issues, patch }: StepProps) {
         />
       </Field>
       <Field
-        label="Homepage"
+        label={t('identification.homepage')}
         htmlFor="wiz-homepage"
         required
-        hint="The dataset's canonical landing page (Croissant 1.0 requires this)."
+        requiredLabel={tCommon('required')}
+        hint={t('identification.homepageHint')}
         error={issues.byField.get('homepage')}
       >
         <Input
@@ -486,9 +513,9 @@ function IdentificationStep({ input, issues, patch }: StepProps) {
         />
       </Field>
       <Field
-        label="Cite as"
+        label={t('identification.citeAs')}
         htmlFor="wiz-citeAs"
-        hint="Optional. The citation string downstream consumers should use."
+        hint={t('identification.citeAsHint')}
         error={issues.byField.get('citeAs')}
       >
         <Textarea
@@ -500,10 +527,11 @@ function IdentificationStep({ input, issues, patch }: StepProps) {
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field
-          label="Version"
+          label={t('identification.version')}
           htmlFor="wiz-version"
           required
-          hint="Semver MAJOR.MINOR.PATCH."
+          requiredLabel={tCommon('required')}
+          hint={t('identification.versionHint')}
           error={issues.byField.get('version')}
         >
           <Input
@@ -514,10 +542,11 @@ function IdentificationStep({ input, issues, patch }: StepProps) {
           />
         </Field>
         <Field
-          label="Date published"
+          label={t('identification.datePublished')}
           htmlFor="wiz-datePublished"
           required
-          hint="YYYY-MM-DD."
+          requiredLabel={tCommon('required')}
+          hint={t('identification.datePublishedHint')}
           error={issues.byField.get('datePublished')}
         >
           <Input
@@ -534,6 +563,7 @@ function IdentificationStep({ input, issues, patch }: StepProps) {
 }
 
 function CreatorsStep({ input, issues, patch }: StepProps) {
+  const t = useTranslations('Publish');
   function update(i: number, change: Partial<ManifestWizardCreator>) {
     const next = input.creators.map((c, j) => (j === i ? { ...c, ...change } : c));
     patch('creators', next);
@@ -550,10 +580,8 @@ function CreatorsStep({ input, issues, patch }: StepProps) {
   }
   return (
     <fieldset className="space-y-3">
-      <legend className="sr-only">Creators</legend>
-      <p className="text-xs text-[var(--color-muted-foreground)]">
-        Authors and contributing organisations. At least one is required.
-      </p>
+      <legend className="sr-only">{t('steps.creators.label')}</legend>
+      <p className="text-xs text-[var(--color-muted-foreground)]">{t('creators.intro')}</p>
       {issues.byField.get('creators') ? (
         <p className="text-xs text-[var(--color-danger)]">{issues.byField.get('creators')}</p>
       ) : null}
@@ -563,7 +591,7 @@ function CreatorsStep({ input, issues, patch }: StepProps) {
             key={i}
             className="grid gap-3 rounded-md border border-[var(--color-border)] p-4 sm:grid-cols-[11rem_minmax(0,1fr)_auto] sm:items-start"
           >
-            <Field label={`Type ${i + 1}`} htmlFor={`wiz-creator-${i}-type`}>
+            <Field label={t('creators.type', { number: i + 1 })} htmlFor={`wiz-creator-${i}-type`}>
               <select
                 id={`wiz-creator-${i}-type`}
                 value={c.type}
@@ -572,12 +600,12 @@ function CreatorsStep({ input, issues, patch }: StepProps) {
                 }
                 className="block h-10 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
               >
-                <option value="Person">Person</option>
-                <option value="Organization">Organization</option>
+                <option value="Person">{t('creators.person')}</option>
+                <option value="Organization">{t('creators.organization')}</option>
               </select>
             </Field>
             <Field
-              label="Name"
+              label={t('creators.name')}
               htmlFor={`wiz-creator-${i}-name`}
               error={issues.byField.get(`creators.${i}.name`)}
             >
@@ -594,54 +622,55 @@ function CreatorsStep({ input, issues, patch }: StepProps) {
                 size="md"
                 onClick={() => remove(i)}
                 disabled={input.creators.length === 1}
-                aria-label={`Remove creator ${i + 1}`}
+                aria-label={t('creators.removeLabel', { number: i + 1 })}
               >
-                Remove
+                {t('creators.remove')}
               </Button>
             </div>
           </li>
         ))}
       </ul>
       <Button type="button" variant="outline" size="sm" onClick={add}>
-        Add creator
+        {t('creators.add')}
       </Button>
     </fieldset>
   );
 }
 
 function BiomedicalStep({ input, issues, patch }: StepProps) {
+  const t = useTranslations('Publish');
   return (
     <fieldset className="space-y-4">
-      <legend className="sr-only">Biomedical context (optional)</legend>
-      <p className="text-xs text-[var(--color-muted-foreground)]">
-        BioCroissant fields. Helps researchers find datasets matching their study population, and
-        improves search relevance. Skip the ones that don't apply.
-      </p>
+      <legend className="sr-only">{t('biomedical.legend')}</legend>
+      <p className="text-xs text-[var(--color-muted-foreground)]">{t('biomedical.intro')}</p>
       <CommaList
-        label="Imaging modality"
-        hint="One per comma. e.g. X-ray, CT, MRI, ultrasound, fundus."
+        id="wiz-list-imagingModality"
+        label={t('biomedical.imagingModality')}
+        hint={t('biomedical.imagingModalityHint')}
         items={input.imagingModality}
         onChange={(items) => patch('imagingModality', items)}
         error={issues.byField.get('imagingModality')}
       />
       <CommaList
-        label="Body region"
-        hint="One per comma. e.g. chest, retina, abdomen."
+        id="wiz-list-bodyRegion"
+        label={t('biomedical.bodyRegion')}
+        hint={t('biomedical.bodyRegionHint')}
         items={input.bodyRegion}
         onChange={(items) => patch('bodyRegion', items)}
         error={issues.byField.get('bodyRegion')}
       />
       <CommaList
-        label="Disease / condition"
-        hint="One per comma. e.g. pneumonia, diabetic retinopathy."
+        id="wiz-list-diseaseCondition"
+        label={t('biomedical.diseaseCondition')}
+        hint={t('biomedical.diseaseConditionHint')}
         items={input.diseaseCondition}
         onChange={(items) => patch('diseaseCondition', items)}
         error={issues.byField.get('diseaseCondition')}
       />
       <Field
-        label="Anonymisation level"
+        label={t('biomedical.anonymizationLevel')}
         htmlFor="wiz-anon"
-        hint="How identifiable individuals in this dataset are. The Provenance step asks what was done to reach this level."
+        hint={t('biomedical.anonymizationLevelHint')}
       >
         <select
           id="wiz-anon"
@@ -654,11 +683,11 @@ function BiomedicalStep({ input, issues, patch }: StepProps) {
           }
           className="block h-10 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
         >
-          <option value="">— not declared —</option>
-          <option value="ANONYMIZED">ANONYMIZED — not re-identifiable</option>
-          <option value="DEIDENTIFIED">DEIDENTIFIED — direct identifiers removed</option>
-          <option value="LIMITED">LIMITED — limited data set (dates, locations kept)</option>
-          <option value="IDENTIFIED">IDENTIFIED — direct identifiers present</option>
+          <option value="">{t('biomedical.notDeclared')}</option>
+          <option value="ANONYMIZED">{`ANONYMIZED — ${t('biomedical.anonymization.ANONYMIZED')}`}</option>
+          <option value="DEIDENTIFIED">{`DEIDENTIFIED — ${t('biomedical.anonymization.DEIDENTIFIED')}`}</option>
+          <option value="LIMITED">{`LIMITED — ${t('biomedical.anonymization.LIMITED')}`}</option>
+          <option value="IDENTIFIED">{`IDENTIFIED — ${t('biomedical.anonymization.IDENTIFIED')}`}</option>
         </select>
       </Field>
     </fieldset>
@@ -670,6 +699,7 @@ function DataUseStep({
   patch,
   visibility,
 }: StepProps & { visibility: 'PUBLIC' | 'RESTRICTED' | 'PRIVATE' }) {
+  const t = useTranslations('Publish');
   const required = visibility !== 'PUBLIC';
   function toggle(id: DuoTermId, checked: boolean) {
     const next = checked
@@ -679,34 +709,32 @@ function DataUseStep({
   }
   return (
     <fieldset className="space-y-3">
-      <legend className="sr-only">Data use (DUO)</legend>
+      <legend className="sr-only">{t('dataUse.legend')}</legend>
       <p className="text-xs text-[var(--color-muted-foreground)]">
-        GA4GH Data Use Ontology terms. Pick a permission (one) and any restrictions / modifiers that
-        apply. Hosts of {visibility !== 'PUBLIC' ? <strong>RESTRICTED / PRIVATE</strong> : 'PUBLIC'}{' '}
-        datasets must declare at least one term — the publish endpoint fail-closes without it.
+        {required
+          ? t.rich('dataUse.introRestricted', { strong: (chunks) => <strong>{chunks}</strong> })
+          : t('dataUse.introPublic')}
       </p>
       {required && input.duoTerms.length === 0 ? (
         <Alert tone="warning">
-          <AlertTitle as="h3">At least one DUO term required</AlertTitle>
-          <AlertDescription>
-            This dataset is non-PUBLIC. Pick at least one term below.
-          </AlertDescription>
+          <AlertTitle as="h3">{t('dataUse.requiredTitle')}</AlertTitle>
+          <AlertDescription>{t('dataUse.requiredBody')}</AlertDescription>
         </Alert>
       ) : null}
       <DuoCategorySection
-        title="Permissions (pick one)"
+        title={t('dataUse.permissions')}
         terms={DUO_REGISTRY.filter((t) => t.category === 'permission')}
         selected={new Set(input.duoTerms)}
         toggle={toggle}
       />
       <DuoCategorySection
-        title="Restrictions"
+        title={t('dataUse.restrictions')}
         terms={DUO_REGISTRY.filter((t) => t.category === 'restriction')}
         selected={new Set(input.duoTerms)}
         toggle={toggle}
       />
       <DuoCategorySection
-        title="Modifiers"
+        title={t('dataUse.modifiers')}
         terms={DUO_REGISTRY.filter((t) => t.category === 'modifier')}
         selected={new Set(input.duoTerms)}
         toggle={toggle}
@@ -758,6 +786,8 @@ function DuoCategorySection({ title, terms, selected, toggle }: DuoSectionProps)
 }
 
 function DistributionsStep({ input, issues, patch }: StepProps) {
+  const t = useTranslations('Publish');
+  const tCommon = useTranslations('Common');
   function update(i: number, change: Partial<ManifestWizardDistribution>) {
     const next = input.distributions.map((d, j) => (j === i ? { ...d, ...change } : d));
     patch('distributions', next);
@@ -776,12 +806,9 @@ function DistributionsStep({ input, issues, patch }: StepProps) {
   }
   return (
     <fieldset className="space-y-3">
-      <legend className="sr-only">Distributions</legend>
+      <legend className="sr-only">{t('steps.distributions.label')}</legend>
       <p className="text-xs text-[var(--color-muted-foreground)]">
-        Files in this version. Each entry becomes a Croissant <code>FileObject</code>. For
-        platform-hosted bytes, publish a first version, upload the file via the Upload card on the
-        publish page, and paste the resulting <code>contentUrl</code> here when you publish the next
-        version.
+        {t.rich('distributions.intro', { code: (chunks) => <code>{chunks}</code> })}
       </p>
       {issues.byField.get('distributions') ? (
         <p className="text-xs text-[var(--color-danger)]">{issues.byField.get('distributions')}</p>
@@ -791,10 +818,11 @@ function DistributionsStep({ input, issues, patch }: StepProps) {
           <li key={i} className="space-y-3 rounded-md border border-[var(--color-border)] p-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field
-                label="Croissant @id"
+                label={t('distributions.croissantId')}
                 htmlFor={`wiz-dist-${i}-id`}
                 required
-                hint="URL-safe identifier for this file inside the manifest."
+                requiredLabel={tCommon('required')}
+                hint={t('distributions.croissantIdHint')}
                 error={issues.byField.get(`distributions.${i}.croissantId`)}
               >
                 <Input
@@ -804,9 +832,10 @@ function DistributionsStep({ input, issues, patch }: StepProps) {
                 />
               </Field>
               <Field
-                label="File name"
+                label={t('distributions.fileName')}
                 htmlFor={`wiz-dist-${i}-name`}
                 required
+                requiredLabel={tCommon('required')}
                 error={issues.byField.get(`distributions.${i}.name`)}
               >
                 <Input
@@ -818,9 +847,10 @@ function DistributionsStep({ input, issues, patch }: StepProps) {
             </div>
             <div className="grid gap-3 sm:grid-cols-[12rem_1fr]">
               <Field
-                label="Encoding format"
+                label={t('distributions.encodingFormat')}
                 htmlFor={`wiz-dist-${i}-fmt`}
                 required
+                requiredLabel={tCommon('required')}
                 error={issues.byField.get(`distributions.${i}.encodingFormat`)}
               >
                 <Input
@@ -830,10 +860,11 @@ function DistributionsStep({ input, issues, patch }: StepProps) {
                 />
               </Field>
               <Field
-                label="Content URL"
+                label={t('distributions.contentUrl')}
                 htmlFor={`wiz-dist-${i}-url`}
                 required
-                hint="Upstream URL or platform-hosted /v2/catalog/datasets/.../download path."
+                requiredLabel={tCommon('required')}
+                hint={t('distributions.contentUrlHint')}
                 error={issues.byField.get(`distributions.${i}.contentUrl`)}
               >
                 <Input
@@ -849,16 +880,16 @@ function DistributionsStep({ input, issues, patch }: StepProps) {
                 variant="outline"
                 size="sm"
                 onClick={() => remove(i)}
-                aria-label={`Remove distribution ${i + 1}`}
+                aria-label={t('distributions.removeLabel', { number: i + 1 })}
               >
-                Remove
+                {t('distributions.remove')}
               </Button>
             </div>
           </li>
         ))}
       </ul>
       <Button type="button" variant="outline" size="sm" onClick={add}>
-        Add distribution
+        {t('distributions.add')}
       </Button>
     </fieldset>
   );
@@ -875,30 +906,27 @@ function ReviewStep({
   accessTier: AccessTier;
   preflight: ProvenancePreflightState;
 }) {
+  const t = useTranslations('Publish');
   const { errors, warnings } = summarisePreflight(preflight);
   return (
     <div className="space-y-4">
       <Alert>
-        <AlertTitle as="h2">Ready to publish?</AlertTitle>
-        <AlertDescription>
-          The platform validates the manifest below against Croissant 1.1 + RAI + BioCroissant + the
-          OCI publish-time checks (e.g. DUO required for non-PUBLIC). The generated JSON-LD is
-          below; you can copy it and use the paste form for further edits if needed.
-        </AlertDescription>
+        <AlertTitle as="h2">{t('review.readyTitle')}</AlertTitle>
+        <AlertDescription>{t('review.readyBody')}</AlertDescription>
       </Alert>
       <dl className="grid grid-cols-[10rem_1fr] gap-y-2 text-sm">
-        <dt className="text-[var(--color-muted-foreground)]">Name</dt>
+        <dt className="text-[var(--color-muted-foreground)]">{t('review.name')}</dt>
         <dd className="font-medium">{input.name}</dd>
-        <dt className="text-[var(--color-muted-foreground)]">Version</dt>
+        <dt className="text-[var(--color-muted-foreground)]">{t('review.version')}</dt>
         <dd className="font-mono">v{input.version}</dd>
-        <dt className="text-[var(--color-muted-foreground)]">License</dt>
+        <dt className="text-[var(--color-muted-foreground)]">{t('review.license')}</dt>
         <dd className="font-mono break-all text-xs">{input.license}</dd>
-        <dt className="text-[var(--color-muted-foreground)]">Creators</dt>
+        <dt className="text-[var(--color-muted-foreground)]">{t('review.creators')}</dt>
         <dd>{input.creators.length}</dd>
-        <dt className="text-[var(--color-muted-foreground)]">DUO terms</dt>
+        <dt className="text-[var(--color-muted-foreground)]">{t('review.duoTerms')}</dt>
         <dd>
           {input.duoTerms.length === 0 ? (
-            <Badge tone="warning">none</Badge>
+            <Badge tone="warning">{t('review.none')}</Badge>
           ) : (
             <span className="flex flex-wrap gap-1">
               {input.duoTerms.map((id) => {
@@ -912,27 +940,31 @@ function ReviewStep({
             </span>
           )}
         </dd>
-        <dt className="text-[var(--color-muted-foreground)]">Distributions</dt>
+        <dt className="text-[var(--color-muted-foreground)]">{t('review.distributions')}</dt>
         <dd>{input.distributions.length}</dd>
-        <dt className="text-[var(--color-muted-foreground)]">Provenance</dt>
+        <dt className="text-[var(--color-muted-foreground)]">{t('review.provenance')}</dt>
         <dd>
           {preflight.status !== 'checked' ? (
-            <span className="text-[var(--color-muted-foreground)]">checking…</span>
+            <span className="text-[var(--color-muted-foreground)]">{t('review.checking')}</span>
           ) : errors === 0 && warnings === 0 ? (
-            <Badge tone="success">complete for {accessTier}</Badge>
+            <Badge tone="success">{t('review.complete', { accessTier })}</Badge>
           ) : (
             <span className="flex flex-wrap gap-1">
-              {errors > 0 ? <Badge tone="danger">{errors} required missing</Badge> : null}
-              {warnings > 0 ? <Badge tone="warning">{warnings} recommended missing</Badge> : null}
+              {errors > 0 ? (
+                <Badge tone="danger">{t('review.requiredMissing', { count: errors })}</Badge>
+              ) : null}
+              {warnings > 0 ? (
+                <Badge tone="warning">{t('review.recommendedMissing', { count: warnings })}</Badge>
+              ) : null}
             </span>
           )}
         </dd>
       </dl>
       <details className="rounded-md border border-[var(--color-border)] p-3">
-        <summary className="cursor-pointer text-sm font-medium">Show generated JSON-LD</summary>
+        <summary className="cursor-pointer text-sm font-medium">{t('review.showJson')}</summary>
         <pre
           tabIndex={0}
-          aria-label="Generated JSON-LD"
+          aria-label={t('review.jsonLabel')}
           className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all rounded bg-[var(--color-subtle)] p-3 font-mono text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
         >
           {JSON.stringify(manifest, null, 2)}
@@ -949,6 +981,7 @@ function ReviewStep({
  * everything else is the path + message, as before.
  */
 function SubmitIssue({ issue, accessTier }: { issue: ManifestIssue; accessTier: AccessTier }) {
+  const headlineOf = useProvenanceHeadline();
   if (isProvenanceCode(issue.code)) {
     const shaped = describeProvenanceIssue(
       {
@@ -961,7 +994,7 @@ function SubmitIssue({ issue, accessTier }: { issue: ManifestIssue; accessTier: 
     );
     return (
       <>
-        <span className="font-medium">{shaped.headline}</span>
+        <span className="font-medium">{headlineOf(shaped)}</span>
         <span className="block text-[var(--color-muted-foreground)]">{shaped.detail}</span>
       </>
     );
@@ -975,11 +1008,12 @@ function SubmitIssue({ issue, accessTier }: { issue: ManifestIssue; accessTier: 
 }
 
 function PreviewPane({ manifest }: { manifest: Record<string, unknown> }) {
+  const t = useTranslations('Publish');
   return (
-    <aside aria-label="Generated manifest">
+    <aside aria-label={t('preview.label')}>
       <div className="rounded-md bg-[var(--color-card)]">
         <header className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
-          <span className="text-xs font-medium">Generated JSON-LD</span>
+          <span className="text-xs font-medium">{t('preview.title')}</span>
           <Badge tone="neutral" className="font-mono">
             Croissant 1.1
           </Badge>
@@ -988,7 +1022,7 @@ function PreviewPane({ manifest }: { manifest: Record<string, unknown> }) {
             keyboard (axe scrollable-region-focusable). */}
         <pre
           tabIndex={0}
-          aria-label="Generated JSON-LD"
+          aria-label={t('preview.title')}
           className="max-h-[28rem] overflow-auto whitespace-pre-wrap break-all p-3 font-mono text-xs leading-relaxed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
         >
           {JSON.stringify(manifest, null, 2)}
@@ -1001,20 +1035,22 @@ function PreviewPane({ manifest }: { manifest: Record<string, unknown> }) {
 // --- Helpers ---------------------------------------------------------------
 
 interface CommaListProps {
+  /** The input's id: stable across interface languages, unlike the label. */
+  id: string;
   label: string;
   hint: string;
   items: string[];
   onChange: (next: string[]) => void;
   error?: string;
 }
-function CommaList({ label, hint, items, onChange, error }: CommaListProps) {
+function CommaList({ id, label, hint, items, onChange, error }: CommaListProps) {
   // Comma-separated string is the simplest list editor; full
   // tag-input UX is overkill for the wizard's v1.
   const value = items.join(', ');
   return (
-    <Field label={label} htmlFor={`wiz-list-${label}`} hint={hint} error={error}>
+    <Field label={label} htmlFor={id} hint={hint} error={error}>
       <Input
-        id={`wiz-list-${label}`}
+        id={id}
         value={value}
         onChange={(e) => {
           const parts = e.target.value
