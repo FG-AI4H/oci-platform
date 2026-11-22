@@ -6,7 +6,9 @@ import type {
   SubmissionMode,
   SubmissionStatus,
 } from '@oci/shared-types';
-import type { RouteReviewStatus } from '@oci/shared-types';
+import type { RouteReviewStatus, SubgroupField, SubgroupResults } from '@oci/shared-types';
+import { parseSubgroupConfig, parseSubgroupFields } from './subgroup-config.js';
+import type { SubgroupConfig } from './subgroup-scoring.js';
 import { PrismaService } from '../../prisma.service.js';
 import { SCORED_QUOTA_EXEMPT } from './submission-quota.js';
 
@@ -55,6 +57,8 @@ export interface SubmissionRow {
  */
 export interface SubmissionDetailRow extends SubmissionRow {
   mode: SubmissionMode;
+  /** Raw JSON as stored, already suppressed; the service parses it (#410). */
+  subgroupScores: unknown;
   /** Participant-facing failure text. Set only when FAILED. */
   error: string | null;
   /** Null for a row created without an identified participant. */
@@ -91,6 +95,8 @@ export interface EvaluationTaskWithSubmissionsRow {
    * `EvaluationTaskItemIdsRow`.
    */
   itemIds: string[];
+  /** The declared subgroup fields (#410). Public; the item map is not read here. */
+  subgroupFields: SubgroupField[];
   submissions: SubmissionRow[];
 }
 
@@ -102,6 +108,11 @@ export interface EvaluationTaskScoringRow {
   numClasses: number;
   referableThreshold: number;
   groundTruth: Record<string, number>;
+  /**
+   * Subgroup declaration and item map (#410), null when the task declares no
+   * field. Server-side only, like the ground truth it sits beside.
+   */
+  subgroups: SubgroupConfig | null;
 }
 
 /**
@@ -155,6 +166,8 @@ export interface SubmissionResultContextRow {
 export interface SubmissionResultUpdate {
   status: SubmissionStatus;
   scores: TaskKindScores | null;
+  /** Results by subgroup, already suppressed (#410). Null when none. */
+  subgroupScores: SubgroupResults | null;
   /** PARTICIPANT-FACING text only — never the worker's operator detail. */
   error: string | null;
   failureCode: string | null;
@@ -222,6 +235,7 @@ export class EvaluationRepository {
         createdAt: true,
         updatedAt: true,
         groundTruth: true,
+        subgroupFields: true,
         submissions: {
           orderBy: { createdAt: 'desc' },
           select: {
@@ -261,6 +275,7 @@ export class EvaluationRepository {
       // preserve insertion order, and a key set that reshuffles between calls
       // is a poor thing to diff a predictions file against.
       itemIds: Object.keys((t.groundTruth ?? {}) as Record<string, unknown>).sort(),
+      subgroupFields: parseSubgroupFields(t.subgroupFields),
       submissions: t.submissions.map((s) => ({
         id: s.id,
         methodName: s.methodName,
@@ -286,6 +301,8 @@ export class EvaluationRepository {
         numClasses: true,
         referableThreshold: true,
         groundTruth: true,
+        subgroupFields: true,
+        subgroupValues: true,
       },
     });
     if (!t) return null;
@@ -295,6 +312,11 @@ export class EvaluationRepository {
       numClasses: t.numClasses,
       referableThreshold: t.referableThreshold,
       groundTruth: t.groundTruth as unknown as Record<string, number>,
+      subgroups: parseSubgroupConfig(
+        t.subgroupFields,
+        t.subgroupValues,
+        Object.keys(t.groundTruth as Record<string, unknown>),
+      ),
     };
   }
 
@@ -395,6 +417,7 @@ export class EvaluationRepository {
         mode: true,
         status: true,
         scores: true,
+        subgroupScores: true,
         error: true,
         submittedBy: true,
         createdAt: true,
@@ -422,6 +445,7 @@ export class EvaluationRepository {
       mode: s.mode,
       status: s.status,
       scores: s.scores,
+      subgroupScores: s.subgroupScores,
       error: s.error,
       submittedBy: s.submittedBy,
       createdAt: s.createdAt,
@@ -458,6 +482,8 @@ export class EvaluationRepository {
             numClasses: true,
             referableThreshold: true,
             groundTruth: true,
+            subgroupFields: true,
+            subgroupValues: true,
           },
         },
       },
@@ -469,6 +495,11 @@ export class EvaluationRepository {
       numClasses: s.task.numClasses,
       referableThreshold: s.task.referableThreshold,
       groundTruth: s.task.groundTruth as unknown as Record<string, number>,
+      subgroups: parseSubgroupConfig(
+        s.task.subgroupFields,
+        s.task.subgroupValues,
+        Object.keys(s.task.groundTruth as Record<string, unknown>),
+      ),
     };
   }
 
@@ -509,6 +540,8 @@ export class EvaluationRepository {
     referableThreshold: number;
     positiveClassName: string | null;
     groundTruth: Record<string, number>;
+    /** Subgroup declaration and item map (#410), already validated. */
+    subgroups: SubgroupConfig | null;
   }): Promise<{ id: string; slug: string }> {
     return this.prisma.client.evaluationTask.create({
       data: {
@@ -520,6 +553,14 @@ export class EvaluationRepository {
         referableThreshold: data.referableThreshold,
         positiveClassName: data.positiveClassName,
         groundTruth: data.groundTruth as unknown as Prisma.InputJsonValue,
+        // Absent rather than `[]` / NULL when none: the column defaults are
+        // exactly "no subgroup field".
+        ...(data.subgroups !== null
+          ? {
+              subgroupFields: data.subgroups.fields as unknown as Prisma.InputJsonValue,
+              subgroupValues: data.subgroups.values as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
       },
       select: { id: true, slug: true },
     });
@@ -611,6 +652,8 @@ export class EvaluationRepository {
     submittedBy: string | null;
     status: SubmissionStatus;
     scores: TaskKindScores | null;
+    /** Results by subgroup, already suppressed (#410). Omitted or null when none. */
+    subgroupScores?: SubgroupResults | null;
     error: string | null;
     /** Route attribution (WP5 invariant 1). Null only for rows that predate it. */
     routeId?: string | null;
@@ -632,6 +675,9 @@ export class EvaluationRepository {
         // (avoids the DbNull / JsonNull distinction on a nullable Json col).
         ...(data.scores !== null
           ? { scores: data.scores as unknown as Prisma.InputJsonValue }
+          : {}),
+        ...(data.subgroupScores
+          ? { subgroupScores: data.subgroupScores as unknown as Prisma.InputJsonValue }
           : {}),
         routeId: data.routeId ?? null,
         routeVersion: data.routeVersion ?? null,
@@ -696,6 +742,9 @@ export class EvaluationRepository {
         // DbNull / JsonNull sidestep as `createSubmission`).
         ...(data.scores !== null
           ? { scores: data.scores as unknown as Prisma.InputJsonValue }
+          : {}),
+        ...(data.subgroupScores !== null
+          ? { subgroupScores: data.subgroupScores as unknown as Prisma.InputJsonValue }
           : {}),
       },
     });

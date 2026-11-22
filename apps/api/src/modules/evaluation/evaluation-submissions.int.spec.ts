@@ -481,5 +481,120 @@ describe.skipIf(!dockerAvailable)(
         ]);
       });
     });
+
+    describe('results by subgroup (#410)', () => {
+      const SLUG = 'int-410-subgroups';
+      // 64 items: site A 40, site B 20, site C 4. Site C is too small to publish,
+      // and site B must then go too, or C would be the total minus A and B.
+      const ids = Array.from({ length: 64 }, (_, i) => `s${String(i).padStart(2, '0')}`);
+      const siteOf = (i: number) => (i < 40 ? 'A' : i < 60 ? 'B' : 'C');
+      const groundTruth = Object.fromEntries(ids.map((id, i) => [id, i % 2]));
+      const subgroups = {
+        fields: [
+          {
+            key: 'site',
+            label: 'Site',
+            values: ['A', 'B', 'C'].map((v) => ({ value: v, label: `Site ${v}` })),
+          },
+          {
+            key: 'sex',
+            label: 'Sex',
+            values: [
+              { value: 'F', label: 'Female' },
+              { value: 'M', label: 'Male' },
+            ],
+          },
+        ],
+        values: Object.fromEntries(
+          ids.map((id, i) => [id, { site: siteOf(i), sex: i % 4 < 2 ? 'F' : 'M' }]),
+        ),
+      };
+      const createTask = (body: unknown) =>
+        app.inject({
+          method: 'POST',
+          url: '/v2/evaluation/tasks',
+          payload: body as Record<string, unknown>,
+          headers: bearer(ADMIN),
+        });
+
+      it('refuses a task whose map leaves an item without a value, naming no value', async () => {
+        const values: Record<string, Record<string, string>> = { ...subgroups.values };
+        delete values['s07'];
+        const res = await createTask({
+          slug: `${SLUG}-bad`,
+          name: 'Bad',
+          datasetSlug: 'int-410',
+          taskKind: 'CLASSIFICATION',
+          numClasses: 2,
+          referableThreshold: 1,
+          groundTruth,
+          subgroups: { ...subgroups, values },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.body).toContain('item \\"s07\\" has no subgroup values');
+        expect(await prisma.evaluationTask.count({ where: { slug: `${SLUG}-bad` } })).toBe(0);
+      });
+
+      it('creates a task with fields, scores by subgroup and publishes what was stored', async () => {
+        const created = await createTask({
+          slug: SLUG,
+          name: 'By site',
+          datasetSlug: 'int-410',
+          taskKind: 'CLASSIFICATION',
+          numClasses: 2,
+          referableThreshold: 1,
+          groundTruth,
+          subgroups,
+        });
+        expect(created.statusCode).toBe(201);
+        const stored = await prisma.evaluationTask.findUniqueOrThrow({ where: { slug: SLUG } });
+        expect(stored.subgroupValues).toEqual(subgroups.values);
+
+        // The task publishes the declaration, never which item has which value.
+        const task = await get(`/tasks/${SLUG}`);
+        expect(task.json<{ subgroupFields: unknown }>().subgroupFields).toEqual(subgroups.fields);
+        expect(task.body).not.toContain('"s07":{');
+        expect(task.body).not.toContain('subgroupValues');
+
+        // Wrong on every site-B item; right elsewhere.
+        const predictions = ids.map((id, i) => ({
+          imageId: id,
+          grade: siteOf(i) === 'B' ? 1 - (i % 2) : i % 2,
+        }));
+        const scored = await post(SLUG, { methodName: 'by site', predictions }, CAROL);
+        expect(scored.statusCode).toBe(201);
+        const id = scored.json<{ id: string }>().id;
+
+        const res = await get(`/tasks/${SLUG}/submissions/${id}`);
+        const detail = EvaluationSubmissionDetailSchema.parse(res.json());
+        const [site, sex] = detail.subgroups?.fields ?? [];
+        expect(site?.cells).toEqual([
+          {
+            status: 'REPORTED',
+            value: 'A',
+            label: 'Site A',
+            itemCount: 40,
+            scoredCount: 40,
+            metrics: { kind: 'CLASSIFICATION', accuracy: 1, balancedAccuracy: 1, macroF1: 1 },
+          },
+          { status: 'SUPPRESSED', value: 'B', label: 'Site B' },
+          { status: 'SUPPRESSED', value: 'C', label: 'Site C' },
+        ]);
+        expect(sex?.cells.map((c) => c.status)).toEqual(['REPORTED', 'REPORTED']);
+
+        // The row holds exactly what was published: no figure for site B or C.
+        const row = await prisma.submission.findUniqueOrThrow({ where: { id } });
+        expect(row.subgroupScores).toEqual(detail.subgroups);
+        expect(JSON.stringify(row.subgroupScores)).not.toMatch(/"value":"[BC]","label":"[^"]+","/);
+
+        // The submitter and an administrator read the same withheld groups.
+        for (const who of [CAROL, ADMIN]) {
+          const again = EvaluationSubmissionDetailSchema.parse(
+            (await get(`/tasks/${SLUG}/submissions/${id}`, who)).json(),
+          );
+          expect(again.subgroups).toEqual(detail.subgroups);
+        }
+      });
+    });
   },
 );

@@ -6,6 +6,34 @@ import { DatasetSlugSchema } from './slug.js';
 import type { DatasetSlug } from './slug.js';
 import { MAX_PREDICTION_ROWS, PredictionRowSchema } from './predictions-file.js';
 import { EvaluationTaskSlugSchema, SubmissionModeSchema } from './submission-validation.js';
+import {
+  SubgroupDeclarationSchema,
+  SubgroupFieldKeySchema,
+  SubgroupFieldSchema,
+  SubgroupValueCodeSchema,
+  subgroupDeclarationIssues,
+} from './evaluation-subgroups.js';
+
+// Subgroup fields of an evaluation task and their validation (#410, ADR-0030).
+export {
+  MAX_SUBGROUP_FIELDS,
+  MAX_SUBGROUP_VALUES,
+  MIN_SUBGROUP_CELL_SIZE,
+  SubgroupDeclarationSchema,
+  SubgroupFieldKeySchema,
+  SubgroupFieldSchema,
+  SubgroupFieldsSchema,
+  SubgroupItemValuesSchema,
+  SubgroupValueCodeSchema,
+  SubgroupValueSchema,
+  subgroupDeclarationIssues,
+} from './evaluation-subgroups.js';
+export type {
+  SubgroupDeclaration,
+  SubgroupField,
+  SubgroupItemValues,
+  SubgroupValue,
+} from './evaluation-subgroups.js';
 
 export { RegulatoryPathwaySchema } from './regulatory-pathway.js';
 export { DatasetSlugSchema } from './slug.js';
@@ -3872,6 +3900,128 @@ export const TaskKindScoresSchema = z.discriminatedUnion('kind', [
 ]);
 export type TaskKindScores = z.infer<typeof TaskKindScoresSchema>;
 
+// ---- Results by subgroup (#410, ADR-0030) ----------------------------------
+//
+// Computed at scoring time by the task kind's own scorer, run on the items of
+// one subgroup, and stored with the submission AFTER suppression: a withheld
+// group is stored with its value and label and nothing else, so there is no
+// stored figure a later bug could publish.
+//
+// Within a group only the headline figures are published. Per-class tables and
+// confusion counts are not: inside one subgroup they are counts of patients
+// by demographic AND condition, the small cells suppression exists to keep out.
+
+/**
+ * `GRADING` headline figures for one group. The referable rates are `null`
+ * when withheld (`ratesWithheld`) or when no scored item of the group falls in
+ * their denominator.
+ */
+export const GradingSubgroupMetricsSchema = z
+  .object({
+    kind: z.literal('GRADING'),
+    qwk: z.number(),
+    accuracy: z.number(),
+    referableSensitivity: z.number().nullable(),
+    referableSpecificity: z.number().nullable(),
+    /**
+     * True when the referable rates are withheld: their denominators (the
+     * group's referable and non-referable items) include a count from 1 to
+     * 10, or would let one be worked out.
+     */
+    ratesWithheld: z.boolean(),
+  })
+  .strict();
+
+/** `CLASSIFICATION` headline figures for one group. No per-class table. */
+export const ClassificationSubgroupMetricsSchema = z
+  .object({
+    kind: z.literal('CLASSIFICATION'),
+    accuracy: z.number(),
+    balancedAccuracy: z.number(),
+    macroF1: z.number(),
+  })
+  .strict();
+
+/**
+ * `BINARY_DIAGNOSTIC` figures for one group, with their Wilson intervals,
+ * which are wider than the overall ones because they rest on fewer items.
+ * Accuracy rests on the group's scored items and is always present. The other
+ * rates are withheld together when any of their denominators (positive and
+ * negative reference items, positive and negative file labels) is from 1 to
+ * 10, or would let one be worked out: published together, the four rates and
+ * their bases give the whole two-by-two table.
+ */
+export const BinaryDiagnosticSubgroupMetricsSchema = z
+  .object({
+    kind: z.literal('BINARY_DIAGNOSTIC'),
+    accuracy: ProportionEstimateSchema,
+    prevalence: ProportionEstimateSchema.nullable(),
+    sensitivity: ProportionEstimateSchema.nullable(),
+    specificity: ProportionEstimateSchema.nullable(),
+    positivePredictiveValue: ProportionEstimateSchema.nullable(),
+    negativePredictiveValue: ProportionEstimateSchema.nullable(),
+    balancedAccuracy: z.number().nullable(),
+    auc: AucEstimateSchema.nullable(),
+    ratesWithheld: z.boolean(),
+  })
+  .strict();
+
+export const SubgroupMetricsSchema = z.discriminatedUnion('kind', [
+  GradingSubgroupMetricsSchema,
+  ClassificationSubgroupMetricsSchema,
+  BinaryDiagnosticSubgroupMetricsSchema,
+]);
+export type SubgroupMetrics = z.infer<typeof SubgroupMetricsSchema>;
+
+/**
+ * One group of one field. `SUPPRESSED` carries no count and no figure, and
+ * does not say whether the group was small or was withheld so that a small
+ * one could not be worked out from the others: saying which would narrow the
+ * small one down.
+ */
+export const SubgroupCellSchema = z.discriminatedUnion('status', [
+  z
+    .object({
+      status: z.literal('REPORTED'),
+      value: SubgroupValueCodeSchema,
+      label: z.string(),
+      /** Items of the task in this group. */
+      itemCount: z.number().int().nonnegative(),
+      /** Of those, the items this submission gave a label for: what the figures rest on. */
+      scoredCount: z.number().int().nonnegative(),
+      metrics: SubgroupMetricsSchema,
+    })
+    .strict(),
+  z
+    .object({
+      status: z.literal('SUPPRESSED'),
+      value: SubgroupValueCodeSchema,
+      label: z.string(),
+    })
+    .strict(),
+]);
+export type SubgroupCell = z.infer<typeof SubgroupCellSchema>;
+
+export const SubgroupFieldResultSchema = z
+  .object({
+    key: SubgroupFieldKeySchema,
+    label: z.string(),
+    /** One per declared value, in the declared order. */
+    cells: z.array(SubgroupCellSchema),
+  })
+  .strict();
+export type SubgroupFieldResult = z.infer<typeof SubgroupFieldResultSchema>;
+
+/** A submission's results by subgroup, as stored and as published. */
+export const SubgroupResultsSchema = z
+  .object({
+    /** The threshold applied when these results were computed. */
+    minCellSize: z.number().int().positive(),
+    fields: z.array(SubgroupFieldResultSchema),
+  })
+  .strict();
+export type SubgroupResults = z.infer<typeof SubgroupResultsSchema>;
+
 /** Summary row for `GET /v2/evaluation/tasks`. NEVER carries groundTruth. */
 export const EvaluationTaskSummarySchema = z.object({
   id: z.string().uuid(),
@@ -3953,6 +4103,12 @@ export const EvaluationTaskDetailSchema = z.object({
   itemIds: z.array(z.string()),
   /** `itemIds.length`, denormalised so a client can show it without the array. */
   itemCount: z.number().int(),
+  /**
+   * The fields results are broken down by (#410), with their labels and
+   * allowed values; `[]` when none. Which item has which value is NOT
+   * published: per item, those values are quasi-identifiers.
+   */
+  subgroupFields: z.array(SubgroupFieldSchema),
   submissions: z.array(EvaluationSubmissionResultSchema),
 });
 export type EvaluationTaskDetail = z.infer<typeof EvaluationTaskDetailSchema>;
@@ -4007,9 +4163,28 @@ export const CreateEvaluationTaskRequestSchema = z
      */
     positiveClassName: z.string().trim().min(1).max(200).optional(),
     groundTruth: z.record(z.string().min(1).max(200), z.number().int().min(0)),
+    /**
+     * Optional (#410): the fields results are broken down by, and each item's
+     * value for each of them. Every item of `groundTruth` needs a value for
+     * every field, from the values the field declares. The declaration is
+     * published with the task; the item map is held like the answer key.
+     */
+    subgroups: SubgroupDeclarationSchema.optional(),
   })
   .superRefine((value, ctx) => {
     const entries = Object.entries(value.groundTruth);
+    if (value.subgroups !== undefined) {
+      for (const issue of subgroupDeclarationIssues(
+        value.subgroups,
+        Object.keys(value.groundTruth),
+      )) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['subgroups', ...issue.path],
+          message: issue.message,
+        });
+      }
+    }
     if (value.taskKind === 'BINARY_DIAGNOSTIC') {
       if (value.numClasses !== 2) {
         ctx.addIssue({
@@ -4329,6 +4504,12 @@ export const EvaluationSubmissionDetailSchema = z
     status: SubmissionStatusSchema,
     /** `null` until SCORED. For CLASSIFICATION, `metrics.perClass` is the per-class breakdown. */
     scores: TaskKindScoresSchema.nullable(),
+    /**
+     * Results by subgroup (#410), small groups withheld. `null` when the task
+     * declares no subgroup field, when the submission is not scored, or when it
+     * was scored before the task declared one.
+     */
+    subgroups: SubgroupResultsSchema.nullable(),
     /** Null only when `scores` is null — same invariant as the list row. */
     attribution: ScoreAttributionSchema.nullable(),
     /** Non-null exactly when `status` is FAILED. */

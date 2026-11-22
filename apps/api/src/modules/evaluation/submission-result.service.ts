@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  MIN_SUBGROUP_CELL_SIZE,
   SealedRunFailureCodeSchema,
   type TaskKindScores,
   type SealedRunFailureCode,
@@ -23,6 +24,7 @@ import {
 } from './sealed-run.js';
 import { ScoringError } from './scoring.js';
 import { scoreByKind } from './scoring-registry.js';
+import { scoreSubgroups } from './subgroup-scoring.js';
 
 /**
  * Response of `POST /v2/submissions/:id/result`.
@@ -118,6 +120,7 @@ export class SubmissionResultService {
       return this.applyOrResolveRace(submissionId, fingerprint, {
         status: 'FAILED',
         scores: null,
+        subgroupScores: null,
         error: participantFacingFailureMessage(outcome.code),
         failureCode: outcome.code,
         durationMs: body.durationMs,
@@ -136,6 +139,9 @@ export class SubmissionResultService {
       return this.applyOrResolveRace(submissionId, fingerprint, {
         status: 'SCORED',
         scores: { kind: 'GRADING', metrics: outcome.metrics },
+        // The host scored against its own labels; the API holds no item to
+        // break the result down by (#410).
+        subgroupScores: null,
         error: null,
         failureCode: null,
         durationMs: body.durationMs,
@@ -173,6 +179,7 @@ export class SubmissionResultService {
         return this.applyOrResolveRace(submissionId, fingerprint, {
           status: 'FAILED',
           scores: null,
+          subgroupScores: null,
           error: participantFacingFailureMessage('MALFORMED_OUTPUT'),
           failureCode: 'MALFORMED_OUTPUT',
           durationMs: body.durationMs,
@@ -182,9 +189,22 @@ export class SubmissionResultService {
       throw err;
     }
 
+    // Results by subgroup (#410), as on the Mode 1 path, and outside the try
+    // for the same reason: the labels have been consulted, so a fault here
+    // must not become a MALFORMED_OUTPUT outcome.
+    const subgroupScores = scoreSubgroups({
+      kind: ctx.taskKind,
+      groundTruth: ctx.groundTruth,
+      predictions: outcome.predictions,
+      config: { numClasses: ctx.numClasses, referableThreshold: ctx.referableThreshold },
+      subgroups: ctx.subgroups,
+      minCellSize: MIN_SUBGROUP_CELL_SIZE,
+    });
+
     return this.applyOrResolveRace(submissionId, fingerprint, {
       status: 'SCORED',
       scores,
+      subgroupScores,
       error: null,
       failureCode: null,
       durationMs: body.durationMs,

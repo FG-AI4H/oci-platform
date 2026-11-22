@@ -118,6 +118,7 @@ describe('EvaluationService.submitPredictions — CLASSIFICATION dispatch', () =
       numClasses: 3,
       referableThreshold: 2,
       groundTruth: NOMINAL_GT,
+      subgroups: null,
     });
     repo.createSubmission.mockResolvedValue({ id: SUBMISSION_ID });
   });
@@ -205,6 +206,7 @@ describe('EvaluationService.submitPredictions — BINARY_DIAGNOSTIC and scores',
     numClasses: 2,
     referableThreshold: 1,
     groundTruth: BINARY_GT,
+    subgroups: null,
   };
 
   beforeEach(() => {
@@ -314,6 +316,7 @@ describe('EvaluationService.submitPredictions (Mode 1 — unchanged)', () => {
       numClasses: 5,
       referableThreshold: 2,
       groundTruth: GROUND_TRUTH,
+      subgroups: null,
     });
     repo.createSubmission.mockResolvedValue({ id: SUBMISSION_ID });
   });
@@ -571,6 +574,7 @@ describe('getTaskDetail — item IDs', () => {
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
       updatedAt: new Date('2026-08-01T00:00:00.000Z'),
       itemIds: [...STORED_KEYS].sort(),
+      subgroupFields: [],
       submissions: [],
       ...over,
     };
