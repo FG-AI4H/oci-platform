@@ -1,6 +1,6 @@
 # ADR-0028: A reviewed statement runs on a deployed database through the migrate task
 
-- **Status:** proposed
+- **Status:** accepted (22 November 2026)
 - **Date:** 2026-11-22
 - **Deciders:** Marc Lecoultre
 - **Tags:** `area:platform` | `area:security` | `phase:B`
