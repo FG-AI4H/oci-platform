@@ -10,6 +10,7 @@ import {
   type CampaignTaskKind,
 } from '@oci/shared-types';
 import { fetchAsUser } from '../../../../lib/api-action';
+import { parseLabelLines } from '../../../../lib/campaign-labels';
 import { isCampaignManager } from '../../../../lib/groups';
 import { sessionForAction } from '../../../../lib/session-recovery';
 
@@ -24,6 +25,10 @@ export interface CreateCampaignValues {
   outputLicense: string;
   /** Feeds the cost estimate only (#311); echoed back, never sent to the API. */
   expectedSamples: string;
+  /** CLASSIFICATION only (#646): one label per line. */
+  labels: string;
+  cannotAssess: boolean;
+  allowComment: boolean;
 }
 
 export type CreateCampaignState =
@@ -68,6 +73,9 @@ export async function createCampaignAction(
     nAnnotators: String(formData.get('nAnnotators') ?? '3'),
     outputLicense: String(formData.get('outputLicense') ?? 'CC-BY-4.0'),
     expectedSamples: String(formData.get('expectedSamples') ?? ''),
+    labels: String(formData.get('labels') ?? ''),
+    cannotAssess: formData.get('cannotAssess') === 'on',
+    allowComment: formData.get('allowComment') === 'on',
   };
 
   const nAnnotators = Number.parseInt(raw.nAnnotators, 10);
@@ -79,17 +87,38 @@ export async function createCampaignAction(
     datasetId: raw.datasetId,
     toolIntegrationId: raw.toolIntegrationId,
     taskKind: raw.taskKind as CampaignTaskKind,
-    workflowConfig: { nAnnotators: Number.isFinite(nAnnotators) ? nAnnotators : 0 },
+    workflowConfig: {
+      nAnnotators: Number.isFinite(nAnnotators) ? nAnnotators : 0,
+      // A CLASSIFICATION campaign declares its answers at creation (#646).
+      ...(raw.taskKind === 'CLASSIFICATION'
+        ? {
+            classificationLabels: {
+              labels: parseLabelLines(raw.labels),
+              cannotAssess: raw.cannotAssess,
+              allowComment: raw.allowComment,
+            },
+          }
+        : {}),
+    },
     outputLicense: raw.outputLicense as CampaignOutputLicense,
   });
   if (!parsed.success) {
     const fieldErrors = new Map<string, string>();
     for (const issue of parsed.error.issues) {
       const path = issue.path.join('.');
-      // Map workflowConfig.nAnnotators back to the flat form field.
-      const field = path === 'workflowConfig.nAnnotators' ? 'nAnnotators' : (issue.path[0] ?? '');
+      // Map nested workflowConfig paths back to the flat form fields.
+      const field =
+        path === 'workflowConfig.nAnnotators'
+          ? 'nAnnotators'
+          : path.startsWith('workflowConfig.classificationLabels')
+            ? 'labels'
+            : (issue.path[0] ?? '');
       const key = String(field);
-      if (key && !fieldErrors.has(key)) fieldErrors.set(key, issue.message);
+      const message =
+        key === 'labels' && issue.path.length > 3
+          ? `Label ${Number(issue.path[3]) + 1}: ${issue.message}`
+          : issue.message;
+      if (key && !fieldErrors.has(key)) fieldErrors.set(key, message);
     }
     return {
       status: 'error',

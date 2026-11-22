@@ -8,9 +8,10 @@ import { test, expect, type Page } from '@playwright/test';
  *      8 demo-seeded tasks (`demo-rsna-segmentation`).
  *   2. Manager pastes a fresh sample ref → server action creates a task
  *      → the table picks it up after revalidate.
- *   3. Annotator visits `/annotation/campaigns/<slug>/annotate` → sees
- *      a pulled assignment (the page does the pull-next server-side).
- *   4. Annotator submits the default JSON payload → success alert.
+ *   3. Annotator visits `/annotation/campaigns/<slug>/annotate` → nothing
+ *      is reserved until they press Start (#646).
+ *   4. Annotator skips a task, starts the next from the keyboard, and
+ *      submits the default JSON payload → back on the queue.
  *
  * Pre-conditions (same as the slice-1 spec):
  *   - docker compose -f infra/local/docker-compose.yml up -d
@@ -56,19 +57,38 @@ test.describe('annotator queue web slice', () => {
     void tasksCard;
   });
 
-  test('annotator: pulls a task, submits the default JSON, sees success', async ({ page }) => {
-    await signInAs(page, 'annie', 'annotator');
+  test('annotator: starts a task, skips it, submits the next one', async ({ page }) => {
+    // A fresh annotator per run: the demo campaign has few tasks.
+    await signInAs(page, `annie-${Date.now()}`, 'annotator');
     await page.goto(`/annotation/campaigns/${RUNNING_SLUG}/annotate`);
 
-    // The page's server-side pull-next probe should hand us a task.
-    await expect(page.getByRole('heading', { name: /your current task/i })).toBeVisible();
-    await expect(page.getByText(/rsna-pneumonia-2018/)).toBeVisible();
-    await expect(page.getByLabel(/annotation/i)).toBeVisible();
+    // Opening the page reserves nothing (#646).
+    await expect(page.getByRole('heading', { name: /ready when you are/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /your current task/i })).toHaveCount(0);
 
-    // Submit the pre-filled JSON. With N=3 on the demo campaign the
-    // first submission should NOT advance the gate.
+    await page.getByRole('button', { name: /^start$/i }).click();
+    await expect(page.getByRole('heading', { name: /your current task/i })).toBeVisible();
+    // Free-text sample references have no image, so the reference is
+    // shown. Which task comes first depends on what earlier runs seeded.
+    const sampleRef = page
+      .locator('dt', { hasText: /^Sample$/ })
+      .locator('xpath=following-sibling::dd[1]');
+    await expect(sampleRef).not.toBeEmpty();
+    const skipped = await sampleRef.textContent();
+
+    // Skip gives it back; the queue offers the next task, focused for Enter.
+    await page.getByRole('button', { name: /^skip$/i }).click();
+    await expect(page.getByRole('status')).toHaveText(/task skipped/i);
+    const startNext = page.getByRole('button', { name: /start the next task/i });
+    await expect(startNext).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { name: /your current task/i })).toBeVisible();
+    await expect(sampleRef).not.toHaveText(skipped ?? '');
+
+    // Submit the pre-filled JSON; back to the queue.
     await page.getByRole('button', { name: /^submit$/i }).click();
-    await expect(page.getByText(/submission counted|gate advanced/i)).toBeVisible();
+    await expect(page.getByRole('status')).toHaveText(/your annotation was saved/i);
+    await expect(page.getByRole('button', { name: /start the next task/i })).toBeFocused();
   });
 
   test('caller without an annotation role is redirected away from /annotate', async ({ page }) => {

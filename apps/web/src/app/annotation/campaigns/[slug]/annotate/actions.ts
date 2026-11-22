@@ -1,7 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { PullNextResponse, SubmitAssignmentResponse } from '@oci/shared-types';
+import { redirect } from 'next/navigation';
+import type { PullNextResponse } from '@oci/shared-types';
 import { fetchAsUser } from '../../../../../lib/api-action';
 import { isAnnotationWorker } from '../../../../../lib/groups';
 import { sessionForAction } from '../../../../../lib/session-recovery';
@@ -11,25 +12,24 @@ export type PullState =
   | { status: 'success'; assignmentId: string | null; message: string }
   | { status: 'error'; message: string };
 
+// A successful submit redirects back to the queue, so only the idle
+// and error states reach the form.
 export type SubmitState =
   | { status: 'idle' }
-  | {
-      status: 'success';
-      assignmentId: string;
-      message: string;
-      newGateState: SubmitAssignmentResponse['newGateState'];
-    }
   | { status: 'error'; message: string; submission: string };
+
+export type ReleaseState = { status: 'idle' } | { status: 'error'; message: string };
 
 // Initial `useActionState` values live in `annotate-form.tsx`. This
 // file is `'use server'` — Next 16 only allows async exports here.
 
 /**
- * Pull the caller's next eligible task. Idempotent — re-issues an
- * in-flight assignment if one exists, otherwise creates a new one
+ * "Start": reserve the caller's next eligible task. Opening the page
+ * reserves nothing (#646); this is the only place a task is taken.
+ * Idempotent — re-issues an in-flight assignment if one exists
  * (router behaviour lives on the API side; this action just forwards).
  */
-export async function pullNextAction(_prev: PullState, formData: FormData): Promise<PullState> {
+export async function startTaskAction(_prev: PullState, formData: FormData): Promise<PullState> {
   const session = await sessionForAction();
   if (!session?.user || !isAnnotationWorker(session)) {
     return {
@@ -60,7 +60,8 @@ export async function pullNextAction(_prev: PullState, formData: FormData): Prom
     return {
       status: 'success',
       assignmentId: null,
-      message: 'No eligible tasks at your gate right now. Check back later.',
+      message:
+        'No tasks are waiting for you right now. New ones appear when the campaign manager adds them or when an earlier step finishes.',
     };
   }
   return {
@@ -81,7 +82,7 @@ export async function submitAssignmentAction(
   formData: FormData,
 ): Promise<SubmitState> {
   const session = await sessionForAction();
-  const submissionRaw = String(formData.get('submission') ?? '');
+  let submissionRaw = String(formData.get('submission') ?? '');
   if (!session?.user || !isAnnotationWorker(session)) {
     return {
       status: 'error',
@@ -105,18 +106,43 @@ export async function submitAssignmentAction(
   );
 
   let submission: Record<string, unknown>;
-  try {
-    const parsed: unknown = JSON.parse(submissionRaw);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('Submission must be a JSON object.');
-    }
-    submission = parsed as Record<string, unknown>;
-  } catch (err) {
-    return {
-      status: 'error',
-      message: `Invalid JSON: ${err instanceof Error ? err.message : 'unparseable'}`,
-      submission: submissionRaw,
+  if (formData.get('mode') === 'labels') {
+    // The label form (#646): one radio choice and an optional comment;
+    // at arbitration, the final label and the required reason.
+    const label = String(formData.get('label') ?? '');
+    const comment = String(formData.get('comment') ?? '').trim();
+    const reasonField = formData.get('reason');
+    const reason = reasonField === null ? null : String(reasonField).trim();
+    submission = {
+      label,
+      ...(comment ? { comment } : {}),
+      ...(reason !== null ? { reason } : {}),
     };
+    submissionRaw = JSON.stringify(submission);
+    if (!label) {
+      return { status: 'error', message: 'Choose an answer first.', submission: submissionRaw };
+    }
+    if (reason === '') {
+      return {
+        status: 'error',
+        message: 'Give the reason for the final label.',
+        submission: submissionRaw,
+      };
+    }
+  } else {
+    try {
+      const parsed: unknown = JSON.parse(submissionRaw);
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('Submission must be a JSON object.');
+      }
+      submission = parsed as Record<string, unknown>;
+    } catch (err) {
+      return {
+        status: 'error',
+        message: `Invalid JSON: ${err instanceof Error ? err.message : 'unparseable'}`,
+        submission: submissionRaw,
+      };
+    }
   }
 
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -156,6 +182,18 @@ export async function submitAssignmentAction(
       };
     }
   }
+  if (res.status === 422) {
+    // Refused by the campaign's rules (completeness or labels, #646).
+    const body = (await res.json().catch(() => null)) as { reasons?: unknown } | null;
+    const reasons = Array.isArray(body?.reasons)
+      ? body.reasons.filter((r) => typeof r === 'string')
+      : [];
+    return {
+      status: 'error',
+      message: `The answer was not accepted${reasons.length ? `: ${reasons.join('; ')}` : '.'}`,
+      submission: submissionRaw,
+    };
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     return {
@@ -164,18 +202,47 @@ export async function submitAssignmentAction(
       submission: submissionRaw,
     };
   }
-  const out = (await res.json()) as SubmitAssignmentResponse;
-  if (slug) revalidatePath(`/annotation/campaigns/${slug}/annotate`);
+  // Back to the queue, which offers the next task. The gate the task
+  // moved to is not shown: it would tell the last reader whether the
+  // others agreed.
+  revalidatePath(`/annotation/campaigns/${slug}/annotate`);
+  redirect(`/annotation/campaigns/${encodeURIComponent(slug)}/annotate?after=submitted`);
+}
 
-  const tail = out.newGateState
-    ? out.newGateState === 'COMPLETED' || out.newGateState === 'SKIPPED'
-      ? `Gate advanced to ${out.newGateState}. Task closed.`
-      : `Gate advanced to ${out.newGateState}.`
-    : 'Submission counted; waiting for the rest of the panel.';
-  return {
-    status: 'success',
-    assignmentId: out.assignmentId,
-    message: tail,
-    newGateState: out.newGateState,
-  };
+/**
+ * "Skip": give the current task back unread (#646). The slot reopens
+ * for other annotators at once; the queue then offers the next task,
+ * preferring ones the caller hasn't skipped.
+ */
+export async function releaseAssignmentAction(
+  _prev: ReleaseState,
+  formData: FormData,
+): Promise<ReleaseState> {
+  const session = await sessionForAction();
+  if (!session?.user || !isAnnotationWorker(session)) {
+    return { status: 'error', message: 'You need an annotation role to skip a task.' };
+  }
+  const assignmentId = String(formData.get('assignmentId') ?? '');
+  const slug = String(formData.get('slug') ?? '');
+  if (!assignmentId || !slug)
+    return { status: 'error', message: 'Missing assignment or campaign.' };
+
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (!base) return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
+
+  const res = await fetchAsUser(
+    `${base}/v2/annotation/assignments/${encodeURIComponent(assignmentId)}/release`,
+    { method: 'POST', cache: 'no-store' },
+  );
+  // 409: already submitted, expired or released — the task is no
+  // longer the caller's either way, so carry on to the queue.
+  if (!res.ok && res.status !== 409) {
+    const body = await res.text().catch(() => '');
+    return {
+      status: 'error',
+      message: `API ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
+    };
+  }
+  revalidatePath(`/annotation/campaigns/${slug}/annotate`);
+  redirect(`/annotation/campaigns/${encodeURIComponent(slug)}/annotate?after=skipped`);
 }

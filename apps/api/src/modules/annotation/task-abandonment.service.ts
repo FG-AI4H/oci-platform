@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { AuditEmitter, AuditTransactionPort } from '@oci/audit';
-import type { AnnotationTask, AnnotationTaskAssignment } from '@oci/database';
+import type { AnnotationTask, AnnotationTaskAssignment, Prisma } from '@oci/database';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { TaskRepository } from './task.repository.js';
 
@@ -98,6 +98,43 @@ export class TaskAbandonmentService {
       this.logger.log(`pull-next expiry — campaign=${args.campaign.slug} expired=${expired}`);
     }
     return expired;
+  }
+
+  /**
+   * The annotator gives the assignment back unread ("Skip", #646). The
+   * caller has already checked ownership. The release and its audit row
+   * share the caller's short transaction (as each pull-next expiry does,
+   * #669), so a failed audit write undoes the release and the audit
+   * chain lock is held only at its end. Returns false when the row
+   * was submitted, expired or released in the meantime.
+   */
+  async release(args: {
+    row: AnnotationTaskAssignment & { task: AnnotationTask };
+    campaignSlug: string;
+    tasks: TaskRepository;
+    tx: Prisma.TransactionClient;
+  }): Promise<boolean> {
+    if (!(await args.tasks.markAssignmentReleased(args.row.id))) return false;
+    await this.audit.emitSync(
+      {
+        module: 'annotation',
+        action: 'task.assignment.released',
+        subjectType: 'annotation-task-assignment',
+        subjectId: args.row.id,
+        payload: {
+          taskId: args.row.taskId,
+          campaignSlug: args.campaignSlug,
+          sampleRef: args.row.task.sampleRef,
+          gateAtAssignment: args.row.gateAtAssignment,
+          assigneeRole: args.row.assigneeRole,
+          assignedAt: args.row.assignedAt.toISOString(),
+          previousStatus: args.row.status,
+        },
+      },
+      args.tx as unknown as AuditTransactionPort,
+    );
+    this.logger.log(`released — campaign=${args.campaignSlug} assignment=${args.row.id}`);
+    return true;
   }
 
   /**

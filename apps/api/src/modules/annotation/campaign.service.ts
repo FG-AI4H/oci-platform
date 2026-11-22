@@ -14,11 +14,13 @@ import type {
   CampaignSummary,
   CampaignOutputLicense,
   CampaignTransitionAction,
+  ClassificationLabelsConfig,
   CommercialUseTerms,
   CreateCampaignRequest,
   ListCampaignsResponse,
 } from '@oci/shared-types';
 import {
+  ClassificationLabelsConfigSchema,
   allowedTaskKindsForModalities,
   defaultOutputLicenseForTier,
   outputLicenseAllowedForTerms,
@@ -139,6 +141,20 @@ export class CampaignService {
         `campaign-create: dataset '${dataset.slug}' has no modalities declared; ` +
           `task-kind constraint fell back to "allow all". Host should publish ` +
           `bio:imagingModality / bio:dataModality on the next manifest revision.`,
+      );
+    }
+
+    // A CLASSIFICATION campaign declares its answers at creation (#646);
+    // other kinds have no use for them.
+    const hasLabels = body.workflowConfig?.classificationLabels !== undefined;
+    if (body.taskKind === 'CLASSIFICATION' && !hasLabels) {
+      throw new BadRequestException(
+        'A CLASSIFICATION campaign must declare its labels (workflowConfig.classificationLabels)',
+      );
+    }
+    if (body.taskKind !== 'CLASSIFICATION' && hasLabels) {
+      throw new BadRequestException(
+        `workflowConfig.classificationLabels applies to CLASSIFICATION campaigns only, not ${body.taskKind}`,
       );
     }
 
@@ -344,7 +360,9 @@ export class CampaignService {
       nAnnotators: number;
       taskTimeoutHours: number;
       completenessMode: 'soft-warn' | 'hard-block';
+      classificationLabels: unknown;
     }>;
+    const labels = readClassificationLabels(row.workflowConfig);
     const workflowConfig = {
       nAnnotators: raw.nAnnotators ?? 3,
       taskTimeoutHours: raw.taskTimeoutHours ?? 24,
@@ -352,6 +370,7 @@ export class CampaignService {
         raw.completenessMode === 'hard-block' || raw.completenessMode === 'soft-warn'
           ? raw.completenessMode
           : ('soft-warn' as const),
+      ...(labels ? { classificationLabels: labels } : {}),
     };
     return {
       ...this.toSummary(row),
@@ -400,4 +419,19 @@ export class CampaignService {
     // eslint-disable-next-line security/detect-object-injection -- typed enum keys
     return CampaignService.LICENSE_TO_CONTRACT[license];
   }
+}
+
+/**
+ * The campaign's declared labels (#646), or null when it has none
+ * (other task kinds, campaigns created before #646) or the stored value
+ * no longer parses.
+ */
+export function readClassificationLabels(
+  workflowConfig: unknown,
+): ClassificationLabelsConfig | null {
+  if (!workflowConfig || typeof workflowConfig !== 'object') return null;
+  const parsed = ClassificationLabelsConfigSchema.safeParse(
+    (workflowConfig as { classificationLabels?: unknown }).classificationLabels,
+  );
+  return parsed.success ? parsed.data : null;
 }

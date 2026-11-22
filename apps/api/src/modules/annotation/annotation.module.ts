@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../auth/auth.module.js';
+import { AssignmentSampleService } from './assignment-sample.service.js';
 import { PrismaService } from '../../prisma.service.js';
+import { StorageModule } from '../storage/storage.module.js';
 import { CalibrationController } from './calibration.controller.js';
 import { CalibrationRepository } from './calibration.repository.js';
 import { CalibrationScheduler } from './calibration.scheduler.js';
@@ -36,7 +38,8 @@ import { ToolIntegrationService } from './tool-integration.service.js';
  *   - SupervisorController (sub-epic #215 — rejection-review queue per ADR-0011)
  */
 @Module({
-  imports: [AuthModule],
+  // StorageModule signs the short-lived image address (#646).
+  imports: [AuthModule, StorageModule],
   controllers: [
     CalibrationController,
     CampaignController,
@@ -48,6 +51,7 @@ import { ToolIntegrationService } from './tool-integration.service.js';
   ],
   providers: [
     PrismaService,
+    AssignmentSampleService,
     CalibrationRepository,
     CalibrationScheduler,
     CalibrationService,

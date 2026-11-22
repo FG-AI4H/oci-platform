@@ -106,6 +106,85 @@ function mockDatasetModalities(modalities: string[], slug = 'chest-xr-pilot') {
   });
 }
 
+/** Labels a CLASSIFICATION campaign must declare at creation (#646). */
+const CLASSIFICATION_CONFIG = {
+  nAnnotators: 3,
+  taskTimeoutHours: 24,
+  completenessMode: 'soft-warn' as const,
+  classificationLabels: {
+    labels: [
+      { value: 'normal', display: 'Normal' },
+      { value: 'abnormal', display: 'Abnormal' },
+    ],
+    cannotAssess: true,
+    allowComment: false,
+  },
+};
+
+describe('CampaignService.create — classification labels (#646)', () => {
+  beforeEach(() => {
+    repo.findBySlug.mockResolvedValue(null);
+    repo.findToolIntegrationById.mockResolvedValue({
+      ...TOOL,
+      supportedTaskKinds: ['CLASSIFICATION', 'SEGMENTATION'],
+    });
+    mockDatasetModalities(['X-ray']);
+  });
+
+  it('refuses a CLASSIFICATION campaign that declares no labels', async () => {
+    await expect(
+      service.create(
+        {
+          slug: 'no-labels',
+          name: 'No labels',
+          datasetId: 'ds-1',
+          toolIntegrationId: TOOL.id,
+          taskKind: 'CLASSIFICATION',
+          workflowConfig: { nAnnotators: 3, taskTimeoutHours: 24, completenessMode: 'soft-warn' },
+        },
+        user(SUB_UUID),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses labels on a campaign that is not CLASSIFICATION', async () => {
+    await expect(
+      service.create(
+        {
+          slug: 'seg-labels',
+          name: 'Segmentation with labels',
+          datasetId: 'ds-1',
+          toolIntegrationId: TOOL.id,
+          taskKind: 'SEGMENTATION',
+          workflowConfig: CLASSIFICATION_CONFIG,
+        },
+        user(SUB_UUID),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('returns the declared labels on the campaign detail', async () => {
+    repo.create.mockResolvedValue({ ...ROW, workflowConfig: CLASSIFICATION_CONFIG });
+
+    const out = await service.create(
+      {
+        slug: 'chest-xr-pilot',
+        name: 'Chest XR Pilot',
+        datasetId: 'ds-1',
+        toolIntegrationId: TOOL.id,
+        taskKind: 'CLASSIFICATION',
+        workflowConfig: CLASSIFICATION_CONFIG,
+      },
+      user(SUB_UUID),
+    );
+
+    expect(out.workflowConfig.classificationLabels).toEqual(
+      CLASSIFICATION_CONFIG.classificationLabels,
+    );
+  });
+});
+
 describe('CampaignService.create', () => {
   it('persists a draft campaign with default outputLicense + workflowConfig', async () => {
     repo.findBySlug.mockResolvedValue(null);
@@ -120,6 +199,7 @@ describe('CampaignService.create', () => {
         datasetId: 'ds-1',
         toolIntegrationId: TOOL.id,
         taskKind: 'CLASSIFICATION',
+        workflowConfig: CLASSIFICATION_CONFIG,
       },
       user(SUB_UUID),
     );
@@ -131,7 +211,7 @@ describe('CampaignService.create', () => {
       expect.objectContaining({
         slug: 'chest-xr-pilot',
         outputLicense: 'CC_BY_4_0',
-        workflowConfig: { nAnnotators: 3 },
+        workflowConfig: CLASSIFICATION_CONFIG,
         createdById: SUB_UUID,
       }),
     );
@@ -154,6 +234,7 @@ describe('CampaignService.create', () => {
         datasetId: 'ds-1',
         toolIntegrationId: TOOL.id,
         taskKind: 'CLASSIFICATION',
+        workflowConfig: CLASSIFICATION_CONFIG,
       },
       user(SUB_UUID),
     );
@@ -180,6 +261,7 @@ describe('CampaignService.create', () => {
         datasetId: 'ds-1',
         toolIntegrationId: TOOL.id,
         taskKind: 'CLASSIFICATION',
+        workflowConfig: CLASSIFICATION_CONFIG,
       },
       user(SUB_UUID),
     );
@@ -206,6 +288,7 @@ describe('CampaignService.create', () => {
           datasetId: 'ds-1',
           toolIntegrationId: TOOL.id,
           taskKind: 'CLASSIFICATION',
+          workflowConfig: CLASSIFICATION_CONFIG,
           outputLicense: 'CC-BY-4.0',
         },
         user(SUB_UUID),
@@ -231,6 +314,7 @@ describe('CampaignService.create', () => {
         datasetId: 'ds-1',
         toolIntegrationId: TOOL.id,
         taskKind: 'CLASSIFICATION',
+        workflowConfig: CLASSIFICATION_CONFIG,
         outputLicense: 'CC-BY-NC-4.0',
       },
       user(SUB_UUID),
@@ -252,6 +336,7 @@ describe('CampaignService.create', () => {
           datasetId: 'ds-1',
           toolIntegrationId: TOOL.id,
           taskKind: 'CLASSIFICATION',
+          workflowConfig: CLASSIFICATION_CONFIG,
         },
         user(SUB_UUID),
       ),
@@ -271,6 +356,7 @@ describe('CampaignService.create', () => {
           datasetId: 'ds-1',
           toolIntegrationId: 'tool-does-not-exist',
           taskKind: 'CLASSIFICATION',
+          workflowConfig: CLASSIFICATION_CONFIG,
         },
         user(SUB_UUID),
       ),
@@ -319,6 +405,7 @@ describe('CampaignService.create — modality → task-kind guard (#247)', () =>
           datasetId: 'ds-1',
           toolIntegrationId: TOOL.id,
           taskKind: 'CLASSIFICATION',
+          workflowConfig: CLASSIFICATION_CONFIG,
         },
         user(SUB_UUID),
       ),
@@ -389,6 +476,7 @@ describe('CampaignService.create — modality → task-kind guard (#247)', () =>
           datasetId: 'ds-1',
           toolIntegrationId: TOOL.id,
           taskKind: 'CLASSIFICATION',
+          workflowConfig: CLASSIFICATION_CONFIG,
         },
         user(SUB_UUID),
       ),
@@ -430,6 +518,7 @@ describe('CampaignService.create — modality → task-kind guard (#247)', () =>
           datasetId: '00000000-0000-4000-8000-000000000999',
           toolIntegrationId: TOOL.id,
           taskKind: 'CLASSIFICATION',
+          workflowConfig: CLASSIFICATION_CONFIG,
         },
         user(SUB_UUID),
       ),
@@ -605,6 +694,7 @@ describe('CampaignService — manifest version pin (ADR-0016 Decision 1, #320)',
         datasetId: 'ds-1',
         toolIntegrationId: TOOL.id,
         taskKind: 'CLASSIFICATION',
+        workflowConfig: CLASSIFICATION_CONFIG,
       },
       user(SUB_UUID),
     );
@@ -622,6 +712,7 @@ describe('CampaignService — manifest version pin (ADR-0016 Decision 1, #320)',
         datasetId: 'ds-1',
         toolIntegrationId: TOOL.id,
         taskKind: 'CLASSIFICATION',
+        workflowConfig: CLASSIFICATION_CONFIG,
       },
       user(SUB_UUID),
     );
@@ -638,6 +729,7 @@ describe('CampaignService — manifest version pin (ADR-0016 Decision 1, #320)',
         manifestVersionId: 'dv-1',
         toolIntegrationId: TOOL.id,
         taskKind: 'CLASSIFICATION',
+        workflowConfig: CLASSIFICATION_CONFIG,
       },
       user(SUB_UUID),
     );
@@ -661,6 +753,7 @@ describe('CampaignService — manifest version pin (ADR-0016 Decision 1, #320)',
           manifestVersionId: 'dv-x',
           toolIntegrationId: TOOL.id,
           taskKind: 'CLASSIFICATION',
+          workflowConfig: CLASSIFICATION_CONFIG,
         },
         user(SUB_UUID),
       ),
@@ -679,6 +772,7 @@ describe('CampaignService — manifest version pin (ADR-0016 Decision 1, #320)',
           manifestVersionId: 'dv-missing',
           toolIntegrationId: TOOL.id,
           taskKind: 'CLASSIFICATION',
+          workflowConfig: CLASSIFICATION_CONFIG,
         },
         user(SUB_UUID),
       ),

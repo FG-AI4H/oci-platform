@@ -129,6 +129,8 @@ test.describe('annotation campaign — header + form', () => {
     // Pick CLASSIFICATION so both seeded tools qualify (monai-label +
     // ohif-viewer both list CLASSIFICATION in supportedTaskKinds).
     await page.getByRole('radio', { name: 'Classification' }).check();
+    // A CLASSIFICATION campaign declares its labels (#646).
+    await page.getByRole('textbox', { name: 'Labels' }).fill('Normal\nAbnormal');
 
     // -- Dataset picker --------------------------------------------------
     await pickDataset(page, SEED_DATASET_SLUG);
@@ -182,6 +184,8 @@ test.describe('annotation campaign — header + form', () => {
     await page.getByLabel('Slug').fill(slug);
     await page.getByLabel('Name').fill('First');
     await page.getByRole('radio', { name: 'Classification' }).check();
+    // A CLASSIFICATION campaign declares its labels (#646).
+    await page.getByRole('textbox', { name: 'Labels' }).fill('Normal\nAbnormal');
     await pickDataset(page, SEED_DATASET_SLUG);
     await selectToolByName(page, 'MONAI Label');
     await selectAllowedLicense(page, SEED_DATASET_TERMS);
@@ -193,6 +197,8 @@ test.describe('annotation campaign — header + form', () => {
     await page.getByLabel('Slug').fill(slug);
     await page.getByLabel('Name').fill('Duplicate');
     await page.getByRole('radio', { name: 'Classification' }).check();
+    // A CLASSIFICATION campaign declares its labels (#646).
+    await page.getByRole('textbox', { name: 'Labels' }).fill('Normal\nAbnormal');
     await pickDataset(page, SEED_DATASET_SLUG);
     await selectToolByName(page, 'MONAI Label');
     await selectAllowedLicense(page, SEED_DATASET_TERMS);

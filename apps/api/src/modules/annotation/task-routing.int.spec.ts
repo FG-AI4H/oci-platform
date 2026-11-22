@@ -291,4 +291,216 @@ describe.skipIf(!dockerAvailable)('Annotation router against Postgres (#647)', (
     });
     expect(open).toBe(0);
   }, 60_000);
+
+  it('a skipped task goes back to the pool and the skipper is offered another first (#646)', async () => {
+    const slug = 'router-646-skip';
+    await runningCampaign({ slug, nAnnotators: 1, sampleCount: 2 });
+    const [skipper, other] = [randomUUID(), randomUUID()];
+
+    const first = await pull(slug, skipper);
+    await service.release({ assignmentId: first!.id, user: user(skipper) });
+
+    const released = await prisma.annotationTaskAssignment.findUniqueOrThrow({
+      where: { id: first!.id },
+    });
+    expect(released.status).toBe('RELEASED');
+    expect(released.releasedAt).not.toBeNull();
+    expect(
+      await prisma.auditEvent.count({
+        where: { action: 'task.assignment.released', subjectId: first!.id },
+      }),
+    ).toBe(1);
+
+    // The skipper moves on to the other image …
+    const next = await pull(slug, skipper);
+    expect(next?.taskId).not.toBe(first!.taskId);
+    // … and the skipped one is open to someone else at once.
+    const forOther = await pull(slug, other);
+    expect(forOther?.taskId).toBe(first!.taskId);
+
+    // A released assignment can't be submitted or released again.
+    await expect(submit(first!.id, skipper)).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.release({ assignmentId: first!.id, user: user(skipper) }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  }, 60_000);
+
+  it('a skipped task comes back to the skipper when nothing else is open (#646)', async () => {
+    const slug = 'router-646-skip-only';
+    const campaignId = await runningCampaign({ slug, nAnnotators: 1, sampleCount: 1 });
+    const skipper = randomUUID();
+
+    const first = await pull(slug, skipper);
+    await service.release({ assignmentId: first!.id, user: user(skipper) });
+    const again = await pull(slug, skipper);
+    expect(again?.taskId).toBe(first!.taskId);
+    await submit(again!.id, skipper);
+
+    const task = await prisma.annotationTask.findFirstOrThrow({ where: { campaignId } });
+    expect(task.gateState).toBe('COMPLETED');
+  }, 60_000);
+
+  it('opening the queue reserves nothing until the annotator starts (#646)', async () => {
+    const slug = 'router-646-current';
+    const campaignId = await runningCampaign({ slug, nAnnotators: 1, sampleCount: 1 });
+    const sub = randomUUID();
+
+    const before = await service.current({ slug, user: user(sub), userGroups: ANNOTATOR });
+    expect(before.assignment).toBeNull();
+    expect(await prisma.annotationTaskAssignment.count({ where: { task: { campaignId } } })).toBe(
+      0,
+    );
+
+    const started = await pull(slug, sub);
+    const after = await service.current({ slug, user: user(sub), userGroups: ANNOTATOR });
+    expect(after.assignment?.id).toBe(started!.id);
+  }, 60_000);
+
+  it('an annotator who has read the first 50 tasks is still offered the open ones after them', async () => {
+    const slug = 'router-646-deep-queue';
+    await runningCampaign({ slug, nAnnotators: 2, sampleCount: 55 });
+    const sub = randomUUID();
+
+    // Seeded in one batch, the tasks share a creation time, so FIFO
+    // order is by id: track what was read rather than which sample.
+    const read = new Set<string>();
+    for (let i = 0; i < 50; i += 1) {
+      const a = await pull(slug, sub);
+      read.add(a!.taskId);
+      await submit(a!.id, sub);
+    }
+    const next = await pull(slug, sub);
+    expect(next).not.toBeNull();
+    expect(read.has(next!.taskId)).toBe(false);
+  }, 120_000);
+
+  it('tasks already full do not hide an open one further down the queue', async () => {
+    const slug = 'router-646-full-tasks';
+    const campaignId = await runningCampaign({ slug, nAnnotators: 1, sampleCount: 52 });
+    const tasks = await prisma.annotationTask.findMany({
+      where: { campaignId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    // Make the open task strictly the newest, so it sits behind more
+    // than a page of full ones whatever the tie order.
+    await prisma.annotationTask.update({
+      where: { id: tasks[51]!.id },
+      data: { createdAt: new Date(tasks[51]!.createdAt.getTime() + 1000) },
+    });
+    // The first 51 in FIFO order each reserved by someone else: full,
+    // but still at the independent step. Only the last one is open.
+    await prisma.annotationTaskAssignment.createMany({
+      data: tasks.slice(0, 51).map((t) => ({
+        taskId: t.id,
+        assigneeUserId: randomUUID(),
+        assigneeRole: 'annotator',
+        gateAtAssignment: 'INDEPENDENT' as const,
+        status: 'PENDING' as const,
+      })),
+    });
+
+    const open = await pull(slug, randomUUID());
+    expect(open?.taskId).toBe(tasks[51]!.id);
+  }, 120_000);
+
+  it('never gives an arbiter a task they read (#646)', async () => {
+    const slug = 'router-646-arbiter';
+    const campaignId = await runningCampaign({ slug, nAnnotators: 1, sampleCount: 2 });
+    const [read, unread] = await prisma.annotationTask.findMany({
+      where: { campaignId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    // Both tasks wait for arbitration. The arbiter read the first one
+    // (an earlier group membership); someone else read the second.
+    await prisma.annotationTask.updateMany({
+      where: { campaignId },
+      data: { gateState: 'AWAITING_ARBITRATION' },
+    });
+    const arbiter = 'arbiter-who-read';
+    await prisma.annotationTaskAssignment.createMany({
+      data: [
+        { taskId: read!.id, assigneeUserId: cognitoSubAsUuid(arbiter) },
+        { taskId: unread!.id, assigneeUserId: randomUUID() },
+      ].map((a) => ({
+        ...a,
+        assigneeRole: 'annotator',
+        gateAtAssignment: 'INDEPENDENT' as const,
+        status: 'SUBMITTED' as const,
+        submission: { label: 'normal' },
+        submittedAt: new Date(),
+      })),
+    });
+    const arbitrate = async () =>
+      (
+        await service.pullNext({
+          slug,
+          user: user(arbiter),
+          userGroups: ['arbitration-annotator'],
+        })
+      ).assignment;
+
+    const first = await arbitrate();
+    expect(first?.taskId).toBe(unread!.id);
+    await service.submit({
+      assignmentId: first!.id,
+      submission: { label: 'normal', reason: 'agrees with the reading' },
+      user: user(arbiter),
+    });
+    // Only the task they read is left, and they are not given it.
+    expect(await arbitrate()).toBeNull();
+  }, 60_000);
+
+  it("tasks from the dataset's hosted images: one per image, and a second run adds none (#646)", async () => {
+    const version = await prisma.datasetVersion.create({
+      data: { datasetId, version: '646.0', croissant: {}, publishedById: randomUUID() },
+    });
+    const file = (name: string, contentType: string, ready = true) => ({
+      datasetVersionId: version.id,
+      croissantId: randomUUID(),
+      contentType,
+      storageBackend: 'S3' as const,
+      s3Bucket: 'oci-datasets-test',
+      s3Key: `router-646/${randomUUID()}/${name}`,
+      uploadStatus: ready ? ('READY' as const) : ('PENDING' as const),
+    });
+    await prisma.distribution.createMany({
+      data: [
+        file('a.png', 'image/png'),
+        file('b.jpg', 'image/jpeg'),
+        file('notes.csv', 'text/csv'),
+        file('c.png', 'image/png', false),
+      ],
+    });
+    await prisma.distribution.create({
+      data: { datasetVersionId: version.id, croissantId: randomUUID(), contentType: 'image/png' },
+    });
+    const slug = 'router-646-from-dataset';
+    const campaign = await prisma.annotationCampaign.create({
+      data: {
+        slug,
+        name: slug,
+        status: 'READY',
+        taskKind: 'CLASSIFICATION',
+        datasetId,
+        manifestVersionId: version.id,
+        toolIntegrationId,
+        outputLicense: 'CC_BY_4_0',
+        workflowConfig: { nAnnotators: 3 },
+        createdById: randomUUID(),
+      },
+    });
+
+    const preview = await service.seedFromDataset({ slug, dryRun: true });
+    expect(preview).toEqual({ matched: 2, created: 2, skipped: 0, dryRun: true });
+    expect(await prisma.annotationTask.count({ where: { campaignId: campaign.id } })).toBe(0);
+
+    const first = await service.seedFromDataset({ slug, dryRun: false });
+    expect(first).toEqual({ matched: 2, created: 2, skipped: 0, dryRun: false });
+    const second = await service.seedFromDataset({ slug, dryRun: false });
+    expect(second).toEqual({ matched: 2, created: 0, skipped: 2, dryRun: false });
+
+    const tasks = await prisma.annotationTask.findMany({ where: { campaignId: campaign.id } });
+    expect(tasks.map((t) => t.sampleRef.split('/').pop()).sort()).toEqual(['a.png', 'b.jpg']);
+    expect(tasks.every((t) => t.nAnnotatorsRequired === 3)).toBe(true);
+  }, 60_000);
 });

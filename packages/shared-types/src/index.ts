@@ -2312,6 +2312,93 @@ export const N_ANNOTATORS_MIN = 1;
 export const N_ANNOTATORS_MAX = 12;
 
 /**
+ * The "cannot assess" answer a CLASSIFICATION campaign may offer (#646).
+ * Reserved: no declared label may use this value.
+ */
+export const CANNOT_ASSESS_LABEL = 'cannot-assess';
+
+/** One answer a reader can give on a CLASSIFICATION campaign (#646). */
+export const ClassificationLabelSchema = z.object({
+  /** Stored in the submission as `label`. Lower-case, digits, `-` and `_`. */
+  value: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9][a-z0-9_-]*$/, 'use lower-case letters, digits, "-" or "_"')
+    .refine((v) => v !== CANNOT_ASSESS_LABEL, `"${CANNOT_ASSESS_LABEL}" is reserved`),
+  /** What the reader sees. */
+  display: z.string().trim().min(1).max(120),
+});
+export type ClassificationLabel = z.infer<typeof ClassificationLabelSchema>;
+
+/**
+ * The answers a CLASSIFICATION campaign offers, declared at creation
+ * (#646). The order is the order readers see, and the number key that
+ * picks each one.
+ */
+export const ClassificationLabelsConfigSchema = z
+  .object({
+    labels: z.array(ClassificationLabelSchema).min(2).max(9),
+    /** Offer "Cannot assess" after the labels. */
+    cannotAssess: z.boolean().default(false),
+    /** Let readers add a free-text comment. */
+    allowComment: z.boolean().default(false),
+  })
+  .refine((c) => new Set(c.labels.map((l) => l.value)).size === c.labels.length, {
+    message: 'label values must be unique',
+    path: ['labels'],
+  });
+export type ClassificationLabelsConfig = z.infer<typeof ClassificationLabelsConfigSchema>;
+
+/** Longest comment a reader may attach to a label. */
+export const LABEL_COMMENT_MAX = 2000;
+
+/**
+ * Check a `{ label, comment }` submission against the campaign's
+ * declared labels (#646). Returns the reasons it is refused; empty when
+ * it is accepted. Shared by the API (which refuses) and the web form.
+ *
+ * At arbitration the arbiter must also say why they chose the final
+ * label: pass `reasonRequired` and the submission must carry a
+ * non-empty `reason`. Readers never send one.
+ */
+export function labelSubmissionProblems(
+  config: ClassificationLabelsConfig,
+  submission: Record<string, unknown>,
+  options: { reasonRequired?: boolean } = {},
+): string[] {
+  const problems: string[] = [];
+  const reasonRequired = options.reasonRequired ?? false;
+  const allowed = new Set(config.labels.map((l) => l.value));
+  if (config.cannotAssess) allowed.add(CANNOT_ASSESS_LABEL);
+  const label = submission.label;
+  if (typeof label !== 'string' || !allowed.has(label)) {
+    problems.push(`label must be one of: ${[...allowed].join(', ')}`);
+  }
+  const comment = submission.comment;
+  if (comment !== undefined && comment !== null && comment !== '') {
+    if (!config.allowComment) problems.push('this campaign does not take comments');
+    else if (typeof comment !== 'string') problems.push('comment must be text');
+    else if (comment.length > LABEL_COMMENT_MAX) {
+      problems.push(`comment must be at most ${LABEL_COMMENT_MAX} characters`);
+    }
+  }
+  if (reasonRequired) {
+    const reason = submission.reason;
+    if (typeof reason !== 'string' || reason.trim() === '') {
+      problems.push('give the reason for the final label');
+    } else if (reason.length > LABEL_COMMENT_MAX) {
+      problems.push(`reason must be at most ${LABEL_COMMENT_MAX} characters`);
+    }
+  }
+  const fields = new Set(['label', 'comment', ...(reasonRequired ? ['reason'] : [])]);
+  for (const key of Object.keys(submission)) {
+    if (!fields.has(key)) problems.push(`unexpected field "${key}"`);
+  }
+  return problems;
+}
+
+/**
  * Workflow configuration (ADR-0009 Decisions 2 + 4). Phase B.A.1 only
  * surfaces `nAnnotators`; IRR thresholds + gate config + experience-
  * model knobs land as #216 (E4) ships.
@@ -2340,6 +2427,12 @@ export const CampaignWorkflowConfigSchema = z.object({
    * workflows where incomplete annotations are a liability.
    */
   completenessMode: CampaignCompletenessModeSchema.default('soft-warn'),
+  /**
+   * The answers a CLASSIFICATION campaign offers (#646). Required when
+   * a CLASSIFICATION campaign is created; absent on other kinds and on
+   * campaigns created before #646, which keep the free-form JSON form.
+   */
+  classificationLabels: ClassificationLabelsConfigSchema.optional(),
 });
 export type CampaignWorkflowConfig = z.infer<typeof CampaignWorkflowConfigSchema>;
 
@@ -3091,6 +3184,7 @@ export const AnnotationAssignmentStatusSchema = z.enum([
   'IN_PROGRESS',
   'SUBMITTED',
   'EXPIRED',
+  'RELEASED',
 ]);
 export type AnnotationAssignmentStatus = z.infer<typeof AnnotationAssignmentStatusSchema>;
 
@@ -3317,6 +3411,71 @@ export type MetadataVisibilityResolveRequest = z.infer<
   typeof MetadataVisibilityResolveRequestSchema
 >;
 
+/**
+ * `POST /v2/annotation/campaigns/:slug/tasks/from-dataset` (#646): one
+ * task per platform-hosted PNG / JPEG file of the campaign's pinned
+ * dataset version. Idempotent: files that already have a task count as
+ * `skipped`.
+ */
+export const SeedTasksFromDatasetRequestSchema = z.object({
+  /** Only files whose name starts with this. */
+  prefix: z.string().max(200).optional(),
+  /** At most this many files, in file-name order. */
+  limit: z.number().int().min(1).max(10_000).optional(),
+  /** Count what would be created without creating anything. */
+  dryRun: z.boolean().default(false),
+});
+export type SeedTasksFromDatasetRequest = z.infer<typeof SeedTasksFromDatasetRequestSchema>;
+
+export const SeedTasksFromDatasetResponseSchema = z.object({
+  /** Image files that matched. */
+  matched: z.number().int().nonnegative(),
+  /** Tasks created (on a dry run: that would be created). */
+  created: z.number().int().nonnegative(),
+  /** Matched files that already have a task. */
+  skipped: z.number().int().nonnegative(),
+  dryRun: z.boolean(),
+});
+export type SeedTasksFromDatasetResponse = z.infer<typeof SeedTasksFromDatasetResponseSchema>;
+
+/**
+ * `GET /v2/annotation/assignments/:id/sample` (#646): short-lived
+ * addresses for the files of the assignment's sample. Nothing else about
+ * the sample travels with them (ADR-0010 blinding).
+ *
+ * A list, in reading order, so the shape doesn't depend on the file
+ * type: a PNG or JPEG task has one file, a DICOM series (#674) has one
+ * per instance. The page picks a viewer from the content types.
+ */
+export const AssignmentSampleFileSchema = z.object({
+  url: z.string().url(),
+  contentType: z.string(),
+});
+export type AssignmentSampleFile = z.infer<typeof AssignmentSampleFileSchema>;
+
+export const AssignmentSampleResponseSchema = z.object({
+  files: z.array(AssignmentSampleFileSchema).min(1),
+  expiresAt: z.string().datetime(),
+});
+export type AssignmentSampleResponse = z.infer<typeof AssignmentSampleResponseSchema>;
+
+/**
+ * `GET /v2/annotation/assignments/:id/readings` (#646): what the
+ * independent readers answered on an arbitration task, each label with
+ * its comment, without who gave them. Sorted by label, so the order
+ * says nothing about who read first.
+ */
+export const AssignmentReadingSchema = z.object({
+  label: z.string(),
+  comment: z.string().nullable(),
+});
+export type AssignmentReading = z.infer<typeof AssignmentReadingSchema>;
+
+export const AssignmentReadingsResponseSchema = z.object({
+  readings: z.array(AssignmentReadingSchema),
+});
+export type AssignmentReadingsResponse = z.infer<typeof AssignmentReadingsResponseSchema>;
+
 export const SeedTasksResponseSchema = z.object({
   created: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
@@ -3384,6 +3543,13 @@ export const PullNextResponseSchema = z.object({
   assignment: AssignmentSummarySchema.nullable(),
 });
 export type PullNextResponse = z.infer<typeof PullNextResponseSchema>;
+
+export const ReleaseAssignmentResponseSchema = z.object({
+  assignmentId: z.string().uuid(),
+  taskId: z.string().uuid(),
+  releasedAt: z.string().datetime(),
+});
+export type ReleaseAssignmentResponse = z.infer<typeof ReleaseAssignmentResponseSchema>;
 
 export const SubmitAssignmentRequestSchema = z.object({
   /**

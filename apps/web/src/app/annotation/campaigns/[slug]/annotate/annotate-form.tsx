@@ -1,98 +1,129 @@
 'use client';
 
-import { useActionState, useId, useState, useTransition } from 'react';
+import { useActionState, useEffect, useId, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Textarea } from '@oci/ui';
-import type { AssignmentSummary } from '@oci/shared-types';
+import type { AssignmentSummary, ClassificationLabelsConfig } from '@oci/shared-types';
 import {
-  pullNextAction,
+  releaseAssignmentAction,
   submitAssignmentAction,
-  type PullState,
+  type ReleaseState,
   type SubmitState,
 } from './actions';
+import { LabelChoices } from './label-choices';
 
-const initialPull: PullState = { status: 'idle' };
 const initialSubmit: SubmitState = { status: 'idle' };
+const initialRelease: ReleaseState = { status: 'idle' };
 
 interface AnnotateFormProps {
   slug: string;
   assignment: AssignmentSummary;
   /** The campaign's current instructions version; null when none is published. */
   instructionsVersion: string | null;
+  /** The campaign's declared labels (#646); null keeps the free-form JSON form. */
+  labels: ClassificationLabelsConfig | null;
+  /** Arbitration on a labelled campaign: the arbiter must say why (#646). */
+  reasonRequired?: boolean;
 }
 
 /**
  * Annotator submission form (#215 slice 2 web slice).
  *
  * The page already loaded the in-flight assignment server-side. This
- * client component owns the submit form + the "pass / pull-next"
- * button so the annotator can chain tasks without a full page nav
- * (the server action revalidates the route on success, so the next
- * paint shows the next task).
+ * client component owns the submit form and "Skip" (#646). Both
+ * actions redirect back to the queue on success, which offers the
+ * next task.
  *
- * Submission shape is free-form JSON today — tool-integration-aware
- * schema validation per ADR-0007 lands with #214. The textarea
- * placeholder shows a minimal valid example so first-time annotators
- * aren't staring at a blank box.
+ * A campaign with declared labels (#646) shows them as radio buttons
+ * with number-key shortcuts and submits `{ label, comment }`. Other
+ * campaigns keep the free-form JSON textarea — tool-integration-aware
+ * schema validation per ADR-0007 lands with #214.
  */
-export function AnnotateForm({ slug, assignment, instructionsVersion }: AnnotateFormProps) {
+export function AnnotateForm({
+  slug,
+  assignment,
+  instructionsVersion,
+  labels,
+  reasonRequired = false,
+}: AnnotateFormProps) {
   const [submitState, submitAction, submitPending] = useActionState(
     submitAssignmentAction,
     initialSubmit,
   );
-  const [pullState, pullAction, pullPending] = useActionState(pullNextAction, initialPull);
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [releaseState, releaseAction, releasePending] = useActionState(
+    releaseAssignmentAction,
+    initialRelease,
+  );
+  const busy = submitPending || releasePending;
   // The version the annotator confirmed. It stays confirmed across
-  // tasks, and un-confirms itself when a new version is published.
-  const [acknowledged, setAcknowledged] = useState<string | null>(null);
-  const ackId = useId();
-
-  // On a successful submit that completed the task, refresh the page
-  // so the server picks up the next assignment via the idempotent
-  // pull-next probe in page.tsx.
-  if (submitState.status === 'success' && submitState.newGateState !== null) {
-    startTransition(() => router.refresh());
+  // tasks (each task remounts this form, so it is kept for the browser
+  // session), and un-confirms itself when a new version is published.
+  const [acknowledged, setAcknowledgedState] = useState<string | null>(null);
+  const ackKey = `oci:annotate:${slug}:acknowledged`;
+  useEffect(() => {
+    try {
+      setAcknowledgedState(window.sessionStorage.getItem(ackKey));
+    } catch {
+      // Storage blocked: the reader confirms on each task instead.
+    }
+  }, [ackKey]);
+  function setAcknowledged(version: string | null) {
+    setAcknowledgedState(version);
+    try {
+      if (version) window.sessionStorage.setItem(ackKey, version);
+      else window.sessionStorage.removeItem(ackKey);
+    } catch {
+      // Storage blocked: nothing to remember.
+    }
   }
+  const ackId = useId();
+  const skipFormId = useId();
 
   return (
     <div className="space-y-5">
-      {submitState.status === 'success' ? (
-        <Alert tone="success">
-          <AlertTitle>Submission recorded</AlertTitle>
-          <AlertDescription>{submitState.message}</AlertDescription>
-        </Alert>
-      ) : null}
       {submitState.status === 'error' ? (
         <Alert tone="danger">
           <AlertTitle>Could not submit</AlertTitle>
           <AlertDescription>{submitState.message}</AlertDescription>
         </Alert>
       ) : null}
+      {releaseState.status === 'error' ? (
+        <Alert tone="danger">
+          <AlertTitle>Could not skip</AlertTitle>
+          <AlertDescription>{releaseState.message}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <form action={submitAction} className="space-y-3">
         <input type="hidden" name="assignmentId" value={assignment.id} />
         <input type="hidden" name="slug" value={slug} />
-        <Field
-          label="Annotation"
-          htmlFor="field-submission"
-          hint='Free-form JSON today (e.g. {"label": "pneumonia"} for classification, or a mask URL for segmentation). The tool-integration-aware schema lands with #214.'
-        >
-          <Textarea
-            id="field-submission"
-            name="submission"
-            rows={8}
-            maxLength={20_000}
-            defaultValue={
-              submitState.status === 'error'
-                ? submitState.submission
-                : defaultPayloadFor(assignment.gateAtAssignment)
-            }
-            spellCheck={false}
-            className="font-mono"
+        {labels ? (
+          <LabelChoices
+            labels={labels}
+            reasonRequired={reasonRequired}
+            echoed={submitState.status === 'error' ? submitState.submission : null}
           />
-        </Field>
+        ) : (
+          <Field
+            label="Annotation"
+            htmlFor="field-submission"
+            hint='Free-form JSON today (e.g. {"label": "pneumonia"} for classification, or a mask URL for segmentation). The tool-integration-aware schema lands with #214.'
+          >
+            <Textarea
+              id="field-submission"
+              name="submission"
+              rows={8}
+              maxLength={20_000}
+              defaultValue={
+                submitState.status === 'error'
+                  ? submitState.submission
+                  : defaultPayloadFor(assignment.gateAtAssignment)
+              }
+              spellCheck={false}
+              className="font-mono"
+            />
+          </Field>
+        )}
         {instructionsVersion ? (
           // The API refuses a submission that doesn't name the current
           // instructions version (#230).
@@ -124,31 +155,23 @@ export function AnnotateForm({ slug, assignment, instructionsVersion }: Annotate
           </div>
         ) : null}
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" variant="primary" disabled={submitPending || isPending}>
-            {submitPending ? 'Submitting…' : 'Submit'}
+          <Button type="submit" variant="primary" disabled={busy}>
+            {submitPending ? 'Submitting…' : labels ? 'Submit (Enter)' : 'Submit'}
+          </Button>
+          {/* Skip lives in its own form; `form=` ties the button to it
+              so it sits beside Submit without nesting forms. */}
+          <Button type="submit" variant="outline" form={skipFormId} disabled={busy}>
+            {releasePending ? 'Skipping…' : 'Skip'}
           </Button>
         </div>
       </form>
-
-      <div className="border-t border-[var(--color-border)] pt-4">
-        {pullState.status === 'success' && pullState.assignmentId === null ? (
-          <Alert tone="info">
-            <AlertDescription>{pullState.message}</AlertDescription>
-          </Alert>
-        ) : null}
-        {pullState.status === 'error' ? (
-          <Alert tone="danger">
-            <AlertTitle>Could not pull next</AlertTitle>
-            <AlertDescription>{pullState.message}</AlertDescription>
-          </Alert>
-        ) : null}
-        <form action={pullAction}>
-          <input type="hidden" name="slug" value={slug} />
-          <Button type="submit" variant="outline" disabled={pullPending}>
-            {pullPending ? 'Refreshing…' : 'Re-check the queue'}
-          </Button>
-        </form>
-      </div>
+      <form id={skipFormId} action={releaseAction} hidden>
+        <input type="hidden" name="assignmentId" value={assignment.id} />
+        <input type="hidden" name="slug" value={slug} />
+      </form>
+      <p className="text-sm text-[var(--color-muted-foreground)]">
+        Skip gives this task back unread, so another annotator can take it.
+      </p>
     </div>
   );
 }

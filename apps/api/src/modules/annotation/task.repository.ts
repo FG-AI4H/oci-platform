@@ -70,6 +70,17 @@ export class TaskRepository {
     return { created: result.count, skipped: items.length - result.count };
   }
 
+  /** How many of `sampleRefs` already have a task in the campaign. */
+  async countExistingSampleRefs(
+    campaignId: string,
+    sampleRefs: readonly string[],
+  ): Promise<number> {
+    if (sampleRefs.length === 0) return 0;
+    return this.prisma.client.annotationTask.count({
+      where: { campaignId, sampleRef: { in: [...sampleRefs] } },
+    });
+  }
+
   /**
    * Pairs of (annotator submission, gold expected label) for every
    * gold sample in the campaign that this annotator has submitted
@@ -189,6 +200,19 @@ export class TaskRepository {
       );
   }
 
+  /** Whether this user submitted an independent reading of the task (#646). */
+  async hasReadTask(taskId: string, userId: string): Promise<boolean> {
+    const n = await this.prisma.client.annotationTaskAssignment.count({
+      where: {
+        taskId,
+        assigneeUserId: userId,
+        gateAtAssignment: 'INDEPENDENT',
+        status: 'SUBMITTED',
+      },
+    });
+    return n > 0;
+  }
+
   async updateGateState(args: {
     taskId: string;
     expectedFrom: AnnotationGateState;
@@ -226,7 +250,8 @@ export class TaskRepository {
   /**
    * Find the caller's active assignment for the (campaign, gate)
    * pair. "Active" means PENDING or IN_PROGRESS. SUBMITTED rows are
-   * historical; EXPIRED rows are abandonment cleanups.
+   * historical; EXPIRED rows are abandonment cleanups; RELEASED rows
+   * were skipped by the annotator (#646).
    *
    * The current shape supports the slice-2 invariant "one annotator
    * holds at most one active assignment in flight per campaign+gate";
@@ -252,58 +277,94 @@ export class TaskRepository {
   /**
    * FIFO eligible-task lookup for the router. Returns the
    * earliest-created task whose `gateState === gate`, where the
-   * caller (`assigneeUserId`) does NOT already hold an active
-   * assignment, AND the task has fewer than the gate's required
-   * number of in-flight assignments (slots-still-open check).
+   * caller (`assigneeUserId`) has not already read or reserved it, AND
+   * the task has fewer than the gate's required number of readings
+   * submitted or in flight (slots-still-open check).
    *
-   * Slice 2 caps "in-flight per task per gate" at
-   * `nAnnotatorsRequired - submittedCount`, so we don't over-assign
-   * a near-complete task. The full predicate chain from ADR-0009
-   * Decision 1 (experience-ranking, bias-prevention, stratification)
-   * is slice 3.
+   * A task the caller skipped (RELEASED, #646) is offered again only
+   * when nothing else is open for them, so "Skip" moves them on to
+   * another image but a campaign with as many readers per task as
+   * annotators can still finish.
+   *
+   * Tasks the caller has read or holds are excluded in the query, and
+   * the rest are read in FIFO pages until one has a slot left. A
+   * single fixed-size page let tasks that were already full hide open
+   * ones further down the queue, and the caller was told there was
+   * nothing left.
    */
   async findNextEligibleTask(args: {
     campaignId: string;
     gate: AnnotationGateState;
     assigneeUserId: string;
   }): Promise<AnnotationTask | null> {
-    // Pull a small candidate page in FIFO order, then filter in
-    // application code. The result-set size is bounded by N (per
-    // task we keep at most N concurrent assignments), so a page of
-    // 50 is sufficient for any campaign N ≤ 12 (the soft cap).
-    const candidates = await this.prisma.client.annotationTask.findMany({
-      where: { campaignId: args.campaignId, gateState: args.gate },
-      orderBy: { createdAt: 'asc' },
-      take: 50,
-      include: {
-        assignments: {
-          where: { gateAtAssignment: args.gate },
-          select: { assigneeUserId: true, status: true },
+    let skippedFallback: AnnotationTask | null = null;
+    let cursor: string | undefined;
+    for (;;) {
+      const page = await this.prisma.client.annotationTask.findMany({
+        where: {
+          campaignId: args.campaignId,
+          gateState: args.gate,
+          // EXPIRED and RELEASED assignments produced no reading, so
+          // they don't bar the caller from the task. Otherwise a
+          // campaign with as many readers per task as annotators could
+          // never finish a task that one of them abandoned or skipped
+          // (#647).
+          assignments: {
+            none: {
+              assigneeUserId: args.assigneeUserId,
+              // At arbitration the caller must also not be one of the
+              // task's readers (#646): an arbiter settles other people's
+              // disagreement, never their own.
+              ...(args.gate === 'AWAITING_ARBITRATION'
+                ? {
+                    OR: [
+                      {
+                        gateAtAssignment: args.gate,
+                        status: { in: ['PENDING', 'IN_PROGRESS', 'SUBMITTED'] },
+                      },
+                      { gateAtAssignment: 'INDEPENDENT', status: 'SUBMITTED' },
+                    ],
+                  }
+                : {
+                    gateAtAssignment: args.gate,
+                    status: { in: ['PENDING', 'IN_PROGRESS', 'SUBMITTED'] },
+                  }),
+            },
+          },
         },
-      },
-    });
-    for (const task of candidates) {
-      const submitted = task.assignments.filter((a) => a.status === 'SUBMITTED').length;
-      const inFlight = task.assignments.filter(
-        (a) => a.status === 'PENDING' || a.status === 'IN_PROGRESS',
-      ).length;
-      const slotsLeft = task.nAnnotatorsRequired - submitted - inFlight;
-      if (slotsLeft <= 0) continue;
-      // An EXPIRED assignment never produced a reading, so it doesn't
-      // bar the caller from the task. Otherwise a campaign with as many
-      // readers per task as annotators could never finish a task that
-      // one of them abandoned (#647).
-      const callerAlreadyOnTask = task.assignments.some(
-        (a) => a.assigneeUserId === args.assigneeUserId && a.status !== 'EXPIRED',
-      );
-      if (callerAlreadyOnTask) continue;
-      // Strip the included assignments — the caller wants a plain
-      // AnnotationTask shape.
-      const { assignments: _drop, ...plain } = task;
-      void _drop;
-      return plain;
+        // `id` breaks ties: tasks seeded in one batch share `createdAt`,
+        // and the cursor needs a stable order to neither repeat nor
+        // skip a task between pages.
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: CANDIDATE_PAGE,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        include: {
+          assignments: {
+            where: { gateAtAssignment: args.gate },
+            select: { assigneeUserId: true, status: true },
+          },
+        },
+      });
+      for (const task of page) {
+        const taken = task.assignments.filter(
+          (a) => a.status === 'SUBMITTED' || a.status === 'PENDING' || a.status === 'IN_PROGRESS',
+        ).length;
+        if (task.nAnnotatorsRequired - taken <= 0) continue;
+        // Strip the included assignments — the caller wants a plain
+        // AnnotationTask shape.
+        const { assignments, ...plain } = task;
+        const skippedByCaller = assignments.some(
+          (a) => a.assigneeUserId === args.assigneeUserId && a.status === 'RELEASED',
+        );
+        if (skippedByCaller) {
+          skippedFallback ??= plain;
+          continue;
+        }
+        return plain;
+      }
+      if (page.length < CANDIDATE_PAGE) return skippedFallback;
+      cursor = page[page.length - 1]?.id;
     }
-    return null;
   }
 
   /**
@@ -321,15 +382,15 @@ export class TaskRepository {
    * expert review are separate work and must not eat into the share.
    *
    * `callerShare` counts the caller's independent assignments that are
-   * not EXPIRED — abandonment doesn't count toward task-share per #229
-   * + ADR-0009.
+   * neither EXPIRED nor RELEASED — abandonment and skips don't count
+   * toward task-share per #229 + ADR-0009.
    *
    * `nActiveAnnotators` counts only annotators who are still working:
    * an independent assignment handed out, or a reading submitted, at or
-   * after `activeSince`. Counting everyone who ever took a task would
-   * keep annotators who left in the denominator and stall a shrinking
-   * cohort at the cap (#669 review). The caller is always counted: they
-   * are pulling now.
+   * after `activeSince`. EXPIRED and RELEASED rows don't count. Counting
+   * everyone who ever took a task would keep annotators who left in the
+   * denominator and stall a shrinking cohort at the cap (#669 review).
+   * The caller is always counted: they are pulling now.
    */
   async biasCapInputs(args: {
     campaignId: string;
@@ -532,4 +593,20 @@ export class TaskRepository {
     });
     return result.count > 0;
   }
+
+  /**
+   * Conditional release ("Skip", #646). Same race guard as
+   * `markAssignmentExpired`: count 0 means the row was submitted,
+   * expired or released in the meantime.
+   */
+  async markAssignmentReleased(assignmentId: string): Promise<boolean> {
+    const result = await this.prisma.client.annotationTaskAssignment.updateMany({
+      where: { id: assignmentId, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+      data: { status: 'RELEASED', releasedAt: new Date() },
+    });
+    return result.count > 0;
+  }
 }
+
+/** Candidate page size for `findNextEligibleTask`. */
+const CANDIDATE_PAGE = 50;

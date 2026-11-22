@@ -37,6 +37,6 @@ The platform handles the bookkeeping (routing, gate progression, IRR scoring, pr
 ## Where to ask
 
 - The campaign manager is your first point of contact — every campaign has a named manager visible at the top of the campaign page.
-- **Stuck on a sample?** Skip it. The campaign manager reviews skipped samples and either re-queues them with a clarification or accepts the skip. Use the reason field — it improves the instructions for everyone.
+- **Stuck on a sample?** Skip it: it goes back to the queue for someone else. If the sample itself is the problem (unreadable, not de-identified, unclear instructions), tell the campaign manager — it improves the instructions for everyone.
 - **Disagree with an arbitration decision?** Flag the task for supervisor review (per [ADR-0011](../adr/0011-annotation-sample-rejection.md)). The supervisor can roll back the gate or invite the expert reviewer.
 - Email: `oci-platform@itu.int`.
