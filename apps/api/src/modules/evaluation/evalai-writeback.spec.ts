@@ -53,6 +53,22 @@ describe('flattenScoresForEvalAi — comparability is preserved, not flattened a
     expect(Object.keys(grading)[1]).not.toBe(Object.keys(classification)[1]);
   });
 
+  it('posts the point estimate of a proportion with an interval (#650)', () => {
+    const out = flattenScoresForEvalAi({
+      kind: 'BINARY_DIAGNOSTIC',
+      metrics: {
+        truePositives: 4,
+        sensitivity: { estimate: 0.8, lower: 0.4, upper: 0.96, numerator: 4, denominator: 5 },
+        negativePredictiveValue: null,
+        auc: null,
+      },
+    });
+    expect(out).toEqual({
+      binary_diagnostic_truePositives: 4,
+      binary_diagnostic_sensitivity: 0.8,
+    });
+  });
+
   it('drops non-finite and non-numeric values rather than posting NaN to a leaderboard', () => {
     const out = flattenScoresForEvalAi({
       kind: 'GRADING',

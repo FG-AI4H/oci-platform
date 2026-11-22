@@ -48,6 +48,7 @@
  */
 
 import type {
+  EvaluationTaskKindDb,
   SubmissionValidationCheck,
   SubmissionValidationCheckName,
   SubmissionValidationItemIdSummary,
@@ -75,7 +76,7 @@ export interface InterfaceValidationOutcome {
  */
 export interface PredictionsValidationInput {
   /** The payload as submitted, duplicates and all. */
-  predictions: readonly { imageId: string; grade: number }[];
+  predictions: readonly { imageId: string; grade: number; score?: number }[];
   /**
    * The task's item-ID key set — the SAME set the participant already holds via
    * `/input/index.json`. Labels are deliberately not part of this type.
@@ -83,7 +84,26 @@ export interface PredictionsValidationInput {
   taskItemIds: readonly string[];
   /** Public task config; already exposed by `GET /v2/evaluation/tasks/:slug`. */
   numClasses: number;
+  /**
+   * Public task config. Decides the word the report uses for a label and
+   * whether a per-item score is accepted (#650).
+   */
+  taskKind: EvaluationTaskKindDb;
 }
+
+/**
+ * What one value in the label column is called for a kind. An ordinal scale
+ * has grades; nominal categories and a present/absent finding have labels.
+ * Exhaustive on purpose: a new kind must choose its word here.
+ */
+const LABEL_NOUN: Readonly<Record<EvaluationTaskKindDb, { one: string; many: string }>> = {
+  GRADING: { one: 'grade', many: 'grades' },
+  CLASSIFICATION: { one: 'label', many: 'labels' },
+  BINARY_DIAGNOSTIC: { one: 'label', many: 'labels' },
+};
+
+/** Kinds whose predictions may carry a per-item score (mirrors the registry). */
+const KINDS_WITH_SCORES: ReadonlySet<EvaluationTaskKindDb> = new Set(['BINARY_DIAGNOSTIC']);
 
 /** Input for a CONTAINER validation: is this image dispatchable at all. */
 export interface ContainerValidationInput {
@@ -121,15 +141,21 @@ function check(
 export function validatePredictionsInterface(
   input: PredictionsValidationInput,
 ): InterfaceValidationOutcome {
-  const { numClasses } = input;
+  const { numClasses, taskKind } = input;
   const maxLabel = numClasses - 1;
+  // `taskKind` is the closed DB enum, so the lookup is one of three literals.
+  // eslint-disable-next-line security/detect-object-injection
+  const noun = LABEL_NOUN[taskKind];
+  const takesScores = KINDS_WITH_SCORES.has(taskKind);
 
   const seen = new Set<string>();
   const duplicates = new Set<string>();
   const outOfRange = new Set<string>();
   const distinctIds: string[] = [];
+  const scored = new Set<string>();
 
-  for (const { imageId, grade } of input.predictions) {
+  for (const { imageId, grade, score } of input.predictions) {
+    if (score !== undefined) scored.add(imageId);
     if (seen.has(imageId)) {
       duplicates.add(imageId);
     } else {
@@ -155,11 +181,12 @@ export function validatePredictionsInterface(
   };
 
   const checks: SubmissionValidationCheck[] = [
-    check(
-      'PAYLOAD_SHAPE',
-      true,
-      `Parsed ${input.predictions.length} prediction row(s) with the expected { imageId, grade } shape.`,
-    ),
+    payloadShapeCheck({
+      rows: input.predictions.length,
+      takesScores,
+      scored,
+      recognisedWithoutScore: distinctIds.filter((id) => taskIds.has(id) && !scored.has(id)).length,
+    }),
     duplicates.size === 0
       ? check('DUPLICATE_ITEM_IDS', true, 'No item ID appears more than once.')
       : check(
@@ -169,17 +196,64 @@ export function validatePredictionsInterface(
           [...duplicates].sort(),
         ),
     outOfRange.size === 0
-      ? check('LABEL_RANGE', true, `Every grade is an integer in [0, ${maxLabel}].`)
+      ? check('LABEL_RANGE', true, `Every ${noun.one} is an integer in [0, ${maxLabel}].`)
       : check(
           'LABEL_RANGE',
           false,
-          `${outOfRange.size} prediction(s) carry a grade outside this task's range. Grades must be integers in [0, ${maxLabel}] (numClasses = ${numClasses}).`,
+          `${outOfRange.size} prediction(s) carry a ${noun.one} outside this task's range. ${capitalise(noun.many)} must be integers in [0, ${maxLabel}] (numClasses = ${numClasses}).`,
           [...outOfRange].sort(),
         ),
     itemIdsRecognisedCheck(unrecognised, recognisedCount, taskIds.size),
   ];
 
   return { ok: checks.every((c) => c.ok), checks, itemIdSummary };
+}
+
+function capitalise(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/**
+ * The shape check. The DTO has already parsed the rows, so the only way this
+ * fails is a score sent to a kind that takes none (#650): refused rather than
+ * dropped, so nobody is scored on less than they believe they sent.
+ *
+ * For a kind that takes scores, the detail says how many rows carry one and,
+ * when some recognised rows do not, that no AUC will be reported. Every count
+ * here is of the participant's own rows and of public identifiers; none is a
+ * function of a label.
+ */
+function payloadShapeCheck(args: {
+  rows: number;
+  takesScores: boolean;
+  scored: ReadonlySet<string>;
+  recognisedWithoutScore: number;
+}): SubmissionValidationCheck {
+  const { rows, takesScores, scored, recognisedWithoutScore } = args;
+  if (!takesScores) {
+    return scored.size === 0
+      ? check('PAYLOAD_SHAPE', true, `Parsed ${rows} prediction row(s) with the expected shape.`)
+      : check(
+          'PAYLOAD_SHAPE',
+          false,
+          `${scored.size} prediction row(s) carry a score. This task takes one label per item and no score; remove the score values.`,
+          [...scored].sort(),
+        );
+  }
+  if (scored.size === 0) {
+    return check(
+      'PAYLOAD_SHAPE',
+      true,
+      `Parsed ${rows} prediction row(s) with the expected shape. No row carries a score, so the result will not include an AUC.`,
+    );
+  }
+  return check(
+    'PAYLOAD_SHAPE',
+    true,
+    recognisedWithoutScore === 0
+      ? `Parsed ${rows} prediction row(s) with the expected shape. Every recognised row carries a score, so the result can include an AUC: it is reported when the scored items include both positive and negative cases.`
+      : `Parsed ${rows} prediction row(s) with the expected shape. ${recognisedWithoutScore} recognised row(s) carry no score, so the result will not include an AUC: it needs a score for every scored item.`,
+  );
 }
 
 /**

@@ -165,7 +165,8 @@ export class EvaluationService {
         createdAt: s.createdAt.toISOString(),
       }))
       // Best-first on the scoring family's own primary metric — quadratic-
-      // weighted kappa for GRADING, macro F1 for CLASSIFICATION (ADR-0020).
+      // weighted kappa for GRADING, macro F1 for CLASSIFICATION, balanced
+      // accuracy for BINARY_DIAGNOSTIC (ADR-0020).
       // Every submission on one task shares that task's kind, so the ordering
       // is well defined; ordering ACROSS tasks is not, which is why results are
       // reported per task. Unscored rows sink rather than sorting as zero.
@@ -179,6 +180,7 @@ export class EvaluationService {
       taskKind: t.taskKind,
       numClasses: t.numClasses,
       referableThreshold: t.referableThreshold,
+      positiveClassName: t.positiveClassName,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
       // #441 — the item-ID key set, so a Mode 1 participant can key a
@@ -304,8 +306,11 @@ export class EvaluationService {
     await this.assertWithinScoredQuota(ctx.id, slug, submittedBy);
 
     // Build the imageId -> grade map, rejecting duplicate imageIds (the DTO
-    // validates the array shape but not cross-row uniqueness).
+    // validates the array shape but not cross-row uniqueness). Scores, where a
+    // row has one, go into their own map: the registry decides whether this
+    // task's kind takes them, and refuses them if not (#650).
     const predictions: Record<string, number> = {};
+    const itemScores: Record<string, number> = {};
     for (const p of body.predictions) {
       if (Object.prototype.hasOwnProperty.call(predictions, p.imageId)) {
         return await this.failSubmission(
@@ -316,6 +321,7 @@ export class EvaluationService {
         );
       }
       predictions[p.imageId] = p.grade;
+      if (p.score !== undefined) itemScores[p.imageId] = p.score;
     }
 
     let scores: TaskKindScores;
@@ -328,6 +334,9 @@ export class EvaluationService {
         kind: ctx.taskKind,
         groundTruth: ctx.groundTruth,
         predictions,
+        // Absent rather than empty when no row had a score, so a kind that
+        // takes none sees exactly what it saw before scores existed.
+        itemScores: Object.keys(itemScores).length > 0 ? itemScores : undefined,
         config: {
           numClasses: ctx.numClasses,
           referableThreshold: ctx.referableThreshold,
@@ -484,6 +493,7 @@ export class EvaluationService {
       predictions: body.predictions,
       taskItemIds: task.itemIds,
       numClasses: task.numClasses,
+      taskKind: task.taskKind,
     });
     this.logValidation(task.slug, 'PREDICTIONS', body.methodName, outcome);
     return validationReport(task.slug, 'PREDICTIONS', outcome);
@@ -533,6 +543,9 @@ export class EvaluationService {
         taskKind: body.taskKind,
         numClasses: body.numClasses,
         referableThreshold: body.referableThreshold,
+        // The request schema requires it for BINARY_DIAGNOSTIC and refuses it
+        // for every other kind, so this is null exactly when it does not apply.
+        positiveClassName: body.positiveClassName ?? null,
         groundTruth: body.groundTruth,
       });
       return {

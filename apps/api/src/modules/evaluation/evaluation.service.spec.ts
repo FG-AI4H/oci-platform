@@ -6,6 +6,7 @@ import {
 import {
   EvaluationTaskDetailSchema,
   SealedRunMessageSchema,
+  TaskKindScoresSchema,
   type SubmitContainerRequest,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
@@ -186,6 +187,116 @@ describe('EvaluationService.submitPredictions — CLASSIFICATION dispatch', () =
     expect(out).toBeInstanceOf(BadRequestException);
     expect(repo.createSubmission).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'FAILED', scores: null }),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #650: a BINARY_DIAGNOSTIC task takes an optional score per row; every other
+// kind refuses one. The refusal happens before scoring, so it is a FAILED row
+// that costs no quota — the same path as a duplicate identifier.
+// ---------------------------------------------------------------------------
+
+describe('EvaluationService.submitPredictions — BINARY_DIAGNOSTIC and scores', () => {
+  const BINARY_GT = { a: 1, b: 1, c: 0, d: 0 };
+  const binaryContext = {
+    id: TASK_ID,
+    taskKind: 'BINARY_DIAGNOSTIC' as const,
+    numClasses: 2,
+    referableThreshold: 1,
+    groundTruth: BINARY_GT,
+  };
+
+  beforeEach(() => {
+    repo.createSubmission.mockResolvedValue({ id: SUBMISSION_ID });
+  });
+
+  it('scores labels with intervals, and AUC when every row has a score', async () => {
+    repo.findScoringContext.mockResolvedValue(binaryContext);
+    const out = await service.submitPredictions(
+      'binary-task',
+      {
+        methodName: 'binary-baseline',
+        intent: 'SCORED',
+        predictions: [
+          { imageId: 'a', grade: 1, score: 0.9 },
+          { imageId: 'b', grade: 0, score: 0.4 },
+          { imageId: 'c', grade: 0, score: 0.3 },
+          { imageId: 'd', grade: 0, score: 0.1 },
+        ],
+      },
+      PARTICIPANT,
+    );
+    if (out.scores.kind !== 'BINARY_DIAGNOSTIC') throw new Error('wrong kind');
+    const m = out.scores.metrics;
+    expect(m.sensitivity).toMatchObject({ estimate: 0.5, numerator: 1, denominator: 2 });
+    expect(m.specificity).toMatchObject({ estimate: 1, numerator: 2, denominator: 2 });
+    expect(m.auc?.estimate).toBe(1);
+    // The response is exactly what the shared schema describes.
+    expect(TaskKindScoresSchema.safeParse(out.scores).success).toBe(true);
+  });
+
+  it('reports no AUC when one row has no score', async () => {
+    repo.findScoringContext.mockResolvedValue(binaryContext);
+    const out = await service.submitPredictions(
+      'binary-task',
+      {
+        methodName: 'binary-baseline',
+        intent: 'SCORED',
+        predictions: [
+          { imageId: 'a', grade: 1, score: 0.9 },
+          { imageId: 'b', grade: 0 },
+          { imageId: 'c', grade: 0, score: 0.3 },
+          { imageId: 'd', grade: 0, score: 0.1 },
+        ],
+      },
+      PARTICIPANT,
+    );
+    if (out.scores.kind !== 'BINARY_DIAGNOSTIC') throw new Error('wrong kind');
+    expect(out.scores.metrics.auc).toBeNull();
+    expect(out.scores.metrics.sensitivity).not.toBeNull();
+  });
+
+  it('refuses a score on a CLASSIFICATION task: FAILED, 400, before scoring', async () => {
+    repo.findScoringContext.mockResolvedValue({ ...binaryContext, taskKind: 'CLASSIFICATION' });
+    const out = await service
+      .submitPredictions(
+        'nominal-task',
+        {
+          methodName: 'nominal-baseline',
+          intent: 'SCORED',
+          predictions: [{ imageId: 'a', grade: 1, score: 0.7 }],
+        },
+        PARTICIPANT,
+      )
+      .catch((err: unknown) => err);
+    expect(out).toBeInstanceOf(BadRequestException);
+    expect(repo.createSubmission).toHaveBeenCalledTimes(1);
+    expect(repo.createSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'FAILED',
+        scores: null,
+        error: expect.stringContaining('takes one label per item and no score'),
+      }),
+    );
+  });
+
+  it('refuses a label of 2 on a binary task', async () => {
+    repo.findScoringContext.mockResolvedValue(binaryContext);
+    const out = await service
+      .submitPredictions(
+        'binary-task',
+        {
+          methodName: 'binary-baseline',
+          intent: 'SCORED',
+          predictions: [{ imageId: 'a', grade: 2 }],
+        },
+        PARTICIPANT,
+      )
+      .catch((err: unknown) => err);
+    expect(out).toBeInstanceOf(BadRequestException);
+    expect(repo.createSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'FAILED', error: expect.stringContaining('expected 0') }),
     );
   });
 });
@@ -456,6 +567,7 @@ describe('getTaskDetail — item IDs', () => {
       taskKind: 'GRADING',
       numClasses: 5,
       referableThreshold: 2,
+      positiveClassName: null,
       createdAt: new Date('2026-08-01T00:00:00.000Z'),
       updatedAt: new Date('2026-08-01T00:00:00.000Z'),
       itemIds: [...STORED_KEYS].sort(),

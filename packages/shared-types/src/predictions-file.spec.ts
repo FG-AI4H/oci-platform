@@ -218,6 +218,90 @@ describe('predictionsTemplateCsv (#645)', () => {
   );
 });
 
+describe('parsePredictionsFile — optional score, for a task that takes one (#650)', () => {
+  const allow = { allowScore: true };
+
+  it('reads item_id,label,score rows', () => {
+    expect(rows(parsePredictionsFile('item_id,label,score\na,1,0.93\nb,0,0.1\n', allow))).toEqual([
+      { imageId: 'a', grade: 1, score: 0.93 },
+      { imageId: 'b', grade: 0, score: 0.1 },
+    ]);
+  });
+
+  it('still reads item_id,label with no score column', () => {
+    expect(rows(parsePredictionsFile('item_id,label\na,1\n', allow))).toEqual([
+      { imageId: 'a', grade: 1 },
+    ]);
+  });
+
+  it('takes an empty score cell as "no score for this item"', () => {
+    expect(rows(parsePredictionsFile('item_id,label,score\na,1,0.8\nb,0,\n', allow))).toEqual([
+      { imageId: 'a', grade: 1, score: 0.8 },
+      { imageId: 'b', grade: 0 },
+    ]);
+  });
+
+  it('reads a decimal comma in a semicolon-separated file', () => {
+    expect(rows(parsePredictionsFile('item_id;label;score\na;1;0,83\nb;0;1\n', allow))).toEqual([
+      { imageId: 'a', grade: 1, score: 0.83 },
+      { imageId: 'b', grade: 0, score: 1 },
+    ]);
+  });
+
+  it.each(['1.5', '-0.2', 'high', '0,5', '1e-3'])(
+    'refuses the score %j in a comma-separated file, with its line',
+    (bad) => {
+      // "0,5" in a comma file is two cells, so it shows up as a fourth value.
+      const result = issues(parsePredictionsFile(`item_id,label,score\na,1,${bad}\n`, allow));
+      expect(result.issues[0]?.line).toBe(2);
+      expect(result.issues[0]?.message).toMatch(
+        /score for "a" must be a number from 0 to 1|at most three/,
+      );
+    },
+  );
+
+  it('produces a body the submissions endpoint accepts, and the endpoint refuses a score above 1', () => {
+    const predictions = rows(parsePredictionsFile('item_id,label,score\na,1,0.5\n', allow));
+    expect(SubmitPredictionsRequestSchema.safeParse({ methodName: 'm', predictions }).success).toBe(
+      true,
+    );
+    expect(
+      SubmitPredictionsRequestSchema.safeParse({
+        methodName: 'm',
+        predictions: [{ imageId: 'a', grade: 1, score: 1.2 }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('reads a JSON score, and refuses one outside 0 to 1', () => {
+    expect(rows(parsePredictionsFile('[{"imageId":"a","grade":1,"score":0.7}]', allow))).toEqual([
+      { imageId: 'a', grade: 1, score: 0.7 },
+    ]);
+    const result = issues(parsePredictionsFile('[{"imageId":"a","grade":1,"score":7}]', allow));
+    expect(result.issues[0]?.message).toMatch(/^predictions\[0\]\.score: /);
+  });
+
+  it('keeps refusing the score column when the task takes none', () => {
+    const result = issues(parsePredictionsFile('item_id,label,score\na,1,0.5\n'));
+    expect(result.issues[0]?.message).toBe(
+      'A score column is not accepted for this task: it takes one whole-number label per item. The first line must be exactly item_id,label.',
+    );
+    const json = issues(parsePredictionsFile('[{"imageId":"a","grade":1,"score":0.5}]'));
+    expect(json.issues[0]?.message).toBe(
+      'predictions[0]: A score is not accepted for this task: it takes one whole-number label per item.',
+    );
+  });
+
+  it('writes a template with an empty score column, which reads back as unlabelled', () => {
+    const csv = predictionsTemplateCsv(['a', 'b'], ',', { withScore: true });
+    expect(csv).toBe('item_id,label,score\r\na,,\r\nb,,\r\n');
+    expect(predictionsTemplateCsv(['a'], ';', { withScore: true })).toBe(
+      'item_id;label;score\r\na;;\r\n',
+    );
+    expect(issues(parsePredictionsFile(csv, allow)).missingLabelCount).toBe(2);
+  });
+});
+
 describe('EvaluationSubmissionDetailSchema (#645)', () => {
   const base = {
     id: '22222222-2222-4222-8222-222222222222',
@@ -228,6 +312,7 @@ describe('EvaluationSubmissionDetailSchema (#645)', () => {
       taskKind: 'GRADING',
       numClasses: 2,
       referableThreshold: 1,
+      positiveClassName: null,
     },
     methodName: 'm',
     mode: 'PREDICTIONS',
