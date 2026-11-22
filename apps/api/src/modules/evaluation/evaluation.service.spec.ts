@@ -1,16 +1,27 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   NotFoundException,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { Prisma } from '@oci/database';
 import {
   EvaluationTaskDetailSchema,
   SealedRunMessageSchema,
   TaskKindScoresSchema,
+  type CreateEvaluationTaskRequest,
   type SubmitContainerRequest,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
+import { canonicalSha256 } from '@oci/audit';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  isFlatPayload,
+  RecordingAuditEmitter,
+} from '../../test-support/recording-audit-emitter.js';
+import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import type { EvalQueueProvider } from './eval-queue.js';
 import type { EvaluationRepository } from './evaluation.repository.js';
 import { EvaluationService } from './evaluation.service.js';
@@ -51,6 +62,8 @@ interface RepoMock {
   createSubmission: ReturnType<typeof vi.fn>;
   createContainerSubmission: ReturnType<typeof vi.fn>;
   applyResult: ReturnType<typeof vi.fn>;
+  createTask: ReturnType<typeof vi.fn>;
+  findTaskItemIds: ReturnType<typeof vi.fn>;
 }
 
 interface QueueMock {
@@ -62,6 +75,7 @@ interface QueueMock {
 
 let repo: RepoMock;
 let queue: QueueMock;
+let audit: RecordingAuditEmitter;
 let service: EvaluationService;
 
 beforeEach(() => {
@@ -85,6 +99,8 @@ beforeEach(() => {
     createSubmission: vi.fn(),
     createContainerSubmission: vi.fn(),
     applyResult: vi.fn().mockResolvedValue(1),
+    createTask: vi.fn().mockResolvedValue({ id: TASK_ID, slug: 'new-task' }),
+    findTaskItemIds: vi.fn(),
   };
   queue = {
     missingConfig: vi.fn().mockReturnValue([]),
@@ -94,9 +110,11 @@ beforeEach(() => {
     publish: vi.fn().mockResolvedValue(undefined),
     runTimeoutSec: 1800,
   };
+  audit = new RecordingAuditEmitter();
   service = new EvaluationService(
     repo as unknown as EvaluationRepository,
     queue as unknown as EvalQueueProvider,
+    audit.asEmitter(),
   );
 });
 
@@ -619,5 +637,413 @@ describe('getTaskDetail — item IDs', () => {
     repo.findBySlugWithSubmissions.mockResolvedValue(null);
 
     await expect(service.getTaskDetail('nope')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #653: the four evaluation audit events. Each carries ids, the method version
+// and sha256 hashes; none carries a prediction, a label or a refusal text that
+// could quote one. The item ids below are distinctive so that "no item id
+// appears anywhere in the payload" is a real check: a prediction or a label
+// cannot be written down without the item it belongs to, and a flat payload
+// has no field a list or a map of them could arrive in.
+// ---------------------------------------------------------------------------
+
+describe('evaluation audit events (#653)', () => {
+  const ITEM_IDS = ['case-alpha-0001', 'case-bravo-0002', 'case-charlie-0003', 'case-delta-0004'];
+  const LABELS: Record<string, number> = {
+    'case-alpha-0001': 0,
+    'case-bravo-0002': 1,
+    'case-charlie-0003': 3,
+    'case-delta-0004': 4,
+  };
+  const PREDICTIONS = [
+    { imageId: 'case-alpha-0001', grade: 0 },
+    { imageId: 'case-bravo-0002', grade: 2 },
+    { imageId: 'case-charlie-0003', grade: 3 },
+    { imageId: 'case-delta-0004', grade: 4 },
+  ];
+  const BODY = {
+    methodName: 'audited-method',
+    intent: 'SCORED' as const,
+    predictions: PREDICTIONS,
+  };
+  const ACTOR = cognitoSubAsUuid('participant-sub');
+
+  const SUBMITTED_KEYS = [
+    'externalChallengeId',
+    'externalSubmissionId',
+    'methodName',
+    'mode',
+    'predictionCount',
+    'predictionsSha256',
+    'routeId',
+    'routeVersion',
+    'routeVersionId',
+    'taskId',
+    'taskKind',
+    'taskSlug',
+  ];
+  const PREDICTIONS_FAILED_KEYS = [
+    'failureCode',
+    'methodName',
+    'mode',
+    'predictionsSha256',
+    'routeId',
+    'routeVersion',
+    'routeVersionId',
+    'taskId',
+    'taskSlug',
+  ];
+  const CONTAINER_SUBMITTED_KEYS = [
+    'imageDigest',
+    'methodName',
+    'mode',
+    'routeId',
+    'routeVersion',
+    'taskId',
+    'taskSlug',
+  ];
+  const TASK_CREATED_KEYS = [
+    'datasetSlug',
+    'groundTruthSha256',
+    'itemCount',
+    'numClasses',
+    'positiveClassName',
+    'referableThreshold',
+    'slug',
+    'subgroupFields',
+    'taskKind',
+  ];
+
+  const keysOf = (payload: Record<string, unknown>) => Object.keys(payload).sort();
+
+  /** Every recorded payload is flat and names no item. */
+  function expectNoItemData(): void {
+    expect(audit.events.length).toBeGreaterThan(0);
+    for (const e of audit.events) {
+      expect(isFlatPayload(e.payload), `${e.action} payload is flat`).toBe(true);
+      const json = JSON.stringify(e.payload);
+      for (const id of ITEM_IDS) expect(json, `${e.action} names ${id}`).not.toContain(id);
+    }
+  }
+
+  beforeEach(() => {
+    repo.findScoringContext.mockResolvedValue({
+      id: TASK_ID,
+      taskKind: 'GRADING' as const,
+      numClasses: 5,
+      referableThreshold: 2,
+      groundTruth: LABELS,
+      subgroups: null,
+    });
+    repo.createSubmission.mockResolvedValue({ id: SUBMISSION_ID });
+  });
+
+  describe('Mode 1 scored submission', () => {
+    it('records evaluation.submitted then evaluation.scored, with hashes and no content', async () => {
+      const out = await service.submitPredictions('audited-task', BODY, PARTICIPANT);
+
+      expect(audit.actions()).toEqual(['evaluation.submitted', 'evaluation.scored']);
+      const submitted = audit.only('evaluation.submitted');
+      const scored = audit.only('evaluation.scored');
+      for (const e of [submitted, scored]) {
+        // `emit`: the score is stored, so an audit failure must not become a 500.
+        expect(e.via).toBe('emit');
+        expect(e.subjectType).toBe('evaluation-submission');
+        expect(e.subjectId).toBe(SUBMISSION_ID);
+        expect(e.actorUserId).toBe(ACTOR);
+      }
+      expect(keysOf(submitted.payload)).toEqual(SUBMITTED_KEYS);
+      expect(keysOf(scored.payload)).toEqual([...SUBMITTED_KEYS, 'scoresSha256'].sort());
+      expect(submitted.payload).toMatchObject({
+        taskId: TASK_ID,
+        taskSlug: 'audited-task',
+        taskKind: 'GRADING',
+        mode: 'PREDICTIONS',
+        methodName: 'audited-method',
+        // Direct submissions are not pinned to a method version yet (#583).
+        routeId: null,
+        routeVersion: null,
+        routeVersionId: null,
+        predictionCount: 4,
+        predictionsSha256: canonicalSha256(PREDICTIONS),
+      });
+      expect(scored.payload['predictionsSha256']).toBe(canonicalSha256(PREDICTIONS));
+      expect(scored.payload['scoresSha256']).toBe(canonicalSha256(out.scores));
+      expectNoItemData();
+    });
+
+    it('carries the method version and the EvalAI ids for a seam submission', async () => {
+      const seam = {
+        submittedBy: '33333333-3333-5333-8333-333333333333',
+        externalSubmissionId: '9001',
+        externalChallengeId: '493',
+      };
+      await service.submitPredictions('audited-task', BODY, undefined, seam);
+
+      for (const action of ['evaluation.submitted', 'evaluation.scored']) {
+        const e = audit.only(action);
+        expect(e.actorUserId).toBe(seam.submittedBy);
+        expect(e.payload).toMatchObject({
+          routeId: 'ref-route',
+          routeVersion: '1.0.0',
+          routeVersionId: 'ref-version',
+          externalSubmissionId: '9001',
+          externalChallengeId: '493',
+        });
+      }
+      expectNoItemData();
+    });
+
+    it('records nothing for an anonymous caller or one over quota', async () => {
+      await expect(service.submitPredictions('audited-task', BODY)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      repo.countScoredSubmissionsForParticipant.mockResolvedValue(10_000);
+      await expect(
+        service.submitPredictions('audited-task', BODY, PARTICIPANT),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(audit.events).toEqual([]);
+    });
+  });
+
+  describe('Mode 1 refused file', () => {
+    it('records only evaluation.failed, synchronously, without the reason that quotes an item', async () => {
+      const duplicate = [...PREDICTIONS, { imageId: 'case-alpha-0001', grade: 1 }];
+      const err: unknown = await service
+        .submitPredictions('audited-task', { ...BODY, predictions: duplicate }, PARTICIPANT)
+        .catch((e: unknown) => e);
+
+      // The caller's answer is unchanged: a 400 naming the item.
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect(JSON.stringify((err as BadRequestException).getResponse())).toContain(
+        'case-alpha-0001',
+      );
+
+      expect(audit.actions()).toEqual(['evaluation.failed']);
+      const failed = audit.only('evaluation.failed');
+      expect(failed.via).toBe('emitSync');
+      expect(failed.subjectId).toBe(SUBMISSION_ID);
+      expect(failed.actorUserId).toBe(ACTOR);
+      expect(keysOf(failed.payload)).toEqual(PREDICTIONS_FAILED_KEYS);
+      expect(failed.payload).toMatchObject({
+        taskId: TASK_ID,
+        taskSlug: 'audited-task',
+        mode: 'PREDICTIONS',
+        failureCode: null,
+        predictionsSha256: canonicalSha256(duplicate),
+      });
+      expectNoItemData();
+    });
+
+    it('leaves out a scoring refusal that quotes a predicted label', async () => {
+      const outOfRange = [{ imageId: 'case-alpha-0001', grade: 77 }];
+      await expect(
+        service.submitPredictions(
+          'audited-task',
+          { ...BODY, predictions: outOfRange },
+          PARTICIPANT,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      const failed = audit.only('evaluation.failed');
+      expect(keysOf(failed.payload)).toEqual(PREDICTIONS_FAILED_KEYS);
+      // The hash is hex and may contain the digits by chance; nothing else may.
+      const { predictionsSha256, ...rest } = failed.payload;
+      expect(predictionsSha256).toBe(canonicalSha256(outOfRange));
+      expect(JSON.stringify(rest)).not.toContain('77');
+      expectNoItemData();
+    });
+
+    it('surfaces a failed audit write instead of the 400, as the other synchronous emitters do', async () => {
+      audit.emitSyncError = new Error('audit insert failed');
+      const duplicate = [...PREDICTIONS, { imageId: 'case-alpha-0001', grade: 1 }];
+      await expect(
+        service.submitPredictions('audited-task', { ...BODY, predictions: duplicate }, PARTICIPANT),
+      ).rejects.toThrow('audit insert failed');
+    });
+  });
+
+  describe('Mode 2 container submission', () => {
+    beforeEach(() => {
+      repo.findTaskRefBySlug.mockResolvedValue({ id: TASK_ID, slug: 'audited-task' });
+      repo.createContainerSubmission.mockResolvedValue({ id: SUBMISSION_ID });
+    });
+
+    it('records evaluation.submitted with the image digest at dispatch', async () => {
+      await service.submitContainer('audited-task', containerBody(), PARTICIPANT);
+
+      expect(audit.actions()).toEqual(['evaluation.submitted']);
+      const submitted = audit.only('evaluation.submitted');
+      expect(submitted.via).toBe('emit');
+      expect(submitted.subjectId).toBe(SUBMISSION_ID);
+      expect(submitted.actorUserId).toBe(ACTOR);
+      expect(keysOf(submitted.payload)).toEqual(CONTAINER_SUBMITTED_KEYS);
+      expect(submitted.payload).toMatchObject({
+        mode: 'CONTAINER',
+        imageDigest: DIGEST,
+        routeId: null,
+        routeVersion: null,
+      });
+      expectNoItemData();
+    });
+
+    it('records evaluation.failed synchronously when the dispatch cannot be published', async () => {
+      queue.publish.mockRejectedValue(new Error('queue down'));
+
+      await expect(
+        service.submitContainer('audited-task', containerBody(), PARTICIPANT),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+
+      expect(audit.actions()).toEqual(['evaluation.submitted', 'evaluation.failed']);
+      const failed = audit.only('evaluation.failed');
+      expect(failed.via).toBe('emitSync');
+      expect(keysOf(failed.payload)).toEqual([...CONTAINER_SUBMITTED_KEYS, 'failureCode'].sort());
+      expect(failed.payload['failureCode']).toBe('INTERNAL_ERROR');
+      expectNoItemData();
+    });
+
+    it('records nothing when dispatch is not configured', async () => {
+      queue.missingConfig.mockReturnValue(['OCI_EVAL_QUEUE_URL']);
+      await expect(
+        service.submitContainer('audited-task', containerBody(), PARTICIPANT),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(audit.events).toEqual([]);
+    });
+  });
+
+  describe('validation submissions', () => {
+    it('record nothing: they write no row', async () => {
+      repo.findTaskItemIds.mockResolvedValue({
+        slug: 'audited-task',
+        itemIds: ITEM_IDS,
+        numClasses: 5,
+        taskKind: 'GRADING',
+      });
+      repo.findTaskRefBySlug.mockResolvedValue({ id: TASK_ID, slug: 'audited-task' });
+      await service.validatePredictions('audited-task', { ...BODY, intent: 'VALIDATION' });
+      await service.validateContainer('audited-task', containerBody({ intent: 'VALIDATION' }));
+      expect(audit.events).toEqual([]);
+    });
+  });
+
+  describe('task creation', () => {
+    const HOST = { sub: 'host-sub' } as unknown as CognitoAccessTokenPayload;
+
+    const TASKS: {
+      kind: string;
+      body: CreateEvaluationTaskRequest;
+      positiveClassName: string | null;
+    }[] = [
+      {
+        kind: 'GRADING',
+        body: {
+          slug: 'new-task',
+          name: 'Grading',
+          datasetSlug: 'ds-grading',
+          taskKind: 'GRADING',
+          numClasses: 5,
+          referableThreshold: 2,
+          groundTruth: LABELS,
+        },
+        positiveClassName: null,
+      },
+      {
+        kind: 'CLASSIFICATION',
+        body: {
+          slug: 'new-task',
+          name: 'Classes',
+          datasetSlug: 'ds-classes',
+          taskKind: 'CLASSIFICATION',
+          numClasses: 5,
+          referableThreshold: 1,
+          groundTruth: LABELS,
+        },
+        positiveClassName: null,
+      },
+      {
+        kind: 'BINARY_DIAGNOSTIC',
+        body: {
+          slug: 'new-task',
+          name: 'Binary',
+          datasetSlug: 'ds-binary',
+          taskKind: 'BINARY_DIAGNOSTIC',
+          numClasses: 2,
+          referableThreshold: 1,
+          positiveClassName: 'Finding present',
+          groundTruth: {
+            'case-alpha-0001': 1,
+            'case-bravo-0002': 0,
+            'case-charlie-0003': 1,
+            'case-delta-0004': 0,
+          },
+          subgroups: {
+            fields: [
+              {
+                key: 'site',
+                label: 'Site',
+                values: [
+                  { value: 'site-north', label: 'North' },
+                  { value: 'site-south', label: 'South' },
+                ],
+              },
+            ],
+            values: {
+              'case-alpha-0001': { site: 'site-north' },
+              'case-bravo-0002': { site: 'site-north' },
+              'case-charlie-0003': { site: 'site-south' },
+              'case-delta-0004': { site: 'site-south' },
+            },
+          },
+        },
+        positiveClassName: 'Finding present',
+      },
+    ];
+
+    it.each(TASKS)(
+      'records evaluation.task.created for a $kind task, with the answer key by hash only',
+      async ({ body, positiveClassName }) => {
+        await service.createTask(body, HOST);
+
+        expect(audit.actions()).toEqual(['evaluation.task.created']);
+        const created = audit.only('evaluation.task.created');
+        expect(created.via).toBe('emitSync');
+        expect(created.subjectType).toBe('evaluation-task');
+        expect(created.subjectId).toBe(TASK_ID);
+        expect(created.actorUserId).toBe(cognitoSubAsUuid('host-sub'));
+        expect(keysOf(created.payload)).toEqual(TASK_CREATED_KEYS);
+        expect(created.payload).toEqual({
+          slug: 'new-task',
+          datasetSlug: body.datasetSlug,
+          taskKind: body.taskKind,
+          numClasses: body.numClasses,
+          referableThreshold: body.referableThreshold,
+          positiveClassName,
+          itemCount: 4,
+          subgroupFields: body.subgroups ? ['site'] : [],
+          groundTruthSha256: canonicalSha256(body.groundTruth),
+        });
+        expectNoItemData();
+        // Nor which item has which subgroup value: that map is held like the key.
+        expect(JSON.stringify(created.payload)).not.toContain('site-north');
+      },
+    );
+
+    it('records nothing when the slug is taken', async () => {
+      repo.createTask.mockRejectedValue(
+        Object.assign(
+          new Prisma.PrismaClientKnownRequestError('unique constraint failed', {
+            code: 'P2002',
+            clientVersion: 'test',
+          }),
+          { code: 'P2002' },
+        ),
+      );
+      const first = TASKS[0];
+      if (!first) throw new Error('no task fixture');
+      await expect(service.createTask(first.body, HOST)).rejects.toBeInstanceOf(ConflictException);
+      expect(audit.events).toEqual([]);
+    });
   });
 });

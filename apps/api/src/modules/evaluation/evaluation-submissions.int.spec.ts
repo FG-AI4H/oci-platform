@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { VersioningType } from '@nestjs/common';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Test } from '@nestjs/testing';
+import { AuditEmitter, canonicalSha256, type AuditPrismaPort } from '@oci/audit';
 import type { PrismaClient } from '@oci/database';
 import {
   EvaluationSubmissionDetailSchema,
@@ -15,6 +16,7 @@ import { COGNITO_VERIFIER, CognitoJwtGuard } from '../../auth/cognito-jwt.guard.
 import { OptionalCognitoJwtGuard } from '../../auth/optional-cognito-jwt.guard.js';
 import { RolesGuard } from '../../auth/roles.guard.js';
 import { PrismaService } from '../../prisma.service.js';
+import { AUDIT_EMITTER } from '../audit/audit.tokens.js';
 import {
   dockerAvailable as checkDocker,
   type MigratedPostgres,
@@ -104,6 +106,12 @@ describe.skipIf(!dockerAvailable)(
           { provide: COGNITO_VERIFIER, useValue: verifier },
           { provide: PrismaService, useValue: { client: prisma } },
           { provide: EvalQueueProvider, useValue: { missingConfig: () => ['OCI_EVAL_QUEUE_URL'] } },
+          // The real writer: the audit events land in the migrated database,
+          // where the triggers chain them (#653).
+          {
+            provide: AUDIT_EMITTER,
+            useValue: new AuditEmitter({ prisma: prisma as unknown as AuditPrismaPort }),
+          },
         ],
       }).compile();
       app = mod.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -288,6 +296,44 @@ describe.skipIf(!dockerAvailable)(
 
         // The quota is per task: the other task is untouched.
         expect((await quotaOf(ALICE, CLASSES)).remaining).toBe(PER_WEEK);
+      });
+
+      it('puts a scored submission in the audit trail with its two events, and a refused one with one (#653)', async () => {
+        const scoredRes = await post(GRADING, { methodName: 'audited', predictions: GOOD }, CAROL);
+        expect(scoredRes.statusCode).toBeLessThan(300);
+        const scoredId = scoredRes.json<{ id: string }>().id;
+        const refusedRes = await post(
+          GRADING,
+          { methodName: 'audited', predictions: DUPLICATED },
+          CAROL,
+        );
+        expect(refusedRes.statusCode).toBe(400);
+        const refusedId = refusedRes.json<{ submissionId: string }>().submissionId;
+
+        const scored = await prisma.auditEvent.findMany({
+          where: { subjectId: scoredId },
+          orderBy: { sequenceNumber: 'asc' },
+        });
+        expect(scored.map((e) => `${e.module}.${e.action}`)).toEqual([
+          'evaluation.submitted',
+          'evaluation.scored',
+        ]);
+        for (const e of scored) {
+          expect(e.actorUserId).toBe(CAROL.sub);
+          expect(e.recordHash).toMatch(/^[0-9a-f]{64}$/);
+          expect(e.payload).toMatchObject({ predictionsSha256: canonicalSha256(GOOD) });
+        }
+
+        const refused = await prisma.auditEvent.findMany({ where: { subjectId: refusedId } });
+        expect(refused.map((e) => `${e.module}.${e.action}`)).toEqual(['evaluation.failed']);
+        expect(refused[0]?.payload).toMatchObject({
+          predictionsSha256: canonicalSha256(DUPLICATED),
+        });
+
+        // No item id (and so no prediction and no label) in any of them.
+        for (const e of [...scored, ...refused]) {
+          expect(JSON.stringify(e.payload)).not.toMatch(/img_[a-d]/);
+        }
       });
 
       it('counts a failed sealed run, which did hold an evaluation slot', async () => {

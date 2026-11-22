@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { canonicalSha256, type AuditEmitter } from '@oci/audit';
 import {
   MIN_SUBGROUP_CELL_SIZE,
   SealedRunFailureCodeSchema,
@@ -14,6 +15,7 @@ import {
   type SealedRunResult,
   type SubmissionStatus,
 } from '@oci/shared-types';
+import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { EvaluationRepository, type SubmissionResultContextRow } from './evaluation.repository.js';
 import { parseScores } from './evaluation.service.js';
 import {
@@ -50,6 +52,16 @@ export interface SealedRunResultResponse {
 const TERMINAL: readonly SubmissionStatus[] = ['SCORED', 'FAILED'];
 
 /**
+ * What the audit event of an applied result says about the result itself,
+ * beyond the submission row: which of the three shapes the worker sent and,
+ * for `predictions`, their hash. Never the predictions.
+ */
+interface AppliedResultAudit {
+  resultKind: 'predictions' | 'metrics' | 'failure';
+  predictionsSha256: string | null;
+}
+
+/**
  * The sealed-run result outbox (WP3, sealed-execution-contract §5).
  *
  * `worker-eval` calls this after a run. Three payload shapes, one of them:
@@ -68,12 +80,19 @@ const TERMINAL: readonly SubmissionStatus[] = ['SCORED', 'FAILED'];
  * (`status = PENDING`), so a replay cannot score a second time even under
  * concurrent delivery. A replay of the SAME result is a 200 no-op; a DIFFERENT
  * result for a terminal submission is a 409.
+ *
+ * An applied result is audited (#653): `evaluation.scored` or
+ * `evaluation.failed`, once, by the call that applied it. A replay and the
+ * loser of a race apply nothing and record nothing.
  */
 @Injectable()
 export class SubmissionResultService {
   private readonly logger = new Logger(SubmissionResultService.name);
 
-  constructor(@Inject(EvaluationRepository) private readonly repo: EvaluationRepository) {}
+  constructor(
+    @Inject(EvaluationRepository) private readonly repo: EvaluationRepository,
+    @Inject(AUDIT_EMITTER) private readonly audit: AuditEmitter,
+  ) {}
 
   async recordResult(
     submissionId: string,
@@ -117,15 +136,20 @@ export class SubmissionResultService {
 
     if (outcome.kind === 'failure') {
       this.logOperatorFailureDetail(submissionId, outcome.code, body.failure?.detail);
-      return this.applyOrResolveRace(submissionId, fingerprint, {
-        status: 'FAILED',
-        scores: null,
-        subgroupScores: null,
-        error: participantFacingFailureMessage(outcome.code),
-        failureCode: outcome.code,
-        durationMs: body.durationMs,
-        resultFingerprint: fingerprint,
-      });
+      return this.applyOrResolveRace(
+        submission,
+        fingerprint,
+        { resultKind: 'failure', predictionsSha256: null },
+        {
+          status: 'FAILED',
+          scores: null,
+          subgroupScores: null,
+          error: participantFacingFailureMessage(outcome.code),
+          failureCode: outcome.code,
+          durationMs: body.durationMs,
+          resultFingerprint: fingerprint,
+        },
+      );
     }
 
     if (outcome.kind === 'metrics') {
@@ -136,17 +160,22 @@ export class SubmissionResultService {
       // and let the API score them, where dispatch is by the task's real kind —
       // until the worker contract carries a kind of its own, mislabelling
       // host-supplied metrics would be worse than restricting the path.
-      return this.applyOrResolveRace(submissionId, fingerprint, {
-        status: 'SCORED',
-        scores: { kind: 'GRADING', metrics: outcome.metrics },
-        // The host scored against its own labels; the API holds no item to
-        // break the result down by (#410).
-        subgroupScores: null,
-        error: null,
-        failureCode: null,
-        durationMs: body.durationMs,
-        resultFingerprint: fingerprint,
-      });
+      return this.applyOrResolveRace(
+        submission,
+        fingerprint,
+        { resultKind: 'metrics', predictionsSha256: null },
+        {
+          status: 'SCORED',
+          scores: { kind: 'GRADING', metrics: outcome.metrics },
+          // The host scored against its own labels; the API holds no item to
+          // break the result down by (#410).
+          subgroupScores: null,
+          error: null,
+          failureCode: null,
+          durationMs: body.durationMs,
+          resultFingerprint: fingerprint,
+        },
+      );
     }
 
     // predictions → score server-side against the hidden ground truth.
@@ -154,6 +183,12 @@ export class SubmissionResultService {
     if (!ctx) {
       throw new NotFoundException(`submission "${submissionId}" not found`);
     }
+
+    // The worker's predictions are recorded in the audit trail by hash only.
+    const audited: AppliedResultAudit = {
+      resultKind: 'predictions',
+      predictionsSha256: canonicalSha256(outcome.predictions),
+    };
 
     let scores: TaskKindScores;
     try {
@@ -176,7 +211,7 @@ export class SubmissionResultService {
         // it produced an unusable artefact, and that is the submission's
         // outcome.
         this.logOperatorFailureDetail(submissionId, 'MALFORMED_OUTPUT', redactScoringError(err));
-        return this.applyOrResolveRace(submissionId, fingerprint, {
+        return this.applyOrResolveRace(submission, fingerprint, audited, {
           status: 'FAILED',
           scores: null,
           subgroupScores: null,
@@ -201,7 +236,7 @@ export class SubmissionResultService {
       minCellSize: MIN_SUBGROUP_CELL_SIZE,
     });
 
-    return this.applyOrResolveRace(submissionId, fingerprint, {
+    return this.applyOrResolveRace(submission, fingerprint, audited, {
       status: 'SCORED',
       scores,
       subgroupScores,
@@ -216,18 +251,56 @@ export class SubmissionResultService {
    * Write the result under the `status = PENDING` predicate. If the row was
    * claimed in between (0 rows updated), re-read and answer replay vs conflict
    * from what actually landed — never from what this call computed.
+   *
+   * Only the call that applied the result audits it, after the write.
    */
   private async applyOrResolveRace(
-    submissionId: string,
+    submission: SubmissionResultContextRow,
     fingerprint: string,
+    result: AppliedResultAudit,
     update: Parameters<EvaluationRepository['applyResult']>[1],
   ): Promise<SealedRunResultResponse> {
+    const submissionId = submission.id;
     const applied = await this.repo.applyResult(submissionId, update);
     if (applied === 0) {
       const current = await this.repo.findSubmissionForResult(submissionId);
       if (!current) throw new NotFoundException(`submission "${submissionId}" not found`);
       return replayOrConflict(current, fingerprint);
     }
+
+    // The worker is a machine credential, not a person, so there is no actor:
+    // the participant is the actor of the submission's `evaluation.submitted`.
+    // Ids, the method version, the result's shape and hashes; never the
+    // worker's predictions, its operator detail or a score.
+    const payload = {
+      taskId: submission.taskId,
+      mode: submission.mode,
+      routeVersion: submission.routeVersion,
+      resultKind: result.resultKind,
+      predictionsSha256: result.predictionsSha256,
+      durationMs: update.durationMs,
+    };
+    if (update.status === 'SCORED') {
+      // `emit`, as on the Mode 1 path: the score is stored, and a failed audit
+      // write must not make the worker retry a result that has been applied.
+      await this.audit.emit({
+        module: 'evaluation',
+        action: 'scored',
+        subjectType: 'evaluation-submission',
+        subjectId: submissionId,
+        payload: { ...payload, scoresSha256: canonicalSha256(update.scores) },
+      });
+    } else {
+      // `emitSync`, so a failure is always recorded or the worker is told.
+      await this.audit.emitSync({
+        module: 'evaluation',
+        action: 'failed',
+        subjectType: 'evaluation-submission',
+        subjectId: submissionId,
+        payload: { ...payload, failureCode: update.failureCode },
+      });
+    }
+
     return {
       id: submissionId,
       status: update.status,

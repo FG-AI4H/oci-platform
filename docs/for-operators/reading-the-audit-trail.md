@@ -1,6 +1,6 @@
 # Reading and exporting the audit trail
 
-The audit trail is the platform's record of what happened: a model card created, a role granted, a method version reviewed, an image released, a statement run on the database, an export of the trail itself. It is append-only, and each event carries the hash of the event before it, so a change to a stored event shows when the chain is verified ([ADR-0014](../adr/0014-evidence-audit-trail-and-regulator-export.md)).
+The audit trail is the platform's record of what happened: a model card created, a role granted, a method version reviewed, a submission scored, an image released, a statement run on the database, an export of the trail itself. It is append-only, and each event carries the hash of the event before it, so a change to a stored event shows when the chain is verified ([ADR-0014](../adr/0014-evidence-audit-trail-and-regulator-export.md)).
 
 The page is **`/admin/audit`**. It is open to the `admin` and `regulator` groups only. The API behind it is described in the [API reference](../for-developers/api-reference.md#audit-trail-653-adr-0014).
 
@@ -61,6 +61,21 @@ One run checks up to 50,000 events and says where the rest begins. The rows are 
 
 To check that a file is the one that was exported, compare its sha256 with `contentSha256` in the `audit.events.exported` event (filter **Event** on `audit.events.exported`).
 
+## Evaluation events
+
+An evaluation leaves four kinds of event ([#653](https://github.com/FG-AI4H/oci-platform/issues/653)). They carry ids, the method version and sha256 hashes. They never carry a prediction, a reference label, a score or the text of a refusal, which can quote a label.
+
+| Event                     | When                                                                                                                     | Object                  | What identifies the content                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------- | ------------------------------------------------------------- |
+| `evaluation.task.created` | A host or admin creates a task. The actor is that person.                                                                | `evaluation-task`       | `groundTruthSha256`: the hash of the answer key               |
+| `evaluation.submitted`    | A predictions file is accepted for scoring, or a container run is dispatched. The actor is the participant.              | `evaluation-submission` | `predictionsSha256`, or the container's `imageDigest`         |
+| `evaluation.scored`       | The score is stored: in the request for a predictions file, when the worker's result is applied for a container run.     | `evaluation-submission` | `scoresSha256`, and `predictionsSha256` when there were any   |
+| `evaluation.failed`       | A predictions file is refused on its format, a dispatch cannot be sent, or a container run fails. Written synchronously. | `evaluation-submission` | `failureCode` for a container run; `predictionsSha256` if any |
+
+A scored submission has two events, `submitted` then `scored`. A predictions file refused on its format has only `failed`: it was never accepted for scoring. A container run's result has no actor, because a machine credential applies it; the participant is the actor of the run's `submitted` event.
+
+Each hash is sha256 over the RFC 8785 canonical JSON of the value, the same rule as the payload hash. Whoever holds the file, the answer key or the scores can recompute it and show which one an event is about.
+
 ## What is not recorded yet
 
-The four evaluation events (`evaluation.task.created`, `evaluation.submitted`, `evaluation.scored`, `evaluation.failed`) are declared and not yet emitted ([#653](https://github.com/FG-AI4H/oci-platform/issues/653)). `scripts/audit-taxonomy.json` lists every declared event and which are still deferred.
+`scripts/audit-taxonomy.json` lists every declared event and which are still deferred.
