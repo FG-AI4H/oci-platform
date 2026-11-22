@@ -24,6 +24,11 @@ interface AnnotateFormProps {
   labels: ClassificationLabelsConfig | null;
   /** Arbitration on a labelled campaign: the arbiter must say why (#646). */
   reasonRequired?: boolean;
+  /**
+   * The submit form's id, so that a viewer outside it can add fields
+   * through the `form` attribute: the DICOM viewer's `view` (#674).
+   */
+  formId?: string;
 }
 
 /**
@@ -45,6 +50,7 @@ export function AnnotateForm({
   instructionsVersion,
   labels,
   reasonRequired = false,
+  formId,
 }: AnnotateFormProps) {
   const [submitState, submitAction, submitPending] = useActionState(
     submitAssignmentAction,
@@ -94,7 +100,7 @@ export function AnnotateForm({
         </Alert>
       ) : null}
 
-      <form action={submitAction} className="space-y-3">
+      <form id={formId} action={submitAction} className="space-y-3">
         <input type="hidden" name="assignmentId" value={assignment.id} />
         <input type="hidden" name="slug" value={slug} />
         {labels ? (

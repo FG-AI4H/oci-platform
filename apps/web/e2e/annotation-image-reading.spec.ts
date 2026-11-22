@@ -89,22 +89,22 @@ async function labelledCampaignWithTasks(
   await page.getByRole('button', { name: /confirm: mark ready/i }).click();
   await page.getByRole('button', { name: 'Start campaign' }).click();
   await page.getByRole('button', { name: /confirm: start campaign/i }).click();
-  await expect(page.getByRole('button', { name: 'Count image files' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Count files and series' })).toBeVisible();
 
   // Tasks from the dataset's files: count first, then confirm.
   await page.getByLabel('At most').fill(String(taskCount));
-  await page.getByRole('button', { name: 'Count image files' }).click();
+  await page.getByRole('button', { name: 'Count files and series' }).click();
   await expect(page.getByRole('status')).toHaveText(
-    new RegExp(`^${taskCount} image files? match(es)?: ${taskCount} new tasks?\\.$`),
+    new RegExp(`^${taskCount} samples? match(es)?: ${taskCount} new tasks?\\.$`),
   );
   await page.getByRole('button', { name: new RegExp(`^Create ${taskCount} tasks?$`) }).click();
   await expect(page.getByText(new RegExp(`^Created ${taskCount} tasks?\\.$`))).toBeVisible();
 
   // Running it again creates nothing new.
-  await page.getByRole('button', { name: 'Count image files' }).click();
+  await page.getByRole('button', { name: 'Count files and series' }).click();
   await expect(page.getByRole('status')).toHaveText(
     new RegExp(
-      `^${taskCount} image files? match(es)?: 0 new tasks, ${taskCount} already ha(s|ve) one\\.$`,
+      `^${taskCount} samples? match(es)?: 0 new tasks, ${taskCount} already ha(s|ve) one\\.$`,
     ),
   );
   await expect(page.getByRole('button', { name: /^Create \d/ })).toHaveCount(0);

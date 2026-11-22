@@ -7,6 +7,10 @@ import type { DatasetSlug } from './slug.js';
 import { MAX_PREDICTION_ROWS, PredictionRowSchema } from './predictions-file.js';
 import { EvaluationTaskSlugSchema, SubmissionModeSchema } from './submission-validation.js';
 import {
+  DicomSeriesSampleSchema as DicomSeriesSampleSchemaLocal,
+  DicomViewSchema as DicomViewSchemaLocal,
+} from './dicom.js';
+import {
   SubgroupDeclarationSchema,
   SubgroupFieldKeySchema,
   SubgroupFieldSchema,
@@ -2354,8 +2358,10 @@ export type ClassificationLabelsConfig = z.infer<typeof ClassificationLabelsConf
 export const LABEL_COMMENT_MAX = 2000;
 
 /**
- * Check a `{ label, comment }` submission against the campaign's
- * declared labels (#646). Returns the reasons it is refused; empty when
+ * Check a `{ label, comment, view? }` submission against the campaign's
+ * declared labels (#646). `view` is optional: a DICOM answer stores what
+ * the viewer had on screen (`DicomViewSchema`); an image answer leaves
+ * it out. Returns the reasons it is refused; empty when
  * it is accepted. Shared by the API (which refuses) and the web form.
  *
  * At arbitration the arbiter must also say why they chose the final
@@ -2391,7 +2397,12 @@ export function labelSubmissionProblems(
       problems.push(`reason must be at most ${LABEL_COMMENT_MAX} characters`);
     }
   }
-  const fields = new Set(['label', 'comment', ...(reasonRequired ? ['reason'] : [])]);
+  // What the screen showed when the reader answered (#674): kept for the
+  // record and for reviewing a disagreement; agreement ignores it.
+  if (submission.view !== undefined && !DicomViewSchemaLocal.safeParse(submission.view).success) {
+    problems.push('view is not a valid record of the screen');
+  }
+  const fields = new Set(['label', 'comment', 'view', ...(reasonRequired ? ['reason'] : [])]);
   for (const key of Object.keys(submission)) {
     if (!fields.has(key)) problems.push(`unexpected field "${key}"`);
   }
@@ -3413,14 +3424,18 @@ export type MetadataVisibilityResolveRequest = z.infer<
 
 /**
  * `POST /v2/annotation/campaigns/:slug/tasks/from-dataset` (#646): one
- * task per platform-hosted PNG / JPEG file of the campaign's pinned
- * dataset version. Idempotent: files that already have a task count as
- * `skipped`.
+ * task per platform-hosted PNG / JPEG file, and one per DICOM series
+ * (#674), of the campaign's pinned dataset version. Idempotent: samples
+ * that already have a task count as `skipped`. A series with a held
+ * image (ADR-0026) is never made into a task and counts as `held`.
  */
 export const SeedTasksFromDatasetRequestSchema = z.object({
-  /** Only files whose name starts with this. */
+  /**
+   * Only image files whose name starts with this. A series has no file
+   * name of its own, so a prefix leaves series out.
+   */
   prefix: z.string().max(200).optional(),
-  /** At most this many files, in file-name order. */
+  /** At most this many samples: image files in file-name order, then series. */
   limit: z.number().int().min(1).max(10_000).optional(),
   /** Count what would be created without creating anything. */
   dryRun: z.boolean().default(false),
@@ -3428,35 +3443,68 @@ export const SeedTasksFromDatasetRequestSchema = z.object({
 export type SeedTasksFromDatasetRequest = z.infer<typeof SeedTasksFromDatasetRequestSchema>;
 
 export const SeedTasksFromDatasetResponseSchema = z.object({
-  /** Image files that matched. */
+  /** Samples that matched: image files and series. */
   matched: z.number().int().nonnegative(),
   /** Tasks created (on a dry run: that would be created). */
   created: z.number().int().nonnegative(),
-  /** Matched files that already have a task. */
+  /** Matched samples that already have a task. */
   skipped: z.number().int().nonnegative(),
+  /** Series left out because an image of theirs is held (ADR-0026). Not in `matched`. */
+  held: z.number().int().nonnegative(),
   dryRun: z.boolean(),
 });
 export type SeedTasksFromDatasetResponse = z.infer<typeof SeedTasksFromDatasetResponseSchema>;
 
-/**
- * `GET /v2/annotation/assignments/:id/sample` (#646): short-lived
- * addresses for the files of the assignment's sample. Nothing else about
- * the sample travels with them (ADR-0010 blinding).
- *
- * A list, in reading order, so the shape doesn't depend on the file
- * type: a PNG or JPEG task has one file, a DICOM series (#674) has one
- * per instance. The page picks a viewer from the content types.
- */
-export const AssignmentSampleFileSchema = z.object({
-  url: z.string().url(),
-  contentType: z.string(),
-});
-export type AssignmentSampleFile = z.infer<typeof AssignmentSampleFileSchema>;
+// ==== How a task points at its sample (#646, #674) ======================
+//
+// A typed platform id, never a storage key: the reference goes into the
+// append-only audit trail, the calibration grouping and exports (#648),
+// and a key carries the file name as uploaded.
+//
+//   file:<distribution id>     an image file, this module
+//   dicom-series:<series id>   a DICOM series (`dicomSeriesSampleRef`)
+//
+// Both resolve against the campaign's pinned dataset version.
 
-export const AssignmentSampleResponseSchema = z.object({
-  files: z.array(AssignmentSampleFileSchema).min(1),
-  expiresAt: z.string().datetime(),
-});
+const FILE_SAMPLE_PREFIX = 'file:';
+
+/** The sample reference of a task on one hosted file. */
+export function fileSampleRef(distributionId: string): string {
+  return `${FILE_SAMPLE_PREFIX}${distributionId}`;
+}
+
+/** The distribution id of a `file:` reference, or null for any other. */
+export function parseFileSampleRef(sampleRef: string): string | null {
+  if (!sampleRef.startsWith(FILE_SAMPLE_PREFIX)) return null;
+  const id = sampleRef.slice(FILE_SAMPLE_PREFIX.length);
+  return z.string().uuid().safeParse(id).success ? id : null;
+}
+
+/**
+ * The `image` answer of a task's sample address: one PNG or JPEG behind
+ * a short-lived address. Nothing else about the sample travels with it
+ * (ADR-0010 blinding).
+ */
+export const ImageSampleSchema = z
+  .object({
+    kind: z.literal('image'),
+    url: z.string().url(),
+    contentType: z.string(),
+    /** The address works at least until then. */
+    expiresAt: z.string().datetime(),
+  })
+  .strict();
+export type ImageSample = z.infer<typeof ImageSampleSchema>;
+
+/**
+ * `GET /v2/annotation/assignments/:id/sample` (#646): the sample of an
+ * assignment, tagged by `kind`. The annotate and arbitration screens
+ * pick the viewer by it: the image viewer, or the DICOM viewer (#674).
+ */
+export const AssignmentSampleResponseSchema = z.discriminatedUnion('kind', [
+  ImageSampleSchema,
+  DicomSeriesSampleSchemaLocal,
+]);
 export type AssignmentSampleResponse = z.infer<typeof AssignmentSampleResponseSchema>;
 
 /**

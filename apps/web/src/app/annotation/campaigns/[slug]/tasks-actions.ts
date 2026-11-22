@@ -9,6 +9,7 @@ import {
 } from '@oci/shared-types';
 import { fetchAsUser } from '../../../../lib/api-action';
 import { isCampaignManager } from '../../../../lib/groups';
+import { heldSeriesNotice } from './seed-messages';
 import { sessionForAction } from '../../../../lib/session-recovery';
 
 export type SeedTasksState =
@@ -112,6 +113,8 @@ export type SeedFromDatasetState =
       matched: number;
       toCreate: number;
       alreadyThere: number;
+      /** DICOM series left out because an image of theirs is held (ADR-0026). */
+      held: number;
       prefix: string;
       limit: string;
     }
@@ -120,7 +123,7 @@ export type SeedFromDatasetState =
 
 /**
  * "Create tasks from the dataset's files" (#646), in two steps: `intent`
- * `preview` counts the matching image files without creating anything,
+ * `preview` counts the matching image files and DICOM series without creating anything,
  * and `create` creates the tasks. The count is shown between the two so
  * the manager confirms what will happen.
  */
@@ -184,12 +187,19 @@ export async function seedFromDatasetAction(
       matched: out.matched,
       toCreate: out.created,
       alreadyThere: out.skipped,
+      held: out.held,
       prefix,
       limit,
     };
   }
   revalidatePath(`/annotation/campaigns/${slug}`);
   const noun = out.created === 1 ? 'task' : 'tasks';
-  const skipped = out.skipped > 0 ? ` ${out.skipped} files already had a task.` : '';
-  return { status: 'success', message: `Created ${out.created} ${noun}.${skipped}`, prefix, limit };
+  const skipped = out.skipped > 0 ? ` ${out.skipped} already had a task.` : '';
+  const held = out.held > 0 ? ` ${heldSeriesNotice(out.held)}` : '';
+  return {
+    status: 'success',
+    message: `Created ${out.created} ${noun}.${skipped}${held}`,
+    prefix,
+    limit,
+  };
 }
