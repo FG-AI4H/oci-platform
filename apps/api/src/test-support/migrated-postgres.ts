@@ -63,9 +63,11 @@ export function replaySeedFile(url: string, sql: string, bucket = 'oci-datasets-
 
 /** Start Postgres, run `prisma migrate deploy` against it, return a client. */
 export async function startMigratedPostgres(): Promise<MigratedPostgres> {
-  // Same major as infra/local/docker-compose.yml and Aurora.
+  // Same major as the Aurora cluster: infra/cdk/lib/data-stack.ts declares
+  // AuroraPostgresEngineVersion.VER_16_4 (#742). Change both together.
+  // infra/local/docker-compose.yml still runs 17 for local development.
   const container: StartedPostgreSqlContainer = await new PostgreSqlContainer(
-    'postgres:17-alpine',
+    'postgres:16-alpine',
   ).start();
   const url = container.getConnectionUri();
   execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'deploy'], {
