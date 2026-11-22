@@ -7,6 +7,7 @@ import {
   datasetName,
   evaluationTaskName,
   modelCards,
+  subgroupFields,
 } from './content.js';
 import { distributionId, type HostedFile, type Json } from './manifest.js';
 import {
@@ -92,6 +93,13 @@ export function buildSeedSql({ selection, labels, manifest, files }: SeedSqlInpu
       if (label === undefined) throw new Error(`no reference label for ${image.imageId}`);
       return [image.imageId, label];
     }),
+  );
+
+  // #410: each item's sex and age band, the two subgroup fields of the task.
+  // Public in the metadata file already; on the task they sit beside the
+  // answer key, which is where the API reads them from when it scores.
+  const subgroupValues = Object.fromEntries(
+    selection.images.map((image) => [image.imageId, { sex: image.sex, ageBand: image.ageBand }]),
   );
 
   const instructions = campaignInstructionsFr(selection);
@@ -218,17 +226,25 @@ END $workshop_dataset$;
 -- overwritten, and the seed fails if the stored key differs from this file.
 -- The error names item ids only, never a label: migrate logs are printed in
 -- the deploy output.
+-- Results are also reported by sex and by age band (#410, ADR-0030). The
+-- fields and each item's values follow the answer key's rule: written with
+-- the task, or once onto a task seeded before they existed, never
+-- overwritten, and the seed fails if the stored values differ from this file.
 -- ----------------------------------------------------------------------------
 
 DO $workshop_answer_key$
 DECLARE
   expected_gt CONSTANT jsonb := ${text(JSON.stringify(answerKey))}::jsonb;
+  expected_fields CONSTANT jsonb := ${text(JSON.stringify(subgroupFields()))}::jsonb;
+  expected_values CONSTANT jsonb := ${text(JSON.stringify(subgroupValues))}::jsonb;
   stored_gt jsonb;
+  stored_fields jsonb;
+  stored_values jsonb;
   drifted_ids text;
 BEGIN
   INSERT INTO "evaluation"."evaluation_tasks"
       (id, slug, name, dataset_slug, task_kind, num_classes, referable_threshold,
-       ground_truth, created_at, updated_at)
+       ground_truth, subgroup_fields, subgroup_values, created_at, updated_at)
   VALUES (
       ${text(uuid5(`${PROFILE}:evaluation-task:${EVALUATION_TASK_SLUG}`))}::uuid,
       ${text(EVALUATION_TASK_SLUG)},
@@ -238,10 +254,17 @@ BEGIN
       2,
       1,
       expected_gt,
+      expected_fields,
+      expected_values,
       CURRENT_TIMESTAMP,
       CURRENT_TIMESTAMP
   )
   ON CONFLICT (slug) DO NOTHING;
+
+  -- A task seeded before #410 gets its subgroup fields once.
+  UPDATE "evaluation"."evaluation_tasks"
+  SET subgroup_fields = expected_fields, subgroup_values = expected_values
+  WHERE slug = ${text(EVALUATION_TASK_SLUG)} AND subgroup_values IS NULL;
 
   SELECT ground_truth INTO stored_gt
   FROM "evaluation"."evaluation_tasks"
@@ -262,6 +285,35 @@ BEGIN
     ) AS diff;
 
     RAISE EXCEPTION 'evaluation task %: stored ground_truth differs from the ${PROFILE} seed profile for item ids [%]. Not overwriting; see #464.',
+      ${text(EVALUATION_TASK_SLUG)}, drifted_ids;
+  END IF;
+
+  -- Same rule for the subgroup fields and values. The error names item ids,
+  -- never a value.
+  SELECT subgroup_fields, subgroup_values INTO stored_fields, stored_values
+  FROM "evaluation"."evaluation_tasks"
+  WHERE slug = ${text(EVALUATION_TASK_SLUG)};
+
+  IF stored_fields IS DISTINCT FROM expected_fields THEN
+    RAISE EXCEPTION 'evaluation task %: stored subgroup_fields differ from the ${PROFILE} seed profile. Not overwriting; see #410.',
+      ${text(EVALUATION_TASK_SLUG)};
+  END IF;
+
+  IF stored_values IS DISTINCT FROM expected_values THEN
+    IF jsonb_typeof(stored_values) IS DISTINCT FROM 'object' THEN
+      RAISE EXCEPTION 'evaluation task %: stored subgroup_values is not a JSON object, expected the item values of the ${PROFILE} seed profile',
+        ${text(EVALUATION_TASK_SLUG)};
+    END IF;
+
+    SELECT string_agg(item_id, ', ' ORDER BY item_id) INTO drifted_ids
+    FROM (
+      SELECT coalesce(s.key, e.key) AS item_id
+      FROM jsonb_each(stored_values) AS s
+      FULL OUTER JOIN jsonb_each(expected_values) AS e ON s.key = e.key
+      WHERE s.value IS DISTINCT FROM e.value
+    ) AS diff;
+
+    RAISE EXCEPTION 'evaluation task %: stored subgroup_values differ from the ${PROFILE} seed profile for item ids [%]. Not overwriting; see #410.',
       ${text(EVALUATION_TASK_SLUG)}, drifted_ids;
   END IF;
 END $workshop_answer_key$;
