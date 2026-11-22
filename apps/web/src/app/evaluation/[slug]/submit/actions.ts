@@ -1,6 +1,6 @@
 'use server';
 
-import { redirect } from 'next/navigation';
+import { redirect, unstable_rethrow } from 'next/navigation';
 import {
   EvaluationTaskSlugSchema,
   ScoredSubmissionQuotaStateSchema,
@@ -19,6 +19,7 @@ import {
 } from '../../../../components/evaluation/format-report';
 import { describeQuotaRefusal } from '../../../../components/evaluation/quota-text';
 import { apiFetch, reauthUrl } from '../../../../lib/api';
+import { fetchAsUser } from '../../../../lib/api-action';
 import { MAX_PREDICTIONS_FILE_BYTES, MAX_PREDICTIONS_FILE_LABEL } from './limits';
 
 export interface SubmitPredictionsValues {
@@ -87,8 +88,9 @@ function messageOf(body: unknown): string | null {
  *     never sent for scoring from this page, so it costs no quota and leaves no
  *     failed attempt behind.
  *
- * The token is read from the session here, on the server, and goes only to the
- * API. It is not in the page, the form or the returned state.
+ * The token never comes into this file: `fetchAsUser` reads it from the
+ * encrypted session, on the server, and sends it only to the API. It is not in
+ * the page, the form or the returned state.
  */
 export async function submitPredictionsAction(
   slug: string,
@@ -115,7 +117,7 @@ export async function submitPredictionsAction(
   // ---- the two fields --------------------------------------------------------
 
   const session = await auth();
-  if (intent === 'submit' && !session?.accessToken) {
+  if (intent === 'submit' && !session?.user) {
     return fail('Sign in to submit for scoring. Checking the format needs no account.');
   }
 
@@ -186,24 +188,30 @@ export async function submitPredictionsAction(
 
   // ---- scoring (the session's token, server-side) ----------------------------
 
+  // `fetchAsUser` attaches the token. If the API answers 401 it renews the
+  // token once and sends the file again: a 401 comes from the API's check of
+  // the caller, before anything is scored, so this cannot use a second slot.
+  // If the session is over it signs the reader out and sends them to sign in.
   const submitPath = `/evaluation/${slugCheck.data}/submit`;
   let res: Response;
   try {
-    res = await fetch(`${base}${taskPath}/submissions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${session?.accessToken ?? ''}`,
+    res = await fetchAsUser(
+      `${base}${taskPath}/submissions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          methodName: values.methodName,
+          intent: 'SCORED',
+          predictions: parsed.predictions,
+        }),
+        cache: 'no-store',
       },
-      body: JSON.stringify({
-        methodName: values.methodName,
-        intent: 'SCORED',
-        predictions: parsed.predictions,
-      }),
-      cache: 'no-store',
-    });
-  } catch {
+      { returnTo: submitPath },
+    );
+  } catch (err) {
+    // Being sent to sign in is not a failure of the scoring service.
+    unstable_rethrow(err);
     // The request may have arrived before the connection dropped, so this does
     // not claim nothing was submitted: a blind retry could spend a second slot.
     return fail(
@@ -212,7 +220,8 @@ export async function submitPredictionsAction(
     );
   }
 
-  // The session is there but the API no longer accepts its token.
+  // The session is there but the API does not accept its token and no new
+  // one could be had just now.
   if (res.status === 401) redirect(reauthUrl(submitPath));
 
   const body: unknown = await res.json().catch(() => null);

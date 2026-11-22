@@ -10,8 +10,9 @@ import {
   type AccessTier,
 } from '@oci/shared-types';
 import { validate } from '@oci/croissant';
-import { auth } from '../../../../auth';
+import { fetchAsUser } from '../../../../lib/api-action';
 import { isHost } from '../../../../lib/groups';
+import { sessionForAction } from '../../../../lib/session-recovery';
 import {
   describeProvenanceIssue,
   isProvenanceCode,
@@ -80,8 +81,8 @@ export async function publishVersionAction(
   _prev: PublishVersionState,
   formData: FormData,
 ): Promise<PublishVersionState> {
-  const session = await auth();
-  if (!session?.accessToken || !isHost(session)) {
+  const session = await sessionForAction();
+  if (!session?.user || !isHost(session)) {
     return { status: 'error', message: 'Only hosts can publish dataset versions.' };
   }
 
@@ -128,13 +129,12 @@ export async function publishVersionAction(
   if (!base) {
     return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
   }
-  const res = await fetch(
+  const res = await fetchAsUser(
     `${base}/v2/catalog/datasets/${encodeURIComponent(parsed.data.slug)}/versions`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.accessToken}`,
       },
       body: JSON.stringify({
         version: parsed.data.version,
@@ -215,8 +215,8 @@ export async function preflightProvenanceAction(
   manifestJson: string,
   accessTier: string,
 ): Promise<ProvenancePreflightState> {
-  const session = await auth();
-  if (!session?.accessToken || !isHost(session)) {
+  const session = await sessionForAction();
+  if (!session?.user || !isHost(session)) {
     return { status: 'error', message: 'Only hosts can publish dataset versions.' };
   }
   const parsed = PreflightSchema.safeParse({ manifest: manifestJson, accessTier });
@@ -255,8 +255,8 @@ export async function preflightProvenanceAction(
 
 /**
  * Bust the detail-page cache after a host completes a file upload —
- * the upload happens browser → API directly so Next.js never sees it
- * and the 30s `apiFetch` revalidate window leaves the freshly-attached
+ * the upload's own calls (`upload-actions.ts`) revalidate nothing, and
+ * the 30s `apiFetch` revalidate window leaves the freshly-attached
  * distribution invisible. Called from the FileUploader on `done`.
  */
 export async function revalidateDatasetDetail(slug: string): Promise<void> {

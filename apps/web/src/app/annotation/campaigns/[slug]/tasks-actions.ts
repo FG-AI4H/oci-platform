@@ -2,8 +2,9 @@
 
 import { revalidatePath } from 'next/cache';
 import { SeedTasksRequestSchema, type SeedTasksResponse } from '@oci/shared-types';
-import { auth } from '../../../../auth';
+import { fetchAsUser } from '../../../../lib/api-action';
 import { isCampaignManager } from '../../../../lib/groups';
+import { sessionForAction } from '../../../../lib/session-recovery';
 
 export type SeedTasksState =
   | { status: 'idle' }
@@ -23,9 +24,9 @@ export async function seedTasksAction(
   _prev: SeedTasksState,
   formData: FormData,
 ): Promise<SeedTasksState> {
-  const session = await auth();
+  const session = await sessionForAction();
   const sampleRefsRaw = String(formData.get('sampleRefs') ?? '');
-  if (!session?.accessToken || !isCampaignManager(session)) {
+  if (!session?.user || !isCampaignManager(session)) {
     return {
       status: 'error',
       message: 'Only campaign managers can seed tasks.',
@@ -65,15 +66,17 @@ export async function seedTasksAction(
       sampleRefs: sampleRefsRaw,
     };
   }
-  const res = await fetch(`${base}/v2/annotation/campaigns/${encodeURIComponent(slug)}/tasks`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.accessToken}`,
+  const res = await fetchAsUser(
+    `${base}/v2/annotation/campaigns/${encodeURIComponent(slug)}/tasks`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sampleRefs }),
+      cache: 'no-store',
     },
-    body: JSON.stringify({ sampleRefs }),
-    cache: 'no-store',
-  });
+  );
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     return {

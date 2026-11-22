@@ -59,7 +59,7 @@ export default async function AnnotationCampaignsPage() {
   // Campaigns are a signed-in surface: the API rejects anonymous callers
   // with 401, and rendering that verbatim reads as a broken page (#488).
   // Same pattern as /certification and the catalog publish flow.
-  if (!session?.accessToken) {
+  if (!session?.user) {
     redirect('/signin?callbackUrl=/annotation/campaigns');
   }
   const canCreate = isCampaignManager(session);

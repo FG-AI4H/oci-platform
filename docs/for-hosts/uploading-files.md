@@ -67,6 +67,8 @@ Browser         OCI API                 S3 / MinIO
 
 The API never touches the bytes — it mints presigned URLs, the browser PUTs directly to S3. This makes uploads scale with your link, not with our request handlers.
 
+The control calls in the diagram (init, part URL, complete) go from the browser to the web app, which makes them to the API as you. Your browser holds presigned URLs and never an API token, and a long upload keeps working while your session is renewed.
+
 ## Bandwidth, retries, resume
 
 - **Concurrency**: 3 parts in flight by default.

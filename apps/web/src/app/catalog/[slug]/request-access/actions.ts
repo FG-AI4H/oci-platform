@@ -6,7 +6,8 @@ import {
   audienceFromIntendedUse,
   safeClassifyEmailDomain,
 } from '@oci/shared-types';
-import { auth } from '../../../../auth';
+import { fetchAsUser } from '../../../../lib/api-action';
+import { sessionForAction } from '../../../../lib/session-recovery';
 
 export interface RequestAccessValues {
   projectTitle: string;
@@ -52,8 +53,8 @@ export async function requestAccessAction(
   _prev: RequestAccessState,
   formData: FormData,
 ): Promise<RequestAccessState> {
-  const session = await auth();
-  if (!session?.accessToken) {
+  const session = await sessionForAction();
+  if (!session?.user) {
     return { status: 'error', message: 'Sign in required.' };
   }
 
@@ -179,13 +180,12 @@ export async function requestAccessAction(
   if (!base) {
     return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
   }
-  const res = await fetch(
+  const res = await fetchAsUser(
     `${base}/v2/catalog/datasets/${encodeURIComponent(slug)}/access-requests`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.accessToken}`,
       },
       body: JSON.stringify(parsed.data),
       cache: 'no-store',

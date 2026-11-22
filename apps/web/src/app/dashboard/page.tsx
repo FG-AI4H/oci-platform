@@ -22,7 +22,7 @@ import {
   ShieldIcon,
   UserIcon,
 } from '@oci/ui';
-import { auth } from '../../auth';
+import { auth, sessionAccessToken } from '../../auth';
 import { isAnnotationWorker } from '../../lib/groups';
 
 interface MeResponse {
@@ -103,11 +103,12 @@ function expiryLabel(minutes: number): string {
 
 export default async function DashboardPage() {
   const session = await auth();
-  if (!session?.accessToken) {
+  const accessToken = session?.user ? await sessionAccessToken() : null;
+  if (!session?.user || !accessToken) {
     redirect('/');
   }
 
-  const result = await fetchMe(session.accessToken);
+  const result = await fetchMe(accessToken);
   const expiresInMin = result.ok
     ? Math.max(0, Math.round((new Date(result.data.expiresAt).getTime() - Date.now()) / 60_000))
     : null;

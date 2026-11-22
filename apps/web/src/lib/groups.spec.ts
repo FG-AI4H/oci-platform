@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from 'next-auth';
 import { canOverseeCampaign, isAdmin, isHost, userGroups } from './groups';
+import { groupsFromAccessToken, subjectFromAccessToken } from './token-claims';
 
+/** The session of a caller holding this access token, as `auth.ts` describes them. */
 function s(accessToken?: string): Session | null {
   if (!accessToken) return null;
   return {
     user: { name: 'test', email: 'test@example.com' },
     expires: new Date(Date.now() + 3600_000).toISOString(),
-    accessToken,
+    groups: groupsFromAccessToken(accessToken),
+    subject: subjectFromAccessToken(accessToken) ?? undefined,
   };
 }
 

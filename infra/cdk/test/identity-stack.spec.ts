@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { resolveEnvironment, type EnvName } from '../lib/environments.js';
 import { IdentityStack, userInvitationMessage } from '../lib/identity-stack.js';
 
-/** The `Properties` of the one user pool in the synthesized identity stack. */
-function userPoolOf(envName: EnvName): Record<string, unknown> {
+/** The synthesized identity stack of one environment. */
+function identityTemplateOf(envName: EnvName): Template {
   const app = new cdk.App();
   const cfg = resolveEnvironment(envName, app);
   const stack = new IdentityStack(app, `oci-${envName}-identity`, {
@@ -13,10 +13,77 @@ function userPoolOf(envName: EnvName): Record<string, unknown> {
     cfg,
     tags: { Project: 'OCI' },
   });
-  const pools = Object.values(Template.fromStack(stack).findResources('AWS::Cognito::UserPool'));
+  return Template.fromStack(stack);
+}
+
+/** The `Properties` of the one user pool in the synthesized identity stack. */
+function userPoolOf(envName: EnvName): Record<string, unknown> {
+  const pools = Object.values(identityTemplateOf(envName).findResources('AWS::Cognito::UserPool'));
   expect(pools).toHaveLength(1);
   return (pools[0] as { Properties: Record<string, unknown> }).Properties;
 }
+
+/** The `Properties` of the web app's user pool client. */
+function webClientOf(envName: EnvName): Record<string, unknown> {
+  const clients = Object.values(
+    identityTemplateOf(envName).findResources('AWS::Cognito::UserPoolClient'),
+  ).map((resource) => (resource as { Properties: Record<string, unknown> }).Properties);
+  const web = clients.filter((client) => client.ClientName === `oci-${envName}-web`);
+  expect(web).toHaveLength(1);
+  return web[0] as Record<string, unknown>;
+}
+
+const ENVIRONMENTS: readonly EnvName[] = ['dev', 'int', 'prod'];
+
+describe('identity stack: how long a web session lasts (#643, ADR-0027)', () => {
+  it('12 hours at most on every environment: the refresh-token validity', () => {
+    for (const envName of ENVIRONMENTS) {
+      const client = webClientOf(envName);
+      expect(client.RefreshTokenValidity).toBe(720);
+      expect(client.TokenValidityUnits).toMatchObject({ RefreshToken: 'minutes' });
+    }
+  });
+
+  it('access and id tokens stay at 60 minutes', () => {
+    for (const envName of ENVIRONMENTS) {
+      const client = webClientOf(envName);
+      expect(client.AccessTokenValidity).toBe(60);
+      expect(client.IdTokenValidity).toBe(60);
+      expect(client.TokenValidityUnits).toMatchObject({
+        AccessToken: 'minutes',
+        IdToken: 'minutes',
+      });
+    }
+  });
+
+  it('the idle limit is two hours on dev and thirty minutes on int and prod', () => {
+    const idleMinutes = (envName: EnvName) =>
+      resolveEnvironment(envName, new cdk.App()).session.idleTimeout.toMinutes();
+    expect(idleMinutes('dev')).toBe(120);
+    expect(idleMinutes('int')).toBe(30);
+    expect(idleMinutes('prod')).toBe(30);
+  });
+
+  it('the idle limit is shorter than the fixed limit, and the fixed limit longer than an access token', () => {
+    for (const envName of ENVIRONMENTS) {
+      const { session } = resolveEnvironment(envName, new cdk.App());
+      expect(session.idleTimeout.toSeconds()).toBeLessThan(session.maxLifetime.toSeconds());
+      expect(session.maxLifetime.toMinutes()).toBeGreaterThan(60);
+    }
+  });
+
+  // The web app's renewal is safe with rotation, but turning it on is a
+  // decision of its own (grace period, more than one web task). This
+  // fails when someone turns it on, so that the ADR is read first.
+  it('refresh-token rotation is off, and the token can be revoked', () => {
+    for (const envName of ENVIRONMENTS) {
+      const client = webClientOf(envName);
+      expect(client.RefreshTokenRotation).toBeUndefined();
+      expect(client.ExplicitAuthFlows).toContain('ALLOW_REFRESH_TOKEN_AUTH');
+      expect(client.EnableTokenRevocation).toBe(true);
+    }
+  });
+});
 
 describe('identity stack: who sends the pool mail (#642)', () => {
   it('dev sends through its own SES domain identity, from an address on that domain', () => {

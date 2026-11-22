@@ -2,79 +2,34 @@ import type { Session } from 'next-auth';
 import { redirect } from 'next/navigation';
 
 /**
- * Reads the caller's Cognito group memberships out of the NextAuth
- * session. Two token shapes are supported, picked by prefix so the
- * same call site works in both deployed envs and the local-dev stub:
+ * The caller's Cognito group memberships, as the session carries them.
  *
- *   - `dev:<user>:<roles>` (the local Credentials provider's
- *     sentinel — see [auth.ts](../auth.ts)). Roles are the
- *     comma-separated tail.
- *   - JWT (real Cognito access token). The `cognito:groups` claim
- *     lives in the payload (segment 1, base64url).
+ * The session callback (`auth.ts`) reads them from the access token
+ * each time the session is read, so they follow the token: a role
+ * granted during a session appears when the access token is next
+ * renewed, within the hour (#643). The token itself is not on the
+ * session; see `lib/token-claims.ts` for how the claims are read.
  *
- * Returns `[]` when no token is attached, the JWT can't be decoded,
- * or the claim is missing — never throws. Callers should treat the
- * empty list as "no privileged role" and gate accordingly.
+ * Returns `[]` when nobody is signed in or the token carried no groups
+ * — never throws. Callers should treat the empty list as "no
+ * privileged role" and gate accordingly.
  */
 export function userGroups(session: Session | null | undefined): string[] {
-  const token = session?.accessToken;
-  if (!token || typeof token !== 'string') return [];
-
-  if (token.startsWith('dev:')) {
-    // Format: dev:<user>:<roles>. The user value can itself contain
-    // colons (e.g. an email) so we split off the prefix and keep the
-    // last colon-separated segment as the roles list.
-    const rest = token.slice('dev:'.length);
-    const lastColon = rest.lastIndexOf(':');
-    if (lastColon < 0) return [];
-    return rest
-      .slice(lastColon + 1)
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-
-  // Real Cognito access token — JWT, three base64url segments.
-  const parts = token.split('.');
-  if (parts.length !== 3) return [];
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1] ?? '', 'base64url').toString('utf8')) as {
-      'cognito:groups'?: unknown;
-    };
-    const groups = payload['cognito:groups'];
-    return Array.isArray(groups) ? groups.filter((g): g is string => typeof g === 'string') : [];
-  } catch {
-    return [];
-  }
+  const groups = session?.groups;
+  return Array.isArray(groups) ? groups.filter((g): g is string => typeof g === 'string') : [];
 }
 
 /**
  * Returns the caller's principal identifier — either the `sub` from a
- * real Cognito JWT, or the `<user>` segment of a `dev:<user>:<roles>`
- * sentinel. Useful for "is this me?" comparisons against an API-side
- * `AdminUserSummary.sub` / `.username`. Returns `null` when the
- * session has no token attached.
+ * real Cognito access token, or the `<user>` segment of a
+ * `dev:<user>:<roles>` sentinel, as the session callback copied it
+ * onto the session. Useful for "is this me?" comparisons against an
+ * API-side `AdminUserSummary.sub` / `.username`. Returns `null` when
+ * nobody is signed in.
  */
 export function userSub(session: Session | null | undefined): string | null {
-  const token = session?.accessToken;
-  if (!token || typeof token !== 'string') return null;
-
-  if (token.startsWith('dev:')) {
-    const rest = token.slice('dev:'.length);
-    const lastColon = rest.lastIndexOf(':');
-    return lastColon < 0 ? null : rest.slice(0, lastColon);
-  }
-
-  const parts = token.split('.');
-  if (parts.length !== 3) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(parts[1] ?? '', 'base64url').toString('utf8')) as {
-      sub?: unknown;
-    };
-    return typeof payload.sub === 'string' ? payload.sub : null;
-  } catch {
-    return null;
-  }
+  const subject = session?.subject;
+  return typeof subject === 'string' && subject.length > 0 ? subject : null;
 }
 
 /** True when the caller belongs to the `host` or `admin` Cognito group. */

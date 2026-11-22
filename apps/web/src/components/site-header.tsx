@@ -4,7 +4,9 @@ import { redirect } from 'next/navigation';
 import { auth, isLocal, signOut } from '../auth';
 import { cognitoLogoutUrl } from '../lib/cognito-logout';
 import { isAdmin, isHost } from '../lib/groups';
+import { activityReportSeconds, sessionIdleSeconds } from '../lib/token-refresh';
 import { BrandLockup } from './brand-mark';
+import { SessionActivity } from './session-activity';
 
 function envTone(env: string): 'info' | 'warning' | 'neutral' {
   if (env === 'dev') return 'info';
@@ -27,6 +29,7 @@ export async function SiteHeader() {
   const showAdminNav = isAdmin(session);
   const showAnnotationNav = session?.user != null;
   const showEnvBadge = env !== 'prod';
+  const idleSeconds = sessionIdleSeconds();
 
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-background)]/85 backdrop-blur supports-[backdrop-filter]:bg-[var(--color-background)]/70">
@@ -60,6 +63,11 @@ export async function SiteHeader() {
 
           {session?.user ? (
             <>
+              {/* Renders nothing; reports use of the page so that reading
+                  or typing does not look like an idle session (#643). */}
+              {idleSeconds === null ? null : (
+                <SessionActivity reportEverySeconds={activityReportSeconds(idleSeconds)} />
+              )}
               <NavLink href="/dashboard">Dashboard</NavLink>
               <NavLink href="/settings">Settings</NavLink>
               <span

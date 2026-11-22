@@ -86,6 +86,25 @@ export interface OciEnvConfig {
    * task does not seed there, and `resolveEnvironment` refuses it.
    */
   seedProfiles: readonly string[];
+  /**
+   * How long a web session lasts (ADR-0027). Access tokens stay at 60
+   * minutes everywhere and the web app renews them while the user is
+   * active; these two say when it stops.
+   */
+  session: {
+    /**
+     * The session ends after this long without activity. Enforced by the
+     * web app (`OCI_SESSION_IDLE_SECONDS`), not by Cognito.
+     */
+    idleTimeout: cdk.Duration;
+    /**
+     * Hard stop, counted from sign-in: the Cognito refresh-token
+     * validity. Activity does not extend it, with or without refresh-
+     * token rotation, so it is the longest anyone works before signing
+     * in again (plus, at most, the last access token's 60 minutes).
+     */
+    maxLifetime: cdk.Duration;
+  };
   /** Backups & retention */
   backupRetentionDays: number;
   /** Whether prod-grade monitoring (X-Ray, Container Insights, alarms) is on */
@@ -133,6 +152,9 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     // commits the real image selection, after its files have been uploaded to
     // the datasets bucket: see docs/for-operators/demo-seed.md.
     seedProfiles: [],
+    // Hands-on sessions: two hours covers a long break without a new
+    // sign-in, and twelve hours a working day started in the morning.
+    session: { idleTimeout: cdk.Duration.hours(2), maxLifetime: cdk.Duration.hours(12) },
     backupRetentionDays: 7,
     enhancedMonitoring: false,
     enableWaf: false,
@@ -158,6 +180,8 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     // identity verified; see the field's comment.
     userPoolMailThroughSes: false,
     seedProfiles: [],
+    // Same as prod, so that what is rehearsed here is what prod does.
+    session: { idleTimeout: cdk.Duration.minutes(30), maxLifetime: cdk.Duration.hours(12) },
     backupRetentionDays: 7,
     enhancedMonitoring: true,
     enableWaf: true,
@@ -186,6 +210,12 @@ const ENVIRONMENTS: Record<EnvName, Omit<OciEnvConfig, 'envName'>> = {
     // identity verified; see the field's comment.
     userPoolMailThroughSes: false,
     seedProfiles: [],
+    // The admin, regulator and supervisor roles sign in with MFA here.
+    // Thirty minutes idle and twelve hours in all is what NIST SP 800-63B
+    // revision 3 required at that assurance level (AAL2); revision 4
+    // recommends no more than one hour and 24 hours. The stricter pair is
+    // the starting point until the values are decided (ADR-0027).
+    session: { idleTimeout: cdk.Duration.minutes(30), maxLifetime: cdk.Duration.hours(12) },
     backupRetentionDays: 35,
     enhancedMonitoring: true,
     enableWaf: true,
