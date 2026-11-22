@@ -24,6 +24,12 @@ BEGIN;
 -- The repository is the authority for the manifest: dataset and version rows
 -- refresh when it differs. File rows refresh their size and hash, because a
 -- regenerated teaching file keeps its name and address.
+-- Published on top (#738, same rule as demo.sql since #641): publishing a
+-- version through the API rewrites the dataset row, so the dataset row stops
+-- following the repository once the dataset has a version published by anyone
+-- other than this file, which publishes as 00000000-0000-4000-8000-000000000099.
+-- The version row this file wrote still follows the repository; a version row
+-- published by anyone else is never rewritten, even under the same number.
 -- The image bytes are NOT uploaded by the deploy: an operator uploads them
 -- once, and the migrate task replays this file only after it has found every
 -- one of them in the bucket.
@@ -55,7 +61,13 @@ BEGIN
     conformance_version = EXCLUDED.conformance_version,
     duo_terms = EXCLUDED.duo_terms,
     updated_at = CURRENT_TIMESTAMP
-  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant;
+  WHERE "datasets".croissant IS DISTINCT FROM EXCLUDED.croissant
+    -- Not once someone has published on top of the seed (#738).
+    AND NOT EXISTS (
+      SELECT 1 FROM "catalog"."dataset_versions" v
+      WHERE v.dataset_id = "datasets".id
+        AND v.published_by_id <> '00000000-0000-4000-8000-000000000099'
+    );
 
   SELECT id INTO STRICT ds_id FROM "catalog"."datasets" WHERE slug = 'nih-chestxray14-workshop';
 
@@ -67,7 +79,9 @@ BEGIN
   )
   ON CONFLICT (dataset_id, version) DO UPDATE SET
     croissant = EXCLUDED.croissant
-  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant;
+  WHERE "dataset_versions".croissant IS DISTINCT FROM EXCLUDED.croissant
+    -- Only a version row this file wrote (#738).
+    AND "dataset_versions".published_by_id = '00000000-0000-4000-8000-000000000099';
 
   SELECT id INTO STRICT ver_id FROM "catalog"."dataset_versions"
   WHERE dataset_id = ds_id AND version = '1.0.0';
