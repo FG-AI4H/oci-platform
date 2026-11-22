@@ -37,6 +37,7 @@ export {
   MAX_REPORTED_FILE_ISSUES,
   PREDICTIONS_CSV_DELIMITERS,
   PREDICTIONS_CSV_HEADER,
+  PREDICTIONS_CSV_HEADER_WITH_SCORE,
   PredictionRowSchema,
   parsePredictionsFile,
   predictionsTemplateCsv,
@@ -46,6 +47,7 @@ export type {
   PredictionsCsvDelimiter,
   PredictionsFileFormat,
   PredictionsFileIssue,
+  PredictionsFileOptions,
   PredictionsFileParseResult,
 } from './predictions-file.js';
 
@@ -3701,12 +3703,19 @@ export type DatasetConsentHistory = z.infer<typeof DatasetConsentHistorySchema>;
  *     quadratic-weighted kappa is the headline metric (ADR-0017).
  *   - `CLASSIFICATION` — nominal categories; every confusion is equally wrong,
  *     so per-class precision/recall and balanced accuracy lead (#428, WP10).
+ *   - `BINARY_DIAGNOSTIC` — one finding, present (1) or absent (0); reported as
+ *     sensitivity, specificity and predictive values with Wilson 95% intervals,
+ *     and AUC when every scored item carries a score (#650).
  *
  * Extend additively only, with a matching Prisma migration. Adding a value
  * here without a registered scorer is a runtime error, not a silent default:
  * see `scoring-registry.ts` in the API's evaluation module.
  */
-export const EvaluationTaskKindDbSchema = z.enum(['GRADING', 'CLASSIFICATION']);
+export const EvaluationTaskKindDbSchema = z.enum([
+  'GRADING',
+  'CLASSIFICATION',
+  'BINARY_DIAGNOSTIC',
+]);
 export type EvaluationTaskKindDb = z.infer<typeof EvaluationTaskKindDbSchema>;
 
 /** How a submission delivered predictions. `PREDICTIONS` = Mode 1 (shipped);
@@ -3791,6 +3800,58 @@ export const ClassificationScoresSchema = z.object({
 });
 export type ClassificationScores = z.infer<typeof ClassificationScoresSchema>;
 
+/** A proportion with its Wilson score 95% interval (#650). */
+export const ProportionEstimateSchema = z.object({
+  /** numerator / denominator, rounded to 4 decimals. */
+  estimate: z.number(),
+  /** Lower bound of the Wilson 95% interval. */
+  lower: z.number(),
+  /** Upper bound of the Wilson 95% interval. */
+  upper: z.number(),
+  numerator: z.number().int().nonnegative(),
+  denominator: z.number().int().positive(),
+});
+export type ProportionEstimate = z.infer<typeof ProportionEstimateSchema>;
+
+/** AUC with its bootstrap 95% interval and how the interval was made (#650). */
+export const AucEstimateSchema = z.object({
+  estimate: z.number(),
+  lower: z.number(),
+  upper: z.number(),
+  /** Bootstrap resamples (stratified by reference class, percentile interval). */
+  resamples: z.number().int().positive(),
+  /** Seed of the bootstrap's generator: same file, same interval. */
+  seed: z.number().int(),
+});
+export type AucEstimate = z.infer<typeof AucEstimateSchema>;
+
+/**
+ * Diagnostic-accuracy metrics for one binary finding (#650, ADR-0020). Label 1
+ * is the task's positive class (named in `positiveClassName`). A proportion is
+ * `null` when its denominator is zero: not estimable, which is not 0%.
+ */
+export const BinaryDiagnosticScoresSchema = z.object({
+  truePositives: z.number().int().nonnegative(),
+  falsePositives: z.number().int().nonnegative(),
+  trueNegatives: z.number().int().nonnegative(),
+  falseNegatives: z.number().int().nonnegative(),
+  prevalence: ProportionEstimateSchema.nullable(),
+  sensitivity: ProportionEstimateSchema.nullable(),
+  specificity: ProportionEstimateSchema.nullable(),
+  positivePredictiveValue: ProportionEstimateSchema.nullable(),
+  negativePredictiveValue: ProportionEstimateSchema.nullable(),
+  accuracy: ProportionEstimateSchema.nullable(),
+  /**
+   * Mean of sensitivity and specificity; the number results are ordered by.
+   * `null` when either rate is not estimable.
+   */
+  balancedAccuracy: z.number().nullable(),
+  /** Present only when every scored item carried a score. */
+  auc: AucEstimateSchema.nullable(),
+  coverage: z.number(),
+});
+export type BinaryDiagnosticScores = z.infer<typeof BinaryDiagnosticScoresSchema>;
+
 /**
  * A scored submission's metrics, tagged with the scoring family that produced
  * them (ADR-0020).
@@ -3807,6 +3868,7 @@ export type ClassificationScores = z.infer<typeof ClassificationScoresSchema>;
 export const TaskKindScoresSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('GRADING'), metrics: GradingScoresSchema }),
   z.object({ kind: z.literal('CLASSIFICATION'), metrics: ClassificationScoresSchema }),
+  z.object({ kind: z.literal('BINARY_DIAGNOSTIC'), metrics: BinaryDiagnosticScoresSchema }),
 ]);
 export type TaskKindScores = z.infer<typeof TaskKindScoresSchema>;
 
@@ -3874,6 +3936,12 @@ export const EvaluationTaskDetailSchema = z.object({
   taskKind: EvaluationTaskKindDbSchema,
   numClasses: z.number().int(),
   referableThreshold: z.number().int(),
+  /**
+   * `BINARY_DIAGNOSTIC`: what label 1 means, in words — the positive class the
+   * sensitivity and predictive values are about (#650). `null` for the other
+   * kinds, and for a binary task created without one.
+   */
+  positiveClassName: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
   /**
@@ -3933,10 +4001,44 @@ export const CreateEvaluationTaskRequestSchema = z
     taskKind: EvaluationTaskKindDbSchema.default('GRADING'),
     numClasses: z.number().int().min(2).max(1000).default(5),
     referableThreshold: z.number().int().min(1).default(2),
+    /**
+     * Required for `BINARY_DIAGNOSTIC`, refused for the other kinds: what label 1
+     * means, in words (e.g. "Pneumothorax present"). Published with the task.
+     */
+    positiveClassName: z.string().trim().min(1).max(200).optional(),
     groundTruth: z.record(z.string().min(1).max(200), z.number().int().min(0)),
   })
   .superRefine((value, ctx) => {
     const entries = Object.entries(value.groundTruth);
+    if (value.taskKind === 'BINARY_DIAGNOSTIC') {
+      if (value.numClasses !== 2) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['numClasses'],
+          message: 'a BINARY_DIAGNOSTIC task has exactly 2 classes (0 absent, 1 present)',
+        });
+      }
+      if (value.referableThreshold !== 1) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['referableThreshold'],
+          message: 'a BINARY_DIAGNOSTIC task takes referableThreshold 1 (label 1 is the finding)',
+        });
+      }
+      if (value.positiveClassName === undefined) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['positiveClassName'],
+          message: 'a BINARY_DIAGNOSTIC task must state its positive class in words',
+        });
+      }
+    } else if (value.positiveClassName !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['positiveClassName'],
+        message: 'positiveClassName applies to BINARY_DIAGNOSTIC tasks only',
+      });
+    }
     if (entries.length === 0) {
       ctx.addIssue({
         code: 'custom',
@@ -4219,6 +4321,8 @@ export const EvaluationSubmissionDetailSchema = z
       taskKind: EvaluationTaskKindDbSchema,
       numClasses: z.number().int(),
       referableThreshold: z.number().int(),
+      /** Same as on the task detail: label 1 in words, binary tasks only. */
+      positiveClassName: z.string().nullable(),
     }),
     methodName: z.string(),
     mode: SubmissionModeSchema,

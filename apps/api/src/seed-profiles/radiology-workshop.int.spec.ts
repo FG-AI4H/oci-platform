@@ -371,7 +371,8 @@ describe.skipIf(!dockerAvailable)(
           '3 item ID(s) appear more than once. Send exactly one prediction per item ID; the scored path rejects the whole submission on the first duplicate.',
         );
         expect(failed.get('LABEL_RANGE')?.detail).toBe(
-          "4 prediction(s) carry a grade outside this task's range. Grades must be integers in [0, 1] (numClasses = 2).",
+          // A classification task has labels, not grades (#650).
+          "4 prediction(s) carry a label outside this task's range. Labels must be integers in [0, 1] (numClasses = 2).",
         );
         expect(failed.get('ITEM_IDS_RECOGNISED')?.detail).toContain(
           "5 submitted item ID(s) are not contained in this task's 200 item(s)",

@@ -66,6 +66,8 @@ export interface SubmissionDetailRow extends SubmissionRow {
     taskKind: EvaluationTaskKindDb;
     numClasses: number;
     referableThreshold: number;
+    /** `BINARY_DIAGNOSTIC` only: label 1 in words. Public configuration. */
+    positiveClassName: string | null;
   };
 }
 
@@ -77,6 +79,8 @@ export interface EvaluationTaskWithSubmissionsRow {
   taskKind: EvaluationTaskKindDb;
   numClasses: number;
   referableThreshold: number;
+  /** `BINARY_DIAGNOSTIC` only: label 1 in words. Public configuration. */
+  positiveClassName: string | null;
   createdAt: Date;
   updatedAt: Date;
   /**
@@ -119,6 +123,8 @@ export interface EvaluationTaskRefRow {
 export interface EvaluationTaskItemIdsRow {
   id: string;
   slug: string;
+  /** Public: decides the label range and whether a score is accepted. */
+  taskKind: EvaluationTaskKindDb;
   numClasses: number;
   /** The ground-truth map's KEYS only. The same set a run is given as
    *  `/input/index.json`, so it is not secret. */
@@ -212,6 +218,7 @@ export class EvaluationRepository {
         taskKind: true,
         numClasses: true,
         referableThreshold: true,
+        positiveClassName: true,
         createdAt: true,
         updatedAt: true,
         groundTruth: true,
@@ -247,6 +254,7 @@ export class EvaluationRepository {
       taskKind: t.taskKind,
       numClasses: t.numClasses,
       referableThreshold: t.referableThreshold,
+      positiveClassName: t.positiveClassName,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
       // Sorted so the response is deterministic across reads: JSONB does not
@@ -323,12 +331,13 @@ export class EvaluationRepository {
   async findTaskItemIds(slug: string): Promise<EvaluationTaskItemIdsRow | null> {
     const t = await this.prisma.client.evaluationTask.findUnique({
       where: { slug },
-      select: { id: true, slug: true, numClasses: true, groundTruth: true },
+      select: { id: true, slug: true, taskKind: true, numClasses: true, groundTruth: true },
     });
     if (!t) return null;
     return {
       id: t.id,
       slug: t.slug,
+      taskKind: t.taskKind,
       numClasses: t.numClasses,
       itemIds: Object.keys((t.groundTruth ?? {}) as Record<string, unknown>),
     };
@@ -401,6 +410,7 @@ export class EvaluationRepository {
             taskKind: true,
             numClasses: true,
             referableThreshold: true,
+            positiveClassName: true,
           },
         },
       },
@@ -424,6 +434,7 @@ export class EvaluationRepository {
         taskKind: s.task.taskKind,
         numClasses: s.task.numClasses,
         referableThreshold: s.task.referableThreshold,
+        positiveClassName: s.task.positiveClassName,
       },
     };
   }
@@ -496,6 +507,7 @@ export class EvaluationRepository {
     taskKind: EvaluationTaskKindDb;
     numClasses: number;
     referableThreshold: number;
+    positiveClassName: string | null;
     groundTruth: Record<string, number>;
   }): Promise<{ id: string; slug: string }> {
     return this.prisma.client.evaluationTask.create({
@@ -506,6 +518,7 @@ export class EvaluationRepository {
         taskKind: data.taskKind,
         numClasses: data.numClasses,
         referableThreshold: data.referableThreshold,
+        positiveClassName: data.positiveClassName,
         groundTruth: data.groundTruth as unknown as Prisma.InputJsonValue,
       },
       select: { id: true, slug: true },

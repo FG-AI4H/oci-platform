@@ -100,7 +100,18 @@ export function flattenScoresForEvalAi(scores: unknown): Record<string, number> 
 
   const out: Record<string, number> = {};
   for (const [k, v] of Object.entries(metrics as Record<string, unknown>)) {
-    if (typeof v === 'number' && Number.isFinite(v)) out[`${kind.toLowerCase()}_${k}`] = v;
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      out[`${kind.toLowerCase()}_${k}`] = v;
+    } else if (typeof v === 'object' && v !== null && !Array.isArray(v)) {
+      // A proportion or an AUC with its interval (#650): the leaderboard takes
+      // one number per column, so the point estimate goes there and the
+      // interval stays on the platform's own pages. Arrays (per-class tables)
+      // are still left out.
+      const estimate = (v as { estimate?: unknown }).estimate;
+      if (typeof estimate === 'number' && Number.isFinite(estimate)) {
+        out[`${kind.toLowerCase()}_${k}`] = estimate;
+      }
+    }
   }
   return out;
 }

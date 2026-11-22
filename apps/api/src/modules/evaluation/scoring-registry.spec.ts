@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { scoreSubmission, ScoringError } from './scoring.js';
 import {
   MAX_PREDICTION_ITEMS,
+  acceptsItemScores,
   isScorableTaskKind,
+  primaryMetricOf,
   scoreByKind,
+  validateItemScores,
   validatePredictionsPayload,
 } from './scoring-registry.js';
 
@@ -71,10 +74,68 @@ describe('scoreByKind — CLASSIFICATION dispatch', () => {
   });
 });
 
+describe('scoreByKind — BINARY_DIAGNOSTIC dispatch (#650)', () => {
+  const gt = { a: 1, b: 0, c: 1, d: 0 };
+  const labels = { a: 1, b: 0, c: 0, d: 0 };
+
+  it('returns the diagnostic metric set and orders by balanced accuracy', () => {
+    const s = scoreByKind({ kind: 'BINARY_DIAGNOSTIC', groundTruth: gt, predictions: labels });
+    if (s.kind !== 'BINARY_DIAGNOSTIC') throw new Error('wrong kind');
+    expect(s.metrics.sensitivity?.estimate).toBe(0.5);
+    expect(s.metrics.specificity?.estimate).toBe(1);
+    expect(primaryMetricOf(s)).toBe(0.75);
+    expect(s.metrics.auc).toBeNull();
+  });
+
+  it('sinks a result whose balanced accuracy is not estimable, rather than ranking it as 0', () => {
+    const oneClass = scoreByKind({
+      kind: 'BINARY_DIAGNOSTIC',
+      groundTruth: { a: 1, b: 1 },
+      predictions: { a: 1, b: 1 },
+    });
+    expect(primaryMetricOf(oneClass)).toBe(Number.NEGATIVE_INFINITY);
+  });
+
+  it('passes item scores through to the scorer', () => {
+    const s = scoreByKind({
+      kind: 'BINARY_DIAGNOSTIC',
+      groundTruth: gt,
+      predictions: labels,
+      itemScores: { a: 0.9, b: 0.2, c: 0.6, d: 0.1 },
+    });
+    if (s.kind !== 'BINARY_DIAGNOSTIC') throw new Error('wrong kind');
+    expect(s.metrics.auc?.estimate).toBe(1);
+  });
+
+  it('refuses item scores for a kind that takes none, rather than ignoring them', () => {
+    expect(acceptsItemScores('BINARY_DIAGNOSTIC')).toBe(true);
+    expect(acceptsItemScores('GRADING')).toBe(false);
+    expect(acceptsItemScores('CLASSIFICATION')).toBe(false);
+    for (const kind of ['GRADING', 'CLASSIFICATION']) {
+      expect(() =>
+        scoreByKind({
+          kind,
+          groundTruth: { a: 0 },
+          predictions: { a: 0 },
+          itemScores: { a: 0.5 },
+          config: { numClasses: 2, referableThreshold: 1 },
+        }),
+      ).toThrow(/no score/);
+    }
+  });
+
+  it('refuses a score outside 0 to 1 at the shape gate', () => {
+    expect(() => validateItemScores('BINARY_DIAGNOSTIC', { a: 1.5 })).toThrow(ScoringError);
+    expect(() => validateItemScores('BINARY_DIAGNOSTIC', { a: -0.1 })).toThrow(ScoringError);
+    expect(validateItemScores('BINARY_DIAGNOSTIC', undefined)).toBeUndefined();
+  });
+});
+
 describe('task-kind gate', () => {
   it('recognises the kinds this build can score', () => {
     expect(isScorableTaskKind('GRADING')).toBe(true);
     expect(isScorableTaskKind('CLASSIFICATION')).toBe(true);
+    expect(isScorableTaskKind('BINARY_DIAGNOSTIC')).toBe(true);
   });
 
   it('rejects kinds that are declared but not yet implemented', () => {

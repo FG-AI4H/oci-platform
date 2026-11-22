@@ -393,11 +393,11 @@ The WHO Fig. 7 Model Facts Label, structured or as Markdown. Anonymous: PUBLISHE
 
 ## Evaluation submissions (#645)
 
-The task list and task detail (`GET /v2/evaluation/tasks`, `GET /v2/evaluation/tasks/:slug`) are public and never return the reference labels.
+The task list and task detail (`GET /v2/evaluation/tasks`, `GET /v2/evaluation/tasks/:slug`) are public and never return the reference labels. The task detail, and the `task` object of a submission, carry `positiveClassName`: for a `BINARY_DIAGNOSTIC` task, what label 1 means in words; `null` for the other kinds. `POST /v2/evaluation/tasks` requires it, with `numClasses: 2` and `referableThreshold: 1`, when `taskKind` is `BINARY_DIAGNOSTIC`, and refuses it otherwise.
 
 ### `POST /v2/evaluation/tasks/:slug/submissions`
 
-Body: `{ methodName, intent?, predictions: [{ imageId, grade }] }`. `intent` is `SCORED` (default) or `VALIDATION`.
+Body: `{ methodName, intent?, predictions: [{ imageId, grade, score? }] }`. `intent` is `SCORED` (default) or `VALIDATION`. `score` (a number from 0 to 1) is accepted for a `BINARY_DIAGNOSTIC` task only; sent to any other kind it is refused as a format error (a failed `PAYLOAD_SHAPE` check on validation, a `400` on a scored submission). A binary task reports AUC only when every scored item carries a score (#650).
 
 - `VALIDATION`: no token needed. Returns a `SubmissionValidationReport` listing identifiers sent twice, identifiers the task does not contain, labels outside the task's range, and how many of the task's items were left out. Nothing is scored, stored or counted.
 - `SCORED` _(any auth)_: scores the predictions and returns `{ id, scores }`. A format error (an identifier sent twice, a label outside the range) returns `400` with `{ message, submissionId }` and records a FAILED submission that does **not** count against the quota. Over the quota: `403` with `{ message, quota }`.
@@ -408,7 +408,7 @@ Body: `{ methodName, intent?, predictions: [{ imageId, grade }] }`. `intent` is 
 
 ### `GET /v2/evaluation/tasks/:slug/submissions/:id`
 
-`EvaluationSubmissionDetail`: the submission's status, its scores (for a `CLASSIFICATION` task, `scores.metrics.perClass` is the per-class breakdown), the evaluation method version that produced them with its review status, and the task fields needed to read the numbers. Never carries predictions, reference labels or the submitter's identity; `viewerIsSubmitter` says only whether the caller submitted it.
+`EvaluationSubmissionDetail`: the submission's status, its scores (for a `CLASSIFICATION` task, `scores.metrics.perClass` is the per-class breakdown; for a `BINARY_DIAGNOSTIC` task each rate is `{ estimate, lower, upper, numerator, denominator }` with a Wilson 95% interval, or `null` when not estimable, and `auc` is `null` unless every scored item had a score), the evaluation method version that produced them with its review status, and the task fields needed to read the numbers. Never carries predictions, reference labels or the submitter's identity; `viewerIsSubmitter` says only whether the caller submitted it.
 
 A SCORED or PENDING submission is public. A FAILED one is returned, with `failure: { reason, quotaConsumed }`, to its submitter and to `admin` only. For anyone else it is a `404`, the same as an unknown id.
 

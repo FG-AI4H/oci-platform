@@ -18,15 +18,18 @@ import {
   Section,
 } from '@oci/ui';
 import type {
+  BinaryDiagnosticScores,
   ClassMetrics,
   EvaluationSubmissionDetail,
   ScoreAttribution,
   SubmissionStatus,
 } from '@oci/shared-types';
 import { auth } from '../../../../../auth';
+import { BINARY_DIAGNOSTIC_TEXT as BD } from '../../../../../components/evaluation/binary-diagnostic-text';
 import {
   formatRate,
   metricCells,
+  positiveClassOf,
   TASK_KIND_LABEL,
   type MetricCell,
 } from '../../../../../components/evaluation/metrics';
@@ -142,6 +145,7 @@ export default async function SubmissionPage({
   const taskHref = `/evaluation/${encodeURIComponent(task.slug)}` as const;
   const cells = metricCells(task, scores);
   const perClass = scores?.kind === 'CLASSIFICATION' ? scores.metrics.perClass : null;
+  const binary = scores?.kind === 'BINARY_DIAGNOSTIC' ? scores.metrics : null;
 
   return (
     <>
@@ -235,6 +239,8 @@ export default async function SubmissionPage({
 
           {perClass ? <PerClassCard perClass={perClass} /> : null}
 
+          {binary ? <ConfusionCard metrics={binary} positive={positiveClassOf(task)} /> : null}
+
           {attribution ? <MethodCard attribution={attribution} /> : null}
 
           <Card>
@@ -265,6 +271,15 @@ export default async function SubmissionPage({
                         — a grade of {task.referableThreshold} or more counts as referable.
                       </span>
                     </DefinitionItem>
+                  </>
+                ) : task.taskKind === 'BINARY_DIAGNOSTIC' ? (
+                  <>
+                    <DefinitionItem term={BD.about.positiveClassTerm}>
+                      {task.positiveClassName
+                        ? BD.about.positiveClass(task.positiveClassName)
+                        : BD.about.positiveClassMissing}
+                    </DefinitionItem>
+                    <DefinitionItem term={BD.about.classesTerm}>{BD.about.classes}</DefinitionItem>
                   </>
                 ) : (
                   <DefinitionItem term="Classes">
@@ -305,36 +320,142 @@ function MetricList({ cells }: { cells: MetricCell[] }) {
     <dl className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
       {cells.map((cell, i) =>
         i === 0 ? (
-          <div key={cell.label} className="rounded-lg bg-[var(--color-subtle)] p-5 sm:col-span-2">
+          <div key={cell.key} className="rounded-lg bg-[var(--color-subtle)] p-5 sm:col-span-2">
             <dt className="text-sm font-medium text-[var(--color-muted-foreground)]">
               {cell.label}
             </dt>
             <dd className="mt-1">
-              <span className="text-4xl font-semibold tabular-nums text-[var(--color-foreground)]">
-                {cell.value}
-              </span>
+              <MetricValue cell={cell} size="text-4xl" />
               <span className="mt-2 block max-w-prose text-sm text-[var(--color-muted-foreground)]">
                 {cell.explanation}
               </span>
             </dd>
           </div>
         ) : (
-          <div key={cell.label}>
+          <div key={cell.key}>
             <dt className="text-sm font-medium text-[var(--color-muted-foreground)]">
               {cell.label}
             </dt>
             <dd className="mt-1">
-              <span className="text-2xl font-semibold tabular-nums text-[var(--color-foreground)]">
-                {cell.value}
-              </span>
+              <MetricValue cell={cell} size="text-2xl" />
               <span className="mt-1 block text-sm text-[var(--color-muted-foreground)]">
-                {cell.explanation}
+                {cell.absent ? cell.absent.reason : cell.explanation}
               </span>
             </dd>
           </div>
         ),
       )}
     </dl>
+  );
+}
+
+/**
+ * The number, then — for a binary-finding rate — its 95% interval and the
+ * counts it rests on, on one quieter line. An absent figure on a scored result
+ * says so in words instead of showing a blank.
+ */
+function MetricValue({ cell, size }: { cell: MetricCell; size: string }) {
+  if (cell.value === null) {
+    return (
+      <span className="text-base font-semibold text-[var(--color-muted-foreground)]">
+        {cell.absent?.label ?? '—'}
+      </span>
+    );
+  }
+  return (
+    <>
+      <span className={`${size} font-semibold tabular-nums text-[var(--color-foreground)]`}>
+        {cell.value}
+      </span>
+      {cell.interval || cell.basis ? (
+        <span className="mt-1 block text-sm tabular-nums text-[var(--color-foreground)]">
+          {cell.interval ? (
+            <>
+              <span aria-hidden="true">{cell.interval.text}</span>
+              <span className="sr-only">{cell.interval.spoken}</span>
+            </>
+          ) : null}
+          {cell.interval && cell.basis ? <span aria-hidden="true"> · </span> : null}
+          {cell.basis ? (
+            <span className="text-[var(--color-muted-foreground)]">
+              {cell.interval ? <span className="sr-only">, </span> : null}
+              {cell.basis}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * The four counts of a binary-finding result as a two-by-two table, reference
+ * label down the side and the file's label across the top — the layout a
+ * diagnostic-accuracy reader expects. Every rate in the metrics card is a ratio
+ * of two of these cells.
+ */
+function ConfusionCard({
+  metrics,
+  positive,
+}: {
+  metrics: BinaryDiagnosticScores;
+  positive: string;
+}) {
+  const c = BD.confusion;
+  const n = (value: number) => value.toLocaleString('en-GB');
+  const cell = (count: number, name: string) => (
+    <td className="px-3 py-3 text-end sm:px-4">
+      <span className="block text-xl font-semibold tabular-nums text-[var(--color-foreground)]">
+        {n(count)}
+      </span>
+      <span className="block text-xs text-[var(--color-muted-foreground)]">{name}</span>
+    </td>
+  );
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle as="h2">{c.title}</CardTitle>
+        <CardDescription>{c.description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div
+          tabIndex={0}
+          role="region"
+          aria-label={c.tableLabel}
+          className="overflow-x-auto rounded-lg border border-[var(--color-border)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+        >
+          <table className="w-full border-collapse text-sm">
+            <thead className="bg-[var(--color-subtle)] text-[var(--color-muted-foreground)]">
+              <tr>
+                <td className="px-3 py-2.5 text-xs sm:px-4">{c.corner}</td>
+                <th scope="col" className="px-3 py-2.5 text-end font-medium sm:px-4">
+                  {c.positive(positive)}
+                </th>
+                <th scope="col" className="px-3 py-2.5 text-end font-medium sm:px-4">
+                  {c.negative}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-[var(--color-border)]">
+                <th scope="row" className="px-3 py-3 text-start font-medium sm:px-4">
+                  {c.positive(positive)}
+                </th>
+                {cell(metrics.truePositives, c.truePositive)}
+                {cell(metrics.falseNegatives, c.falseNegative)}
+              </tr>
+              <tr className="border-t border-[var(--color-border)]">
+                <th scope="row" className="px-3 py-3 text-start font-medium sm:px-4">
+                  {c.negative}
+                </th>
+                {cell(metrics.falsePositives, c.falsePositive)}
+                {cell(metrics.trueNegatives, c.trueNegative)}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

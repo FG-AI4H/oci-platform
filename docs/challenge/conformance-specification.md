@@ -151,10 +151,11 @@ and its declared envelope is observed to be enforced.
 A task declares its scoring family, and the platform scores accordingly.
 Currently:
 
-| Family           | Payload           | Metrics reported                                                                                 |
-| ---------------- | ----------------- | ------------------------------------------------------------------------------------------------ |
-| `GRADING`        | one ordinal label | quadratic-weighted kappa, accuracy, referable sensitivity/specificity, coverage                  |
-| `CLASSIFICATION` | one nominal label | accuracy, balanced accuracy, macro and micro F1, per-class precision/recall/F1/support, coverage |
+| Family              | Payload                                                                    | Metrics reported                                                                                                                                                                      |
+| ------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GRADING`           | one ordinal label                                                          | quadratic-weighted kappa, accuracy, referable sensitivity/specificity, coverage                                                                                                       |
+| `CLASSIFICATION`    | one nominal label                                                          | accuracy, balanced accuracy, macro and micro F1, per-class precision/recall/F1/support, coverage                                                                                      |
+| `BINARY_DIAGNOSTIC` | label 0 or 1; optional score 0–1 (predictions file only, not a sealed run) | confusion counts, prevalence, sensitivity, specificity, PPV, NPV, accuracy (Wilson 95% intervals), balanced accuracy, AUC with bootstrap interval when every item is scored, coverage |
 
 Segmentation, detection and span extraction are in development. Metrics are
 always reported with the family that produced them, because a number means

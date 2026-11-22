@@ -31,9 +31,10 @@ import { z } from 'zod';
 
 import { scoreSubmission, ScoringError, type EvaluationScores } from './scoring.js';
 import { scoreClassification, type ClassificationScores } from './scoring-classification.js';
+import { scoreBinaryDiagnostic, type BinaryDiagnosticScores } from './scoring-binary-diagnostic.js';
 
 /** Task kinds this build can score. Mirrors the Prisma `EvaluationTaskKind`. */
-export const SCORABLE_TASK_KINDS = ['GRADING', 'CLASSIFICATION'] as const;
+export const SCORABLE_TASK_KINDS = ['GRADING', 'CLASSIFICATION', 'BINARY_DIAGNOSTIC'] as const;
 export type ScorableTaskKind = (typeof SCORABLE_TASK_KINDS)[number];
 
 /**
@@ -55,6 +56,18 @@ const singleLabelPayloadSchema = z
     message: `predictions payload exceeds ${MAX_PREDICTION_ITEMS} items`,
   });
 
+/**
+ * Optional per-item scores (`itemId -> real number in [0, 1]`). Only a kind
+ * that declares `acceptsItemScores` takes them; every other kind refuses a
+ * payload that carries any, rather than ignoring them. Shape gate only: the
+ * scorer checks that each score belongs to a predicted item.
+ */
+const itemScoresSchema = z
+  .record(z.string().min(1), z.number().min(0).max(1))
+  .refine((rec) => Object.keys(rec).length <= MAX_PREDICTION_ITEMS, {
+    message: `item scores exceed ${MAX_PREDICTION_ITEMS} items`,
+  });
+
 /** Config a task carries into scoring, whatever its kind. */
 export interface TaskScoringConfig {
   numClasses?: number;
@@ -65,11 +78,18 @@ export interface TaskScoringConfig {
 /** Scores envelope: the kind that produced them, and the metrics themselves. */
 export type KindScores =
   | { kind: 'GRADING'; metrics: EvaluationScores }
-  | { kind: 'CLASSIFICATION'; metrics: ClassificationScores };
+  | { kind: 'CLASSIFICATION'; metrics: ClassificationScores }
+  | { kind: 'BINARY_DIAGNOSTIC'; metrics: BinaryDiagnosticScores };
 
 interface ScorerEntry {
   /** Strict shape gate for this kind's predictions payload. */
   readonly payloadSchema: z.ZodType<unknown>;
+  /**
+   * Whether a submission may carry a per-item score next to its label.
+   * Reaches the scorer from a predictions file only: the sealed-run output
+   * contract carries labels, never scores (#414, ADR-0020 amendment).
+   */
+  readonly acceptsItemScores: boolean;
   /**
    * The single number a task of this kind is ordered by. Declared per kind
    * because there is no metric common to all of them: ordinal agreement is
@@ -83,6 +103,7 @@ interface ScorerEntry {
   readonly score: (args: {
     groundTruth: Record<string, number>;
     predictions: Record<string, number>;
+    itemScores: Record<string, number> | undefined;
     config: TaskScoringConfig;
   }) => KindScores;
 }
@@ -90,6 +111,7 @@ interface ScorerEntry {
 const REGISTRY: Readonly<Record<ScorableTaskKind, ScorerEntry>> = {
   GRADING: {
     payloadSchema: singleLabelPayloadSchema,
+    acceptsItemScores: false,
     // Quadratic-weighted kappa: the ordinal agreement metric IDRiD grading is
     // conventionally reported on.
     primaryMetric: (s) => (s.kind === 'GRADING' ? s.metrics.qwk : Number.NEGATIVE_INFINITY),
@@ -106,6 +128,7 @@ const REGISTRY: Readonly<Record<ScorableTaskKind, ScorerEntry>> = {
   },
   CLASSIFICATION: {
     payloadSchema: singleLabelPayloadSchema,
+    acceptsItemScores: false,
     // Macro F1 rather than accuracy: it averages per-class F1 over classes the
     // split actually contains, so a model that ignores a minority class cannot
     // hide behind a dominant one.
@@ -118,6 +141,24 @@ const REGISTRY: Readonly<Record<ScorableTaskKind, ScorerEntry>> = {
         predictions,
         numClasses: config.numClasses,
       }),
+    }),
+  },
+  BINARY_DIAGNOSTIC: {
+    // Same `itemId -> integer` shape; the scorer refuses anything but 0 or 1.
+    payloadSchema: singleLabelPayloadSchema,
+    acceptsItemScores: true,
+    // Balanced accuracy, the mean of sensitivity and specificity: not carried
+    // by the majority class the way accuracy is, and not maximised by flagging
+    // everything (sensitivity alone) or nothing (specificity alone).
+    primaryMetric: (s) =>
+      // A result whose balanced accuracy is not estimable sinks with the
+      // unscored rows rather than sorting as a real 0.
+      s.kind === 'BINARY_DIAGNOSTIC'
+        ? (s.metrics.balancedAccuracy ?? Number.NEGATIVE_INFINITY)
+        : Number.NEGATIVE_INFINITY,
+    score: ({ groundTruth, predictions, itemScores }) => ({
+      kind: 'BINARY_DIAGNOSTIC',
+      metrics: scoreBinaryDiagnostic({ groundTruth, predictions, itemScores }),
     }),
   },
 };
@@ -141,7 +182,7 @@ export function validatePredictionsPayload(kind: string, payload: unknown): Reco
     );
   }
   /* eslint-disable-next-line security/detect-object-injection --
-   * `kind` has been narrowed by `isScorableTaskKind` to the two-member
+   * `kind` has been narrowed by `isScorableTaskKind` to the closed
    * literal union `ScorableTaskKind`, and REGISTRY is a closed
    * `Readonly<Record<ScorableTaskKind, ScorerEntry>>`. The index cannot be
    * an arbitrary caller-supplied string, so the injection sink does not
@@ -157,6 +198,38 @@ export function validatePredictionsPayload(kind: string, payload: unknown): Reco
   return parsed.data as Record<string, number>;
 }
 
+/** True when tasks of this kind accept a per-item score next to the label. */
+export function acceptsItemScores(kind: string): boolean {
+  /* eslint-disable-next-line security/detect-object-injection --
+   * narrowed by `isScorableTaskKind` to a literal of the closed registry. */
+  return isScorableTaskKind(kind) && REGISTRY[kind].acceptsItemScores;
+}
+
+/**
+ * Validate the optional per-item scores for a task of the given kind. Absent
+ * scores are always fine. Present scores are refused for a kind that takes
+ * none — a refusal, not a silent drop, so a participant is never scored on
+ * less than they believe they sent.
+ */
+export function validateItemScores(
+  kind: string,
+  itemScores: unknown,
+): Record<string, number> | undefined {
+  if (itemScores === undefined) return undefined;
+  if (!acceptsItemScores(kind)) {
+    throw new ScoringError(
+      `Task kind "${kind}" takes one label per item and no score; remove the score values`,
+    );
+  }
+  const parsed = itemScoresSchema.safeParse(itemScores);
+  if (!parsed.success) {
+    throw new ScoringError(
+      `Malformed item scores for task kind "${kind}": ${parsed.error.issues[0]?.message ?? 'schema mismatch'}`,
+    );
+  }
+  return parsed.data;
+}
+
 /**
  * Score a submission for a task of the given kind.
  *
@@ -168,18 +241,22 @@ export function scoreByKind(args: {
   kind: string;
   groundTruth: Record<string, number>;
   predictions: unknown;
+  /** Optional per-item scores; refused by a kind that takes none. */
+  itemScores?: unknown;
   config?: TaskScoringConfig;
 }): KindScores {
   const predictions = validatePredictionsPayload(args.kind, args.predictions);
+  const itemScores = validateItemScores(args.kind, args.itemScores);
   // `validatePredictionsPayload` has already narrowed the kind.
   const kind = args.kind as ScorableTaskKind;
   /* eslint-disable-next-line security/detect-object-injection --
    * Same as above: `validatePredictionsPayload` has already rejected any
-   * kind outside `ScorableTaskKind`, so this index is one of two literals
+   * kind outside `ScorableTaskKind`, so this index is one of the literals
    * against a closed record. */
   return REGISTRY[kind].score({
     groundTruth: args.groundTruth,
     predictions,
+    itemScores,
     config: args.config ?? {},
   });
 }
