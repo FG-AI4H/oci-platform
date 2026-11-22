@@ -227,20 +227,22 @@ export async function preflightProvenanceAction(
   manifestJson: string,
   accessTier: string,
 ): Promise<ProvenancePreflightState> {
-  const t = await getTranslations('Publish');
+  // Called on a debounce while the host types: resolve the language (a
+  // preferences read) only when an error message needs it.
+  const t = () => getTranslations('Publish');
   const session = await sessionForAction();
   if (!session?.user || !isHost(session)) {
-    return { status: 'error', message: t('errors.onlyHostsPublish') };
+    return { status: 'error', message: (await t())('errors.onlyHostsPublish') };
   }
   const parsed = PreflightSchema.safeParse({ manifest: manifestJson, accessTier });
   if (!parsed.success) {
-    return { status: 'error', message: t('errors.preflightInvalid') };
+    return { status: 'error', message: (await t())('errors.preflightInvalid') };
   }
   let manifest: unknown;
   try {
     manifest = JSON.parse(parsed.data.manifest);
   } catch {
-    return { status: 'error', message: t('errors.preflightNotJson') };
+    return { status: 'error', message: (await t())('errors.preflightNotJson') };
   }
 
   const tier = parsed.data.accessTier;

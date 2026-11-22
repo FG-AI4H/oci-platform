@@ -1,5 +1,5 @@
 /**
- * The interface languages (#654, ADR-0028). English is the default and
+ * The interface languages (#654, ADR-0029). English is the default and
  * the reference: every key exists in English first, and the French file
  * must hold the same keys (see `messages.spec.ts`).
  *

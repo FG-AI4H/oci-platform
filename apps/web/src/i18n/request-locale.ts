@@ -8,9 +8,13 @@ import type { AppLocale } from './locales';
 import { LOCALE_COOKIE } from './locales';
 import { resolveLocale } from './resolve-locale';
 
+/** How long a page waits for the stored preference before going without it. */
+const PREFERENCE_TIMEOUT_MS = 1500;
+
 /**
  * The signed-in user's stored language preference, or `null` (signed
- * out, none set, or the API did not answer). Read once per request.
+ * out, none set, or the API did not answer in time). Read once per
+ * request.
  *
  * Read from the API rather than from a cookie copy, so a preference set
  * on another device applies here from the first page. A failure is not
@@ -20,10 +24,11 @@ const storedPreference = cache(async (): Promise<string | null> => {
   const session = await auth();
   if (!session?.user) return null;
   try {
-    const preferences = await apiFetch<UserPreferences>('/v2/preferences/me', {
-      session,
-      revalidate: 0,
-    });
+    const preferences = await Promise.race([
+      apiFetch<UserPreferences>('/v2/preferences/me', { session, revalidate: 0 }),
+      // Every page waits on this; a slow API must not hold them all up.
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), PREFERENCE_TIMEOUT_MS)),
+    ]);
     return preferences?.locale ?? null;
   } catch (err) {
     unstable_rethrow(err);

@@ -97,7 +97,9 @@ language (`lang` on `/oauth2/authorize`).
 ### Negative
 
 - Every page render for a signed-in user makes one more API call (`/v2/preferences/me`). It is a
-  primary-key read; if it fails the cookie and the browser decide and the page renders.
+  primary-key read; if it fails or takes more than 1.5 s, the cookie and the browser decide and
+  the page renders. Server actions that only need a message on their error path (file upload,
+  provenance preflight) resolve the language only there.
 - Pages are rendered per request in any case (the header reads the session), so per-language static
   rendering is not available. It was not before either.
 - Search engines see one URL per page, in the language their crawler asks for (English by default).

@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 import createNextIntlPlugin from 'next-intl/plugin';
 
-// Interface languages (#654, ADR-0028): points next-intl at the
+// Interface languages (#654, ADR-0029): points next-intl at the
 // per-request configuration. No locale routing.
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 

@@ -11,7 +11,7 @@ async function loadMessages(locale: AppLocale): Promise<Messages> {
 }
 
 /**
- * next-intl's per-request configuration (#654, ADR-0028), wired in by
+ * next-intl's per-request configuration (#654, ADR-0029), wired in by
  * the plugin in `next.config.ts`. No locale segment in the URL and no
  * next-intl middleware: the language is resolved here from the user's
  * preference, the cookie and `Accept-Language`.

@@ -59,7 +59,8 @@ const FormSchema = z
  * The language (#654) applies on the redirect that follows: the layout
  * reads the stored preference first. It is also mirrored into the
  * `oci-locale` cookie so the choice holds after signing out; "follow my
- * browser" clears the cookie, or an old switch choice would win.
+ * browser" (or a saved tag with no interface) clears the cookie, or an old
+ * switch choice would win.
  */
 export async function updatePreferencesAction(
   _prev: PreferencesFormState,
@@ -129,8 +130,10 @@ export async function updatePreferencesAction(
 
   await writeThemeCookie(parsed.data.darkMode);
   const interfaceLocale = toAppLocale(parsed.data.locale);
+  // "Follow my browser", or a tag with no interface: drop an older switch
+  // choice, which would otherwise outrank the browser.
   if (interfaceLocale !== null) await writeLocaleCookie(interfaceLocale);
-  else if (parsed.data.locale === null) (await cookies()).delete(LOCALE_COOKIE);
+  else (await cookies()).delete(LOCALE_COOKIE);
   revalidatePath('/settings');
   // Re-render the settings page with the new server state.
   redirect('/settings?saved=1');

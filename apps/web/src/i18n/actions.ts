@@ -24,16 +24,20 @@ export async function switchLocaleAction(formData: FormData): Promise<void> {
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (!session?.user || !base) return;
   const body: UpdateUserPreferencesRequest = { locale };
+  // A save that fails (an error status or a thrown fetch) leaves the old
+  // preference in charge, so the page stays in its language until the
+  // user tries again or uses /settings, which reports errors. The cookie
+  // is written either way and applies once signed out. The switch itself
+  // has nowhere to show an error.
   try {
-    await fetchAsUser(`${base}/v2/preferences/me`, {
+    const res = await fetchAsUser(`${base}/v2/preferences/me`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
       cache: 'no-store',
     });
+    if (!res.ok) console.warn(`language switch: preferences PUT answered ${res.status}`);
   } catch (err) {
-    // A failed save leaves the old preference in charge; the cookie is
-    // still written. Not worth an error page for the user.
     unstable_rethrow(err);
   }
 }
