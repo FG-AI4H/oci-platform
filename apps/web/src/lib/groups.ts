@@ -87,6 +87,27 @@ export function requireAdmin(session: Session | null | undefined): Session {
   return session;
 }
 
+/**
+ * True when the caller can read the audit trail: `admin` or `regulator`.
+ * Mirrors `@Roles('admin', 'regulator')` on `/v2/audit`; the API's 403
+ * stays authoritative.
+ */
+export function canReadAuditTrail(session: Session | null | undefined): boolean {
+  const groups = userGroups(session);
+  return groups.includes('admin') || groups.includes('regulator');
+}
+
+/** Server-side guard for /admin/audit (admin or regulator). */
+export function requireAuditReader(session: Session | null | undefined): Session {
+  if (!session?.user) {
+    redirect('/');
+  }
+  if (!canReadAuditTrail(session)) {
+    redirect('/dashboard');
+  }
+  return session;
+}
+
 /** Server-side guard for /annotation/campaigns/new (campaign-manager only). */
 export function requireCampaignManager(session: Session | null | undefined): Session {
   if (!session?.user) {

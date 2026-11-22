@@ -197,6 +197,49 @@ Three routes for the review of held files. Admin only, on every route: the datas
 - `422` when a selected value cannot be read back from storage or is too long to be shown whole. Nothing is recorded.
 - Uploads with findings and decisions on the same dataset are serialised, so a file indexed while a decision is recorded is covered by it.
 
+## Audit trail (#653, ADR-0014)
+
+The platform's append-only, hash-chained record of events. Read by `admin` and `regulator` only, on every route; anyone else gets `403`. See [Reading and exporting the audit trail](../for-operators/reading-the-audit-trail.md) for how to use it.
+
+**Who sees whom.** An `admin` sees the user id of each actor. A `regulator` sees a pseudonym instead, `ps-` and 24 hex digits: a keyed HMAC-SHA256 of the identifier, the same for the same person on every page and in every export. The same applies to the id of an event whose subject is a person (`subjectType: user`) and to values under person keys in a payload (`actorUsername`, `targetUsername`, `operator`, `reviewer`, …); each event lists them in `pseudonymised` as JSON Pointers. Without the key (`OCI_AUDIT_PSEUDONYM_KEY`), a deployed environment shows a regulator `withheld` instead. Someone in both groups is treated as an `admin`.
+
+**Filters**, shared by the list and the exports (empty values are ignored):
+
+| Parameter     | Meaning                                                                                                                 |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `subjectType` | The kind of object: `model-card`, `dataset`, `user`, `audit-export`, …                                                  |
+| `subjectId`   | The object's id as stored. A regulator gives a pseudonym for a person and cannot use a real user id.                    |
+| `actor`       | `system` (no person), a user id (`admin` only) or a pseudonym (`regulator` only). The other form is a `400`.            |
+| `action`      | `module.action` as in `scripts/audit-taxonomy.json` (`prediction.modelcard.created`), or a module alone (`prediction`). |
+| `from`, `to`  | ISO 8601 with an offset; `from` inclusive, `to` exclusive, on `occurredAt`.                                             |
+
+### `GET /v2/audit/events`
+
+A page of events. `?limit=` 1–200 (default 50), `?order=desc` (newest first, the default) or `asc`, `?cursor=` the `nextCursor` of the previous page.
+
+Response: `AuditEventPage` — `{ events, nextCursor, actorView }`, `actorView` being `identified`, `pseudonymous` or `withheld`. Each event: `{ id, sequenceNumber, occurredAt, eventType, module, action, subjectType, subjectId, actor, actorRoles, payload, pseudonymised, payloadHash, previousHash, recordHash, retentionClass }`. `actor` is `{ kind: 'system' }`, `{ kind: 'user', id }`, `{ kind: 'pseudonym', id }` or `{ kind: 'withheld' }`. `sequenceNumber` is a string; gaps are normal (a rolled-back insert uses a number).
+
+### `GET /v2/audit/events/verify`
+
+Recomputes the chain and reports the first event at which it does not hold. Without parameters, from the first event of the trail. `?fromSequence=` / `?toSequence=` bound it by sequence number; `?from=` / `?to=` by time, which is turned into the span of sequence numbers between the first and last event in that time, every event in between being checked. At most 50,000 events per call; `complete: false` and `continueFromSequence` say where to go on. Rate-limited to 10 calls a minute.
+
+For each event, in sequence order:
+
+- `previousHash` must be the stored `recordHash` of the event before it (for the first event checked, the event before the range, or `null` at the start of the trail): otherwise `previous-hash`;
+- `recordHash` must be sha256 of `module|action|subjectType|subjectId|occurredAt (YYYY-MM-DDTHH:MM:SS.mmmZ)|sequenceNumber|actor user id or empty|payloadHash|previousHash or empty`: otherwise `record-hash`;
+- `payloadHash` must be sha256 of the RFC 8785 form of the stored payload: otherwise `payload-hash`.
+
+Response: `AuditChainVerification` — `{ status: 'intact' | 'broken' | 'empty', checked, firstSequence, lastSequence, anchor, complete, continueFromSequence, firstBreak: { id, sequenceNumber, kind, expected, actual } | null, verifiedAt }`.
+
+### `GET /v2/audit/events.csv` and `GET /v2/audit/events.json`
+
+The events the filters match, oldest first, as a download (`Content-Disposition: attachment`, `Cache-Control: no-store`). `422` when more than 10,000 match. Rate-limited to 10 a minute.
+
+**Each export is itself recorded** before the file is sent: event `audit.events.exported`, subject `audit-export` / the export id, with the format, the filters, the event count, the first and last sequence numbers, the `actorView` and the sha256 of the file. If that record cannot be written, there is no export. The response carries `X-OCI-Export-Id` and `X-OCI-Export-Sha256`.
+
+- **JSON** (`oci-audit-events/v1`): `{ format, exportId, exportedAt, actorView, filters, count, rules, events }`; `rules` states both hash rules.
+- **CSV**: columns `sequenceNumber, occurredAt, eventType, subjectType, subjectId, actorKind, actor, actorRoles, payload, pseudonymised, payloadHash, previousHash, recordHash, retentionClass, id`, CRLF line ends. `payload` is its RFC 8785 form. A cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'` so a spreadsheet does not run it.
+
 ## Certification (#117)
 
 ### `GET /v2/certification/quizzes/:type`

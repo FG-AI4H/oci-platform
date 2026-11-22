@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from 'next-auth';
-import { canOverseeCampaign, isAdmin, isHost, userGroups } from './groups';
+import { canOverseeCampaign, canReadAuditTrail, isAdmin, isHost, userGroups } from './groups';
 import { groupsFromAccessToken, subjectFromAccessToken } from './token-claims';
 
 /** The session of a caller holding this access token, as `auth.ts` describes them. */
@@ -102,5 +102,14 @@ describe('canOverseeCampaign', () => {
     expect(canOverseeCampaign(s('dev:n:annotator'))).toBe(false);
     expect(canOverseeCampaign(s('dev:e:expert-reviewer'))).toBe(false);
     expect(canOverseeCampaign(null)).toBe(false);
+  });
+});
+
+describe('canReadAuditTrail', () => {
+  it('is true for admin and regulator, and for nobody else', () => {
+    expect(canReadAuditTrail(s('dev:alice:admin'))).toBe(true);
+    expect(canReadAuditTrail(s('dev:rita:regulator'))).toBe(true);
+    expect(canReadAuditTrail(s('dev:bob:host,supervisor'))).toBe(false);
+    expect(canReadAuditTrail(null)).toBe(false);
   });
 });

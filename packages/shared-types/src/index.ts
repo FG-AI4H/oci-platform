@@ -267,6 +267,30 @@ export type { SeamIntakeRequest, SeamIntakeResponse } from './evalai-seam.js';
 // Model Facts Label (#261) — a WHO Fig. 7 rendering of the canonical ModelCard.
 export { ModelFactsLabelSchema, ModelFactsPerformanceEntrySchema } from './model-facts-label.js';
 export type { ModelFactsLabel, ModelFactsPerformanceEntry } from './model-facts-label.js';
+
+// Audit trail reader (#653, ADR-0014).
+export {
+  AUDIT_EXPORT_MAX,
+  AUDIT_PAGE_DEFAULT,
+  AUDIT_PAGE_MAX,
+  AUDIT_PSEUDONYM_PATTERN,
+  AuditActorFilterSchema,
+  AuditEventFiltersSchema,
+  AuditEventsQuerySchema,
+  AuditVerifyQuerySchema,
+} from './audit.js';
+export type {
+  AuditActor,
+  AuditActorView,
+  AuditChainBreakKind,
+  AuditChainVerification,
+  AuditEventFilters,
+  AuditEventPage,
+  AuditEventView,
+  AuditEventsExport,
+  AuditEventsQuery,
+  AuditVerifyQuery,
+} from './audit.js';
 export type {
   RiskTier,
   MedicalPurpose,

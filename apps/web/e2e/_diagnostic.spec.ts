@@ -338,6 +338,16 @@ test.describe('ui/ux diagnostic', () => {
     sections.push({ label: 'admin-index', runs });
   });
 
+  test('admin audit trail (regulator)', async ({ browser }) => {
+    const runs = await runMatrix(browser, 'admin-audit', async (page) => {
+      await signInAs(page, 'rita', 'regulator');
+      await page.goto('/admin/audit');
+      await page.waitForLoadState('networkidle');
+      return page.url();
+    });
+    sections.push({ label: 'admin-audit', runs });
+  });
+
   test('admin users list (admin)', async ({ browser }) => {
     const runs = await runMatrix(browser, 'admin-users-list', async (page) => {
       await signInAs(page, 'alice', 'admin');

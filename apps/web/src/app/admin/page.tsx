@@ -65,6 +65,14 @@ export default async function AdminIndexPage() {
           </li>
           <li>
             <AdminTile
+              href="/admin/audit"
+              title="Audit trail"
+              description="Every recorded event, with its hash chain. Filter, follow one object, verify the chain, export."
+              icon={<ShieldIcon size={20} />}
+            />
+          </li>
+          <li>
+            <AdminTile
               href="/catalog/remotes"
               title="Federation peers"
               description="Remote catalogue mirrors harvested into this platform. Soft-deprecated path: this tile will move to /admin/federation."

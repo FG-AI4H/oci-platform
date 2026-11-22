@@ -14,6 +14,7 @@ You're deploying or running an OCI instance. The platform is designed to run as 
 | [Admin: users & groups](./admin-user-management.md)                   | Granting / revoking Cognito group membership (campaign-manager, host, …).                       |
 | [Admin: platform settings](./admin-platform-settings.md)              | Maintenance banner, tool registry (future), license defaults (future).                          |
 | [Reviewing held DICOM images](./reviewing-held-dicom-images.md)       | A dataset has DICOM images held for what their header carries, and you decide what is released. |
+| [Reading and exporting the audit trail](./reading-the-audit-trail.md) | You, or an authority, need to read what happened, check the chain, or hand over an export.      |
 | [Demo-data seed](./demo-seed.md)                                      | How baseline rows reach dev/int on every deploy; how to add new entities.                       |
 | [Writing annotation instructions](./annotation-instructions-guide.md) | You're a campaign manager and need to write effective per-campaign instructions for annotators. |
 | Observability _(not yet written)_                                     | What to wire to your CloudWatch / X-Ray / Grafana.                                              |
