@@ -136,7 +136,10 @@ export function campaignDescription(selection: Selection): string {
 }
 
 export function evaluationTaskName(selection: Selection): string {
-  const name = `NIH ChestX-ray14 slice: ${selection.finding.nameEn.toLowerCase()} present or absent`;
+  // The task is CLASSIFICATION and the platform has no names for classes, so
+  // the name carries what each number means: it is shown on the task page and
+  // above the submit form.
+  const name = `NIH ChestX-ray14 slice: ${selection.finding.nameEn.toLowerCase()}, 0 = absent, 1 = present`;
   return selection.standIn ? `${name} (synthetic stand-in)` : name;
 }
 

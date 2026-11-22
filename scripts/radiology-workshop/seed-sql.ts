@@ -195,9 +195,11 @@ END $workshop_dataset$;
 
 -- ----------------------------------------------------------------------------
 -- 2. Evaluation task with the HIDDEN reference labels.
--- One binary finding. Until a task kind for binary findings exists (#650) it
--- is a GRADING task with grades 0 and 1 and the referable threshold at 1,
--- which already reports sensitivity and specificity.
+-- One binary finding, as a CLASSIFICATION task with two classes: 0 for
+-- absent, 1 for present (decided 2026-11-22). Its result page shows the
+-- per-class table: the recall of class 1 is the sensitivity, the recall of
+-- class 0 the specificity. The referable threshold is not read by this kind;
+-- it is set to 1 so the row stays meaningful if the kind is ever changed.
 -- Same rule as the answer key of demo.sql (#464): inserted once, never
 -- overwritten, and the seed fails if the stored key differs from this file.
 -- The error names item ids only, never a label: migrate logs are printed in
@@ -218,7 +220,7 @@ BEGIN
       ${text(EVALUATION_TASK_SLUG)},
       ${text(evaluationTaskName(selection))},
       ${text(DATASET_SLUG)},
-      'GRADING'::"evaluation"."EvaluationTaskKind",
+      'CLASSIFICATION'::"evaluation"."EvaluationTaskKind",
       2,
       1,
       expected_gt,
