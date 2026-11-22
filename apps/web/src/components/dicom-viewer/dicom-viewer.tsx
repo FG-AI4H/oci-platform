@@ -89,6 +89,8 @@ type Phase = 'starting' | 'ready' | 'failed';
 type Failure =
   | { kind: 'empty' }
   | { kind: 'decoder'; position: number; transferSyntaxUid: string | null }
+  /** Decodable, but drawn wrong (#778): refused before anything is fetched. */
+  | { kind: 'refused'; position: number; transferSyntaxUid: string | null }
   | { kind: 'open'; reason: 'address' | 'other' }
   | { kind: 'changed' }
   | { kind: 'start' };
@@ -103,6 +105,17 @@ function failureText(t: Translate, failure: Failure): { title: string; detail: s
       return {
         title: t('failure.decoderTitle'),
         detail: t('failure.decoderDetail', {
+          position: failure.position + 1,
+          syntax:
+            failure.transferSyntaxUid === null
+              ? t('failure.transferSyntaxUnknown')
+              : describeTransferSyntax(failure.transferSyntaxUid),
+        }),
+      };
+    case 'refused':
+      return {
+        title: t('failure.refusedTitle'),
+        detail: t('failure.refusedDetail', {
           position: failure.position + 1,
           syntax:
             failure.transferSyntaxUid === null
@@ -263,11 +276,11 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
       // into a picture that is wrong and looks right (#778).
       const refused = firstRefusedEncoding(series.instances);
       if (refused !== null) {
-        fail(
-          'The viewer cannot show this series faithfully',
-          `Image ${refused + 1} is stored as ${describeTransferSyntax(series.instances.at(refused)?.transferSyntaxUid ?? null)}, ` +
-            'a compression this viewer decodes with errors in the grey levels. Download the files to open them in another viewer.',
-        );
+        fail({
+          kind: 'refused',
+          position: refused,
+          transferSyntaxUid: series.instances.at(refused)?.transferSyntaxUid ?? null,
+        });
         return;
       }
 

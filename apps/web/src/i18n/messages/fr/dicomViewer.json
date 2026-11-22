@@ -46,6 +46,8 @@
     "emptyDetail": "Cette série ne contient aucune image que vous pouvez ouvrir.",
     "decoderTitle": "La visionneuse ne peut pas décoder cette série",
     "decoderDetail": "L’image {position} est enregistrée en {syntax}, une compression pour laquelle cette visionneuse n’a pas de décodeur. Téléchargez les fichiers pour les ouvrir dans une autre visionneuse.",
+    "refusedTitle": "La visionneuse ne peut pas afficher cette série fidèlement",
+    "refusedDetail": "L’image {position} est enregistrée en {syntax}, une compression que cette visionneuse décode avec des erreurs dans les niveaux de gris. Téléchargez les fichiers pour les ouvrir dans une autre visionneuse.",
     "openTitle": "La série n’a pas pu être ouverte",
     "openAddress": "Le stockage a refusé le fichier. Il n’est peut-être plus disponible pour vous ; rechargez la page et réessayez.",
     "openNetwork": "La première image n’a pas pu être récupérée depuis le stockage. Vérifiez votre connexion et réessayez.",
