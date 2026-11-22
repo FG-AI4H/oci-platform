@@ -25,7 +25,7 @@
     "@tanstack/react-query": "^5.100.8",
     "aws-jwt-verify": "^5.1.1",
     "dicom-parser": "1.8.21",
-    "next": "^16.4.3",
+    "next": "^16.4.6",
     "next-auth": "5.0.0-beta.32",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

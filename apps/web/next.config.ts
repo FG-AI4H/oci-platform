@@ -25,6 +25,10 @@ const nextConfig: NextConfig = {
     // it widens what any visitor can make the web server read.
     serverActions: { bodySizeLimit: '1mb' },
   },
+  // Since 16.4, `next dev` writes an AGENTS.md into apps/web when it detects
+  // an AI coding agent, which then shows up untracked in every checkout
+  // (#676). The repository keeps its contributor guidance elsewhere.
+  agentRules: false,
   // The DICOM viewer's codecs (#674, ADR-0026) are WebAssembly modules
   // whose glue code contains `require('fs')` behind a Node-only guard.
   // Turbopack still has to resolve it for the browser bundle; point it
