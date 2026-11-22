@@ -436,6 +436,47 @@ describe.skipIf(!dockerAvailable)(
         expect(applied.previousHash).toBe(deleted.recordHash);
       });
 
+      it('applied on a server whose time zone is not UTC, still records UTC and a verifiable hash', async () => {
+        // New sessions on this database start 14 hours ahead of UTC.
+        const name = new URL(db.url).pathname.slice(1);
+        expect(name).toMatch(/^[\w-]+$/);
+        await prisma.$executeRawUnsafe(
+          `ALTER DATABASE "${name}" SET timezone TO 'Pacific/Kiritimati'`,
+        );
+        try {
+          const startedAt = Date.now();
+          const result = applyDeletion(target);
+          expect(result.status).toBe(0);
+
+          const fresh = (
+            await prisma.auditEvent.findMany({
+              where: { sequenceNumber: { gt: 0 } },
+              orderBy: { sequenceNumber: 'asc' },
+            })
+          ).slice(auditBefore);
+          expect(fresh).toHaveLength(2);
+          for (const event of fresh) {
+            // The column has no time zone and is read as UTC.
+            expect(Math.abs(event.occurredAt.getTime() - startedAt)).toBeLessThan(60_000);
+            // As a verifier recomputes it from an export, with no database.
+            const canonical = [
+              event.module,
+              event.action,
+              event.subjectType,
+              event.subjectId,
+              event.occurredAt.toISOString(),
+              String(event.sequenceNumber),
+              event.actorUserId ?? '',
+              event.payloadHash,
+              event.previousHash ?? '',
+            ].join('|');
+            expect(event.recordHash).toBe(createHash('sha256').update(canonical).digest('hex'));
+          }
+        } finally {
+          await prisma.$executeRawUnsafe(`ALTER DATABASE "${name}" RESET timezone`);
+        }
+      });
+
       it('applied a second time, fails, and changes and records nothing', async () => {
         expect(applyDeletion(target).status).toBe(0);
         const afterFirst = await prisma.auditEvent.count();

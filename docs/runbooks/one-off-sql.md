@@ -24,6 +24,7 @@ It runs on **`dev`** (and a local stack) only. `int` and `prod` are refused. The
 - **Applying needs the statement's sha256.** You compute it from the file you reviewed; if the image holds another text, the run is refused. The runner never prints a hash ready to paste: copying the image's own hash would prove nothing.
 - **A statement cannot end the transaction unseen.** The file may not contain transaction control, and after the statement the runner checks that its transaction is still the one it opened. If not, it says the changes **may have been committed**: check the database, and correct the statement.
 - **An applied run is recorded.** In the same transaction it writes one audit event, `platform` / `sql.statement_applied`, with the statement, its sha256, the parameters, the operator and the reviewer as you declared them, and the task's ARN. If the statement fails, nothing is changed and nothing is recorded.
+- **Times are UTC.** The runner sets its transaction's time zone to UTC whatever the server's default, so the audit events it writes record the right time and a hash that a verifier reproduces from an export (#774).
 - **The event has no actor.** The task does not know who launched it. Who did is in CloudTrail: the `RunTask` event whose response names the same task ARN.
 
 ## The steps
