@@ -109,8 +109,11 @@ export {
   DicomSeriesListSchema,
   DicomSeriesSummarySchema,
   DicomSeriesVersionQuerySchema,
+  DicomSeriesSampleSchema,
   DicomViewSchema,
   RecordDicomFindingDecisionRequestSchema,
+  dicomSeriesSampleRef,
+  parseDicomSeriesSampleRef,
 } from './dicom.js';
 export type {
   DicomFindingDecisionResult,
@@ -124,7 +127,10 @@ export type {
   DicomSeriesList,
   DicomSeriesSummary,
   DicomUndecidedFinding,
+  DicomSeriesSample,
+  DicomSeriesTaskCandidate,
   DicomView,
+  DicomViewerSeries,
   RecordDicomFindingDecisionRequest,
 } from './dicom.js';
 

@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   DicomSeriesDetailSchema,
   DicomSeriesListSchema,
   DicomSeriesVersionQuerySchema,
+  DicomSeriesSampleSchema,
   DicomViewSchema,
+  dicomSeriesSampleRef,
+  parseDicomSeriesSampleRef,
+  type DicomSeriesDetail,
+  type DicomSeriesSample,
+  type DicomViewerSeries,
 } from './dicom.js';
 
 const summary = {
@@ -129,5 +135,49 @@ describe('DICOM view stored with an answer (#674)', () => {
     expect(
       DicomViewSchema.safeParse({ ...view, sopInstanceUid: '1.2.826.0.1.3680043.8.498.1' }).success,
     ).toBe(false);
+  });
+});
+
+describe('a DICOM series as the sample of a task (#674, #646)', () => {
+  const id = '5fae91c3-e8c0-4dc9-a1f7-0f578f637f79';
+
+  it('refers to a series by its platform id, and reads it back', () => {
+    expect(dicomSeriesSampleRef(id)).toBe(`dicom-series:${id}`);
+    expect(parseDicomSeriesSampleRef(dicomSeriesSampleRef(id))).toBe(id);
+  });
+
+  it('reads nothing from another kind of reference, or a malformed one', () => {
+    for (const ref of [
+      `file:${id}`,
+      'dicom-series:',
+      'dicom-series:1.2.826.0.1.3680043.8.498.200',
+      `dicom-series:${id}/x`,
+      `DICOM-SERIES:${id}`,
+      id,
+    ]) {
+      expect(parseDicomSeriesSampleRef(ref)).toBeNull();
+    }
+  });
+
+  it('answers with what the viewer needs, and nothing that names the dataset', () => {
+    const sample = {
+      kind: 'dicom-series',
+      modality: 'CT',
+      expiresAt: '2026-11-22T21:00:00.000Z',
+      instances: [instance],
+    };
+    expect(DicomSeriesSampleSchema.parse(sample)).toEqual(sample);
+    expect(DicomSeriesSampleSchema.safeParse({ ...sample, datasetSlug: 'brain-ct' }).success).toBe(
+      false,
+    );
+    expect(DicomSeriesSampleSchema.safeParse({ ...sample, instances: [] }).success).toBe(false);
+    expect(DicomSeriesSampleSchema.safeParse({ ...sample, kind: 'image' }).success).toBe(false);
+  });
+});
+
+describe('what the viewer takes', () => {
+  it('fits a task sample as well as a series from the dataset page', () => {
+    expectTypeOf<DicomSeriesSample>().toExtend<DicomViewerSeries>();
+    expectTypeOf<DicomSeriesDetail>().toExtend<DicomViewerSeries>();
   });
 });

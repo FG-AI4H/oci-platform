@@ -49,6 +49,8 @@ import { StorageService } from './storage.service.js';
     DicomReviewService,
     RolesGuard,
   ],
-  exports: [StorageService, BulkDownloadService],
+  // DicomSeriesService for the annotation module: a task on a DICOM
+  // series reads its candidates and its sample through it (#646, #674).
+  exports: [StorageService, BulkDownloadService, DicomSeriesService],
 })
 export class StorageModule {}

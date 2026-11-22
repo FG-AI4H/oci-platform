@@ -1,10 +1,14 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { orderInstances, type DicomInstanceHeader } from '@oci/dicom';
-import type {
-  DatasetSlug,
-  DicomSeriesDetail,
-  DicomSeriesInstance,
-  DicomSeriesList,
+import {
+  dicomSeriesSampleRef,
+  parseDicomSeriesSampleRef,
+  type DatasetSlug,
+  type DicomSeriesDetail,
+  type DicomSeriesInstance,
+  type DicomSeriesList,
+  type DicomSeriesSample,
+  type DicomSeriesTaskCandidate,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CatalogService } from '../catalog/catalog.service.js';
@@ -12,6 +16,10 @@ import { DicomSeriesRepository, type SeriesInstanceRow } from './dicom-series.re
 import { StorageService } from './storage.service.js';
 
 const SERIES_NOT_FOUND = 'series not found';
+const SAMPLE_NOT_FOUND = 'sample not found';
+
+/** More series than any campaign makes tasks of; past it, creation is refused, never cut short. */
+const MAX_TASK_SAMPLES = 5000;
 
 /** The list is for a page, not an export. `total` says how many there are. */
 const MAX_SERIES_LISTED = 500;
@@ -44,10 +52,9 @@ function tuple<N extends number>(
  * read (they have no series), and files that are individually
  * access-gated (`requiresAccess`), as in the whole-dataset archive.
  *
- * The annotation and arbitration screens will deliver the same
- * addresses under their own rule (the assignee, and the campaign's
- * supervisors and managers); that path is not this service's
- * `getSeries`, which always applies the dataset's rule.
+ * The annotation and arbitration screens deliver the same addresses
+ * under their own rule, through `listTaskSamples` and `taskSample`
+ * below. `getSeries` always applies the dataset's rule.
  */
 @Injectable()
 export class DicomSeriesService {
@@ -133,21 +140,7 @@ export class DicomSeriesService {
     // that a held series is not confirmed to exist.
     if (rows.length === 0) throw new NotFoundException(SERIES_NOT_FOUND);
 
-    const ordered = orderInstances(
-      rows.map((row) => ({
-        row,
-        sopInstanceUid: row.sop_instance_uid,
-        instanceNumber: row.instance_number,
-        imagePositionPatient: tuple(
-          row.image_position_patient,
-          3,
-        ) as DicomInstanceHeader['imagePositionPatient'],
-        imageOrientationPatient: tuple(
-          row.image_orientation_patient,
-          6,
-        ) as DicomInstanceHeader['imageOrientationPatient'],
-      })),
-    ).map((entry) => entry.row);
+    const ordered = this.inStackOrder(rows);
 
     // Taken before signing, so that every address lasts at least as
     // long as stated.
@@ -176,6 +169,105 @@ export class DicomSeriesService {
       expiresAt,
       instances,
     };
+  }
+
+  // ==== As the sample of an annotation task (#646) ========================
+  //
+  // No access rule here, on purpose. A reader usually has no access to
+  // the dataset itself; the annotation module delivers a task's sample
+  // under its own rule (the assignee, the campaign's supervisors and
+  // managers, the task's arbiter) and calls these after applying it.
+  // What stays here is what no rule may lift: a held file never reaches
+  // a task, whoever asks.
+
+  /**
+   * The series of the campaign's pinned version that tasks can be made
+   * of, held images counted. Task creation refuses a series that has
+   * any.
+   */
+  async listTaskSamples(versionId: string): Promise<DicomSeriesTaskCandidate[]> {
+    const version = await this.repo.findVersionById(versionId);
+    if (!version) throw new NotFoundException('dataset version not found');
+    const rows = await this.repo.listSeries({
+      datasetId: version.datasetId,
+      versionId,
+      includeHeld: true,
+      limit: MAX_TASK_SAMPLES,
+    });
+    if ((rows[0]?.total ?? 0) > MAX_TASK_SAMPLES) {
+      throw new ConflictException(
+        `the version has more than ${MAX_TASK_SAMPLES} series; split the campaign`,
+      );
+    }
+    return rows.map((row) => ({
+      sampleRef: dicomSeriesSampleRef(row.id),
+      seriesId: row.id,
+      modality: row.modality,
+      seriesNumber: row.series_number,
+      imageCount: row.instance_count,
+      heldImageCount: row.held_instance_count,
+    }));
+  }
+
+  /**
+   * The sample of a task on a DICOM series: its images in display
+   * order, each with a fresh signed address, read in the campaign's
+   * pinned version. 404 when the reference is not a series of that
+   * version; 409 when any of its files is held, which happens when a
+   * file is held after the task was made.
+   */
+  async taskSample(args: { sampleRef: string; versionId: string }): Promise<DicomSeriesSample> {
+    const seriesId = parseDicomSeriesSampleRef(args.sampleRef);
+    if (seriesId === null) throw new NotFoundException(SAMPLE_NOT_FOUND);
+    const [series, version] = await Promise.all([
+      this.repo.findSeries(seriesId),
+      this.repo.findVersionById(args.versionId),
+    ]);
+    if (!series || !version || series.datasetId !== version.datasetId) {
+      throw new NotFoundException(SAMPLE_NOT_FOUND);
+    }
+
+    const rows = await this.repo.listInstances({
+      datasetId: series.datasetId,
+      versionId: version.id,
+      includeHeld: true,
+      seriesInstanceUid: series.seriesInstanceUid,
+    });
+    if (rows.length === 0) throw new NotFoundException(SAMPLE_NOT_FOUND);
+    if (rows.some((row) => row.held)) {
+      throw new ConflictException(
+        'a file of this sample is held for de-identification findings; an operator has to decide on it first',
+      );
+    }
+
+    const ordered = this.inStackOrder(rows);
+    const expiresAt = (await this.storage.signedUrlValidUntil()).toISOString();
+    const instances = await Promise.all(ordered.map((row) => this.toInstance(row)));
+    return {
+      kind: 'dicom-series',
+      modality: ordered[0]?.modality ?? null,
+      expiresAt,
+      instances,
+    };
+  }
+
+  /** Along the stack, in the scanner's own direction (ADR-0026). */
+  private inStackOrder(rows: SeriesInstanceRow[]): SeriesInstanceRow[] {
+    return orderInstances(
+      rows.map((row) => ({
+        row,
+        sopInstanceUid: row.sop_instance_uid,
+        instanceNumber: row.instance_number,
+        imagePositionPatient: tuple(
+          row.image_position_patient,
+          3,
+        ) as DicomInstanceHeader['imagePositionPatient'],
+        imageOrientationPatient: tuple(
+          row.image_orientation_patient,
+          6,
+        ) as DicomInstanceHeader['imageOrientationPatient'],
+      })),
+    ).map((entry) => entry.row);
   }
 
   private async requireVersion(
