@@ -1,4 +1,6 @@
+import type { Route } from 'next';
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { Badge, Button } from '@oci/ui';
 import { redirect } from 'next/navigation';
 import { auth, isLocal, signOut } from '../auth';
@@ -6,6 +8,8 @@ import { cognitoLogoutUrl } from '../lib/cognito-logout';
 import { isAdmin, isHost } from '../lib/groups';
 import { activityReportSeconds, sessionIdleSeconds } from '../lib/token-refresh';
 import { BrandLockup } from './brand-mark';
+import { HeaderMenu } from './header-menu';
+import { LanguageSwitch } from './language-switch';
 import { SessionActivity } from './session-activity';
 
 function envTone(env: string): 'info' | 'warning' | 'neutral' {
@@ -16,103 +20,168 @@ function envTone(env: string): 'info' | 'warning' | 'neutral' {
 
 /**
  * Top navigation bar. Server component — reads the NextAuth session
- * to render either the sign-in CTA path (just the brand) or the
- * authenticated path (brand, dashboard link, sign-out form).
+ * to render either the signed-out path (brand, public links, language
+ * switch) or the signed-in one (plus dashboard, settings, sign-out).
+ *
+ * From `xl` up the links sit in a row; below it they move into a menu
+ * (#743), which keeps the account area clear at tablet width in both
+ * languages.
  *
  * The `dev` / `int` / `prod` env tag is rendered as a small badge so
  * operators can tell at a glance which environment they're looking at.
  */
 export async function SiteHeader() {
-  const session = await auth();
+  const [session, t] = await Promise.all([auth(), getTranslations('Header')]);
   const env = process.env.OCI_ENV ?? 'local';
   const showHostNav = isHost(session);
   const showAdminNav = isAdmin(session);
-  const showAnnotationNav = session?.user != null;
+  const signedIn = session?.user != null;
   const showEnvBadge = env !== 'prod';
   const idleSeconds = sessionIdleSeconds();
+
+  // One list, rendered twice: as a row from `xl` up, and inside the
+  // menu below it (#743).
+  const primaryLinks: { href: Route; label: string }[] = [
+    { href: '/catalog', label: t('catalog') },
+    // Public like /catalog: PUBLISHED model cards only (#591).
+    { href: '/models', label: t('models') },
+    // Public like /catalog: evaluation tasks and their scores are
+    // readable by anyone (ADR-0017); ground truth never is.
+    { href: '/evaluation', label: t('evaluation') },
+    ...(signedIn ? [{ href: '/annotation/campaigns' as Route, label: t('annotation') }] : []),
+    ...(showHostNav
+      ? [{ href: '/dashboard/host/access-requests' as Route, label: t('inbox') }]
+      : []),
+    ...(showAdminNav ? [{ href: '/admin' as Route, label: t('admin') }] : []),
+  ];
+  const accountLinks: { href: Route; label: string }[] = signedIn
+    ? [
+        { href: '/dashboard', label: t('dashboard') },
+        { href: '/settings', label: t('settings') },
+      ]
+    : [];
+  const accountName = session?.user?.email ?? session?.user?.name ?? null;
 
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-background)]/85 backdrop-blur supports-[backdrop-filter]:bg-[var(--color-background)]/70">
       <div className="mx-auto flex h-14 max-w-(--breakpoint-2xl) items-center justify-between gap-4 px-4 sm:px-6">
-        <div className="flex items-center gap-6 min-w-0">
+        <div className="flex min-w-0 items-center gap-6">
           <Link
             href="/"
-            className="rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+            className="shrink-0 rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
           >
             <BrandLockup />
           </Link>
-          <nav aria-label="Primary" className="hidden sm:flex items-center gap-5">
-            <NavLink href="/catalog">Catalog</NavLink>
-            {/* Public like /catalog: PUBLISHED model cards only (#591). */}
-            <NavLink href="/models">Models</NavLink>
-            {/* Public like /catalog: evaluation tasks and their scores are
-                readable by anyone (ADR-0017); ground truth never is. */}
-            <NavLink href="/evaluation">Evaluation</NavLink>
-            {showAnnotationNav ? <NavLink href="/annotation/campaigns">Annotation</NavLink> : null}
-            {showHostNav ? <NavLink href="/dashboard/host/access-requests">Inbox</NavLink> : null}
-            {showAdminNav ? <NavLink href="/admin">Admin</NavLink> : null}
+          <nav aria-label={t('primaryNav')} className="hidden items-center gap-5 xl:flex">
+            {primaryLinks.map((link) => (
+              <NavLink key={link.href} href={link.href}>
+                {link.label}
+              </NavLink>
+            ))}
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           {showEnvBadge && (
             <Badge tone={envTone(env)} className="hidden sm:inline-flex">
               {env}
             </Badge>
           )}
 
-          {session?.user ? (
+          <LanguageSwitch />
+
+          {signedIn ? (
             <>
               {/* Renders nothing; reports use of the page so that reading
                   or typing does not look like an idle session (#643). */}
               {idleSeconds === null ? null : (
                 <SessionActivity reportEverySeconds={activityReportSeconds(idleSeconds)} />
               )}
-              <NavLink href="/dashboard">Dashboard</NavLink>
-              <NavLink href="/settings">Settings</NavLink>
-              <span
-                className="hidden md:inline text-sm text-[var(--color-muted-foreground)] truncate max-w-[14ch]"
-                title={session.user.email ?? session.user.name ?? undefined}
-              >
-                {session.user.email ?? session.user.name}
-              </span>
-              <form
-                action={async () => {
-                  'use server';
-                  // End the Cognito hosted-UI session too, or the next
-                  // "Sign in" silently returns the same user (#663).
-                  const logoutUrl = isLocal
-                    ? null
-                    : await cognitoLogoutUrl({
-                        issuer: process.env.AUTH_COGNITO_ISSUER,
-                        clientId: process.env.AUTH_COGNITO_ID,
-                        returnTo: `${(process.env.AUTH_URL ?? '').replace(/\/+$/, '')}/`,
-                      });
-                  if (logoutUrl === null) {
-                    await signOut({ redirectTo: '/' });
-                    return;
-                  }
-                  await signOut({ redirect: false });
-                  redirect(logoutUrl);
-                }}
-              >
-                <Button type="submit" variant="ghost" size="sm">
-                  Sign out
+              <div className="hidden items-center gap-3 xl:flex">
+                {accountLinks.map((link) => (
+                  <NavLink key={link.href} href={link.href}>
+                    {link.label}
+                  </NavLink>
+                ))}
+                {accountName ? (
+                  <span
+                    className="hidden max-w-[14ch] truncate text-sm text-[var(--color-muted-foreground)] 2xl:inline"
+                    title={accountName}
+                  >
+                    {accountName}
+                  </span>
+                ) : null}
+              </div>
+              <form className="hidden sm:block" action={signOutAction}>
+                <Button type="submit" variant="ghost" size="sm" className="whitespace-nowrap">
+                  {t('signOut')}
                 </Button>
               </form>
             </>
           ) : null}
+
+          <HeaderMenu label={t('menu')}>
+            <nav aria-label={t('primaryNav')}>
+              <ul className="flex flex-col">
+                {[...primaryLinks, ...accountLinks].map((link) => (
+                  <li key={link.href}>
+                    <Link
+                      href={link.href}
+                      className="block rounded px-3 py-2 text-sm font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--color-ring)]"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+            {signedIn ? (
+              <div className="mt-2 border-t border-[var(--color-border)] pt-2">
+                {accountName ? (
+                  <p className="truncate px-3 py-1 text-xs text-[var(--color-muted-foreground)]">
+                    {t('signedInAs', { name: accountName })}
+                  </p>
+                ) : null}
+                <form className="sm:hidden" action={signOutAction}>
+                  <Button type="submit" variant="ghost" size="sm" className="w-full justify-start">
+                    {t('signOut')}
+                  </Button>
+                </form>
+              </div>
+            ) : null}
+          </HeaderMenu>
         </div>
       </div>
     </header>
   );
 }
 
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+/**
+ * Signs out here and at the Cognito hosted UI, or the next "Sign in"
+ * silently returns the same user (#663).
+ */
+async function signOutAction() {
+  'use server';
+  const logoutUrl = isLocal
+    ? null
+    : await cognitoLogoutUrl({
+        issuer: process.env.AUTH_COGNITO_ISSUER,
+        clientId: process.env.AUTH_COGNITO_ID,
+        returnTo: `${(process.env.AUTH_URL ?? '').replace(/\/+$/, '')}/`,
+      });
+  if (logoutUrl === null) {
+    await signOut({ redirectTo: '/' });
+    return;
+  }
+  await signOut({ redirect: false });
+  redirect(logoutUrl);
+}
+
+function NavLink({ href, children }: { href: Route; children: React.ReactNode }) {
   return (
     <Link
       href={href}
-      className="text-sm font-medium text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
+      className="whitespace-nowrap rounded text-sm font-medium text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
     >
       {children}
     </Link>
