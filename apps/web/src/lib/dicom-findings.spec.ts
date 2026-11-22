@@ -1,4 +1,10 @@
 import type { DicomUndecidedFinding } from '@oci/shared-types';
+// The header check's own lists, reached by path: the web app does not
+// depend on the header-reading package, and a test is no reason to.
+import {
+  IDENTIFYING_ATTRIBUTES,
+  WHOLE_FILE_FINDING_ATTRIBUTES,
+} from '../../../../packages/dicom/src/findings';
 import { describe, expect, it } from 'vitest';
 import {
   countOf,
@@ -29,6 +35,17 @@ describe('findingKind', () => {
   it('marks the findings about the whole file, which have no value to show', () => {
     for (const attribute of ['BurnedInAnnotation', 'DataAfterPixelData', 'SequenceDepthExceeded']) {
       expect(findingKind(attribute).hasValue, attribute).toBe(false);
+    }
+  });
+
+  it('names in plain words every attribute the header check looks for', () => {
+    for (const { attribute } of IDENTIFYING_ATTRIBUTES) {
+      // A keyword shown as itself means the label table fell behind the list.
+      expect(findingKind(attribute).label, attribute).not.toBe(attribute);
+      expect(findingKind(attribute).hasValue, attribute).toBe(true);
+    }
+    for (const attribute of WHOLE_FILE_FINDING_ATTRIBUTES) {
+      expect(findingKind(attribute).label, attribute).not.toBe(attribute);
     }
   });
 
