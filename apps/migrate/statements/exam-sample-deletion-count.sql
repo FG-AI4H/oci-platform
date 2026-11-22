@@ -7,11 +7,13 @@
 --   kept     stays, by design; named in the confirmation of deletion
 --   blocks   must be 0, or exam-sample-deletion.sql refuses to run
 --
--- Before running, replace the two placeholders in this file:
+-- Run it through the one-off runner (docs/runbooks/one-off-sql.md), which
+-- fills the two placeholders from checked launch parameters and runs it
+-- in a read-only transaction:
 --   __DATASET_ID__    the dataset's id (a UUID)
 --   __DATASET_SLUG__  the dataset's slug
 --
--- One statement, so it runs the same from psql or any other client.
+-- One statement, so it also runs the same from psql on a local stack.
 
 WITH target AS (
   SELECT '__DATASET_ID__'::uuid AS id, '__DATASET_SLUG__'::text AS slug

@@ -278,6 +278,36 @@ describe('migrate entrypoint', TIMEOUT, () => {
       expect(result.stderr).toBe('reset: REFUSED. A profile reset never runs on prod.\n');
       expect(result.log).toEqual([]);
     });
+
+    it('launched for a one-off statement, runs the statement runner and nothing else (#739)', async () => {
+      const result = await entrypoint({
+        OCI_ENV: 'dev',
+        OCI_DATASETS_BUCKET: 'bkt',
+        OCI_SEED_PROFILES: 'p1',
+        OCI_SQL_STATEMENT: 'exam-sample-deletion-count',
+      });
+      expect(result.code).toBe(0);
+      expect(result.log).toEqual(['node ./run-statement.mjs dir= profile=']);
+      expect(result.sql).toEqual([]);
+    });
+
+    it('launched for a one-off statement on prod, refuses before starting anything', async () => {
+      const result = await entrypoint({ OCI_ENV: 'prod', OCI_SQL_STATEMENT: 'anything' });
+      expect(result.code).toBe(2);
+      expect(result.stderr).toBe('one-off: REFUSED. A one-off statement never runs on prod.\n');
+      expect(result.log).toEqual([]);
+    });
+
+    it('launched for a reset and a statement at once, refuses both', async () => {
+      const result = await entrypoint({
+        OCI_ENV: 'dev',
+        OCI_SEED_RESET: 'p1',
+        OCI_SQL_STATEMENT: 'exam-sample-deletion-count',
+      });
+      expect(result.code).toBe(2);
+      expect(result.stderr).toContain('launch one at a time');
+      expect(result.log).toEqual([]);
+    });
   });
 });
 

@@ -19,7 +19,7 @@ import { DicomIndexRepository } from './dicom-index.repository.js';
  * Postgres with every migration applied.
  *
  * This is a test of the runbook, not of application code: the two
- * statements are read from `docs/runbooks/sql/` and executed unchanged
+ * statements are read from `apps/migrate/statements/` and executed unchanged
  * apart from the placeholders an operator fills in, so the procedure
  * and its proof cannot drift apart. That is why raw SQL is executed
  * here, outside a `*.raw.ts` repository file.
@@ -38,7 +38,7 @@ const dockerAvailable = await checkDocker('exam-sample-deletion.int.spec');
 
 const SQL_DIR = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../../../../docs/runbooks/sql',
+  '../../../../../apps/migrate/statements',
 );
 const COUNT_SQL = readFileSync(path.join(SQL_DIR, 'exam-sample-deletion-count.sql'), 'utf8');
 const DELETE_SQL = readFileSync(path.join(SQL_DIR, 'exam-sample-deletion.sql'), 'utf8');
@@ -49,6 +49,8 @@ const READER = '00000000-0000-4000-8000-000000000659';
 const STRANGER = '00000000-0000-4000-8000-000000000660';
 const REFERENCE = 'DEL-2026-12-21';
 const SHA = 'a'.repeat(64);
+/** The one-off run the deletion is part of; the runner sets it (#739). */
+const RUN = '00000000-0000-4000-8000-000000000739';
 
 /** What an operator does by hand: put the three values into the file. */
 function fill(sql: string, values: { id: string; slug: string; reference?: string }): string {
@@ -119,8 +121,21 @@ describe.skipIf(!dockerAvailable)('exam sample deletion SQL against Postgres (#6
       .reduce((sum, row) => sum + Number(row.rows), 0);
   }
 
-  function runDeletion(target: { id: string; slug: string; reference?: string }): Promise<number> {
-    return prisma.$executeRawUnsafe(fill(DELETE_SQL, target));
+  /**
+   * What the one-off runner does around the statement (#739): one
+   * transaction, with the run's id set for the statement to record.
+   * The runner itself is tested in `apps/api/src/one-off-sql/`.
+   */
+  async function runDeletion(target: {
+    id: string;
+    slug: string;
+    reference?: string;
+  }): Promise<number> {
+    const [, deleted] = await prisma.$transaction([
+      prisma.$queryRaw`SELECT set_config('oci.one_off_run', ${RUN}, true)`,
+      prisma.$executeRawUnsafe(fill(DELETE_SQL, target)),
+    ]);
+    return deleted;
   }
 
   /** A dataset the way uploads, the DICOM check and a reading campaign leave it. */
@@ -351,6 +366,13 @@ describe.skipIf(!dockerAvailable)('exam sample deletion SQL against Postgres (#6
     expect(await blocking(sample)).toBe(0);
   });
 
+  it('refuses to run outside the one-off runner, and deletes nothing', async () => {
+    await expect(prisma.$executeRawUnsafe(fill(DELETE_SQL, sample))).rejects.toThrow(
+      /through the one-off runner/,
+    );
+    expect(await counts(sample)).toEqual(BEFORE);
+  });
+
   it('refuses a file whose placeholders were not filled in', async () => {
     await expect(prisma.$executeRawUnsafe(DELETE_SQL)).rejects.toThrow();
     expect(await counts(sample)).toEqual(BEFORE);
@@ -481,6 +503,7 @@ describe.skipIf(!dockerAvailable)('exam sample deletion SQL against Postgres (#6
       dicomObjects: 3,
       dicomSeries: 1,
       distributions: 4,
+      oneOffRun: RUN,
       reference: REFERENCE,
       relatedAuditEventsKept: 1,
       runbook: 'exam-sample-deletion',

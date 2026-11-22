@@ -8,6 +8,7 @@ You're deploying or running an OCI instance. The platform is designed to run as 
 | [Architecture](../architecture.md)                                    | High-level reference for what's where.                                                          |
 | [Security baseline](../security.md)                                   | The controls expected on every instance (KMS, WAF, OIDC, etc.).                                 |
 | [Runbooks](../runbooks/)                                              | Day-2 operations: incidents, rotations, restores.                                               |
+| [Running a reviewed SQL statement](../runbooks/one-off-sql.md)        | A procedure needs a statement run on a deployed database (sample deletion, data repair).        |
 | [DocuSeal bootstrap](./docuseal.md)                                   | First-time DocuSeal admin / API-token / webhook configuration.                                  |
 | [SES mail](./ses.md)                                                  | Domain identity, SMTP-credential rotation, DMARC tightening.                                    |
 | [Admin: users & groups](./admin-user-management.md)                   | Granting / revoking Cognito group membership (campaign-manager, host, …).                       |

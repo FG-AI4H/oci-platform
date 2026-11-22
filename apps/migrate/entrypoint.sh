@@ -22,6 +22,10 @@
 #
 # Profile reset (#644). Launched with OCI_SEED_RESET=<profile>, the task
 # runs ./reset-profile.mjs and nothing else: no migration, no seed.
+#
+# One-off statement (#739). Launched with OCI_SQL_STATEMENT=<name>, the task
+# runs ./run-statement.mjs and nothing else: a reviewed statement from
+# ./statements/, a dry run unless confirmed. docs/runbooks/one-off-sql.md.
 set -eu
 
 : "${DB_USERNAME:?DB_USERNAME not set (expected from Aurora secret)}"
@@ -34,6 +38,25 @@ set -eu
 DB_PASSWORD_ENC=$(node -e "process.stdout.write(encodeURIComponent(process.env.DB_PASSWORD))")
 
 export DATABASE_URL="postgresql://${DB_USERNAME}:${DB_PASSWORD_ENC}@${DB_HOST}:${DB_PORT}/${DB_NAME}?schema=public&sslmode=require"
+
+# A one-off launch does one thing. Both set is a launch mistake.
+if [ -n "${OCI_SEED_RESET:-}" ] && [ -n "${OCI_SQL_STATEMENT:-}" ]; then
+  echo "one-off: REFUSED. OCI_SEED_RESET and OCI_SQL_STATEMENT are both set; launch one at a time." >&2
+  exit 2
+fi
+
+# One-off statement (#739). The script refuses anything but dev and local
+# and is a dry run unless confirmed; see its header. `exec` so its exit code
+# is the task's.
+if [ -n "${OCI_SQL_STATEMENT:-}" ]; then
+  # Refused here as well as in the script: two places would have to be wrong.
+  if [ "${OCI_ENV:-}" = "prod" ]; then
+    echo "one-off: REFUSED. A one-off statement never runs on prod." >&2
+    exit 2
+  fi
+  echo "one-off: OCI_SQL_STATEMENT=${OCI_SQL_STATEMENT}, running the statement instead of migrate and seed"
+  exec node ./run-statement.mjs
+fi
 
 # One-off reset of a seed profile's objects (#644). The script refuses
 # anything but dev and local, and is a dry run unless confirmed; see its

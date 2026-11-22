@@ -38,6 +38,10 @@ COPY apps/migrate/upload-fixtures.mjs ./upload-fixtures.mjs
 # unless the task is launched with OCI_SEED_PROFILES / OCI_SEED_RESET.
 COPY apps/migrate/seed-profile-check.mjs ./seed-profile-check.mjs
 COPY apps/migrate/reset-profile.mjs ./reset-profile.mjs
+# One-off statements (#739): the runner and the reviewed statements it may
+# run. Nothing runs unless the task is launched with OCI_SQL_STATEMENT.
+COPY apps/migrate/run-statement.mjs ./run-statement.mjs
+COPY apps/migrate/statements ./statements
 COPY packages/database/prisma ./prisma
 # Demo-data seed file + bundled fixtures (#249, #251). Replayed by the
 # entrypoint after migrate when OCI_ENV != 'prod'. Idempotent — every

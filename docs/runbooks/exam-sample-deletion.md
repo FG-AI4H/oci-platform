@@ -28,7 +28,7 @@ There is no per-dataset encryption key: the buckets and the database share one k
 ## Before the date
 
 1. **The date and the scope are written down**, agreed with the institution: the date, and whether it wants the annotations made on its exams (answers and comments of the readers) handed over before deletion. The default is that they are deleted with everything else.
-2. **Who does it.** Two people: one runs the steps, one reads along and signs the record. The operator needs, for the storage step, the operator role on the AWS account (assumed with MFA or SSO, never static keys) with permission to list and delete object versions and to abort multipart uploads on the datasets bucket **[env]**; for the database step, a way to run one SQL statement against the environment's database (see the open point in step 5).
+2. **Who does it.** Two people: one runs the steps, one reads along and signs the record. The operator needs, for the storage step, the operator role on the AWS account (assumed with MFA or SSO, never static keys) with permission to list and delete object versions and to abort multipart uploads on the datasets bucket **[env]**; for the database step, permission to launch the migrate task with overrides, as described in [One-off SQL](./one-off-sql.md) **[env]**.
 3. **The rehearsal has been done** on the same environment, and its record is filed.
 4. **Know the dataset.** Its slug, and its id: sign in as the host or an admin and read `id` from `GET /v2/catalog/datasets/<slug>`. Keep both for the commands below. The files live under the key prefix `<slug>/` in the bucket `oci-<env>-datasets-<account id>` (`apps/api/src/modules/storage/storage.service.ts`, `initUpload`; `infra/cdk/lib/data-stack.ts`) **[code]**.
 
@@ -53,7 +53,7 @@ pnpm purge-dataset-objects --bucket oci-<env>-datasets-<account id> --prefix <sl
 
 It prints the number of keys, of object versions (current and noncurrent), of delete markers and of unfinished uploads, and the total size. It never prints a key.
 
-Database: fill the two placeholders in [`sql/exam-sample-deletion-count.sql`](./sql/exam-sample-deletion-count.sql) and run it. It reads only. Every line marked `blocks` must be `0`; if one is not, stop: the dataset is not what this procedure was written for (see step 5).
+Database: run [`exam-sample-deletion-count`](../../apps/migrate/statements/exam-sample-deletion-count.sql) with the one-off runner ([One-off SQL](./one-off-sql.md)), with `OCI_SQL_PARAM_DATASET_ID` and `OCI_SQL_PARAM_DATASET_SLUG`. It reads only. Every line marked `blocks` must be `0`; if one is not, stop: the dataset is not what this procedure was written for (see step 5).
 
 Compare the two: the number of keys in storage should be the number of `distributions (files)` rows, plus any upload that was discarded (a discarded upload leaves a hidden version behind, `storage.service.ts`, `discardStoredObject`) **[code]**. A large difference means files were stored some other way; find out before deleting.
 
@@ -89,7 +89,7 @@ Nothing of a dataset is stored in another bucket: the API and the workers are gi
 
 ### 5. Delete the database rows
 
-Fill the three placeholders in [`sql/exam-sample-deletion.sql`](./sql/exam-sample-deletion.sql) (the id, the slug, and the reference of this deletion record, for example `DEL-2026-12-21`) and run it. It is one statement, so it either does everything or changes nothing. It:
+Run [`exam-sample-deletion`](../../apps/migrate/statements/exam-sample-deletion.sql) with the one-off runner ([One-off SQL](./one-off-sql.md)), with `OCI_SQL_PARAM_DATASET_ID`, `OCI_SQL_PARAM_DATASET_SLUG` and `OCI_SQL_PARAM_REFERENCE` (the reference of this deletion record, for example `DEL-2026-12-21`). First as a dry run, which shows the counts it would delete and changes nothing; then applied, with the confirmation, the statement's sha256, and the names of the two people of step 2 as operator and reviewer. It is one statement, so it either does everything or changes nothing. It:
 
 - checks that the id and the slug belong together;
 - refuses if a signed data use agreement, an issued visa or a policy acceptance exists for the dataset, if a file row of another dataset points into this dataset's storage prefix, or if an evaluation task names the dataset. None of these exists for a privately hosted sample; if one does, a person decides what happens to it;
@@ -98,7 +98,7 @@ Fill the three placeholders in [`sql/exam-sample-deletion.sql`](./sql/exam-sampl
 
 There is no API for deleting a dataset or a file, which is why this is SQL. Rows linked without a foreign key (tasks and calibration flags to their campaign, consent records to the dataset) are handled explicitly; the rest follows the foreign keys **[code]** (`packages/database/prisma/migrations/`).
 
-**Open point: how the statement reaches the database.** The database is in isolated subnets and no way of running a one-off statement against it is documented. The migrate task runs a fixed script and takes no statement; ECS exec is off for the web service and not switched on for the API service (`infra/cdk/lib/web-stack.ts`, `api-stack.ts`); the Data API is not enabled **[code]**. This has to be decided and rehearsed before a sample is hosted. Until it is, this step cannot be carried out on a deployed environment.
+**How the statement reaches the database.** The database is in isolated subnets. The statement runs inside the environment, in a one-off launch of the migrate task ([One-off SQL](./one-off-sql.md), [#739](https://github.com/FG-AI4H/oci-platform/issues/739)) **[code]**. The statement refuses to run any other way. The applied run writes a second audit event, `platform` / `sql.statement_applied`, that names the operator and the reviewer as they were declared and the task that ran it; the deletion event points at it (`oneOffRun`). Neither event has a verified actor: who launched the task is in CloudTrail's `RunTask` event for that task **[env]**.
 
 What stays in the database, by design:
 
@@ -111,7 +111,7 @@ The keyed digests of findings are deleted with the index rows. The key they were
 ### 6. Prove it
 
 1. Storage: run the count of step 2 again. It must print `Nothing is stored under this prefix.`
-2. Database: run the count SQL again. Every line marked `deleted` must be `0`, and `audit record of this deletion` must be `1`.
+2. Database: run the count again, the same way as in step 2. Every line marked `deleted` must be `0`, and `audit record of this deletion` must be `1`.
 3. From outside: signed in as the host, then as an admin, `GET /v2/catalog/datasets/<slug>` answers 404, and so does a file address noted before the deletion (`/v2/catalog/datasets/<slug>/distributions/<id>/download`). The web app can show a cached page for up to 30 seconds (`apps/web/src/lib/api.ts`, `revalidate: 30`) **[code]**.
 
 What this proves: nothing is left under the prefix in the bucket, and no row is left in the live database. What it cannot prove: that no copy exists outside the platform.
@@ -180,14 +180,14 @@ The rehearsal is what turns the **[env]** marks into facts. It is not complete u
 Tested locally, with synthetic data:
 
 - `purge-dataset-objects`: unit tests against an in-memory versioned bucket (versions, delete markers, unfinished uploads, more than 1,000 versions, a partial failure, every refusal, a second run), and one run of the real command against a local S3-compatible store with versioning on (1,207 versions, a delete marker and an unfinished upload removed; neighbouring prefixes untouched).
-- The two SQL files: run unchanged against a real Postgres with every migration applied (`apps/api/src/modules/storage/exam-sample-deletion.int.spec.ts`). The test seeds a dataset as uploads, the DICOM check and a campaign leave it, shows each refusal changes nothing, shows the deletion leaves no row and leaves a second dataset untouched, and checks the audit event.
+- The two SQL files: run unchanged against a real Postgres with every migration applied (`apps/api/src/modules/storage/exam-sample-deletion.int.spec.ts`), and through the one-off runner as an operator runs them, dry run and applied, with both audit events checked against the platform's hash rule and chain (`apps/api/src/one-off-sql/run-statement.int.spec.ts`). The test seeds a dataset as uploads, the DICOM check and a campaign leave it, shows each refusal changes nothing, shows the deletion leaves no row and leaves a second dataset untouched, and checks the audit event.
 
 - Steps 2, 4, 5 and 6 in sequence, on a locally running API with a real database and a local S3-compatible store: 60 synthetic files uploaded through the upload API, a second version of one object and a delete marker added by hand, then the count, the purge (61 versions and 1 delete marker removed, nothing left), the row deletion, and "not found" for the host afterwards, with the neighbouring dataset untouched.
 
 Not tested, to be established by the rehearsal **[env]**:
 
 - the script against the real bucket: the role's permissions, the bucket's encryption key, and the listing of unfinished uploads on S3 itself;
-- running the SQL on a deployed database (the open point in step 5);
+- running the SQL on a deployed database through the one-off runner ([One-off SQL](./one-off-sql.md)): not yet rehearsed on `dev`;
 - that Object Lock is off on `dev` as the CDK says, and that no replication, backup plan or trail exists outside the CDK;
 - the retention of the database log export;
 - what a task's sample reference contains once [#646](https://github.com/FG-AI4H/oci-platform/issues/646) is deployed;

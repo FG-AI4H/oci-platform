@@ -183,25 +183,18 @@ export class DicomReviewService {
       decidedById,
       findings: waiting.map((row) => ({ attribute: row.attribute, valueDigest: row.value_digest })),
       audit: this.audit,
-      auditEvent: (decision) => ({
-        module: 'storage',
-        action: 'dicom.findings_accepted',
-        subjectType: 'dataset',
-        subjectId: dataset.id,
-        actorUserId: decidedById,
-        actorRoles: ((args.user['cognito:groups'] ?? []) as string[]).filter((g) => g === 'admin'),
-        // Attribute, keyed digest and counts. Never a value.
-        payload: {
-          datasetSlug: args.slug,
-          decisionId: decision.decisionId,
-          reason: args.body.reason,
-          // Also covers the same values in files uploaded later.
-          acceptedForDataset: decision.acceptedForDataset,
-          // Covers the files held at this moment, and no other.
-          acceptedOnFiles: decision.acceptedOnFiles,
-          releasedInstanceCount: decision.releasedInstanceCount,
-          stillHeldInstanceCount: decision.stillHeldInstanceCount,
-        },
+      actorRoles: ((args.user['cognito:groups'] ?? []) as string[]).filter((g) => g === 'admin'),
+      // Attribute, keyed digest and counts. Never a value.
+      auditPayload: (decision) => ({
+        datasetSlug: args.slug,
+        decisionId: decision.decisionId,
+        reason: args.body.reason,
+        // Also covers the same values in files uploaded later.
+        acceptedForDataset: decision.acceptedForDataset,
+        // Covers the files held at this moment, and no other.
+        acceptedOnFiles: decision.acceptedOnFiles,
+        releasedInstanceCount: decision.releasedInstanceCount,
+        stillHeldInstanceCount: decision.stillHeldInstanceCount,
       }),
     });
     const acceptedCount =
