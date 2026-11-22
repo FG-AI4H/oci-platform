@@ -3,6 +3,7 @@ import {
   DicomSeriesDetailSchema,
   DicomSeriesListSchema,
   DicomSeriesVersionQuerySchema,
+  DicomViewSchema,
 } from './dicom.js';
 
 const summary = {
@@ -89,6 +90,44 @@ describe('DICOM series schemas (ADR-0026)', () => {
     expect(
       DicomSeriesDetailSchema.safeParse(detail({ ...instance, imagePositionPatient: [0, 0] }))
         .success,
+    ).toBe(false);
+  });
+});
+
+describe('DICOM view stored with an answer (#674)', () => {
+  const view = {
+    distributionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    position: 12,
+    imageCount: 30,
+    window: { width: 80, center: 40 },
+    inverted: false,
+  };
+
+  it('accepts the image drawn, its place in the stack and how it was displayed', () => {
+    expect(DicomViewSchema.parse(view)).toEqual(view);
+    expect(DicomViewSchema.safeParse({ ...view, window: null }).success).toBe(true);
+    expect(DicomViewSchema.safeParse({ ...view, position: 30 }).success).toBe(true);
+  });
+
+  it('refuses a position outside the stack and a window that cannot be displayed', () => {
+    for (const bad of [
+      { ...view, position: 0 },
+      { ...view, position: 31 },
+      { ...view, position: 1.5 },
+      { ...view, window: { width: 0, center: 40 } },
+      { ...view, window: { width: Number.POSITIVE_INFINITY, center: 40 } },
+      { ...view, window: { width: 80, center: Number.NaN } },
+    ]) {
+      expect(DicomViewSchema.safeParse(bad).success).toBe(false);
+    }
+  });
+
+  it('names the image by its distribution and carries no DICOM identifier', () => {
+    expect(DicomViewSchema.safeParse({ ...view, distributionId: '1.2.826.0.1' }).success).toBe(
+      false,
+    );
+    expect(
+      DicomViewSchema.safeParse({ ...view, sopInstanceUid: '1.2.826.0.1.3680043.8.498.1' }).success,
     ).toBe(false);
   });
 });

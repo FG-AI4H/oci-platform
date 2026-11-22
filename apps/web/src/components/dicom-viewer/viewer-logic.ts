@@ -5,6 +5,8 @@
  * is partly loaded (ADR-0026). Kept apart so they are unit-tested.
  */
 
+import type { DicomView } from '@oci/shared-types';
+
 /** A display window: its width and its centre (level). */
 export interface WindowSetting {
   width: number;
@@ -296,3 +298,46 @@ const TRANSFER_SYNTAX_NAMES: ReadonlyMap<string, string> = new Map([
   ['1.2.840.10008.1.2.4.201', 'HTJ2K lossless'],
   ['1.2.840.10008.1.2.4.203', 'HTJ2K'],
 ]);
+
+/**
+ * What the reader has on screen, to store with an answer: the image
+ * drawn and how it is displayed. Null whenever the picture is not the
+ * image asked for (it is still loading, or could not be loaded): the
+ * reader then sees a stand-in, and no image may be recorded as seen.
+ */
+export function currentView(state: {
+  /** The distribution of each image, in stack order. */
+  distributionIds: readonly string[];
+  /** The image asked for. */
+  index: number;
+  /** The image the canvas shows. */
+  drawnIndex: number;
+  failed: ReadonlySet<number>;
+  window: WindowSetting | null;
+  inverted: boolean;
+}): DicomView | null {
+  const { distributionIds, index, drawnIndex, failed } = state;
+  if (index !== drawnIndex || failed.has(index)) return null;
+  const distributionId = distributionIds.at(index);
+  if (distributionId === undefined || index < 0) return null;
+  return {
+    distributionId,
+    position: index + 1,
+    imageCount: distributionIds.length,
+    window: state.window ? { width: state.window.width, center: state.window.center } : null,
+    inverted: state.inverted,
+  };
+}
+
+/** True when two views describe the same screen. */
+export function sameView(a: DicomView | null, b: DicomView | null): boolean {
+  if (a === null || b === null) return a === b;
+  return (
+    a.distributionId === b.distributionId &&
+    a.position === b.position &&
+    a.imageCount === b.imageCount &&
+    a.inverted === b.inverted &&
+    a.window?.width === b.window?.width &&
+    a.window?.center === b.window?.center
+  );
+}

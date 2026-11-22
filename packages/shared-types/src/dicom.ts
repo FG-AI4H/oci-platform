@@ -116,6 +116,37 @@ export const DicomSeriesDetailSchema = DicomSeriesSummarySchema.extend({
 });
 export type DicomSeriesDetail = z.infer<typeof DicomSeriesDetailSchema>;
 
+/**
+ * What the built-in viewer had on screen: the image drawn and how it
+ * was displayed. An annotation answer about a series stores it as its
+ * optional `view`, for the record and for reviewing a disagreement;
+ * agreement and arbitration ignore it (#674, ADR-0026).
+ *
+ * The image is named by its distribution, never by a DICOM UID: the
+ * answer lands in the audit trail and in exports.
+ */
+export const DicomViewSchema = z
+  .object({
+    /** The distribution of the image drawn. */
+    distributionId: z.string().uuid(),
+    /** Its place in the series' display order, from 1. */
+    position: z.number().int().min(1),
+    /** How many images the series had on screen. */
+    imageCount: z.number().int().min(1),
+    /** The window as the screen showed it; null if none was set. */
+    window: z
+      .object({ width: z.number().min(1), center: z.number() })
+      .strict()
+      .nullable(),
+    inverted: z.boolean(),
+  })
+  .strict()
+  .refine((view) => view.position <= view.imageCount, {
+    message: 'position is past the last image',
+    path: ['position'],
+  });
+export type DicomView = z.infer<typeof DicomViewSchema>;
+
 // ==== Operator review of held files (ADR-0026, decision 2) ================
 //
 // A DICOM file whose header carries a value de-identification normally
