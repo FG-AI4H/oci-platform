@@ -1,0 +1,22 @@
+{
+  "siteTitle": "Plateforme OCI — UIT/OMS/OMPI",
+  "siteDescription": "Open Code Infrastructure — plateforme unifiée pour l’évaluation comparative et l’évaluation de l’IA en santé, dans le cadre de l’Initiative mondiale UIT-OMS-OMPI sur l’IA pour la santé (GI-AI4H).",
+  "titleSuffix": "Plateforme OCI",
+  "save": "Enregistrer",
+  "saving": "Enregistrement…",
+  "cancel": "Annuler",
+  "back": "Retour",
+  "next": "Suivant",
+  "previous": "Précédent",
+  "loading": "Chargement…",
+  "none": "Aucun",
+  "notSet": "Non renseigné",
+  "unknown": "Inconnu",
+  "yes": "Oui",
+  "no": "Non",
+  "signInToContinue": "Connectez-vous pour continuer.",
+  "apiBaseUrlMissing": "NEXT_PUBLIC_API_BASE_URL n’est pas défini dans l’environnement web.",
+  "apiError": "API {status} {statusText} : {detail}",
+  "correctErrors": "Veuillez corriger les erreurs ci-dessous.",
+  "required": "obligatoire"
+}

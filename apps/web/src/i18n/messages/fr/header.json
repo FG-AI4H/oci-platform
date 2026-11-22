@@ -1,0 +1,14 @@
+{
+  "primaryNav": "Navigation principale",
+  "catalog": "Catalogue",
+  "models": "Modèles",
+  "evaluation": "Évaluation",
+  "annotation": "Annotation",
+  "inbox": "Demandes reçues",
+  "admin": "Administration",
+  "dashboard": "Tableau de bord",
+  "settings": "Paramètres",
+  "signOut": "Se déconnecter",
+  "menu": "Menu",
+  "signedInAs": "Connecté en tant que {name}"
+}

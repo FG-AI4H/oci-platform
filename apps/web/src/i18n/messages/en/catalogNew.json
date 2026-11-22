@@ -1,0 +1,40 @@
+{
+  "metaTitle": "New dataset — OCI Catalog",
+  "back": "Catalog",
+  "eyebrow": "Host workflow",
+  "heading": "New dataset",
+  "intro": "Create a draft. After this step you’ll attach a Croissant 1.1 manifest to publish your first version.",
+  "slugPermanent": {
+    "title": "Slug is permanent",
+    "body": "The slug becomes part of your catalog URL and the Croissant <code>@id</code>. Choose deliberately — slugs cannot be renamed once published."
+  },
+  "draftDetails": "Draft details",
+  "form": {
+    "errorTitle": "Could not create dataset",
+    "slugLabel": "Slug",
+    "slugHint": "lower-case, hyphenated, 3–80 chars (e.g. rsna-pneumonia-2018)",
+    "nameLabel": "Name",
+    "nameHint": "Human-readable title shown in catalog cards and <code>Schema.org Dataset.name</code>.",
+    "descriptionLabel": "Description",
+    "descriptionHint": "Optional. Markdown isn’t parsed yet — plain text only.",
+    "visibilityLegend": "Initial visibility",
+    "visibilityHelp": "Drafts default to private. Change later from the dataset page.",
+    "visibility": {
+      "PRIVATE": { "title": "Private", "hint": "Only you and admins can see this draft." },
+      "RESTRICTED": {
+        "title": "Restricted",
+        "hint": "Visible after an access request is approved."
+      },
+      "PUBLIC": { "title": "Public", "hint": "Listed in the catalog and crawlable." }
+    },
+    "creating": "Creating…",
+    "submit": "Create draft"
+  },
+  "errors": {
+    "onlyHosts": "Only hosts can create datasets.",
+    "apiBaseUrlMissing": "NEXT_PUBLIC_API_BASE_URL not set in web env.",
+    "slugTaken": "Slug \"{slug}\" is already taken.",
+    "slugTakenField": "taken",
+    "unexpectedShape": "API returned an unexpected dataset shape."
+  }
+}

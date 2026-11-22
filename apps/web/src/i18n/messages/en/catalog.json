@@ -1,0 +1,138 @@
+{
+  "metaTitle": "Catalog — OCI Platform",
+  "metaDescription": "Discover datasets curated under the GI-AI4H Topic Groups, with provenance and consent tracked end-to-end.",
+  "eyebrow": "Catalog",
+  "heading": "Datasets",
+  "resultCount": "{count, plural, one {<num>{total}</num> dataset} other {<num>{total}</num> datasets}}",
+  "resultCountMatching": "{count, plural, one {<num>{total}</num> dataset} other {<num>{total}</num> datasets}} matching <query>“{q}”</query>",
+  "myDatasets": "My datasets",
+  "newDataset": "New dataset",
+  "intro": "Browse the GI-AI4H curated catalogue. Each dataset ships a Croissant 1.1 manifest with RAI + BIOCroissant health metadata; restricted rows require approval before download.",
+  "search": {
+    "label": "Search datasets",
+    "placeholder": "Search by name, slug, or description",
+    "submit": "Search"
+  },
+  "error": {
+    "title": "Catalog unavailable",
+    "unreachable": "Unable to reach catalog API"
+  },
+  "filters": {
+    "title": "Filters",
+    "activeCount": "{count} active",
+    "selectedHint": "(selected — activate to remove filter)",
+    "unselectedHint": "(activate to filter)"
+  },
+  "facets": {
+    "modality": "Imaging modality",
+    "bodyRegion": "Body region",
+    "condition": "Disease / condition",
+    "anonymization": "Anonymisation",
+    "license": "License",
+    "duo": "Data use (DUO)",
+    "commercialUse": "Commercial use"
+  },
+  "modalities": {
+    "xRay": "X-ray",
+    "ct": "CT",
+    "mri": "MRI",
+    "ultrasound": "Ultrasound",
+    "fundus": "Fundus",
+    "pathology": "Pathology"
+  },
+  "bodyRegions": {
+    "chest": "Chest",
+    "retina": "Retina",
+    "brain": "Brain",
+    "abdomen": "Abdomen",
+    "skin": "Skin",
+    "cardiovascular": "Cardiovascular"
+  },
+  "conditions": {
+    "pneumonia": "Pneumonia",
+    "diabeticRetinopathy": "Diabetic retinopathy",
+    "cancer": "Cancer",
+    "tuberculosis": "Tuberculosis",
+    "covid19": "COVID-19",
+    "cardiacArrhythmia": "Cardiac arrhythmia"
+  },
+  "anonymization": {
+    "IDENTIFIED": "Identified",
+    "LIMITED": "Limited dataset",
+    "DEIDENTIFIED": "De-identified (pseudonymised)",
+    "ANONYMIZED": "Anonymised"
+  },
+  "commercial": {
+    "OK": "OK for commercial use",
+    "NON_COMMERCIAL_ONLY": "Non-commercial only",
+    "CASE_BY_CASE": "Case-by-case"
+  },
+  "chips": {
+    "applied": "Applied",
+    "removeFilter": "Remove filter",
+    "clearAll": "Clear all",
+    "modality": "Modality: {value}",
+    "bodyRegion": "Body: {value}",
+    "condition": "Condition: {value}",
+    "anonymization": "Anonymisation: {value}",
+    "license": "License: {value}",
+    "duo": "DUO: {value}",
+    "commercial": "Commercial: {value}",
+    "commercialValue": {
+      "OK": "commercial OK",
+      "NON_COMMERCIAL_ONLY": "non-commercial only",
+      "CASE_BY_CASE": "case-by-case"
+    }
+  },
+  "results": {
+    "none": "No results.",
+    "showing": "Showing <range>{start}–{end}</range> of <num>{total}</num>"
+  },
+  "sort": {
+    "label": "Sort",
+    "recent": "Most recent",
+    "name": "Name",
+    "oldest": "Oldest"
+  },
+  "pagination": {
+    "label": "Pagination",
+    "prev": "← Prev",
+    "next": "Next →"
+  },
+  "source": {
+    "label": "Source filter",
+    "local": "Local",
+    "localHint": "Datasets published on this platform.",
+    "federated": "Federated",
+    "federatedHint": "Mirrors of datasets harvested from peer catalogues.",
+    "all": "All",
+    "allHint": "Everything — local first, federated to fill the page."
+  },
+  "card": {
+    "opensUpstream": "{name} — opens upstream on {catalog} in a new tab",
+    "federated": "federated",
+    "noDescription": "No description provided.",
+    "commercialOk": "commercial OK",
+    "nonCommercial": "non-commercial",
+    "fromCatalog": "from {catalog}",
+    "noVersion": "no version"
+  },
+  "visibility": {
+    "PUBLIC": "public",
+    "RESTRICTED": "restricted",
+    "PRIVATE": "private"
+  },
+  "status": {
+    "DRAFT": "draft",
+    "REVIEW": "review",
+    "PUBLISHED": "published",
+    "ARCHIVED": "archived"
+  },
+  "empty": {
+    "noMatchesTitle": "No matches yet",
+    "noDatasetsTitle": "No datasets yet",
+    "noMatchesBody": "Try fewer filters, or broaden your search to find more datasets.",
+    "noDatasetsBody": "The catalogue is empty on this environment. Once hosts publish the first Croissant 1.1 manifests, they will appear here.",
+    "clearAllFilters": "Clear all filters"
+  }
+}

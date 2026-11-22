@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages, getTranslations } from 'next-intl/server';
 import { SiteShell } from '../components/site-shell';
+import { clientMessages } from '../i18n/client-namespaces';
+import type { Messages } from '../i18n/messages/en';
 import { siteUrl } from '../lib/site-url';
 import { readThemeCookie, themeAttr } from '../lib/theme-cookie';
 import './globals.css';
@@ -17,27 +21,34 @@ const inter = Inter({
   variable: '--font-inter',
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl()),
-  title: 'OCI Platform — ITU/WHO/WIPO',
-  description:
-    'Open Code Infrastructure — unified platform for benchmarking and assessing health AI under the ITU-WHO-WIPO Global Initiative on AI for Health (GI-AI4H).',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations('Common');
+  return {
+    metadataBase: new URL(siteUrl()),
+    title: t('siteTitle'),
+    description: t('siteDescription'),
+  };
+}
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Read the saved dark-mode preference at SSR so the right palette is
   // baked into the first paint — no FOUC flash from light-by-default
   // hydrating to dark a frame later.
   const dataTheme = themeAttr(await readThemeCookie());
+  // The interface language (#654): preference, cookie, Accept-Language,
+  // English. The client gets only the namespaces its components read.
+  const [locale, messages] = await Promise.all([getLocale(), getMessages()]);
   return (
     <html
-      lang="en"
+      lang={locale}
       className={inter.variable}
       suppressHydrationWarning
       {...(dataTheme ? { 'data-theme': dataTheme } : {})}
     >
       <body>
-        <SiteShell>{children}</SiteShell>
+        <NextIntlClientProvider messages={clientMessages(messages as Messages)}>
+          <SiteShell>{children}</SiteShell>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

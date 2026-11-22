@@ -1,0 +1,51 @@
+{
+  "convenedBy": "Convened by <strong>ITU · WHO · WIPO</strong> · GI-AI4H",
+  "titleLead": "Open Code Infrastructure",
+  "titleAccent": "for trustworthy health AI",
+  "lede": "A unified platform for the Global Initiative on AI for Health — catalog, annotate, evaluate, and report on AI in clinical and public-health workflows, end to end.",
+  "openDashboard": "Open dashboard",
+  "browseCatalog": "Browse catalog",
+  "signInLocal": "Sign in (local dev)",
+  "signInCognito": "Sign in with Cognito",
+  "stats": {
+    "datasetsLabel": "Datasets in the catalog",
+    "datasetsHint": "Curated under GI-AI4H Topic Groups",
+    "conformanceLabel": "Native conformance",
+    "conformanceHint": "RAI + BIOCroissant health metadata",
+    "openSourceValue": "Open source",
+    "openSourceLabel": "BSD 3-Clause licensed",
+    "openSourceHint": "Reproducible, end-to-end auditable"
+  },
+  "roadmapEyebrow": "Platform · 12-18 month roadmap",
+  "roadmapTitle": "Four workstreams, one provenance chain",
+  "roadmapBody": "Every artefact — dataset, annotation, evaluation, report — points back to the dataset that fed it. So a regulator can trace any claim to its evidence, and a host can revoke a downstream artefact if consent is withdrawn upstream.",
+  "phaseLabel": "Phase {id} ·",
+  "phases": {
+    "A": {
+      "title": "Catalog",
+      "description": "Discover datasets curated under the GI-AI4H Topic Groups. Croissant 1.1 + RAI + BIOCroissant manifests, with provenance and consent tracked end-to-end."
+    },
+    "B": {
+      "title": "Annotation",
+      "description": "Coordinate multi-rater annotation with conflict resolution, regulator-grade audit trails, and burndown tooling."
+    },
+    "C": {
+      "title": "Evaluation",
+      "description": "Evaluate health AI models against benchmarking tasks without publishing the reference labels: predictions scoring, sealed-container execution, and a reviewed registry of evaluation methods."
+    },
+    "D": {
+      "title": "Reporting",
+      "description": "JSON-LD evaluation reports for regulators, plus a portal that lets supervisors trace every claim back to its evidence."
+    }
+  },
+  "status": {
+    "live": "Live",
+    "inProgress": "In progress",
+    "planned": "Planned"
+  },
+  "hostsTitle": "For dataset hosts",
+  "hostsBody": "Publishing on the catalog takes two steps: create a dataset, attach a Croissant 1.1 manifest. We validate the manifest against Croissant + RAI + BIOCroissant before mirroring distributions, so what lands in the catalog is machine-readable and audit-ready.",
+  "createDataset": "Create a dataset",
+  "signInToPublish": "Sign in to publish",
+  "readCatalog": "Read the catalog →"
+}

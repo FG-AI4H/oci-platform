@@ -1,0 +1,22 @@
+{
+  "siteTitle": "OCI Platform — ITU/WHO/WIPO",
+  "siteDescription": "Open Code Infrastructure — unified platform for benchmarking and assessing health AI under the ITU-WHO-WIPO Global Initiative on AI for Health (GI-AI4H).",
+  "titleSuffix": "OCI Platform",
+  "save": "Save",
+  "saving": "Saving…",
+  "cancel": "Cancel",
+  "back": "Back",
+  "next": "Next",
+  "previous": "Previous",
+  "loading": "Loading…",
+  "none": "None",
+  "notSet": "Not set",
+  "unknown": "Unknown",
+  "yes": "Yes",
+  "no": "No",
+  "signInToContinue": "Sign in to continue.",
+  "apiBaseUrlMissing": "NEXT_PUBLIC_API_BASE_URL is not set in the web environment.",
+  "apiError": "API {status} {statusText}: {detail}",
+  "correctErrors": "Please correct the errors below.",
+  "required": "required"
+}

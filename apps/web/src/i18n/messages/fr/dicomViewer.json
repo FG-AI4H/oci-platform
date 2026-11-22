@@ -1,0 +1,58 @@
+{
+  "loadingViewer": "Chargement de la visionneuse…",
+  "roleDescription": "visionneuse d’images",
+  "viewportLabel": "{label}, image {index} sur {count}",
+  "viewportLabelLoading": "{label}, chargement",
+  "opening": "Ouverture de la série…",
+  "status": {
+    "opening": "Ouverture de la série",
+    "loading": "Chargement des images",
+    "allLoaded": "{count, plural, one {# image chargée} other {Les # images sont chargées}}",
+    "someMissing": "{loaded} images chargées sur {count}, {missing, plural, one {# n’a pas pu être chargée} other {# n’ont pas pu être chargées}}"
+  },
+  "missingAlert": "{missing, plural, one {# image sur {count} n’a pas pu être chargée} other {# images sur {count} n’ont pas pu être chargées}}. Chacune le signale lorsque vous l’atteignez. Fermez la visionneuse et rouvrez la série pour réessayer.",
+  "standInFailed": "L’image {index} n’a pas pu être chargée",
+  "standInLoading": "Chargement de l’image {index}…",
+  "windowReadout": "L {width} · N {center}",
+  "loadingProgress": "chargement {loaded} / {count}",
+  "image": "Image",
+  "imageValueText": "Image {index} sur {count}",
+  "window": "Fenêtre",
+  "width": "Largeur",
+  "level": "Niveau",
+  "view": "Affichage",
+  "zoomOut": "Zoom arrière",
+  "zoomIn": "Zoom avant",
+  "moveLeft": "Déplacer vers la gauche",
+  "moveUp": "Déplacer vers le haut",
+  "moveDown": "Déplacer vers le bas",
+  "moveRight": "Déplacer vers la droite",
+  "invert": "Inverser",
+  "reset": "Réinitialiser",
+  "presets": {
+    "brain": "Cerveau",
+    "subdural": "Sous-dural",
+    "bone": "Os",
+    "lung": "Poumon",
+    "mediastinum": "Médiastin"
+  },
+  "help": {
+    "summary": "Souris et clavier",
+    "mouse": "<strong>Souris.</strong> La molette change d’image, le glissement règle la fenêtre, Maj + glissement déplace l’image, le glissement avec le bouton droit zoome.",
+    "keyboard": "<strong>Clavier, l’image ayant le focus.</strong> Les flèches changent d’image (Page préc. et Page suiv. de dix en dix, Début et Fin pour aller aux extrémités), Maj + flèches déplacent l’image, + et − zooment, I inverse, R réinitialise."
+  },
+  "failure": {
+    "emptyTitle": "Rien à afficher",
+    "emptyDetail": "Cette série ne contient aucune image que vous pouvez ouvrir.",
+    "decoderTitle": "La visionneuse ne peut pas décoder cette série",
+    "decoderDetail": "L’image {position} est enregistrée en {syntax}, une compression pour laquelle cette visionneuse n’a pas de décodeur. Téléchargez les fichiers pour les ouvrir dans une autre visionneuse.",
+    "openTitle": "La série n’a pas pu être ouverte",
+    "openAddress": "Le stockage a refusé le fichier. Il n’est peut-être plus disponible pour vous ; rechargez la page et réessayez.",
+    "openNetwork": "La première image n’a pas pu être récupérée depuis le stockage. Vérifiez votre connexion et réessayez.",
+    "changedTitle": "La série a changé",
+    "changedDetail": "Ses fichiers ne sont plus ceux qui étaient affichés. Fermez la visionneuse et rouvrez la série.",
+    "startTitle": "La visionneuse n’a pas pu démarrer",
+    "startDetail": "La série n’a pas pu être chargée. Rechargez la page et réessayez ; si l’échec persiste, téléchargez plutôt les fichiers.",
+    "transferSyntaxUnknown": "non indiquée dans le fichier"
+  }
+}

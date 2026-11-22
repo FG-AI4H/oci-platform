@@ -1,0 +1,35 @@
+{
+  "eyebrow": "Authenticated session",
+  "title": "Dashboard",
+  "lede": "Live identity for the bearer token in your NextAuth session, fetched server-side from <code>/v2/me</code>.",
+  "queue": {
+    "title": "Annotation queue",
+    "description": "Your Cognito role lets you pick up annotation work on RUNNING campaigns. Pull the next eligible task from the campaign list.",
+    "browse": "Browse campaigns"
+  },
+  "principal": {
+    "title": "Principal",
+    "description": "Claims from the Cognito access token, verified by the API’s aws-jwt-verify guard.",
+    "username": "Username",
+    "subject": "Subject",
+    "groups": "Groups",
+    "noGroups": "None assigned"
+  },
+  "token": {
+    "title": "Token",
+    "description": "Cognito access token claims and expiry — refresh by signing back in if you see warnings here.",
+    "use": "Use",
+    "scope": "Scope",
+    "expires": "Expires",
+    "expired": "expired",
+    "inMinutes": "expires in {minutes} min",
+    "inHours": "expires in {hours}h",
+    "inHoursMinutes": "expires in {hours}h {minutes}m"
+  },
+  "security": {
+    "title": "Security note",
+    "description": "Bearer tokens are visible to the server only. The web container forwards them to <code>/v2/*</code> with TLS — they do not travel to your browser."
+  },
+  "apiStatus": "API responded {status}",
+  "apiUnreachable": "API unreachable"
+}

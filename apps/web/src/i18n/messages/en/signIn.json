@@ -1,0 +1,21 @@
+{
+  "metaTitle": "Sign in — OCI Platform",
+  "title": "Sign in",
+  "descriptionLocal": "Local dev mode — pick any user and role set to mint a session against the running stack.",
+  "descriptionCognito": "Use your Cognito account to access the OCI Platform.",
+  "expired": "Your session has expired. Sign in again to continue.",
+  "failed": "Sign-in failed ({error}). Try again.",
+  "policies": "Signing in agrees to the GI-AI4H platform’s data-handling policies.",
+  "cognitoButton": "Continue with Cognito",
+  "cognitoHint": "You’ll be redirected to your organisation’s Cognito sign-in.",
+  "local": {
+    "failedTitle": "Sign-in failed",
+    "failedMessage": "Sign-in failed: {type}",
+    "user": "User",
+    "userHint": "Any string. The UUID-shaped user maps cleanly to identity.users.id; non-UUIDs are derived deterministically (PR D).",
+    "roles": "Roles",
+    "rolesHint": "Comma-separated. Try host, admin, participant, regulator, supervisor.",
+    "submit": "Sign in (local dev)",
+    "submitting": "Signing in…"
+  }
+}

@@ -1,0 +1,182 @@
+{
+  "metaTitle": "{slug} — Catalogue OCI",
+  "catalogUnavailable": "Catalogue indisponible",
+  "catalogApiUnreachable": "Impossible de joindre l’API du catalogue",
+  "breadcrumb": "Catalogue",
+  "statusBadge": {
+    "DRAFT": "brouillon",
+    "REVIEW": "en revue",
+    "PUBLISHED": "publié",
+    "ARCHIVED": "archivé"
+  },
+  "visibilityBadge": {
+    "PUBLIC": "public",
+    "RESTRICTED": "restreint",
+    "PRIVATE": "privé"
+  },
+  "visibilityCopy": {
+    "PUBLIC": "Répertorié et indexable par les moteurs de recherche",
+    "RESTRICTED": "Accès sur demande",
+    "PRIVATE": "Hôtes et administrateurs uniquement"
+  },
+  "statusCopy": {
+    "DRAFT": "Brouillon : ni répertorié ni indexable tant qu’aucune version n’est publiée",
+    "REVIEW": "En revue : non répertorié tant qu’aucune version n’est publiée",
+    "ARCHIVED": "Archivé : n’est plus répertorié"
+  },
+  "accessTier": {
+    "OPEN": "Accès libre",
+    "REGISTERED": "Sur inscription",
+    "CONTROLLED": "Contrôlé",
+    "SENSITIVE": "Sensible"
+  },
+  "commercial": {
+    "OK": "Usage commercial autorisé",
+    "NON_COMMERCIAL_ONLY": "Usage non commercial uniquement",
+    "CASE_BY_CASE": "Usage commercial : au cas par cas"
+  },
+  "publishNewVersion": "Publier une nouvelle version",
+  "publishFirstVersion": "Publier la première version",
+  "about": {
+    "title": "À propos de ce jeu de données",
+    "description": "<strong>Résumé</strong> en donne une vue d’ensemble choisie ; <strong>Manifeste complet</strong> liste chaque champ publié par l’hôte ; <strong>JSON brut</strong> montre l’enregistrement sous-jacent. Télécharger le manifeste seul : <link>croissant.json</link>."
+  },
+  "summary": {
+    "conformsTo": "Conforme à",
+    "license": "Licence",
+    "homepage": "Page d’accueil",
+    "keywords": "Mots-clés",
+    "modality": "Modalité",
+    "bodyRegion": "Région anatomique",
+    "conditions": "Pathologies",
+    "anonymization": "Anonymisation",
+    "commercialUse": "Usage commercial",
+    "permittedUse": "Usages autorisés (DUO)",
+    "citeAs": "Citer comme"
+  },
+  "imaging": {
+    "title": "Séries d’imagerie",
+    "description": "Séries DICOM de la dernière version. Ouvrez-en une pour parcourir ses images et modifier la fenêtre, sans rien télécharger.",
+    "heldTitle": "{count, plural, one {# image est retenue} other {# images sont retenues}}",
+    "heldBody": "Leurs en-têtes contiennent des valeurs que la dé-identification supprime normalement, comme un identifiant de patient ou une date d’examen. Tant qu’un opérateur de la plateforme ne les a pas examinées, seuls l’hôte du jeu de données et les opérateurs de la plateforme voient ces images. Les autres lecteurs ne les voient pas, pas plus qu’une série composée uniquement de ces images.",
+    "reviewFindings": "<link>Examiner les constats</link>.",
+    "heldAll": "retenue",
+    "heldSome": "{count, plural, one {# retenue} other {# retenues}}",
+    "showingFirst": "Affichage des {shown} premières séries sur {total}."
+  },
+  "series": {
+    "name": "Série {modality} {number}",
+    "nameNoNumber": "Série {modality}",
+    "images": "{count, plural, one {# image} other {# images}}",
+    "inExam": "Examen {exam} · {name}",
+    "nthOf": "{title} ({place} sur {total})",
+    "view": "afficher",
+    "viewAria": "Afficher {title}",
+    "closeAria": "Fermer {title}"
+  },
+  "files": {
+    "title": "Fichiers",
+    "description": "Fichiers de la dernière version. Les entrées <em>hébergées</em> sont servies par OCI ; les entrées <em>en amont</em> sont conservées par l’éditeur d’origine, et nous renvoyons vers elles. Les images hébergées peuvent être prévisualisées sans téléchargement.",
+    "requiresAccess": "accès requis",
+    "hosted": "hébergé",
+    "upstream": "en amont",
+    "noUrl": "sans URL",
+    "download": "télécharger",
+    "downloadAria": "Télécharger {file} depuis le stockage de la plateforme",
+    "open": "ouvrir",
+    "openAria": "Ouvrir {file} chez l’hébergeur d’origine (nouvel onglet)"
+  },
+  "versions": {
+    "title": "Historique des versions",
+    "description": "Chaque version publiée est immuable — les empreintes du manifeste servent d’ancrage aux rapports d’évaluation qui en dépendent."
+  },
+  "footer": "Manifeste repris de l’hébergeur d’origine. <link>Retour au catalogue</link>.",
+  "access": {
+    "gatedTitle": "L’accès à ce jeu de données est soumis à autorisation.",
+    "gatedBody": "Connectez-vous pour demander l’accès. L’hôte examine chaque demande.",
+    "signInToRequest": "Se connecter pour demander l’accès",
+    "gatedForDataset": "L’accès à ce jeu de données est soumis à autorisation.",
+    "fileRequestBody": "Déposez une demande d’accès structurée — l’hôte examine l’objectif et l’attestation du comité d’éthique (IRB) au regard des conditions d’utilisation DUO du jeu de données.",
+    "requestAccess": "Demander l’accès",
+    "submitted": "Demande envoyée. L’hôte a été prévenu — vous verrez la décision ici et sur votre tableau de bord.",
+    "yourRequest": "Votre demande d’accès",
+    "status": {
+      "PENDING": "en attente",
+      "APPROVED": "approuvée",
+      "DENIED": "refusée",
+      "REVOKED": "révoquée"
+    },
+    "pendingBody": "L’hôte examine votre demande. Vous verrez la décision sur votre tableau de bord.",
+    "approvedBody": "Vous pouvez télécharger les distributions ci-dessous.",
+    "deniedBody": "Votre demande a été refusée. Vous pouvez déposer une nouvelle demande avec des attestations corrigées.",
+    "hostNote": "Note de l’hôte :",
+    "revokedBody": "Une demande précédemment approuvée a été révoquée. Déposez une nouvelle demande si votre projet remplit désormais la condition à l’origine de la révocation.",
+    "seeRequests": "Voir vos demandes",
+    "fileNew": "Déposer une nouvelle demande"
+  },
+  "campaign": {
+    "create": "Créer une campagne d’annotation",
+    "createAria": "Créer une campagne d’annotation sur {slug}"
+  },
+  "bulk": {
+    "noArchiveTitle": "Aucune archive disponible pour ce jeu de données",
+    "noArchiveBody": "Une archive groupée ne couvre que les fichiers dont la plateforme détient le contenu.",
+    "title": "Télécharger le jeu de données complet",
+    "sizeSuffix": " (environ {size})",
+    "includedOnly": "Un ZIP contenant l’unique fichier du jeu de données{size}.",
+    "includedAll": "Un ZIP contenant les {total} fichiers{size}.",
+    "includedSome": "Un ZIP contenant {included} fichiers sur {total}{size}.",
+    "unknownSize": "{count, plural, one {L’un d’eux n’indique pas de taille ; le total est donc une valeur minimale.} other {# d’entre eux n’indiquent pas de taille ; le total est donc une valeur minimale.}}",
+    "gated": "{count, plural, one {# fichier nécessite un accès approuvé — demandez l’accès, puis téléchargez-le depuis la liste ci-dessous.} other {# fichiers nécessitent un accès approuvé — demandez l’accès, puis téléchargez-les depuis la liste ci-dessous.}}",
+    "upstream": "{count, plural, one {# fichier est hébergé par l’éditeur d’origine — ouvrez-le depuis la liste ci-dessous.} other {# fichiers sont hébergés par l’éditeur d’origine — ouvrez-les depuis la liste ci-dessous.}}",
+    "licenceNote": "Chaque archive contient aussi LICENSE.txt et CITATION.txt — l’attribution est une condition d’utilisation, la licence et la citation accompagnent donc les fichiers.",
+    "notIncluded": "Non inclus :",
+    "downloadAll": "Télécharger tous les fichiers",
+    "includeMetadata": "Inclure les métadonnées (croissant.json)",
+    "includeMetadataHint": "le manifeste complet : provenance, licence, définitions des champs"
+  },
+  "preview": {
+    "trigger": "aperçu",
+    "triggerAria": "Aperçu de {file}",
+    "closeAria": "Fermer l’aperçu de {file}",
+    "unavailableTitle": "Aperçu indisponible",
+    "unavailableBody": "L’image n’a pas pu être chargée. Elle nécessite peut-être un accès approuvé, ou le lien signé a expiré — utilisez plutôt le lien de téléchargement.",
+    "loading": "Chargement de l’aperçu…",
+    "alt": "Aperçu de {file}"
+  },
+  "manifest": {
+    "tabsLabel": "Vue du manifeste",
+    "tabs": {
+      "summary": "Résumé",
+      "full": "Manifeste complet",
+      "raw": "JSON brut"
+    },
+    "none": "Aucun manifeste disponible.",
+    "empty": "Le manifeste est vide.",
+    "groups": {
+      "framing": "Structure JSON-LD",
+      "rai": "IA responsable",
+      "other": "Autres"
+    }
+  },
+  "provenance": {
+    "title": "Provenance",
+    "subtitle": "D’où viennent les données et quels traitements elles ont subis (bio-prov v0.2)",
+    "source": "Source",
+    "sites": "Sites",
+    "collected": "Collecte",
+    "device": "Appareil d’acquisition",
+    "deidentification": "Dé-identification",
+    "resultingLevel": "niveau obtenu",
+    "ethics": "Approbation éthique (IRB)",
+    "labelProtocol": "Protocole d’étiquetage",
+    "derivedFrom": "Dérivé de",
+    "deidMethod": {
+      "SAFE_HARBOR": "Safe Harbor",
+      "EXPERT_DETERMINATION": "Détermination par un expert",
+      "PSEUDONYMISATION": "Pseudonymisation",
+      "SYNTHETIC": "Données synthétiques",
+      "NONE": "Aucune"
+    }
+  }
+}

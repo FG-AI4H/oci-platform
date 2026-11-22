@@ -1,0 +1,164 @@
+{
+  "metaTitle": "Modèles — OCI Platform",
+  "metaDescription": "Découvrez les modèles d’IA en santé publiés, avec leur usage prévu, leur statut réglementaire et leur étiquette « Model Facts » de l’OMS.",
+  "riskTier": "Niveau de risque {tier}",
+  "generativeAi": "IA générative",
+  "unavailable": {
+    "title": "Catalogue des modèles indisponible",
+    "fallback": "Impossible de joindre l’API du catalogue des modèles"
+  },
+  "list": {
+    "eyebrow": "Catalogue",
+    "heading": "Modèles",
+    "countPublished": "<num>{total}</num> {count, plural, one {modèle publié} other {modèles publiés}}",
+    "countMatching": "<num>{total}</num> {count, plural, one {modèle publié} other {modèles publiés}} correspondant à <quoted>« {query} »</quoted>",
+    "intro": "Modèles d’IA en santé publiés, avec un usage prévu déclaré. Chaque fiche porte une étiquette « Model Facts » de l’OMS qui résume à quoi sert le modèle, comment il a été validé et quand cesser de s’y fier.",
+    "noSummary": "Aucun résumé clinique fourni."
+  },
+  "search": {
+    "label": "Rechercher des modèles",
+    "placeholder": "Rechercher par nom, développeur ou usage prévu",
+    "submit": "Rechercher"
+  },
+  "filters": {
+    "toggle": "Filtres",
+    "region": "Filtres",
+    "active": "{count, plural, one {# actif} other {# actifs}}",
+    "modelClass": "Classe de modèle",
+    "jurisdiction": "Juridiction",
+    "selected": "(sélectionné — activer pour retirer le filtre)",
+    "notSelected": "(activer pour filtrer)"
+  },
+  "applied": {
+    "label": "Appliqués",
+    "classChip": "Classe : {label}",
+    "jurisdictionChip": "Juridiction : {code}",
+    "remove": "Retirer le filtre",
+    "clearAll": "Tout effacer"
+  },
+  "sort": {
+    "label": "Trier",
+    "region": "Tri",
+    "recent": "Plus récents",
+    "name": "Nom",
+    "oldest": "Plus anciens"
+  },
+  "results": {
+    "none": "Aucun résultat.",
+    "showing": "Affichage de <range>{start}–{end}</range> sur <all>{total}</all>"
+  },
+  "pagination": {
+    "region": "Pagination",
+    "prev": "← Précédent",
+    "next": "Suivant →",
+    "page": "Page {current} sur {total}"
+  },
+  "empty": {
+    "noMatchTitle": "Aucun modèle correspondant",
+    "noneTitle": "Aucun modèle publié pour l’instant",
+    "noMatchBody": "Essayez avec moins de filtres ou élargissez votre recherche.",
+    "noneBody": "Les fiches de modèles apparaissent ici une fois publiées. Les brouillons et les soumissions en cours d’examen ne sont pas listés.",
+    "clearAll": "Effacer tous les filtres"
+  },
+  "detail": {
+    "metaTitle": "{slug} — Modèles OCI",
+    "back": "Modèles",
+    "about": "À propos de ce modèle",
+    "developer": "Développeur",
+    "contact": "Contact",
+    "modelClass": "Classe de modèle",
+    "version": "Version",
+    "medicalPurpose": "Finalité médicale",
+    "bodySystem": "Système ou site anatomique",
+    "trainingDataFrom": "Données d’entraînement provenant de",
+    "regulatoryApproval": "Autorisation réglementaire",
+    "notDeclared": "Non déclarée",
+    "architecture": "Architecture",
+    "biasMitigation": "Atténuation des biais",
+    "factsUnavailableTitle": "Étiquette « Model Facts » indisponible",
+    "factsUnavailableBody": "L’étiquette de ce modèle n’a pas pu être générée pour le moment. Les détails de la fiche restent exacts."
+  },
+  "facts": {
+    "title": "Model Facts",
+    "generatedOn": "Étiquette « Model Facts » de l’OMS, générée à partir de cette fiche le {date}.",
+    "summary": "Résumé",
+    "mechanism": "Mécanisme",
+    "validation": "Validation et performances",
+    "noPerformance": "Aucune performance mesurée pour l’instant.",
+    "uses": "Utilisations et mode d’emploi",
+    "medicalPurpose": "Finalité médicale",
+    "intendedUsers": "Utilisateurs prévus",
+    "clinicalPathway": "Parcours clinique",
+    "operatingEnvironments": "Environnements d’utilisation",
+    "targetPopulation": "Population cible",
+    "warnings": "Mises en garde",
+    "riskTier": "Niveau de risque",
+    "foreseeableMisuse": "Mésusage prévisible",
+    "contraindications": "Contre-indications",
+    "knownBiases": "Biais connus",
+    "generalisability": "Généralisabilité",
+    "discontinue": "Quand cesser l’utilisation",
+    "gaps": "Lacunes connues de cette étiquette"
+  },
+  "modelClass": {
+    "classical": "Apprentissage automatique classique",
+    "time-series": "Séries temporelles",
+    "foundation": "Modèle de fondation",
+    "lmm": "Grand modèle multimodal",
+    "agent": "Agent"
+  },
+  "medicalPurpose": {
+    "screening": "Dépistage",
+    "diagnosis": "Diagnostic",
+    "triage": "Triage",
+    "treatment-planning": "Planification du traitement",
+    "monitoring": "Surveillance",
+    "prognosis": "Pronostic",
+    "clinical-decision-support": "Aide à la décision clinique",
+    "administrative": "Administratif",
+    "patient-education": "Éducation du patient",
+    "research-only": "Recherche uniquement",
+    "other": "Autre"
+  },
+  "clinicalPathway": {
+    "standalone": "Autonome",
+    "adjunct-with-confirmation": "Complément avec confirmation",
+    "triage-before-clinician": "Triage avant le clinicien",
+    "screening-before-specialist": "Dépistage avant le spécialiste",
+    "research-only": "Recherche uniquement"
+  },
+  "operatingEnvironment": {
+    "primary-care": "Soins primaires",
+    "hospital-inpatient": "Hôpital, hospitalisation",
+    "hospital-outpatient": "Hôpital, ambulatoire",
+    "emergency": "Urgences",
+    "field-or-community": "Terrain ou communauté",
+    "home-or-telehealth": "Domicile ou télésanté",
+    "lab": "Laboratoire",
+    "research": "Recherche"
+  },
+  "intendedUser": {
+    "nurse": "Personnel infirmier",
+    "general-clinician": "Clinicien généraliste",
+    "specialist": "Spécialiste",
+    "radiologist": "Radiologue",
+    "pathologist": "Pathologiste",
+    "lab-tech": "Technicien de laboratoire",
+    "patient": "Patient",
+    "researcher": "Chercheur",
+    "administrator": "Administrateur",
+    "other": "Autre"
+  },
+  "regulatoryStatus": {
+    "none": "Aucune autorisation réglementaire",
+    "pending": "Autorisation en attente",
+    "granted": "Autorisation accordée",
+    "withdrawn": "Autorisation retirée"
+  },
+  "jurisdiction": {
+    "EU": "Union européenne",
+    "CH": "Suisse",
+    "GB": "Royaume-Uni",
+    "US": "États-Unis"
+  }
+}
