@@ -99,6 +99,12 @@ Not verified by the spike: the deployed environment (real object storage and its
 ## Amendments to this ADR
 
 - **22 November 2026, the list of decision 2** ([#745](https://github.com/FG-AI4H/oci-platform/issues/745)). Four attributes of the kinds already listed were missing from the table in code and are added: other patient names (`OtherPatientNames`), the content date (`ContentDate`), the acquisition date and time (`AcquisitionDateTime`), and the date the file was created (`InstanceCreationDate`). A file uploaded from then on that carries one is held for it like for any other finding. Files indexed before are not checked again: the check runs when an upload completes, and a file released earlier stays released.
+- **22 November 2026, transfer syntaxes and long series** (results on [#674](https://github.com/FG-AI4H/oci-platform/issues/674); [#778](https://github.com/FG-AI4H/oci-platform/issues/778)). This supersedes the spike's "Transfer syntaxes" row, and the "several hundred slices" item of what it did not verify. On a synthetic CT series stored as scanners store it (12 bits, rescale intercept −1024), compared pixel by pixel with the uncompressed series in the production build:
+  - **Drawn identical to uncompressed:** implicit and explicit VR little endian, explicit VR big endian, RLE, JPEG lossless (`4.57`, `4.70`), JPEG-LS lossless, JPEG 2000 lossless and HTJ2K lossless.
+  - **Drawn as encoded:** JPEG-LS near-lossless, JPEG 2000 and HTJ2K.
+  - **Refused:** JPEG extended (`4.51`, and the retired `4.53` and `4.55`). The image loader sends them to one 12-bit JPEG decoder whatever the bit depth, and it drew the series about 4 HU too bright, up to 27 HU in places, where dcmtk decoded the same files right. The viewer refuses them before fetching anything, as it refuses a syntax it has no decoder for. A wrong picture that looks right is worse than none.
+  - **Unchanged:** deflated files are held as unreadable at upload, because the header reader never inflates.
+  - **Long series:** 300 slices of 512 × 512 (157 MB) load in 1.5 s locally and 64 s at 20 Mbit/s, which is the link's own limit, and the first image shows in about 1 s either way. The tab holds about twice the files' size while the series is open, and closing the viewer gives it back. Images load nearest the one on screen first ([#767](https://github.com/FG-AI4H/oci-platform/issues/767)).
 
 ## References
 

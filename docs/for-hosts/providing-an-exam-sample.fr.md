@@ -99,7 +99,7 @@ Le contrôle que nous exécutons à l'arrivée est public et fonctionne hors lig
 
 ## Ce qui facilite l'exercice
 
-Une cinquantaine d'examens. Des séries axiales, en images de scanner à une seule coupe par fichier, non compressées (Explicit VR Little Endian) si votre archive le permet. Trois encodages ont été affichés par la visionneuse de la plateforme, dans le navigateur Chromium : non compressé (Explicit VR Little Endian), JPEG-LS sans perte, et JPEG sans perte avec prédiction du premier ordre (Process 14, valeur de sélection 1). D'autres compressions fonctionnent peut-être et n'ont pas été essayées : si votre archive en exporte une autre, prévenez-nous tôt et envoyez d'abord un seul examen.
+Une cinquantaine d'examens. Des séries axiales, en images de scanner à une seule coupe par fichier, non compressées (Explicit VR Little Endian) ou dans une compression sans perte. Ces encodages ont été affichés par la visionneuse de la plateforme, dans le navigateur Chromium, exactement comme les images non compressées : non compressé (VR explicite ou implicite, petit-boutiste ou gros-boutiste), RLE, JPEG sans perte, JPEG-LS sans perte, JPEG 2000 sans perte et HTJ2K sans perte. JPEG 2000 sans perte ou JPEG-LS sans perte rendent les fichiers environ quatre fois plus petits, ce qui raccourcit le téléchargement pour chaque lecteur. **N'envoyez pas de JPEG avec perte** (JPEG extended, `1.2.840.10008.1.2.4.51`) : la visionneuse le refuse, car elle l'afficherait avec des niveaux de gris faux. Si votre archive exporte une autre compression, prévenez-nous tôt et envoyez d'abord un seul examen.
 
 ## Ce que nous faisons de l'échantillon
 

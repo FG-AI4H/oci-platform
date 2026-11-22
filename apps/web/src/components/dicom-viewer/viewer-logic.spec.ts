@@ -9,6 +9,7 @@ import {
   currentView,
   describeTransferSyntax,
   dragWindow,
+  firstRefusedEncoding,
   exactFromVoiRange,
   fromVoiRange,
   matchingPreset,
@@ -352,5 +353,49 @@ describe('which image to fetch next', () => {
   it('takes a position outside the stack as its nearest end', () => {
     expect(nextToLoad(40, 5, new Set())).toBe(4);
     expect(nextToLoad(-3, 5, new Set())).toBe(0);
+  });
+});
+
+describe('encodings the viewer refuses because it draws them wrong (#778)', () => {
+  const at = (...uids: Array<string | null>) =>
+    uids.map((transferSyntaxUid) => ({ transferSyntaxUid }));
+
+  it('names the first image stored as JPEG extended, whatever comes before it', () => {
+    expect(firstRefusedEncoding(at('1.2.840.10008.1.2.4.51'))).toBe(0);
+    expect(
+      firstRefusedEncoding(
+        at('1.2.840.10008.1.2.1', '1.2.840.10008.1.2.4.51', '1.2.840.10008.1.2.4.51'),
+      ),
+    ).toBe(1);
+    // The retired processes go to the same decoder.
+    expect(firstRefusedEncoding(at('1.2.840.10008.1.2.4.53'))).toBe(0);
+    expect(firstRefusedEncoding(at('1.2.840.10008.1.2.4.55'))).toBe(0);
+    expect(describeTransferSyntax('1.2.840.10008.1.2.4.51')).toBe(
+      'JPEG extended (1.2.840.10008.1.2.4.51)',
+    );
+  });
+
+  it('lets through every encoding that was drawn as encoded', () => {
+    expect(
+      firstRefusedEncoding(
+        at(
+          '1.2.840.10008.1.2',
+          '1.2.840.10008.1.2.1',
+          '1.2.840.10008.1.2.2',
+          '1.2.840.10008.1.2.5',
+          '1.2.840.10008.1.2.4.50',
+          '1.2.840.10008.1.2.4.57',
+          '1.2.840.10008.1.2.4.70',
+          '1.2.840.10008.1.2.4.80',
+          '1.2.840.10008.1.2.4.81',
+          '1.2.840.10008.1.2.4.90',
+          '1.2.840.10008.1.2.4.91',
+          '1.2.840.10008.1.2.4.201',
+          '1.2.840.10008.1.2.4.203',
+          null,
+        ),
+      ),
+    ).toBeNull();
+    expect(firstRefusedEncoding([])).toBeNull();
   });
 });

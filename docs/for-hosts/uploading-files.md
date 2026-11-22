@@ -106,7 +106,7 @@ Tell the operator what your codes and dates are, and that the files are de-ident
 
 **Viewing a series.** The dataset page lists the DICOM series of the latest version under **Imaging series**. `view` opens one in the platform's own viewer: scroll through the images, change the window (with presets for CT), zoom, move, invert. Nothing is downloaded to disk and nothing can be drawn or measured: the viewer only displays. Anyone who may download from the dataset may view its series, except for held images, which only you and the operators see.
 
-A series is made of single-frame images. Reports, presentation states and multi-frame objects are stored and downloadable, and are not shown in the viewer. Uncompressed, JPEG-LS and JPEG lossless files have been verified; a series in a compression the viewer cannot decode opens with a message that names it.
+A series is made of single-frame images. Reports, presentation states and multi-frame objects are stored and downloadable, and are not shown in the viewer. Uncompressed, RLE, JPEG lossless, JPEG-LS, JPEG 2000 and HTJ2K files have been verified to display as encoded. Lossy 12-bit JPEG (JPEG extended) is refused with a message, because the viewer would show it with wrong grey levels. A series in a compression the viewer cannot decode opens with a message that names it.
 
 **What the platform does not do.**
 

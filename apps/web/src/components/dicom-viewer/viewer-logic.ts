@@ -303,6 +303,32 @@ export function describeTransferSyntax(uid: string | null): string {
   return name ? `${name} (${uid})` : uid;
 }
 
+/**
+ * Encodings the image loader decodes without failing, but wrongly. It
+ * sends JPEG extended (and the retired processes 6 and 8) to one 12-bit
+ * JPEG decoder, whatever the bit depth, and that decoder drew a CT
+ * series about 4 HU too bright, up to 27 HU in places, where dcmtk
+ * decoded the same files right (#778). A wrong picture that looks
+ * right is worse than none, so these are refused like a syntax the
+ * viewer has no decoder for.
+ */
+const DRAWN_WRONG: ReadonlySet<string> = new Set([
+  '1.2.840.10008.1.2.4.51',
+  '1.2.840.10008.1.2.4.53',
+  '1.2.840.10008.1.2.4.55',
+]);
+
+/** The first position whose encoding the viewer refuses, or null. */
+export function firstRefusedEncoding(
+  instances: ReadonlyArray<{ transferSyntaxUid: string | null }>,
+): number | null {
+  const position = instances.findIndex(
+    (instance) =>
+      instance.transferSyntaxUid !== null && DRAWN_WRONG.has(instance.transferSyntaxUid),
+  );
+  return position === -1 ? null : position;
+}
+
 const TRANSFER_SYNTAX_NAMES: ReadonlyMap<string, string> = new Map([
   ['1.2.840.10008.1.2', 'uncompressed, implicit VR'],
   ['1.2.840.10008.1.2.1', 'uncompressed'],
@@ -310,6 +336,8 @@ const TRANSFER_SYNTAX_NAMES: ReadonlyMap<string, string> = new Map([
   ['1.2.840.10008.1.2.5', 'RLE'],
   ['1.2.840.10008.1.2.4.50', 'JPEG baseline'],
   ['1.2.840.10008.1.2.4.51', 'JPEG extended'],
+  ['1.2.840.10008.1.2.4.53', 'JPEG extended, retired'],
+  ['1.2.840.10008.1.2.4.55', 'JPEG full progression, retired'],
   ['1.2.840.10008.1.2.4.57', 'JPEG lossless'],
   ['1.2.840.10008.1.2.4.70', 'JPEG lossless'],
   ['1.2.840.10008.1.2.4.80', 'JPEG-LS lossless'],
