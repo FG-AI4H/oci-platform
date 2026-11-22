@@ -86,7 +86,7 @@ Content for the December 2026 radiology workshop ([#644](https://github.com/FG-A
 | Object          | Slug                         | What it is                                                                                                                |
 | --------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Dataset         | `nih-chestxray14-workshop`   | 200 chest radiographs from NIH ChestX-ray14, at most 1024 px, PUBLIC / OPEN, with `metadata.csv` and three teaching files |
-| Evaluation task | `nih-chestxray14-finding`    | One finding, present or absent. `GRADING` with grades 0 and 1 and the referable threshold at 1, until #650                |
+| Evaluation task | `nih-chestxray14-finding`    | One finding, present or absent. `CLASSIFICATION` with two classes: 0 absent, 1 present                                    |
 | Campaign        | `nih-chestxray14-reading`    | Reading exercise on 60 of the images, three readers per image, French instructions, `taskTimeoutHours: 1`, status READY   |
 | Model cards     | `workshop-cxr-model-a`, `-b` | Fictional teaching entries: A is PUBLISHED with a complete intended-use statement, B is a DRAFT                           |
 

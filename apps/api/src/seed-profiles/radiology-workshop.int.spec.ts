@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { EvalQueueProvider } from '../modules/evaluation/eval-queue.js';
 import { EvaluationRepository } from '../modules/evaluation/evaluation.repository.js';
 import { EvaluationService } from '../modules/evaluation/evaluation.service.js';
-import { scoreSubmission } from '../modules/evaluation/scoring.js';
+import { scoreClassification } from '../modules/evaluation/scoring-classification.js';
 import type { PrismaService } from '../prisma.service.js';
 import {
   dockerAvailable as checkDocker,
@@ -144,7 +144,7 @@ describe.skipIf(!dockerAvailable)(
 
         const task = await prisma.evaluationTask.findUniqueOrThrow({ where: { slug: TASK } });
         expect([task.taskKind, task.numClasses, task.referableThreshold, task.datasetSlug]).toEqual(
-          ['GRADING', 2, 1, DATASET],
+          ['CLASSIFICATION', 2, 1, DATASET],
         );
         expect(Object.keys(task.groundTruth as object)).toHaveLength(200);
 
@@ -235,13 +235,23 @@ describe.skipIf(!dockerAvailable)(
     });
 
     describe('teaching files, scored by the evaluation service', () => {
-      const accuracyIn = (predictions: { imageId: string; grade: number }[], ids: Set<string>) =>
-        scoreSubmission({
+      // The task is CLASSIFICATION with class 0 = absent and 1 = present, so the
+      // recall of class 1 is the sensitivity and the recall of class 0 the
+      // specificity: the figures a participant reads off the per-class table.
+      const accuracyIn = (predictions: { imageId: string; grade: number }[], ids: Set<string>) => {
+        const scores = scoreClassification({
           groundTruth: Object.fromEntries([...reference].filter(([id]) => ids.has(id))),
           predictions: Object.fromEntries(predictions.map((p) => [p.imageId, p.grade])),
           numClasses: 2,
-          referableThreshold: 1,
         });
+        const recallOf = (label: number) =>
+          scores.perClass.find((c) => c.label === label)?.recall ?? Number.NaN;
+        return {
+          accuracy: scores.accuracy,
+          referableSensitivity: recallOf(1),
+          referableSpecificity: recallOf(0),
+        };
+      };
       const idsWhere = (keep: (m: (typeof metadata)[number]) => boolean) =>
         new Set(metadata.filter(keep).map((m) => m.imageId));
 
@@ -260,12 +270,17 @@ describe.skipIf(!dockerAvailable)(
         );
         expect(a?.scores).toEqual(b?.scores);
         expect(a?.scores).toMatchObject({
-          kind: 'GRADING',
+          kind: 'CLASSIFICATION',
           metrics: {
             accuracy: 0.9,
-            referableSensitivity: 0.9,
-            referableSpecificity: 0.9,
+            balancedAccuracy: 0.9,
             coverage: 1,
+            // Class 0 = absent (recall = specificity), class 1 = present
+            // (recall = sensitivity).
+            perClass: [
+              { label: 0, recall: 0.9, support: 120 },
+              { label: 1, recall: 0.9, support: 80 },
+            ],
           },
         });
       });
