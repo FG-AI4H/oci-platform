@@ -3,11 +3,17 @@ import type { Session } from 'next-auth';
 import { loadFlags, loadQuality } from './load';
 
 // The real `apiFetch` runs against a stubbed `fetch`, so status codes
-// go through the same ApiError mapping as in the app.
+// go through the same ApiError mapping as in the app. The bearer token
+// is not on the session; `apiFetch` asks the auth module for it.
+vi.mock('../../../../../auth', () => ({
+  sessionAccessToken: async () => 'dev:sup:task-supervisor',
+}));
+
 const session = {
   user: { name: 'sup' },
   expires: new Date(Date.now() + 3600_000).toISOString(),
-  accessToken: 'dev:sup:task-supervisor',
+  groups: ['task-supervisor'],
+  subject: 'sup',
 } as Session;
 const USER = 'e2e55401-0000-4000-8000-000000000554';
 

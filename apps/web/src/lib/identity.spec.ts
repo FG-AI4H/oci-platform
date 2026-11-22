@@ -1,6 +1,7 @@
 import type { Session } from 'next-auth';
 import { describe, expect, it } from 'vitest';
 import { isHostOfDataset, subToUuid, viewerUuid } from './identity';
+import { groupsFromAccessToken, subjectFromAccessToken } from './token-claims';
 
 /** A Cognito-shaped access token: header.payload.signature, payload base64url. */
 function cognitoToken(payload: Record<string, unknown>): string {
@@ -11,8 +12,14 @@ function cognitoToken(payload: Record<string, unknown>): string {
 /** A real pool subject: version nibble 7, variant nibble 5 — not an RFC 9562 UUID. */
 const COGNITO_SUB = 'e3b418e2-f0a1-70fd-524a-8a6c453745c2';
 
+/** The session of a caller holding this access token, as `auth.ts` describes them. */
 function session(accessToken: string, user: Record<string, unknown> = {}): Session {
-  return { accessToken, user, expires: '2099-01-01T00:00:00.000Z' } as unknown as Session;
+  return {
+    groups: groupsFromAccessToken(accessToken),
+    subject: subjectFromAccessToken(accessToken) ?? undefined,
+    user,
+    expires: '2099-01-01T00:00:00.000Z',
+  } as unknown as Session;
 }
 
 describe('viewer identity', () => {

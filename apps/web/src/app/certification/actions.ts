@@ -2,7 +2,8 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { auth } from '../../auth';
+import { fetchAsUser } from '../../lib/api-action';
+import { sessionForAction } from '../../lib/session-recovery';
 
 const ACTIVE_QUIZ_TYPE = 'data_ethics_v1';
 
@@ -33,15 +34,14 @@ interface SubmitResponse {
 }
 
 export async function startAttemptAction(): Promise<{ attemptId: string }> {
-  const session = await auth();
-  if (!session?.accessToken) redirect('/signin?callbackUrl=/certification');
+  const session = await sessionForAction();
+  if (!session?.user) redirect('/signin?callbackUrl=/certification');
 
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (!base) throw new Error('NEXT_PUBLIC_API_BASE_URL not set');
 
-  const res = await fetch(`${base}/v2/certification/quizzes/${ACTIVE_QUIZ_TYPE}/attempts`, {
+  const res = await fetchAsUser(`${base}/v2/certification/quizzes/${ACTIVE_QUIZ_TYPE}/attempts`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${session.accessToken}` },
     cache: 'no-store',
   });
   if (!res.ok) {
@@ -67,8 +67,8 @@ export async function submitAttemptAction(
   _prev: SubmitAttemptState,
   formData: FormData,
 ): Promise<SubmitAttemptState> {
-  const session = await auth();
-  if (!session?.accessToken) {
+  const session = await sessionForAction();
+  if (!session?.user) {
     return { status: 'error', message: 'Sign-in required.' };
   }
 
@@ -90,13 +90,12 @@ export async function submitAttemptAction(
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (!base) return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set.' };
 
-  const res = await fetch(
+  const res = await fetchAsUser(
     `${base}/v2/certification/quizzes/${ACTIVE_QUIZ_TYPE}/attempts/${encodeURIComponent(attemptId)}/submit`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.accessToken}`,
       },
       body: JSON.stringify({ answers }),
       cache: 'no-store',

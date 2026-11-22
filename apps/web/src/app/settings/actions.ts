@@ -10,7 +10,8 @@ import {
   type UpdateUserPreferencesRequest,
 } from '@oci/shared-types';
 import { z } from 'zod';
-import { auth } from '../../auth';
+import { fetchAsUser } from '../../lib/api-action';
+import { sessionForAction } from '../../lib/session-recovery';
 import { writeThemeCookie } from '../../lib/theme-cookie';
 
 export interface PreferencesFormValues {
@@ -54,8 +55,8 @@ export async function updatePreferencesAction(
   _prev: PreferencesFormState,
   formData: FormData,
 ): Promise<PreferencesFormState> {
-  const session = await auth();
-  if (!session?.accessToken) {
+  const session = await sessionForAction();
+  if (!session?.user) {
     return { status: 'error', message: 'Sign in to change your preferences.' };
   }
 
@@ -92,11 +93,10 @@ export async function updatePreferencesAction(
   if (!base) {
     return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
   }
-  const res = await fetch(`${base}/v2/preferences/me`, {
+  const res = await fetchAsUser(`${base}/v2/preferences/me`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.accessToken}`,
     },
     body: JSON.stringify(body),
     cache: 'no-store',

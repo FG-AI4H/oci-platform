@@ -2,8 +2,9 @@
 
 import { redirect } from 'next/navigation';
 import { CreateRemoteCatalogRequestSchema, type RemoteCatalogDetail } from '@oci/shared-types';
-import { auth } from '../../../../auth';
+import { fetchAsUser } from '../../../../lib/api-action';
 import { isAdmin } from '../../../../lib/groups';
+import { sessionForAction } from '../../../../lib/session-recovery';
 
 export interface CreateRemoteValues {
   slug: string;
@@ -30,8 +31,8 @@ export async function createRemoteAction(
   _prev: CreateRemoteState,
   formData: FormData,
 ): Promise<CreateRemoteState> {
-  const session = await auth();
-  if (!session?.accessToken || !isAdmin(session)) {
+  const session = await sessionForAction();
+  if (!session?.user || !isAdmin(session)) {
     return { status: 'error', message: 'Only admins can register peer catalogues.' };
   }
 
@@ -66,11 +67,10 @@ export async function createRemoteAction(
   if (!base) {
     return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
   }
-  const res = await fetch(`${base}/v2/catalog/remotes`, {
+  const res = await fetchAsUser(`${base}/v2/catalog/remotes`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.accessToken}`,
     },
     body: JSON.stringify(parsed.data),
     cache: 'no-store',

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '../../../../auth';
+import { sessionAccessToken } from '../../../../auth';
 
 /**
  * Proxies the bulk dataset archive from the API
@@ -28,10 +28,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
 
   const includeManifest = new URL(req.url).searchParams.get('manifest') === 'true';
 
-  const session = await auth();
+  const accessToken = await sessionAccessToken();
   const headers: Record<string, string> = { Accept: 'application/zip' };
-  if (session?.accessToken) {
-    headers.Authorization = `Bearer ${session.accessToken}`;
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
   }
 
   const upstream = await fetch(

@@ -118,6 +118,10 @@ export class WebStack extends cdk.Stack {
         NEXT_PUBLIC_API_BASE_URL: `https://${props.cfg.domainName}`,
         AUTH_COGNITO_ID: cognitoClientId,
         AUTH_COGNITO_ISSUER: `https://cognito-idp.${this.region}.amazonaws.com/${userPoolId}`,
+        // The web app ends a session after this long without activity
+        // (ADR-0027). The hard stop is the refresh-token validity, in
+        // identity-stack.
+        OCI_SESSION_IDLE_SECONDS: String(props.cfg.session.idleTimeout.toSeconds()),
       },
       secrets: {
         AUTH_SECRET: ecs.Secret.fromSecretsManager(authSecret),
@@ -186,7 +190,7 @@ export class WebStack extends cdk.Stack {
         {
           id: 'AwsSolutions-ECS2',
           reason:
-            'Plaintext envs on the Web task are non-secret build/runtime configuration only (NODE_ENV, OCI_ENV, NEXT_PUBLIC_API_BASE_URL, AUTH_URL, AUTH_COGNITO_ID, AUTH_COGNITO_ISSUER — all are public URLs / non-secret IDs). The two real secrets, AUTH_SECRET and AUTH_COGNITO_SECRET, are injected via ecs.Secret.fromSecretsManager.',
+            'Plaintext envs on the Web task are non-secret build/runtime configuration only (NODE_ENV, OCI_ENV, NEXT_PUBLIC_API_BASE_URL, AUTH_URL, AUTH_COGNITO_ID, AUTH_COGNITO_ISSUER, OCI_SESSION_IDLE_SECONDS — all are public URLs / non-secret IDs / a timeout). The two real secrets, AUTH_SECRET and AUTH_COGNITO_SECRET, are injected via ecs.Secret.fromSecretsManager.',
         },
       ],
       true,

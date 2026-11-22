@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run --passWithNoTests",
+    "e2e:session": "playwright test -c playwright.session.config.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf .next .turbo"
   },

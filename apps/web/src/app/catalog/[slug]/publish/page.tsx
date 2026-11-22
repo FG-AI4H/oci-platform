@@ -134,7 +134,7 @@ export default async function PublishVersionPage({ params }: PageProps) {
            * For datasets that already use external URLs, this
            * section is just ignored.
            */}
-          {detail.latestVersion && session?.accessToken ? (
+          {detail.latestVersion && session?.user ? (
             <Card className="max-w-3xl">
               <CardHeader>
                 <CardTitle>Upload files</CardTitle>
@@ -146,7 +146,7 @@ export default async function PublishVersionPage({ params }: PageProps) {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <FileUploader slug={detail.slug} accessToken={session.accessToken} />
+                <FileUploader slug={detail.slug} />
               </CardContent>
             </Card>
           ) : null}

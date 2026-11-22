@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { DicomSeriesDetailSchema } from '@oci/shared-types';
-import { auth } from '../../../../../../auth';
+import { sessionAccessToken } from '../../../../../../auth';
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -34,10 +34,10 @@ export async function GET(
     return NextResponse.json({ message: 'Series not found.' }, { status: 404, headers: NO_STORE });
   }
 
-  const session = await auth();
+  const accessToken = await sessionAccessToken();
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (session?.accessToken) {
-    headers.Authorization = `Bearer ${session.accessToken}`;
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
   }
 
   const upstream = await fetch(`${base}/v2/storage/dicom/series/${seriesId}`, {

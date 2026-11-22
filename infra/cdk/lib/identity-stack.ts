@@ -208,7 +208,8 @@ export class IdentityStack extends cdk.Stack {
       enableTokenRevocation: true,
       accessTokenValidity: cdk.Duration.minutes(60),
       idTokenValidity: cdk.Duration.minutes(60),
-      refreshTokenValidity: cdk.Duration.days(30),
+      // The longest a web session lasts, from sign-in (ADR-0027).
+      refreshTokenValidity: props.cfg.session.maxLifetime,
     });
 
     // ---------------------------------------------------------------------

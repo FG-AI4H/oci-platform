@@ -8,12 +8,16 @@ import type {
 /**
  * Browser-side multipart upload orchestrator (PR I, #87).
  *
- * Talks to our `/v2/catalog/datasets/<slug>/uploads/...` API surface,
- * not S3 directly. The API mints a presigned PUT URL per part; we
- * fetch each URL and PUT the corresponding chunk in parallel. ETags
- * collected from the responses go back to the API's `complete`
- * endpoint, which finalises the multipart on S3 and persists the
- * Distribution row.
+ * Drives the `/v2/catalog/datasets/<slug>/uploads/...` API surface
+ * through an `UploadTransport`, not S3 directly. The API mints a
+ * presigned PUT URL per part; we PUT the corresponding chunk to each
+ * URL in parallel. ETags collected from the responses go back to the
+ * API's `complete` endpoint, which finalises the multipart on S3 and
+ * persists the Distribution row.
+ *
+ * The transport is the only thing that talks to the API, and it does so
+ * on the server (see `upload-actions.ts`): this module runs in the
+ * browser and never holds a bearer token (#643).
  *
  * Concurrency, retry, and resume policy:
  *   - DEFAULT_CONCURRENCY=3 parallel uploads. Higher saturates a
@@ -34,11 +38,35 @@ import type {
  * for at-rest verification), pause/resume UI controls, transfer-rate
  * graphs. All deferred.
  */
+/** Identifies one multipart upload on the API. */
+export interface UploadRef {
+  uploadId: string;
+  key: string;
+}
+
+/** The API's four upload control calls. Each rejects on failure. */
+export interface UploadTransport {
+  init(request: {
+    filename: string;
+    contentType: string;
+    contentSize: number;
+    sha256?: string;
+  }): Promise<InitUploadResponse>;
+  partUrl(ref: UploadRef, partNumber: number): Promise<PartUrlResponse>;
+  complete(
+    ref: UploadRef,
+    file: { contentType: string; contentSize: number; sha256?: string },
+    body: CompleteUploadRequest,
+  ): Promise<UploadedDistribution>;
+  abort(ref: UploadRef): Promise<void>;
+}
+
 export interface UploadOptions {
+  /** Namespaces the resume record in `localStorage`. */
   slug: string;
   file: File;
-  /** Bearer token from the NextAuth session. */
-  accessToken: string;
+  /** How the API is reached; the caller's session stays on the server. */
+  transport: UploadTransport;
   /**
    * Optional sha256 hex (lower-case). Computed in-browser via
    * `crypto.subtle.digest`. Skipped when undefined to avoid the read
@@ -108,25 +136,19 @@ function clearResumeState(storageKey: string): void {
  * on success; throws on hard failure (after retries) or abort.
  */
 export async function uploadMultipart(opts: UploadOptions): Promise<UploadResult> {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!apiBase) throw new Error('NEXT_PUBLIC_API_BASE_URL is not set');
   const concurrency = opts.concurrency ?? DEFAULT_CONCURRENCY;
+  const contentType = opts.file.type || 'application/octet-stream';
 
-  // 1. Initiate.
-  const init = (await jsonFetch(
-    `${apiBase}/v2/catalog/datasets/${encodeURIComponent(opts.slug)}/uploads`,
-    {
-      method: 'POST',
-      accessToken: opts.accessToken,
-      body: {
-        filename: opts.file.name,
-        contentType: opts.file.type || 'application/octet-stream',
-        contentSize: opts.file.size,
-        sha256: opts.sha256,
-      },
-      signal: opts.signal,
-    },
-  )) as InitUploadResponse;
+  // 1. Initiate. (The transport's calls cannot be interrupted once
+  // sent; a cancel takes effect before the next one.)
+  if (opts.signal?.aborted) throw new Error('upload aborted');
+  const init = await opts.transport.init({
+    filename: opts.file.name,
+    contentType,
+    contentSize: opts.file.size,
+    sha256: opts.sha256,
+  });
+  const ref: UploadRef = { uploadId: init.uploadId, key: init.key };
 
   const totalParts = Math.max(1, Math.ceil(opts.file.size / init.partSize));
   const storageKey = resumeStorageKey(opts.slug, init.key, init.uploadId);
@@ -150,16 +172,11 @@ export async function uploadMultipart(opts: UploadOptions): Promise<UploadResult
     const end = Math.min(opts.file.size, start + init.partSize);
     const blob = opts.file.slice(start, end);
 
-    const partUrlPath = `${apiBase}/v2/catalog/datasets/${encodeURIComponent(opts.slug)}/uploads/${encodeURIComponent(init.uploadId)}/parts/${partNumber}/url?key=${encodeURIComponent(init.key)}`;
-
     let lastErr: unknown;
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
-        const partUrl = (await jsonFetch(partUrlPath, {
-          method: 'GET',
-          accessToken: opts.accessToken,
-          signal: opts.signal,
-        })) as PartUrlResponse;
+        if (opts.signal?.aborted) throw new Error('upload aborted');
+        const partUrl = await opts.transport.partUrl(ref, partNumber);
         const res = await fetch(partUrl.url, {
           method: 'PUT',
           body: blob,
@@ -207,7 +224,7 @@ export async function uploadMultipart(opts: UploadOptions): Promise<UploadResult
   await Promise.all(inFlight);
 
   if (opts.signal?.aborted) {
-    await abortUpload(apiBase, opts.slug, init, opts.accessToken).catch(() => {
+    await opts.transport.abort(ref).catch(() => {
       /* best effort */
     });
     clearResumeState(storageKey);
@@ -221,63 +238,14 @@ export async function uploadMultipart(opts: UploadOptions): Promise<UploadResult
   })).sort((a, b) => a.partNumber - b.partNumber);
   const completeBody: CompleteUploadRequest = { parts: sortedParts };
 
-  const completeUrl = new URL(
-    `${apiBase}/v2/catalog/datasets/${encodeURIComponent(opts.slug)}/uploads/${encodeURIComponent(
-      init.uploadId,
-    )}/complete`,
+  const distribution = await opts.transport.complete(
+    ref,
+    { contentType, contentSize: opts.file.size, sha256: opts.sha256 },
+    completeBody,
   );
-  completeUrl.searchParams.set('key', init.key);
-  completeUrl.searchParams.set('contentType', opts.file.type || 'application/octet-stream');
-  completeUrl.searchParams.set('contentSize', String(opts.file.size));
-  if (opts.sha256) completeUrl.searchParams.set('sha256', opts.sha256);
-
-  const distribution = (await jsonFetch(completeUrl.toString(), {
-    method: 'POST',
-    accessToken: opts.accessToken,
-    body: completeBody,
-    signal: opts.signal,
-  })) as UploadedDistribution;
 
   clearResumeState(storageKey);
   return { distribution };
-}
-
-async function abortUpload(
-  apiBase: string,
-  slug: string,
-  init: InitUploadResponse,
-  accessToken: string,
-): Promise<void> {
-  const url = `${apiBase}/v2/catalog/datasets/${encodeURIComponent(slug)}/uploads/${encodeURIComponent(
-    init.uploadId,
-  )}/abort?key=${encodeURIComponent(init.key)}`;
-  await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}` } });
-}
-
-interface JsonFetchInit {
-  method: 'GET' | 'POST';
-  accessToken: string;
-  body?: unknown;
-  signal?: AbortSignal;
-}
-
-async function jsonFetch(url: string, init: JsonFetchInit): Promise<unknown> {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${init.accessToken}`,
-  };
-  if (init.body !== undefined) headers['Content-Type'] = 'application/json';
-  const res = await fetch(url, {
-    method: init.method,
-    headers,
-    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-    signal: init.signal,
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`API ${res.status} ${res.statusText} on ${url}: ${text.slice(0, 300)}`);
-  }
-  return res.json();
 }
 
 function sleep(ms: number): Promise<void> {

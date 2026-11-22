@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 /** What the signed-in reader may do, without the token leaving the server. */
 async function scoringAccess(slug: string): Promise<ScoringAccess> {
   const session = await auth();
-  if (!session?.accessToken) return { kind: 'signed-out' };
+  if (!session?.user) return { kind: 'signed-out' };
   try {
     const quota = await apiFetch<ScoredSubmissionQuotaSummary>(
       `/v2/evaluation/tasks/${encodeURIComponent(slug)}/quota`,

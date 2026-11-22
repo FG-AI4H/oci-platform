@@ -1,8 +1,9 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { auth } from '../../../../auth';
+import { fetchAsUser } from '../../../../lib/api-action';
 import { isAdmin } from '../../../../lib/groups';
+import { sessionForAction } from '../../../../lib/session-recovery';
 
 export type DeleteRemoteState = { status: 'idle' } | { status: 'error'; message: string };
 
@@ -14,8 +15,8 @@ export async function deleteRemoteAction(
   _prev: DeleteRemoteState,
   formData: FormData,
 ): Promise<DeleteRemoteState> {
-  const session = await auth();
-  if (!session?.accessToken || !isAdmin(session)) {
+  const session = await sessionForAction();
+  if (!session?.user || !isAdmin(session)) {
     return { status: 'error', message: 'Only admins can deregister peer catalogues.' };
   }
 
@@ -28,9 +29,8 @@ export async function deleteRemoteAction(
   if (!base) {
     return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
   }
-  const res = await fetch(`${base}/v2/catalog/remotes/${encodeURIComponent(id)}`, {
+  const res = await fetchAsUser(`${base}/v2/catalog/remotes/${encodeURIComponent(id)}`, {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${session.accessToken}` },
     cache: 'no-store',
   });
   if (res.status === 404) {

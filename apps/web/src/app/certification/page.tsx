@@ -59,7 +59,7 @@ interface UserCertificationStatus {
  */
 export default async function CertificationPage() {
   const session = await auth();
-  if (!session?.accessToken) {
+  if (!session?.user) {
     redirect('/signin?callbackUrl=/certification');
   }
 

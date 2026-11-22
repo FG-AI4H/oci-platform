@@ -10,6 +10,7 @@ and (over time) federated health data. This page is the operating contract.
 - **Cognito advanced security (PLUS)** is enabled in prod for compromised-credential and adaptive risk checks.
 - **JWT verification** uses `aws-jwt-verify` (JWKS-backed). All API endpoints require a valid Cognito JWT except `/health` and `/docs` (the latter only enabled in dev).
 - **Roles via Cognito groups**: `admin`, `host`, `participant`, `annotator`, `reviewer`, `supervisor`, `regulator`. No application-defined role tables.
+- **Web sessions** ([ADR-0027](./adr/0027-web-session-lasts-while-in-use.md)): access tokens last 60 minutes and the web app renews them while the user is active. A session ends after the environment's idle limit (2 hours in dev, 30 minutes in int/prod) and in any case 12 hours after sign-in. Access and refresh tokens stay in the encrypted, `HttpOnly` session cookie; no token is sent to the browser in a page, a component prop or `/api/auth/session`. Server code reads the access token only through `sessionAccessToken()`.
 - **GitHub Actions** authenticate to AWS via **OIDC**, never via long-lived keys.
 
 ## Data protection
