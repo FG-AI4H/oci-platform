@@ -64,10 +64,8 @@ async function checkHeader(page: Page): Promise<HeaderCheck> {
         )
       : [];
     const overlaps: string[] = [];
-    for (let i = 0; i < items.length; i += 1) {
-      for (let j = i + 1; j < items.length; j += 1) {
-        const a = items[i]!;
-        const b = items[j]!;
+    items.forEach((a, i) => {
+      for (const b of items.slice(i + 1)) {
         if (a.contains(b) || b.contains(a)) continue;
         const ra = a.getBoundingClientRect();
         const rb = b.getBoundingClientRect();
@@ -82,7 +80,7 @@ async function checkHeader(page: Page): Promise<HeaderCheck> {
           );
         }
       }
-    }
+    });
     return {
       overlaps,
       pageScrollsSideways: document.documentElement.scrollWidth > window.innerWidth,
