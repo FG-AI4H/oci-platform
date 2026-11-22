@@ -32,6 +32,7 @@ De-identification is done by you, before sending. We check; we do not clean. If 
 | (0010,0010) | PatientName             | Patient's name                        |
 | (0010,0020) | PatientID               | Patient number                        |
 | (0010,1000) | OtherPatientIDs         | Any other patient number              |
+| (0010,1001) | OtherPatientNames       | Any other name of the patient         |
 | (0010,0030) | PatientBirthDate        | Date of birth                         |
 | (0010,1040) | PatientAddress          | Address                               |
 | (0010,2154) | PatientTelephoneNumbers | Telephone numbers                     |
@@ -44,6 +45,9 @@ De-identification is done by you, before sending. We check; we do not clean. If 
 | (0008,0020) | StudyDate               | Date of the exam                      |
 | (0008,0021) | SeriesDate              | Date of the series                    |
 | (0008,0022) | AcquisitionDate         | Date of the acquisition               |
+| (0008,0023) | ContentDate             | Date the image was created            |
+| (0008,002A) | AcquisitionDateTime     | Date and time of the acquisition      |
+| (0008,0012) | InstanceCreationDate    | Date the file was created             |
 | (0018,1000) | DeviceSerialNumber      | Serial number of the scanner          |
 | (0008,1010) | StationName             | Name of the scanner or of its console |
 

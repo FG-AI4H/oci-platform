@@ -13,6 +13,7 @@ export type Vr =
   | 'SH'
   | 'PN'
   | 'DA'
+  | 'DT'
   | 'DS'
   | 'IS'
   | 'US'

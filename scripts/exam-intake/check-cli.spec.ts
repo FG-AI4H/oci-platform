@@ -135,7 +135,10 @@ describe('check-exam-sample: never prints the value of an identifying attribute'
       );
     }
     expect(cli.text()).toContain('exam-002/series-01/0001.dcm');
-    expect(cli.text()).toMatch(/REFUSED: 17 kind\(s\) of problem\. Nothing may be uploaded/);
+    // One kind of problem per attribute of the list, whatever its length.
+    expect(cli.text()).toContain(
+      `REFUSED: ${IDENTIFYING_ATTRIBUTES.length} kind(s) of problem. Nothing may be uploaded`,
+    );
 
     // The proof: the invented values are in the file on disk and in nothing the command produced.
     expect(

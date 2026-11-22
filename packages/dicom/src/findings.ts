@@ -14,6 +14,7 @@ export const IDENTIFYING_ATTRIBUTES: ReadonlyArray<{ tag: string; attribute: str
   { tag: '00100010', attribute: 'PatientName' },
   { tag: '00100020', attribute: 'PatientID' },
   { tag: '00101000', attribute: 'OtherPatientIDs' },
+  { tag: '00101001', attribute: 'OtherPatientNames' },
   { tag: '00100030', attribute: 'PatientBirthDate' },
   { tag: '00101040', attribute: 'PatientAddress' },
   { tag: '00102154', attribute: 'PatientTelephoneNumbers' },
@@ -30,6 +31,9 @@ export const IDENTIFYING_ATTRIBUTES: ReadonlyArray<{ tag: string; attribute: str
   { tag: '00080020', attribute: 'StudyDate' },
   { tag: '00080021', attribute: 'SeriesDate' },
   { tag: '00080022', attribute: 'AcquisitionDate' },
+  { tag: '00080023', attribute: 'ContentDate' },
+  { tag: '0008002a', attribute: 'AcquisitionDateTime' },
+  { tag: '00080012', attribute: 'InstanceCreationDate' },
   // Device
   { tag: '00181000', attribute: 'DeviceSerialNumber' },
   { tag: '00081010', attribute: 'StationName' },

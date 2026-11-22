@@ -32,6 +32,7 @@ La dé-identification est faite par vous, avant l'envoi. Nous vérifions ; nous 
 | (0010,0010) | PatientName             | Nom du patient                  |
 | (0010,0020) | PatientID               | Numéro du patient               |
 | (0010,1000) | OtherPatientIDs         | Tout autre numéro du patient    |
+| (0010,1001) | OtherPatientNames       | Tout autre nom du patient       |
 | (0010,0030) | PatientBirthDate        | Date de naissance               |
 | (0010,1040) | PatientAddress          | Adresse                         |
 | (0010,2154) | PatientTelephoneNumbers | Numéros de téléphone            |
@@ -44,6 +45,9 @@ La dé-identification est faite par vous, avant l'envoi. Nous vérifions ; nous 
 | (0008,0020) | StudyDate               | Date de l'examen                |
 | (0008,0021) | SeriesDate              | Date de la série                |
 | (0008,0022) | AcquisitionDate         | Date de l'acquisition           |
+| (0008,0023) | ContentDate             | Date de création de l'image     |
+| (0008,002A) | AcquisitionDateTime     | Date et heure de l'acquisition  |
+| (0008,0012) | InstanceCreationDate    | Date de création du fichier     |
 | (0018,1000) | DeviceSerialNumber      | Numéro de série du scanner      |
 | (0008,1010) | StationName             | Nom du scanner ou de sa console |
 
