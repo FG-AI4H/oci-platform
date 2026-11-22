@@ -95,7 +95,7 @@ The check we run on arrival is public and runs offline (`pnpm check-exam-sample 
 
 ## What helps the exercise
 
-About fifty exams. Axial series, as single-frame CT images, uncompressed (Explicit VR Little Endian) if your archive allows it. Lossless JPEG and JPEG-LS have been displayed; other encodings have not been tried yet, so tell us early.
+About fifty exams. Axial series, as single-frame CT images, uncompressed (Explicit VR Little Endian) if your archive allows it. Three encodings have been displayed by the platform's viewer, in the Chromium browser: uncompressed (Explicit VR Little Endian), JPEG-LS lossless, and JPEG lossless with first-order prediction (Process 14, selection value 1). Other compressions may work and have not been tried: if your archive exports another one, tell us early and send one exam first.
 
 ## What we do with the sample
 
