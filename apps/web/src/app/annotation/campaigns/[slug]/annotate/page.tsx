@@ -18,7 +18,6 @@ import {
   type AnnotationGateState,
   type AssignmentReading,
   type AssignmentReadingsResponse,
-  type AssignmentSampleFile,
   type AssignmentSampleResponse,
   type AssignmentSummary,
   type CampaignDetail,
@@ -31,6 +30,10 @@ import { annotationGateForCaller } from '../../../../../lib/groups';
 import { AnnotateForm } from './annotate-form';
 import { ImageViewer } from './image-viewer';
 import { StartTaskForm } from './start-task-form';
+import { TaskSeriesViewer } from './task-series-viewer';
+
+/** The answer form's id; the DICOM viewer's `view` field joins it (#674). */
+const ANSWER_FORM_ID = 'annotate-answer';
 
 const GATE_LABEL: Record<AnnotationGateState, string> = {
   INDEPENDENT: 'Independent annotation',
@@ -100,18 +103,18 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
 
   const labels = detail.workflowConfig.classificationLabels ?? null;
 
-  // The sample's files (#646), and at arbitration / expert review what
-  // the readers answered. A task whose sample is not a hosted file
-  // (free-text refs), or not one this page can show, has no image; the
-  // page then falls back to showing the reference.
-  let sample: AssignmentSampleFile | null = null;
+  // The sample (#646), tagged by kind: an image or a DICOM series
+  // (#674), and at arbitration / expert review what the readers
+  // answered. A task whose sample is not a hosted file (free-text refs)
+  // has none; the page then falls back to showing the reference.
+  let sample: AssignmentSampleResponse | null = null;
   let readings: AssignmentReading[] | null = null;
   if (assignment) {
     const body = await apiFetch<AssignmentSampleResponse>(
       `/v2/annotation/assignments/${encodeURIComponent(assignment.id)}/sample`,
       { session, revalidate: 0 },
     ).catch(() => null);
-    sample = viewableImage(body);
+    sample = body ?? null;
     if (assignment.gateAtAssignment !== 'INDEPENDENT' && labels) {
       readings =
         (
@@ -186,13 +189,21 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
             <CardContent
               className={sample ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]' : 'space-y-5'}
             >
-              {sample ? (
+              {sample?.kind === 'image' ? (
                 <ImageViewer
                   // A fresh viewer per task: zoom, filters and the fade-in
                   // start over with each image.
                   key={assignment.id}
                   src={sample.url}
                   alt={`Image to read at the ${GATE_LABEL[assignment.gateAtAssignment].toLowerCase()} step`}
+                />
+              ) : sample?.kind === 'dicom-series' ? (
+                <TaskSeriesViewer
+                  key={assignment.id}
+                  assignmentId={assignment.id}
+                  initial={sample}
+                  label={`Series to read at the ${GATE_LABEL[assignment.gateAtAssignment].toLowerCase()} step`}
+                  formId={ANSWER_FORM_ID}
                 />
               ) : null}
               <div className="space-y-5">
@@ -225,6 +236,7 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
                   reasonRequired={
                     labels !== null && assignment.gateAtAssignment === 'AWAITING_ARBITRATION'
                   }
+                  formId={ANSWER_FORM_ID}
                 />
               </div>
             </CardContent>
@@ -257,19 +269,6 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
       </Section>
     </Container>
   );
-}
-
-/**
- * The one image the viewer can show, or null. The sample address
- * returns a list of files whatever the type (#674 adds DICOM series);
- * this page's viewer reads a single PNG or JPEG.
- */
-function viewableImage(sample: AssignmentSampleResponse | null): AssignmentSampleFile | null {
-  if (!sample || sample.files.length !== 1) return null;
-  const [file] = sample.files;
-  return file && (file.contentType === 'image/png' || file.contentType === 'image/jpeg')
-    ? file
-    : null;
 }
 
 /**

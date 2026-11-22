@@ -6,9 +6,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { AnnotationTask, AnnotationTaskAssignment } from '@oci/database';
-import type { AssignmentReadingsResponse, AssignmentSampleResponse } from '@oci/shared-types';
+import {
+  parseDicomSeriesSampleRef,
+  parseFileSampleRef,
+  type AssignmentReadingsResponse,
+  type AssignmentSampleResponse,
+} from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
+import { DicomSeriesService } from '../storage/dicom-series.service.js';
 import { StorageService } from '../storage/storage.service.js';
 import { CampaignRepository } from './campaign.repository.js';
 import { TaskRepository } from './task.repository.js';
@@ -28,9 +34,14 @@ const OVERSIGHT_GROUPS = ['campaign-manager', 'task-supervisor', 'admin'] as con
  * about the sample goes with them: no metadata, no file name, no reader
  * identities (ADR-0010).
  *
- * Nothing here depends on the file type: the task names a storage key,
- * the repository decides which types can be read, and the answer is a
- * list of addresses. DICOM series (#674) add a lookup, not a new shape.
+ * The task's sample reference is a typed platform id (#646, #674), and
+ * one resolver switches on its prefix: `file:<distribution id>` is an
+ * image, `dicom-series:<series id>` a series, both within the
+ * campaign's pinned version. The answer is tagged by `kind`.
+ *
+ * The task's rule applies here, not the dataset's access rule: a reader
+ * usually has no access to the dataset itself. A held file (ADR-0026)
+ * never reaches a reader: the series side answers 409 when one is.
  */
 @Injectable()
 export class AssignmentSampleService {
@@ -38,6 +49,7 @@ export class AssignmentSampleService {
     @Inject(CampaignRepository) private readonly campaigns: CampaignRepository,
     @Inject(TaskRepository) private readonly tasks: TaskRepository,
     @Inject(StorageService) private readonly storage: StorageService,
+    @Inject(DicomSeriesService) private readonly dicomSeries: DicomSeriesService,
   ) {}
 
   async sample(args: {
@@ -51,27 +63,32 @@ export class AssignmentSampleService {
     if (!campaign?.manifestVersionId) {
       throw new ConflictException('The campaign has no pinned dataset version');
     }
-    const files = await this.campaigns.findHostedSampleFiles(
-      campaign.manifestVersionId,
-      assignment.task.sampleRef,
-    );
-    if (files.length === 0) {
+    const versionId = campaign.manifestVersionId;
+    const sampleRef = assignment.task.sampleRef;
+
+    if (parseDicomSeriesSampleRef(sampleRef) !== null) {
+      // 404 when not a series of the pinned version, 409 when a file is held.
+      return this.dicomSeries.taskSample({ sampleRef, versionId });
+    }
+
+    const distributionId = parseFileSampleRef(sampleRef);
+    const file = distributionId
+      ? await this.campaigns.findHostedImageFile(versionId, distributionId)
+      : null;
+    if (!file) {
       throw new NotFoundException("This task's sample is not a hosted file the platform can show");
     }
-    const signed = await Promise.all(
-      files.map(async (file) => ({
-        url: await this.storage.signHostedRead({
-          bucket: file.s3Bucket,
-          key: file.s3Key,
-          contentType: file.contentType,
-          ttlSeconds: SAMPLE_URL_TTL_SECONDS,
-        }),
-        contentType: file.contentType,
-      })),
-    );
+    const url = await this.storage.signHostedRead({
+      bucket: file.s3Bucket,
+      key: file.s3Key,
+      contentType: file.contentType,
+      ttlSeconds: SAMPLE_URL_TTL_SECONDS,
+    });
     const now = args.nowMs ?? Date.now();
     return {
-      files: signed,
+      kind: 'image',
+      url,
+      contentType: file.contentType,
       expiresAt: new Date(now + SAMPLE_URL_TTL_SECONDS * 1000).toISOString(),
     };
   }

@@ -113,10 +113,22 @@ export async function submitAssignmentAction(
     const comment = String(formData.get('comment') ?? '').trim();
     const reasonField = formData.get('reason');
     const reason = reasonField === null ? null : String(reasonField).trim();
+    // What the DICOM viewer had on screen (#674), for the record; an
+    // image answer has none. The API checks its shape.
+    const viewRaw = String(formData.get('view') ?? '');
+    let view: unknown;
+    if (viewRaw) {
+      try {
+        view = JSON.parse(viewRaw);
+      } catch {
+        view = undefined;
+      }
+    }
     submission = {
       label,
       ...(comment ? { comment } : {}),
       ...(reason !== null ? { reason } : {}),
+      ...(view !== undefined ? { view } : {}),
     };
     submissionRaw = JSON.stringify(submission);
     if (!label) {

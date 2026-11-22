@@ -15,6 +15,7 @@ import type {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
+import type { DicomSeriesService } from '../storage/dicom-series.service.js';
 import { CampaignRepository } from './campaign.repository.js';
 import { TaskAbandonmentService } from './task-abandonment.service.js';
 import { TaskRepository } from './task.repository.js';
@@ -136,6 +137,7 @@ const TX = { tx: true };
 
 let campaigns: CampaignsMock;
 let tasks: TasksMock;
+let dicomSeries: { listTaskSamples: ReturnType<typeof vi.fn> };
 let abandonment: {
   expireStaleForCampaign: ReturnType<typeof vi.fn>;
   release: ReturnType<typeof vi.fn>;
@@ -190,6 +192,7 @@ beforeEach(() => {
     countGoldSamplesInCampaign: vi.fn().mockResolvedValue(0),
     countExistingSampleRefs: vi.fn().mockResolvedValue(0),
   };
+  dicomSeries = { listTaskSamples: vi.fn().mockResolvedValue([]) };
   abandonment = {
     expireStaleForCampaign: vi.fn().mockResolvedValue(0),
     release: vi.fn().mockResolvedValue(true),
@@ -198,6 +201,7 @@ beforeEach(() => {
     campaigns as unknown as CampaignRepository,
     tasks as unknown as TaskRepository,
     abandonment as unknown as TaskAbandonmentService,
+    dicomSeries as unknown as DicomSeriesService,
   );
 });
 
@@ -270,11 +274,26 @@ describe('TaskService.seed', () => {
 // --- annotatorQuality (#291) ------------------------------------------------
 
 describe('TaskService.seedFromDataset (#646)', () => {
+  const D1 = '11111111-1111-4111-8111-111111111111';
+  const D2 = '22222222-2222-4222-8222-222222222222';
+  const D3 = '33333333-3333-4333-8333-333333333333';
+  const S1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const S2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   const IMAGES = [
-    { s3Key: 'ds/u1/IDRiD_001.jpg', contentType: 'image/jpeg' },
-    { s3Key: 'ds/u2/IDRiD_002.jpg', contentType: 'image/jpeg' },
-    { s3Key: 'ds/u3/other_003.png', contentType: 'image/png' },
+    { id: D1, s3Key: 'ds/u1/IDRiD_001.jpg', contentType: 'image/jpeg' },
+    { id: D2, s3Key: 'ds/u2/IDRiD_002.jpg', contentType: 'image/jpeg' },
+    { id: D3, s3Key: 'ds/u3/other_003.png', contentType: 'image/png' },
   ];
+  function series(id: string, heldImageCount = 0) {
+    return {
+      sampleRef: `dicom-series:${id}`,
+      seriesId: id,
+      modality: 'CT',
+      seriesNumber: 1,
+      imageCount: 40,
+      heldImageCount,
+    };
+  }
 
   function campaignWithVersion(versionId: string | null = 'dv-1') {
     return { ...runningCampaign(3), manifestVersionId: versionId };
@@ -285,18 +304,34 @@ describe('TaskService.seedFromDataset (#646)', () => {
     campaigns.findHostedImages.mockResolvedValue(IMAGES);
   });
 
-  it('creates one task per hosted image of the pinned version, keyed by storage key', async () => {
+  it('creates one task per hosted image of the pinned version, keyed by distribution id, not storage key', async () => {
     tasks.seedTasks.mockResolvedValue({ created: 3, skipped: 0 });
 
     const out = await service.seedFromDataset({ slug: 'pilot', dryRun: false });
 
     expect(campaigns.findHostedImages).toHaveBeenCalledWith('dv-1');
     expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [
-      { sampleRef: 'ds/u1/IDRiD_001.jpg' },
-      { sampleRef: 'ds/u2/IDRiD_002.jpg' },
-      { sampleRef: 'ds/u3/other_003.png' },
+      { sampleRef: `file:${D1}` },
+      { sampleRef: `file:${D2}` },
+      { sampleRef: `file:${D3}` },
     ]);
-    expect(out).toEqual({ matched: 3, created: 3, skipped: 0, dryRun: false });
+    expect(out).toEqual({ matched: 3, created: 3, skipped: 0, held: 0, dryRun: false });
+  });
+
+  it('adds one task per DICOM series after the images, and leaves out a series with a held image', async () => {
+    dicomSeries.listTaskSamples.mockResolvedValue([series(S1), series(S2, 2)]);
+    tasks.seedTasks.mockResolvedValue({ created: 4, skipped: 0 });
+
+    const out = await service.seedFromDataset({ slug: 'pilot', dryRun: false });
+
+    expect(dicomSeries.listTaskSamples).toHaveBeenCalledWith('dv-1');
+    expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [
+      { sampleRef: `file:${D1}` },
+      { sampleRef: `file:${D2}` },
+      { sampleRef: `file:${D3}` },
+      { sampleRef: `dicom-series:${S1}` },
+    ]);
+    expect(out).toEqual({ matched: 4, created: 4, skipped: 0, held: 1, dryRun: false });
   });
 
   it('is idempotent: a second run skips the files that already have tasks', async () => {
@@ -304,7 +339,7 @@ describe('TaskService.seedFromDataset (#646)', () => {
 
     const out = await service.seedFromDataset({ slug: 'pilot', dryRun: false });
 
-    expect(out).toEqual({ matched: 3, created: 0, skipped: 3, dryRun: false });
+    expect(out).toEqual({ matched: 3, created: 0, skipped: 3, held: 0, dryRun: false });
   });
 
   it('a dry run counts what it would create and creates nothing', async () => {
@@ -313,17 +348,17 @@ describe('TaskService.seedFromDataset (#646)', () => {
     const out = await service.seedFromDataset({ slug: 'pilot', dryRun: true });
 
     expect(tasks.seedTasks).not.toHaveBeenCalled();
-    expect(out).toEqual({ matched: 3, created: 2, skipped: 1, dryRun: true });
+    expect(out).toEqual({ matched: 3, created: 2, skipped: 1, held: 0, dryRun: true });
   });
 
-  it('applies the file-name prefix and the limit', async () => {
+  it('applies the file-name prefix and the limit; a prefix leaves series out', async () => {
+    dicomSeries.listTaskSamples.mockResolvedValue([series(S1)]);
     tasks.seedTasks.mockResolvedValue({ created: 1, skipped: 0 });
 
     await service.seedFromDataset({ slug: 'pilot', prefix: 'IDRiD_', limit: 1, dryRun: false });
 
-    expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [
-      { sampleRef: 'ds/u1/IDRiD_001.jpg' },
-    ]);
+    expect(dicomSeries.listTaskSamples).not.toHaveBeenCalled();
+    expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [{ sampleRef: `file:${D1}` }]);
   });
 
   it('409s when the campaign pins no dataset version', async () => {

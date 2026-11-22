@@ -15,6 +15,7 @@ import { CampaignRepository } from './campaign.repository.js';
 import { TaskAbandonmentService } from './task-abandonment.service.js';
 import { TaskRepository } from './task.repository.js';
 import { TaskService } from './task.service.js';
+import type { DicomSeriesService } from '../storage/dicom-series.service.js';
 
 /**
  * #647 — the annotation router against a real Postgres with every
@@ -57,6 +58,8 @@ describe.skipIf(!dockerAvailable)('Annotation router against Postgres (#647)', (
       new CampaignRepository(prismaService),
       tasks,
       new TaskAbandonmentService(tasks, audit),
+      // No DICOM series in these runs.
+      { listTaskSamples: async () => [] } as unknown as DicomSeriesService,
     );
 
     datasetId = (
@@ -491,16 +494,25 @@ describe.skipIf(!dockerAvailable)('Annotation router against Postgres (#647)', (
     });
 
     const preview = await service.seedFromDataset({ slug, dryRun: true });
-    expect(preview).toEqual({ matched: 2, created: 2, skipped: 0, dryRun: true });
+    expect(preview).toEqual({ matched: 2, created: 2, skipped: 0, held: 0, dryRun: true });
     expect(await prisma.annotationTask.count({ where: { campaignId: campaign.id } })).toBe(0);
 
     const first = await service.seedFromDataset({ slug, dryRun: false });
-    expect(first).toEqual({ matched: 2, created: 2, skipped: 0, dryRun: false });
+    expect(first).toEqual({ matched: 2, created: 2, skipped: 0, held: 0, dryRun: false });
     const second = await service.seedFromDataset({ slug, dryRun: false });
-    expect(second).toEqual({ matched: 2, created: 0, skipped: 2, dryRun: false });
+    expect(second).toEqual({ matched: 2, created: 0, skipped: 2, held: 0, dryRun: false });
 
     const tasks = await prisma.annotationTask.findMany({ where: { campaignId: campaign.id } });
-    expect(tasks.map((t) => t.sampleRef.split('/').pop()).sort()).toEqual(['a.png', 'b.jpg']);
+    // The task stores the distribution id, never the storage key (#646).
+    const read = await prisma.distribution.findMany({
+      where: {
+        datasetVersionId: version.id,
+        OR: [{ s3Key: { endsWith: '/a.png' } }, { s3Key: { endsWith: '/b.jpg' } }],
+      },
+      select: { id: true },
+    });
+    const expected = read.map((d) => `file:${d.id}`).sort();
+    expect(tasks.map((t) => t.sampleRef).sort()).toEqual(expected);
     expect(tasks.every((t) => t.nAnnotatorsRequired === 3)).toBe(true);
   }, 60_000);
 });

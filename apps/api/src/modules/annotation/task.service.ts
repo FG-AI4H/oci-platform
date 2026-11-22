@@ -25,11 +25,12 @@ import type {
   SubmitAssignmentResponse,
   TaskSummary,
 } from '@oci/shared-types';
-import { evaluateCompleteness, labelSubmissionProblems } from '@oci/shared-types';
+import { evaluateCompleteness, fileSampleRef, labelSubmissionProblems } from '@oci/shared-types';
 // ANNOTATION_GATE_ROLES is the canonical gate → group mapping shared
 // with the web; `roleForGate` is the local typed accessor.
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
+import { DicomSeriesService } from '../storage/dicom-series.service.js';
 import { CampaignRepository } from './campaign.repository.js';
 import { readClassificationLabels } from './campaign.service.js';
 import { evaluateGate1Predicate } from './gate-irr-predicate.js';
@@ -66,6 +67,8 @@ export class TaskService {
     @Inject(CampaignRepository) private readonly campaigns: CampaignRepository,
     @Inject(TaskRepository) private readonly tasks: TaskRepository,
     @Inject(TaskAbandonmentService) private readonly abandonment: TaskAbandonmentService,
+    @Inject(DicomSeriesService)
+    private readonly dicomSeries: Pick<DicomSeriesService, 'listTaskSamples'>,
   ) {}
 
   // --- Seed --------------------------------------------------------------
@@ -105,12 +108,19 @@ export class TaskService {
   }
 
   /**
-   * One task per platform-hosted PNG / JPEG file of the campaign's
-   * pinned dataset version (#646). The sample reference is the file's
-   * storage key, so the annotate page can find the bytes again.
-   * Idempotent: a file that already has a task is `skipped`. `prefix`
-   * matches the file name; `limit` takes the first files in key order.
-   * A dry run reports the counts and creates nothing, for the manager's
+   * One task per platform-hosted PNG / JPEG file, and one per DICOM
+   * series (#674), of the campaign's pinned dataset version (#646).
+   *
+   * The sample reference is a typed platform id, `file:<distribution
+   * id>` or `dicom-series:<series id>`, never the storage key: it goes
+   * into the audit trail and exports, and a key carries the file name.
+   * A series with a held image (ADR-0026) is not made into a task and
+   * is counted as `held`: a held file never reaches a reader.
+   *
+   * Idempotent: a sample that already has a task is `skipped`. `prefix`
+   * matches image file names and leaves series out; `limit` takes the
+   * first samples, image files in key order, then series. A dry run
+   * reports the counts and creates nothing, for the manager's
    * confirmation step.
    */
   async seedFromDataset(args: {
@@ -129,11 +139,17 @@ export class TaskService {
     }
 
     const prefix = args.prefix?.trim() ?? '';
-    const images = (await this.campaigns.findHostedImages(campaign.manifestVersionId)).filter((f) =>
-      fileNameOf(f.s3Key).startsWith(prefix),
-    );
-    const picked = args.limit !== undefined ? images.slice(0, args.limit) : images;
-    const refs = picked.map((f) => f.s3Key);
+    const [images, series] = await Promise.all([
+      this.campaigns.findHostedImages(campaign.manifestVersionId),
+      prefix ? Promise.resolve([]) : this.dicomSeries.listTaskSamples(campaign.manifestVersionId),
+    ]);
+    const imageRefs = images
+      .filter((f) => fileNameOf(f.s3Key).startsWith(prefix))
+      .map((f) => fileSampleRef(f.id));
+    const seriesRefs = series.filter((c) => c.heldImageCount === 0).map((c) => c.sampleRef);
+    const held = series.length - seriesRefs.length;
+    const all = [...imageRefs, ...seriesRefs];
+    const refs = args.limit !== undefined ? all.slice(0, args.limit) : all;
 
     if (args.dryRun) {
       const existing = await this.tasks.countExistingSampleRefs(campaign.id, refs);
@@ -141,10 +157,11 @@ export class TaskService {
         matched: refs.length,
         created: refs.length - existing,
         skipped: existing,
+        held,
         dryRun: true,
       };
     }
-    if (refs.length === 0) return { matched: 0, created: 0, skipped: 0, dryRun: false };
+    if (refs.length === 0) return { matched: 0, created: 0, skipped: 0, held, dryRun: false };
 
     const n = this.requireNAnnotators(campaign.workflowConfig);
     const result = await this.tasks.seedTasks(
@@ -153,9 +170,9 @@ export class TaskService {
       refs.map((sampleRef) => ({ sampleRef })),
     );
     this.logger.log(
-      `seed-from-dataset: campaign=${campaign.slug} matched=${refs.length} created=${result.created} skipped=${result.skipped}`,
+      `seed-from-dataset: campaign=${campaign.slug} matched=${refs.length} created=${result.created} skipped=${result.skipped} held=${held}`,
     );
-    return { matched: refs.length, ...result, dryRun: false };
+    return { matched: refs.length, ...result, held, dryRun: false };
   }
 
   /**
