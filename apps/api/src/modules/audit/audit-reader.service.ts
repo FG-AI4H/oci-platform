@@ -232,7 +232,10 @@ export class AuditReaderService {
       },
     });
 
-    const stamp = exportedAt.toISOString().replaceAll(':', '').replace(/\.\d+Z$/, 'Z');
+    const stamp = exportedAt
+      .toISOString()
+      .replace(/\.\d+Z$/, 'Z')
+      .replace(/[-:]/g, '');
     return {
       body,
       contentType: format === 'json' ? 'application/json; charset=utf-8' : 'text/csv; charset=utf-8',
