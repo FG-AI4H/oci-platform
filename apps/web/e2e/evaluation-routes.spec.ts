@@ -192,7 +192,7 @@ test.describe('evaluation-method pages (#487)', () => {
     const latest = page.getByRole('region', { name: /Version 1\.1\.0/ });
     await expect(latest.getByText('published', { exact: true })).toBeVisible();
     await expect(latest.getByText('reviewed', { exact: false }).first()).toBeVisible();
-    await expect(latest.getByRole('heading', { level: 3, name: 'Review notes' })).toBeVisible();
+    await expect(latest.getByRole('heading', { level: 3, name: 'Rationale published with the decision' })).toBeVisible();
     await expect(
       latest.getByText('within the published tolerance', { exact: false }),
     ).toBeVisible();

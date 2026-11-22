@@ -44,6 +44,18 @@ export function isAdmin(session: Session | null | undefined): boolean {
 }
 
 /**
+ * True when the caller may record review outcomes on evaluation-method
+ * versions. Mirrors the API's `isEvaluationReviewer`: `evaluation-reviewer`,
+ * with `admin` as the operator override. Only decides what the page shows;
+ * the API also bars whoever submitted the method, and its 403 stays
+ * authoritative.
+ */
+export function isEvaluationReviewer(session: Session | null | undefined): boolean {
+  const groups = userGroups(session);
+  return groups.includes('evaluation-reviewer') || groups.includes('admin');
+}
+
+/**
  * True when the caller can create annotation campaigns. Mirrors the
  * server-side guard in `AnnotationRolesGuard`: `campaign-manager` is
  * the principal role; `admin` is the operator override. Phase B.A.1
