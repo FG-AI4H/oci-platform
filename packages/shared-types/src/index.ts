@@ -62,6 +62,15 @@ export type {
   EmailDomainAllowlistEntry,
 } from './email-domain.js';
 
+// Request body limits of the API (#741): enforced by the API, checked by the
+// scripts that call it.
+export {
+  DEFAULT_REQUEST_BODY_LIMIT_BYTES,
+  MANIFEST_PUBLISH_BODY_LIMIT_BYTES,
+  PREDICTIONS_SUBMISSION_BODY_LIMIT_BYTES,
+  formatByteLimit,
+} from './request-limits.js';
+
 // DICOM series read endpoints (#674, ADR-0026).
 export {
   DicomFindingRefSchema,

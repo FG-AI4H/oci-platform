@@ -106,8 +106,13 @@ function storageAddress(raw: unknown): string {
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
-/** The body limit of the API (Fastify's default): a larger request is answered 413. */
-export const API_BODY_LIMIT_BYTES = 1024 * 1024;
+/**
+ * The API's body limit for publishing a version (#741): a larger request is
+ * answered 413. The same number as `MANIFEST_PUBLISH_BODY_LIMIT_BYTES` in
+ * `@oci/shared-types` (a spec checks it), written out here so that the upload
+ * command runs without building that package first.
+ */
+export const API_BODY_LIMIT_BYTES = 8 * 1024 * 1024;
 
 /** `https://`, or plain `http://` to this machine only: a token is never sent in clear over a network. */
 export function checkApiBase(raw: string): string {

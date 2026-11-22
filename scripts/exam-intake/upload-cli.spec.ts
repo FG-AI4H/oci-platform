@@ -11,10 +11,11 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { MANIFEST_PUBLISH_BODY_LIMIT_BYTES } from '@oci/shared-types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseRecord } from './arrival-record.js';
 import { run as runCheck } from './check-cli.js';
-import { FileChanged, HttpPlatformApi } from './platform-api.js';
+import { API_BODY_LIMIT_BYTES, FileChanged, HttpPlatformApi } from './platform-api.js';
 import { FakePlatform } from './test-support/fake-platform.js';
 import {
   INVENTED_MARKER,
@@ -235,12 +236,16 @@ describe('upload-exam-sample: a checked sample', () => {
     expect(readManifest().fileListVersion).toBe('1.1.0');
   });
 
+  it('checks a file list against the API’s limit for a version publish (#741)', () => {
+    expect(API_BODY_LIMIT_BYTES).toBe(MANIFEST_PUBLISH_BODY_LIMIT_BYTES);
+  });
+
   it('does not publish a file list larger than the API accepts, and keeps the files attached', async () => {
     writeCleanSample(sample, { exams: 1, slicesPerSeries: 2 });
     checkAndLook();
     writeFileSync(
       path.join(desk, 'base.json'),
-      JSON.stringify({ ...MANIFEST_BASE, description: 'x'.repeat(1024 * 1024) }),
+      JSON.stringify({ ...MANIFEST_BASE, description: 'x'.repeat(API_BODY_LIMIT_BYTES) }),
     );
     platform.addDataset(SLUG);
     platform.addVersion(SLUG, '1.0.0');

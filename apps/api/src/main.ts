@@ -10,6 +10,8 @@ import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import helmet from '@fastify/helmet';
 import { AppModule } from './app.module.js';
+import { SERVER_BODY_LIMIT_BYTES } from './common/http/body-limits.js';
+import { configureRequestBodyLimits } from './common/http/configure-body-limits.js';
 import { setupOpenApi } from './openapi.js';
 
 async function bootstrap() {
@@ -23,8 +25,16 @@ async function bootstrap() {
       // 512 leaves headroom for federated remote IDs without
       // inviting URL abuse.
       maxParamLength: 512,
+      // Request body limit (#741): Fastify's own default (1 MiB), written
+      // down. The routes that take more (predictions, manifest publish)
+      // are listed in common/http/body-limits.ts and get theirs below.
+      bodyLimit: SERVER_BODY_LIMIT_BYTES,
     }),
   );
+
+  // Per-route body limits and the 413 problem response. Before init, so
+  // the hook sees the routes as they are registered.
+  const bodyLimits = configureRequestBodyLimits(app);
 
   await app.register(helmet, { contentSecurityPolicy: false });
 
@@ -52,6 +62,11 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   setupOpenApi(app);
+
+  // Registers the routes. A body-limit entry that matched no route stops
+  // the start here rather than leaving that route at the default.
+  await app.init();
+  bodyLimits.assertAllApplied();
 
   const port = Number(process.env.PORT ?? 3000);
   await app.listen({ port, host: '0.0.0.0' });

@@ -15,6 +15,16 @@ const nextConfig: NextConfig = {
   // review (#79); developers can re-enable per-session via
   // `process.env.NEXT_DEV_INDICATORS=true` if needed.
   devIndicators: false,
+  experimental: {
+    // Server-action request bodies (#741): Next.js's default, 1 MB
+    // (1,048,576 bytes), written down. The largest a page sends is a
+    // predictions file of at most 512 KiB (the submit page refuses more)
+    // or a pasted manifest. The API takes larger bodies from scripts
+    // (docs/for-developers/api-reference.md, "Request size limits").
+    // This applies to every server action, signed in or not, so raising
+    // it widens what any visitor can make the web server read.
+    serverActions: { bodySizeLimit: '1mb' },
+  },
   // The DICOM viewer's codecs (#674, ADR-0026) are WebAssembly modules
   // whose glue code contains `require('fs')` behind a Node-only guard.
   // Turbopack still has to resolve it for the browser bundle; point it
