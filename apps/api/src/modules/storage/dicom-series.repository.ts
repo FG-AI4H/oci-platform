@@ -58,6 +58,14 @@ export class DicomSeriesRepository {
     })) as { id: string; version: string } | null;
   }
 
+  /** A dataset version by its id, as a campaign pins it, or null. */
+  async findVersionById(id: string): Promise<{ id: string; datasetId: string } | null> {
+    return (await this.prisma.client.datasetVersion.findUnique({
+      where: { id },
+      select: { id: true, datasetId: true },
+    })) as { id: string; datasetId: string } | null;
+  }
+
   listSeries(scope: SeriesScope & { limit: number }): Promise<SeriesSummaryRow[]> {
     return listSeriesSummaries(this.prisma.client, scope);
   }

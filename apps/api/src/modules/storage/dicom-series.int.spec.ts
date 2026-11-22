@@ -1,9 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { S3Client } from '@aws-sdk/client-s3';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import type { PrismaClient } from '@oci/database';
 import type { DicomInstanceHeader } from '@oci/dicom';
-import { DicomSeriesDetailSchema, DicomSeriesListSchema } from '@oci/shared-types';
+import {
+  DicomSeriesDetailSchema,
+  DicomSeriesListSchema,
+  DicomSeriesSampleSchema,
+  dicomSeriesSampleRef,
+} from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { PrismaService } from '../../prisma.service.js';
@@ -670,6 +675,158 @@ describe.skipIf(!dockerAvailable)('DICOM series endpoints against Postgres (#674
           approvedDatasetIds.length = 0;
         }
       });
+    });
+  });
+
+  describe('as the sample of an annotation task (#646)', () => {
+    it('lists every series of the pinned version a task can be made of, held images counted', async () => {
+      const out = await service.listTaskSamples(v1);
+      expect(out.map((s) => [s.seriesNumber, s.imageCount, s.heldImageCount])).toEqual([
+        // Five images: the gated file, the unfinished upload, the
+        // report and the multi-frame object are not images of the series.
+        [1, 5, 0],
+        [2, 3, 1],
+        [3, 2, 2],
+      ]);
+      const clean = out[0];
+      if (!clean) throw new Error('no series');
+      expect(clean).toEqual({
+        sampleRef: `dicom-series:${clean.seriesId}`,
+        seriesId: await seriesId(SERIES_CLEAN),
+        modality: 'CT',
+        seriesNumber: 1,
+        imageCount: 5,
+        heldImageCount: 0,
+      });
+    });
+
+    it('reads the version the campaign pinned, not the latest', async () => {
+      expect(
+        (await service.listTaskSamples(v2)).map((s) => [s.seriesNumber, s.imageCount]),
+      ).toEqual([[1, 2]]);
+      await expect(service.listTaskSamples(randomUUID())).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('delivers a series in stack order with signed addresses, and no field that names the dataset', async () => {
+      const id = await seriesId(SERIES_CLEAN);
+      const sample = await service.taskSample({
+        sampleRef: dicomSeriesSampleRef(id),
+        versionId: v1,
+      });
+
+      expect(DicomSeriesSampleSchema.parse(sample)).toEqual(sample);
+      expect(sample.kind).toBe('dicom-series');
+      expect(sample.modality).toBe('CT');
+      // No field names the dataset. The addresses do carry the storage
+      // key (`<slug>/<uuid>/<name>`), as every download address does.
+      const withoutAddresses = {
+        ...sample,
+        instances: sample.instances.map(({ url: _url, ...rest }) => rest),
+      };
+      expect(JSON.stringify(withoutAddresses)).not.toContain(slug);
+      expect(sample.instances[0]?.url).toContain(`/${slug}/`);
+      // The same images, in the same order, as the dataset page shows.
+      const page = await service.getSeries({ seriesId: id, version: '1.0.0', user: undefined });
+      expect(sample.instances.map((i) => i.distributionId)).toEqual(
+        page.instances.map((i) => i.distributionId),
+      );
+      expect(sample.instances.map((i) => i.instanceNumber)).toEqual([1, 2, 3, 4, 5]);
+      for (const instance of sample.instances) {
+        expect(instance.held).toBe(false);
+        expect(new URL(instance.url).searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
+      }
+      expect(Date.parse(sample.expiresAt)).toBeGreaterThan(Date.now());
+    });
+
+    it('delivers the images of the pinned version only', async () => {
+      const id = await seriesId(SERIES_CLEAN);
+      const sample = await service.taskSample({
+        sampleRef: dicomSeriesSampleRef(id),
+        versionId: v2,
+      });
+      expect(sample.instances.map((i) => i.instanceNumber)).toEqual([1, 2]);
+    });
+
+    it('refuses a series with any held file, whoever asks: a held file never reaches a task', async () => {
+      for (const uid of [SERIES_MIXED, SERIES_HELD]) {
+        const ref = dicomSeriesSampleRef(await seriesId(uid));
+        await expect(service.taskSample({ sampleRef: ref, versionId: v1 })).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+      }
+    });
+
+    it('is a 404 for a reference that is not a series of the pinned version', async () => {
+      const id = await seriesId(SERIES_CLEAN);
+      const other = await prisma.dataset.create({
+        data: {
+          slug: 'series-674-task-other',
+          name: 'Other',
+          hostId: HOST_SUB,
+          visibility: 'PUBLIC',
+          status: 'PUBLISHED',
+        },
+      });
+      const otherVersion = await prisma.datasetVersion.create({
+        data: { datasetId: other.id, version: '1.0.0', croissant: {}, publishedById: HOST_SUB },
+      });
+      for (const [sampleRef, versionId] of [
+        [`file:${id}`, v1],
+        ['dicom-series:not-a-uuid', v1],
+        [dicomSeriesSampleRef(randomUUID()), v1],
+        [dicomSeriesSampleRef(id), randomUUID()],
+        // A series of this dataset, read in another dataset's version.
+        [dicomSeriesSampleRef(id), otherVersion.id],
+      ] as const) {
+        await expect(service.taskSample({ sampleRef, versionId })).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+      }
+    });
+
+    it("does not follow the dataset's access rule: the task's own rule applies before", async () => {
+      const privateId = (
+        await prisma.dataset.create({
+          data: {
+            slug: 'series-674-private',
+            name: 'Private',
+            hostId: HOST_SUB,
+            visibility: 'PRIVATE',
+            status: 'PUBLISHED',
+          },
+        })
+      ).id;
+      const privateVersion = (
+        await prisma.datasetVersion.create({
+          data: { datasetId: privateId, version: '1.0.0', croissant: {}, publishedById: HOST_SUB },
+        })
+      ).id;
+      const uid = '1.2.826.0.1.3680043.8.498.674.40';
+      await store({
+        dataset: privateId,
+        versions: [privateVersion],
+        name: 'private-1.dcm',
+        key: `series-674-private/${randomUUID()}/private-1.dcm`,
+        header: { seriesInstanceUid: uid, sopInstanceUid: `${uid}.1` },
+      });
+      const id = (
+        await prisma.dicomSeries.findUniqueOrThrow({
+          where: { datasetId_seriesInstanceUid: { datasetId: privateId, seriesInstanceUid: uid } },
+        })
+      ).id;
+
+      // The dataset page refuses a stranger...
+      await expect(
+        service.getSeries({ seriesId: id, version: undefined, user: STRANGER }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      // ...the task path takes no caller at all.
+      const [candidate] = await service.listTaskSamples(privateVersion);
+      expect(candidate?.imageCount).toBe(1);
+      const sample = await service.taskSample({
+        sampleRef: dicomSeriesSampleRef(id),
+        versionId: privateVersion,
+      });
+      expect(sample.instances).toHaveLength(1);
     });
   });
 

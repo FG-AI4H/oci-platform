@@ -147,6 +147,69 @@ export const DicomViewSchema = z
   });
 export type DicomView = z.infer<typeof DicomViewSchema>;
 
+/** What the built-in viewer needs of a series, wherever it comes from. */
+export type DicomViewerSeries = Pick<DicomSeriesDetail, 'modality' | 'expiresAt' | 'instances'>;
+
+// ==== A DICOM series as the sample of an annotation task (#674, #646) ====
+//
+// A task points at its sample by a typed platform id, never by a
+// storage key: the reference goes into the append-only audit trail and
+// into exports, and a key carries the file name as uploaded.
+//
+//   file:<distribution id>     an image file (#646)
+//   dicom-series:<series id>   a DICOM series, resolved against the
+//                              campaign's pinned dataset version
+//
+// The sample address of a task answers with a `kind`. This is the
+// `dicom-series` one. It carries what the viewer needs, and no field
+// names the dataset: a reader usually has no access to the dataset
+// itself, and blinding (ADR-0010) keeps its name off the screen. The
+// signed addresses do carry the storage key (`<slug>/<uuid>/<name>`),
+// as every download address does, and the files carry their full
+// header (ADR-0026): neither is shown, neither is hidden.
+
+const DICOM_SERIES_SAMPLE_PREFIX = 'dicom-series:';
+
+/** The sample reference of a task on a DICOM series. */
+export function dicomSeriesSampleRef(seriesId: string): string {
+  return `${DICOM_SERIES_SAMPLE_PREFIX}${seriesId}`;
+}
+
+/** The series id of a `dicom-series:` reference, or null for any other. */
+export function parseDicomSeriesSampleRef(sampleRef: string): string | null {
+  if (!sampleRef.startsWith(DICOM_SERIES_SAMPLE_PREFIX)) return null;
+  const id = sampleRef.slice(DICOM_SERIES_SAMPLE_PREFIX.length);
+  return z.string().uuid().safeParse(id).success ? id : null;
+}
+
+/** The `dicom-series` answer of a task's sample address. */
+export const DicomSeriesSampleSchema = z
+  .object({
+    kind: z.literal('dicom-series'),
+    modality: z.string().nullable(),
+    /** The instance addresses work at least until then. */
+    expiresAt: z.string().datetime(),
+    /** In display order. Never a held file: the whole sample is refused instead. */
+    instances: z.array(DicomSeriesInstanceSchema).min(1),
+  })
+  .strict();
+export type DicomSeriesSample = z.infer<typeof DicomSeriesSampleSchema>;
+
+/** A series a campaign can make a task of, as task creation reads it. */
+export interface DicomSeriesTaskCandidate {
+  /** What the task stores as its sample reference. */
+  sampleRef: string;
+  seriesId: string;
+  modality: string | null;
+  seriesNumber: number | null;
+  imageCount: number;
+  /**
+   * Images held for de-identification findings. A series with any is
+   * not made into a task: a held file never reaches a reader.
+   */
+  heldImageCount: number;
+}
+
 // ==== Operator review of held files (ADR-0026, decision 2) ================
 //
 // A DICOM file whose header carries a value de-identification normally

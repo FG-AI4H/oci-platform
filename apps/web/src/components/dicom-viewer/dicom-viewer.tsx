@@ -12,7 +12,7 @@ import {
 import { init as dicomImageLoaderInit, wadouri } from '@cornerstonejs/dicom-image-loader';
 import { Enums as MetadataEnums, metaData } from '@cornerstonejs/metadata';
 import { useTranslations } from 'next-intl';
-import type { DicomSeriesDetail, DicomView } from '@oci/shared-types';
+import type { DicomView, DicomViewerSeries } from '@oci/shared-types';
 import { Alert, AlertDescription, AlertTitle, Button } from '@oci/ui';
 import {
   CT_PRESETS,
@@ -65,9 +65,10 @@ export interface DicomViewerProps {
    * Fetches the series: its instances in display order, each with a
    * fresh storage address. Called on mount, and again when addresses
    * expire. Keep its identity stable (`useCallback`) or the viewer
-   * restarts.
+   * restarts. The dataset page passes a series from the dataset's
+   * endpoint; a task screen passes its `dicom-series` sample. Both fit.
    */
-  loadSeries: () => Promise<DicomSeriesDetail>;
+  loadSeries: () => Promise<DicomViewerSeries>;
   /** Names the image for assistive technology, e.g. "CT series 3". */
   label: string;
   /**
@@ -286,7 +287,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
 
       // --- addresses -----------------------------------------------
       // When to renew, on the reader's own monotonic clock.
-      const deadlineOf = (detail: DicomSeriesDetail): number => {
+      const deadlineOf = (detail: DicomViewerSeries): number => {
         const lifetime = usableLifetimeMs(detail.expiresAt, Date.now());
         return lifetime === null ? Number.POSITIVE_INFINITY : performance.now() + lifetime;
       };
