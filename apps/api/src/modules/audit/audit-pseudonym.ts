@@ -53,7 +53,9 @@ export class AuditPseudonymiser {
   /** The pseudonym of `value`, or null when no key is configured. */
   pseudonym(value: string): string | null {
     if (this.key === null) return null;
-    const mac = createHmac('sha256', this.key).update(LABEL + value, 'utf8').digest('hex');
+    const mac = createHmac('sha256', this.key)
+      .update(LABEL + value, 'utf8')
+      .digest('hex');
     return `ps-${mac.slice(0, 24)}`;
   }
 }

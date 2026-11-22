@@ -50,7 +50,9 @@ describe('toAuditCsv', () => {
     expect(lines[2]).toBe('');
     expect(lines[1]).toContain('pseudonym,ps-0123456789abcdef01234567,regulator;host');
     // Keys sorted (RFC 8785), in one quoted cell that starts with "{".
-    expect(lines[1]).toContain('"{""from"":""SUBMITTED"",""reason"":""=cmd"",""to"":""PUBLISHED""}"');
+    expect(lines[1]).toContain(
+      '"{""from"":""SUBMITTED"",""reason"":""=cmd"",""to"":""PUBLISHED""}"',
+    );
   });
 
   it('writes the header only for no events', () => {

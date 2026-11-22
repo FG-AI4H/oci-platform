@@ -107,7 +107,8 @@ export class AuditReaderRepository {
 
 function toWhere(filter: AuditRowFilter): Prisma.AuditEventWhereInput {
   const and: Prisma.AuditEventWhereInput[] = [];
-  if (filter.subjectTypes !== undefined) and.push({ subjectType: { in: [...filter.subjectTypes] } });
+  if (filter.subjectTypes !== undefined)
+    and.push({ subjectType: { in: [...filter.subjectTypes] } });
   if (filter.excludeSubjectTypes && filter.excludeSubjectTypes.length > 0) {
     and.push({ subjectType: { notIn: [...filter.excludeSubjectTypes] } });
   }

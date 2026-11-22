@@ -16,7 +16,11 @@ import {
 const ALICE = '6f1f7b0e-4a53-4c1e-9a8e-2b8f2b1f0c11';
 const BOB = '7a2e8c1f-5b64-4d2f-8b9f-3c9a3c2a1d22';
 
-function row(seq: number, over: Partial<AuditEvent> = {}, previous: string | null = null): AuditEvent {
+function row(
+  seq: number,
+  over: Partial<AuditEvent> = {},
+  previous: string | null = null,
+): AuditEvent {
   const payload = (over.payload ?? { slug: `card-${seq}` }) as Record<string, unknown>;
   const base = {
     id: `00000000-0000-4000-8000-${String(seq).padStart(12, '0')}`,
@@ -65,9 +69,19 @@ function fakeRepo(rows: AuditEvent[]) {
       const sorted = rows
         .filter((r) => matches(r, filter))
         .filter((r) =>
-          after === null ? true : order === 'desc' ? r.sequenceNumber < after : r.sequenceNumber > after,
+          after === null
+            ? true
+            : order === 'desc'
+              ? r.sequenceNumber < after
+              : r.sequenceNumber > after,
         )
-        .sort((a, b) => Number(order === 'desc' ? b.sequenceNumber - a.sequenceNumber : a.sequenceNumber - b.sequenceNumber));
+        .sort((a, b) =>
+          Number(
+            order === 'desc'
+              ? b.sequenceNumber - a.sequenceNumber
+              : a.sequenceNumber - b.sequenceNumber,
+          ),
+        );
       return sorted.slice(0, take);
     }),
     distinctActorIds: vi.fn(async () => [
@@ -79,7 +93,9 @@ function fakeRepo(rows: AuditEvent[]) {
     sequenceSpan: vi.fn(),
     eventBefore: vi.fn(async (seq: bigint) => {
       const before = rows.filter((r) => r.sequenceNumber < seq).at(-1);
-      return before ? { sequenceNumber: before.sequenceNumber, recordHash: before.recordHash } : null;
+      return before
+        ? { sequenceNumber: before.sequenceNumber, recordHash: before.recordHash }
+        : null;
     }),
     chainBatch: vi.fn(async (from: bigint, to: bigint | null, take: number) =>
       rows
@@ -93,7 +109,8 @@ function fakeRepo(rows: AuditEvent[]) {
 const pseudo = (configured = true) =>
   ({
     configured,
-    pseudonym: (v: string) => (configured ? `ps-${createHash('sha256').update(v).digest('hex').slice(0, 24)}` : null),
+    pseudonym: (v: string) =>
+      configured ? `ps-${createHash('sha256').update(v).digest('hex').slice(0, 24)}` : null,
   }) as unknown as AuditPseudonymiser;
 
 function service(rows: AuditEvent[], configured = true) {
@@ -211,7 +228,10 @@ describe('AuditReaderService — filters', () => {
   });
 
   it('returns nothing for an unknown pseudonym', async () => {
-    const page = await service(rows).svc.list(q({ actor: 'ps-000000000000000000000000' }), regulator);
+    const page = await service(rows).svc.list(
+      q({ actor: 'ps-000000000000000000000000' }),
+      regulator,
+    );
     expect(page.events).toEqual([]);
   });
 
@@ -228,9 +248,13 @@ describe('AuditReaderService — filters', () => {
 
   it('filters system events and module.action names', async () => {
     const { svc } = service(rows);
-    expect((await svc.list(q({ actor: 'system' }), admin)).events.map((e) => e.sequenceNumber)).toEqual(['4']);
     expect(
-      (await svc.list(q({ action: 'identity.role.granted' }), admin)).events.map((e) => e.sequenceNumber),
+      (await svc.list(q({ actor: 'system' }), admin)).events.map((e) => e.sequenceNumber),
+    ).toEqual(['4']);
+    expect(
+      (await svc.list(q({ action: 'identity.role.granted' }), admin)).events.map(
+        (e) => e.sequenceNumber,
+      ),
     ).toEqual(['3']);
     expect((await svc.list(q({ action: 'prediction' }), admin)).events).toHaveLength(2);
   });
@@ -306,7 +330,11 @@ describe('AuditReaderService — export', () => {
     expect(createHash('sha256').update(file.body).digest('hex')).toBe(file.sha256);
     const doc = JSON.parse(file.body);
     expect(doc.format).toBe('oci-audit-events/v1');
-    expect(doc.events.map((e: { sequenceNumber: string }) => e.sequenceNumber)).toEqual(['1', '2', '3']);
+    expect(doc.events.map((e: { sequenceNumber: string }) => e.sequenceNumber)).toEqual([
+      '1',
+      '2',
+      '3',
+    ]);
     expect(file.body).not.toContain(ALICE);
   });
 

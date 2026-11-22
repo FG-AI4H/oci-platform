@@ -238,7 +238,8 @@ export class AuditReaderService {
       .replace(/[-:]/g, '');
     return {
       body,
-      contentType: format === 'json' ? 'application/json; charset=utf-8' : 'text/csv; charset=utf-8',
+      contentType:
+        format === 'json' ? 'application/json; charset=utf-8' : 'text/csv; charset=utf-8',
       filename: `audit-events-${stamp}.${format}`,
       exportId,
       sha256,

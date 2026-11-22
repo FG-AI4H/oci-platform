@@ -142,7 +142,9 @@ describe.skipIf(!dockerAvailable)('audit trail reader against Postgres (#653)', 
 
   it('detects a covered field changed in place, at that row', async () => {
     const target = ids[1]!;
-    await tamper(`UPDATE platform.audit_events SET subject_id = 'someone-else' WHERE id = '${target}'`);
+    await tamper(
+      `UPDATE platform.audit_events SET subject_id = 'someone-else' WHERE id = '${target}'`,
+    );
     expect(await reader.verify({})).toMatchObject({
       status: 'broken',
       firstBreak: { id: target, kind: 'record-hash' },
@@ -202,9 +204,9 @@ describe.skipIf(!dockerAvailable)('audit trail reader against Postgres (#653)', 
     const pseudonym = grant.actor.kind === 'pseudonym' ? grant.actor.id : '';
     const byActor = await reader.list({ limit: 50, order: 'asc', actor: pseudonym }, regulator);
     expect(byActor.events.length).toBeGreaterThan(0);
-    expect(byActor.events.every((e) => e.actor.kind === 'pseudonym' && e.actor.id === pseudonym)).toBe(
-      true,
-    );
+    expect(
+      byActor.events.every((e) => e.actor.kind === 'pseudonym' && e.actor.id === pseudonym),
+    ).toBe(true);
 
     const aboutBob = await reader.list(
       { limit: 50, order: 'asc', subjectId: grant.subjectId },
@@ -214,12 +216,20 @@ describe.skipIf(!dockerAvailable)('audit trail reader against Postgres (#653)', 
   });
 
   it('records an export in the trail, chained like any other event', async () => {
-    const file = await reader.export('csv', { subjectType: 'model-card' }, { sub: BOB, groups: ['regulator'] });
+    const file = await reader.export(
+      'csv',
+      { subjectType: 'model-card' },
+      { sub: BOB, groups: ['regulator'] },
+    );
     const recorded = await prisma.auditEvent.findFirstOrThrow({
       where: { module: 'audit', action: 'events.exported' },
     });
     expect(recorded.subjectId).toBe(file.exportId);
-    expect(recorded.payload).toMatchObject({ format: 'csv', eventCount: 4, contentSha256: file.sha256 });
+    expect(recorded.payload).toMatchObject({
+      format: 'csv',
+      eventCount: 4,
+      contentSha256: file.sha256,
+    });
     expect(await reader.verify({})).toMatchObject({ status: 'intact', checked: 7 });
   });
 
