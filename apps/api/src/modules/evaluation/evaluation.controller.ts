@@ -1,11 +1,18 @@
 import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import {
   CreateEvaluationTaskRequestSchema,
   EvaluationTaskSlugSchema,
   type CreateEvaluationTaskRequest,
   type EvaluationTaskSlug,
 } from '@oci/shared-types';
+import { z } from 'zod';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CognitoJwtGuard } from '../../auth/cognito-jwt.guard.js';
 import { OptionalCognitoJwtGuard } from '../../auth/optional-cognito-jwt.guard.js';
@@ -22,11 +29,18 @@ interface FastifyLikeRequest {
   user?: CognitoAccessTokenPayload;
 }
 
+/** A submission is addressed by its uuid. Anything else is a 400, not a lookup. */
+const SubmissionIdSchema = z.string().uuid();
+
 /**
  * `/v2/evaluation/*` — the minimal model-to-data scoring surface (ADR-0017,
  * Mode 1). Auth model:
  *
- *   - GET endpoints: public. Ground truth is NEVER returned.
+ *   - GET endpoints: public. Ground truth is NEVER returned. Two exceptions:
+ *     one submission's result is public unless it FAILED, in which case only
+ *     its submitter and administrators get it (so that route reads the token
+ *     when one is sent); and the caller's own quota needs a token, because
+ *     there is no quota without a participant.
  *   - POST submissions: public (Mode 1). The optional JWT guard captures
  *     the submitter's identity when a token is present; anonymous
  *     submissions are allowed and recorded with a null submitter.
@@ -55,11 +69,47 @@ export class EvaluationController {
     return this.evaluation.getTaskDetail(slug);
   }
 
+  @Get('tasks/:slug/quota')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Scored submissions the caller has left on a task',
+    description:
+      'The weekly and per-task limits in force on this environment, how many scored submissions the caller has used against each, and the smaller remainder. Validation submissions and predictions files refused for a format error are not counted.',
+  })
+  @ApiOkResponse({ description: 'Limits, usage and what remains, for the caller.' })
+  @UseGuards(CognitoJwtGuard)
+  quota(
+    @Param('slug', new ZodPipe(EvaluationTaskSlugSchema)) slug: EvaluationTaskSlug,
+    @Req() req: FastifyLikeRequest,
+  ) {
+    return this.evaluation.getScoredQuota(slug, req.user);
+  }
+
+  @Get('tasks/:slug/submissions/:id')
+  @ApiOperation({
+    summary: 'Get one submission with its full result (no predictions, no ground truth)',
+    description:
+      'The metrics (for a classification task, with the per-class breakdown), the evaluation method version that produced them and where it stands in review. A SCORED or PENDING submission is public. A FAILED one is returned, with the reason, to its submitter and to administrators only; anyone else gets 404.',
+  })
+  @ApiOkResponse({ description: 'The submission, its scores and its attribution.' })
+  @ApiNotFoundResponse({
+    description:
+      'No such submission on this task, or a failed one the caller is not entitled to read.',
+  })
+  @UseGuards(OptionalCognitoJwtGuard)
+  submissionDetail(
+    @Param('slug', new ZodPipe(EvaluationTaskSlugSchema)) slug: EvaluationTaskSlug,
+    @Param('id', new ZodPipe(SubmissionIdSchema)) id: string,
+    @Req() req: FastifyLikeRequest,
+  ) {
+    return this.evaluation.getSubmissionDetail(slug, id, req.user);
+  }
+
   @Post('tasks/:slug/submissions')
   @ApiOperation({
     summary: 'Submit predictions (Mode 1) or a sealed container (Mode 2)',
     description:
-      'With `intent: VALIDATION` (either mode): checks the submission against the task interface and returns a report; nothing is scored, stored or counted against the quota, and no account is needed. Otherwise, without `mode`, or with `mode: PREDICTIONS`: scores the predictions against the task’s hidden ground truth and records the result, returning the new submission id + its scores; a validation / scoring error records a FAILED submission and returns 400. With `mode: CONTAINER`: records a PENDING submission and enqueues a sealed run — nothing is scored in-process, and the result arrives later through the worker outbox. Returns 503 if sealed execution is not configured on this environment.',
+      'With `intent: VALIDATION` (either mode): checks the submission against the task interface and returns a report; nothing is scored, stored or counted against the quota, and no account is needed. Otherwise, without `mode`, or with `mode: PREDICTIONS`: scores the predictions against the task’s hidden ground truth and records the result, returning the new submission id + its scores; a format error (an identifier sent twice, a label outside the task’s range) records a FAILED submission that does not count against the quota, and returns 400 with its id. With `mode: CONTAINER`: records a PENDING submission and enqueues a sealed run — nothing is scored in-process, and the result arrives later through the worker outbox. Returns 503 if sealed execution is not configured on this environment.',
   })
   @ApiOkResponse({ description: 'Mode 1: submission id + computed scores. Mode 2: id + PENDING.' })
   @UseGuards(OptionalCognitoJwtGuard)

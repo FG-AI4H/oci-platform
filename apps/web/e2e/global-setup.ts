@@ -13,6 +13,8 @@ import { execFileSync } from 'node:child_process';
  *     federation-filter, access-requests, screenshots). Each picks
  *     a unique stamp-based slug (`e2e-*`, `ux-*`, `peer-*`, `fed-*`,
  *     `restricted-*`); cleaning by prefix covers all of them.
+ *   - Evaluation tasks created by the submit specs are `e2e-eval-*`;
+ *     their submissions go with them (ON DELETE CASCADE).
  *
  * `docker exec oci-postgres` matches the existing fed-filter spec's
  * SQL-injection helper — keeps the Playwright runtime free of a
@@ -35,6 +37,7 @@ export function resetTestRows(): void {
     DELETE FROM catalog.remote_catalogs WHERE slug LIKE 'fedtest-%' OR slug LIKE 'peer-%' OR slug = 'local-self';
     DELETE FROM catalog.datasets WHERE slug LIKE 'e2e-%' OR slug LIKE 'ux-%' OR slug LIKE 'restricted-%';
     DELETE FROM prediction.model_cards WHERE slug LIKE 'e2e-model-%';
+    DELETE FROM evaluation.evaluation_tasks WHERE slug LIKE 'e2e-eval-%';
   `.trim();
 
   try {

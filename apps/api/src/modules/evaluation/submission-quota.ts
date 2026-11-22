@@ -45,7 +45,13 @@
  * instant is supposed to prevent.
  */
 
-import type { ScoredSubmissionQuotaScope, ScoredSubmissionQuotaState } from '@oci/shared-types';
+import type {
+  ScoredSubmissionQuotaScope,
+  ScoredSubmissionQuotaState,
+  ScoredSubmissionQuotaSummary,
+  SubmissionMode,
+  SubmissionStatus,
+} from '@oci/shared-types';
 
 /** Default scored submissions per participant per task per calendar week. */
 export const DEFAULT_SCORED_SUBMISSIONS_PER_WEEK = 3;
@@ -109,6 +115,43 @@ export function resolveScoredQuotaLimits(env: {
   }
 
   return { limits: { perWeek, perTask }, warnings };
+}
+
+/** The one (mode, status) pair that is not counted. See `consumesScoredQuota`. */
+export const SCORED_QUOTA_EXEMPT = { mode: 'PREDICTIONS', status: 'FAILED' } as const;
+
+/**
+ * Whether a stored submission counts against its submitter's quota (#645).
+ *
+ * Every row counts except one kind: a predictions file refused BEFORE scoring.
+ *
+ * A Mode 1 submission has exactly two outcomes, because it is scored inside the
+ * request. Either it is scored (SCORED), or it is refused first for a format
+ * error — an identifier sent twice, a label outside the task's range, a
+ * malformed payload — and recorded FAILED. There is no third: nothing in that
+ * path fails after the predictions have met the reference labels. So
+ * `PREDICTIONS` + `FAILED` identifies a format failure exactly, with no extra
+ * column to keep in step.
+ *
+ * Such a row is free for the reason a validation submission is free. The quota
+ * rations queries against the hidden labels, and a refused file made none: its
+ * refusal is a function of the file and the task's public configuration, the
+ * same facts the unlimited validation path reports. Charging for it would only
+ * punish a typo.
+ *
+ * A sealed run that failed (CONTAINER + FAILED) still counts. It occupied a
+ * host evaluation slot whatever came out of it, and refunding it would make a
+ * container that fails on purpose a way round the cap. PENDING counts too: the
+ * slot is taken from the moment the run is accepted.
+ *
+ * `SCORED_QUOTA_EXEMPT` is the same rule as a Prisma filter. The repository's
+ * count uses it, and the integration spec checks the two agree row for row.
+ */
+export function consumesScoredQuota(row: {
+  mode: SubmissionMode;
+  status: SubmissionStatus;
+}): boolean {
+  return !(row.mode === SCORED_QUOTA_EXEMPT.mode && row.status === SCORED_QUOTA_EXEMPT.status);
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -183,5 +226,31 @@ export function quotaState(
     limit: scope === 'WEEK' ? limits.perWeek : limits.perTask,
     used,
     resetsAt: resetsAt === null ? null : resetsAt.toISOString(),
+  };
+}
+
+/**
+ * What a participant has left on one task, from the two usage counts (#645).
+ * Remainders are floored at zero: lowering a cap below what someone has already
+ * used must read as "none left", not as a negative allowance.
+ */
+export function quotaSummary(
+  taskSlug: string,
+  usage: { weekUsed: number; totalUsed: number },
+  limits: ScoredQuotaLimits,
+  now: Date,
+): ScoredSubmissionQuotaSummary {
+  const weekRemaining = Math.max(0, limits.perWeek - usage.weekUsed);
+  const totalRemaining = Math.max(0, limits.perTask - usage.totalUsed);
+  return {
+    taskSlug,
+    week: {
+      limit: limits.perWeek,
+      used: usage.weekUsed,
+      remaining: weekRemaining,
+      resetsAt: nextQuotaWeekStart(now).toISOString(),
+    },
+    total: { limit: limits.perTask, used: usage.totalUsed, remaining: totalRemaining },
+    remaining: Math.min(weekRemaining, totalRemaining),
   };
 }

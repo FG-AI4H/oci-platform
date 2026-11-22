@@ -8,6 +8,7 @@ import type {
 } from '@oci/shared-types';
 import type { RouteReviewStatus } from '@oci/shared-types';
 import { PrismaService } from '../../prisma.service.js';
+import { SCORED_QUOTA_EXEMPT } from './submission-quota.js';
 
 /**
  * Row shapes returned to the service. Defined locally (same rationale as
@@ -45,6 +46,27 @@ export interface SubmissionRow {
     reviewStatus: RouteReviewStatus;
     route: { slug: string };
   } | null;
+}
+
+/**
+ * One submission with the task context its page needs. Carries `submittedBy`
+ * and `error`, which the list row deliberately does not: they are what the
+ * service's visibility rule is decided on, and never leave it unconditionally.
+ */
+export interface SubmissionDetailRow extends SubmissionRow {
+  mode: SubmissionMode;
+  /** Participant-facing failure text. Set only when FAILED. */
+  error: string | null;
+  /** Null for a row created without an identified participant. */
+  submittedBy: string | null;
+  task: {
+    slug: string;
+    name: string;
+    datasetSlug: string;
+    taskKind: EvaluationTaskKindDb;
+    numClasses: number;
+    referableThreshold: number;
+  };
 }
 
 export interface EvaluationTaskWithSubmissionsRow {
@@ -317,11 +339,13 @@ export class EvaluationRepository {
    * quota gate (WP6). `since` bounds it to the current calendar week; omitting
    * it counts the task lifetime.
    *
-   * Every status counts — PENDING, SCORED and FAILED alike. A scored submission
-   * consumes a host evaluation slot and an oracle query the moment it is
-   * accepted, whatever its outcome; and refunding FAILED rows would make cheap
-   * deliberate failures a way around the cap. Validation submissions are the
-   * free debugging path, and they write no row here at all.
+   * Every row counts except a predictions file refused before scoring
+   * (`SCORED_QUOTA_EXEMPT`, #645): it never met the reference labels, so it used
+   * no evaluation slot and no oracle query. A sealed run counts whatever its
+   * outcome — it holds a host slot from the moment it is accepted, and refunding
+   * a failed one would make deliberate failures a way around the cap. The full
+   * reasoning is on `consumesScoredQuota`. Validation submissions write no row
+   * here at all.
    *
    * Backed by `@@index([taskId, submittedBy, createdAt])`, whose prefix serves
    * the unbounded variant too.
@@ -335,9 +359,73 @@ export class EvaluationRepository {
       where: {
         taskId: args.taskId,
         submittedBy: args.submittedBy,
+        NOT: { mode: SCORED_QUOTA_EXEMPT.mode, status: SCORED_QUOTA_EXEMPT.status },
         ...(args.since ? { createdAt: { gte: args.since } } : {}),
       },
     });
+  }
+
+  /**
+   * One submission of one task, with what its own page shows (#645).
+   *
+   * Matched on the task slug as well as the id, so an id is only ever answered
+   * under the task it belongs to. `submittedBy`, `error` and `failureCode` ARE
+   * read here, unlike in the list query: the service needs the first to decide
+   * who may see a FAILED row and returns the second only to them. No ground
+   * truth is selected.
+   */
+  async findSubmissionDetail(
+    taskSlug: string,
+    submissionId: string,
+  ): Promise<SubmissionDetailRow | null> {
+    const s = await this.prisma.client.submission.findFirst({
+      where: { id: submissionId, task: { slug: taskSlug } },
+      select: {
+        id: true,
+        methodName: true,
+        mode: true,
+        status: true,
+        scores: true,
+        error: true,
+        submittedBy: true,
+        createdAt: true,
+        retractedAt: true,
+        routeVersionRef: {
+          select: { version: true, reviewStatus: true, route: { select: { slug: true } } },
+        },
+        task: {
+          select: {
+            slug: true,
+            name: true,
+            datasetSlug: true,
+            taskKind: true,
+            numClasses: true,
+            referableThreshold: true,
+          },
+        },
+      },
+    });
+    if (!s) return null;
+    return {
+      id: s.id,
+      methodName: s.methodName,
+      mode: s.mode,
+      status: s.status,
+      scores: s.scores,
+      error: s.error,
+      submittedBy: s.submittedBy,
+      createdAt: s.createdAt,
+      retractedAt: s.retractedAt,
+      routeVersionRef: s.routeVersionRef,
+      task: {
+        slug: s.task.slug,
+        name: s.task.name,
+        datasetSlug: s.task.datasetSlug,
+        taskKind: s.task.taskKind,
+        numClasses: s.task.numClasses,
+        referableThreshold: s.task.referableThreshold,
+      },
+    };
   }
 
   /**

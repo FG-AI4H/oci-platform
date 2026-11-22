@@ -20,6 +20,11 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,md,json,yml,yaml}\"",
     "lint:root": "eslint . --max-warnings=0",
     "provision-users": "pnpm --silent --filter @oci/shared-types build && pnpm --filter @oci/scripts run provision-users",
+    "radiology-workshop": "pnpm --silent --filter \"@oci/croissant...\" build && pnpm --filter @oci/scripts run radiology-workshop",
+    "check-exam-sample": "pnpm --silent --filter @oci/dicom build && pnpm --filter @oci/scripts run check-exam-sample",
+    "upload-exam-sample": "pnpm --silent --filter @oci/dicom build && pnpm --filter @oci/scripts run upload-exam-sample",
+    "purge-dataset-objects": "pnpm --filter @oci/scripts run purge-dataset-objects",
+    "make-synthetic-exam-sample": "pnpm --silent --filter @oci/dicom build && pnpm --filter @oci/scripts run make-synthetic-exam-sample",
     "prepare": "husky || true"
   },
   "devDependencies": {

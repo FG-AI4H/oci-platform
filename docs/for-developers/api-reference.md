@@ -371,6 +371,27 @@ Who sees which shape: the submitter, `evaluation-reviewer` and `admin` get the f
 
 The WHO Fig. 7 Model Facts Label, structured or as Markdown. Anonymous: PUBLISHED cards only, else `404`. Signed in: any non-DRAFT card; DRAFT is a `409`.
 
+## Evaluation submissions (#645)
+
+The task list and task detail (`GET /v2/evaluation/tasks`, `GET /v2/evaluation/tasks/:slug`) are public and never return the reference labels.
+
+### `POST /v2/evaluation/tasks/:slug/submissions`
+
+Body: `{ methodName, intent?, predictions: [{ imageId, grade }] }`. `intent` is `SCORED` (default) or `VALIDATION`.
+
+- `VALIDATION`: no token needed. Returns a `SubmissionValidationReport` listing identifiers sent twice, identifiers the task does not contain, labels outside the task's range, and how many of the task's items were left out. Nothing is scored, stored or counted.
+- `SCORED` _(any auth)_: scores the predictions and returns `{ id, scores }`. A format error (an identifier sent twice, a label outside the range) returns `400` with `{ message, submissionId }` and records a FAILED submission that does **not** count against the quota. Over the quota: `403` with `{ message, quota }`.
+
+### `GET /v2/evaluation/tasks/:slug/quota` _(any auth)_
+
+`ScoredSubmissionQuotaSummary`: the weekly and per-task limits in force on the environment, the caller's usage against each, and `remaining`, the smaller of the two remainders. Validation submissions and predictions files refused for a format error are not counted; a sealed run counts whatever its outcome.
+
+### `GET /v2/evaluation/tasks/:slug/submissions/:id`
+
+`EvaluationSubmissionDetail`: the submission's status, its scores (for a `CLASSIFICATION` task, `scores.metrics.perClass` is the per-class breakdown), the evaluation method version that produced them with its review status, and the task fields needed to read the numbers. Never carries predictions, reference labels or the submitter's identity; `viewerIsSubmitter` says only whether the caller submitted it.
+
+A SCORED or PENDING submission is public. A FAILED one is returned, with `failure: { reason, quotaConsumed }`, to its submitter and to `admin` only. For anyone else it is a `404`, the same as an unknown id.
+
 ## Errors
 
 The API emits RFC 7807 `application/problem+json` for all error responses:

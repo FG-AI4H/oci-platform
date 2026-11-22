@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
+import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import type { CatalogService } from '../catalog/catalog.service.js';
 import { DuaTemplateService } from './dua-template.service.js';
 
@@ -15,6 +16,8 @@ function datasetRow(
     duoTerms: string[];
     emailDomainAllowlist: string[];
     commercialUseTerms: string;
+    visibility: 'PRIVATE' | 'RESTRICTED' | 'PUBLIC';
+    hostId: string;
   }> = {},
 ) {
   return {
@@ -169,4 +172,56 @@ describe('DuaTemplateService.preview', () => {
     expect(result.markdown).toContain('CE marking — IIa medical device');
     expect(result.markdown).toContain('CH');
   });
+});
+
+describe('DuaTemplateService.previewFor (#658)', () => {
+  // UUID-shaped subs are used as they are for the host comparison.
+  const HOST_SUB = '00000000-0000-4000-8000-000000000001';
+  const OTHER_SUB = '00000000-0000-4000-8000-000000000002';
+  const caller = (sub: string, ...groups: string[]) =>
+    ({ sub, 'cognito:groups': groups }) as unknown as CognitoAccessTokenPayload;
+  const body = {
+    datasetSlug: 'sample',
+    audience: 'RESEARCHER' as const,
+    intendedUse: 'A 20-character-plus rationale for using the dataset in a research study.',
+  };
+
+  it('answers 404 for a PRIVATE dataset, as for an unknown slug, to a caller who is neither host nor admin', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue(null);
+    const unknown = await service.previewFor(body, caller(OTHER_SUB)).catch((e: unknown) => e);
+
+    catalog.findOwnerBySlug.mockResolvedValue(
+      datasetRow({ visibility: 'PRIVATE', hostId: HOST_SUB }),
+    );
+    for (const who of [
+      caller(OTHER_SUB),
+      caller(OTHER_SUB, 'participant'),
+      caller(OTHER_SUB, 'host'),
+      caller(OTHER_SUB, 'regulator'),
+      caller(OTHER_SUB, 'supervisor'),
+    ]) {
+      const known = await service.previewFor(body, who).catch((e: unknown) => e);
+      expect(known).toBeInstanceOf(NotFoundException);
+      expect((known as Error).message).toBe((unknown as Error).message);
+    }
+  });
+
+  it('renders a PRIVATE dataset for its host and for an admin', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue(
+      datasetRow({ visibility: 'PRIVATE', hostId: HOST_SUB }),
+    );
+    for (const who of [caller(HOST_SUB), caller(HOST_SUB, 'host'), caller(OTHER_SUB, 'admin')]) {
+      const result = await service.previewFor(body, who);
+      expect(result.markdown).toContain('example.edu');
+    }
+  });
+
+  it.each(['RESTRICTED', 'PUBLIC'] as const)(
+    'renders a %s dataset for any signed-in caller, as before',
+    async (visibility) => {
+      catalog.findOwnerBySlug.mockResolvedValue(datasetRow({ visibility, hostId: HOST_SUB }));
+      const result = await service.previewFor(body, caller(OTHER_SUB));
+      expect(result.templateId).toBe('dua-researcher');
+    },
+  );
 });

@@ -211,6 +211,15 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await page.getByLabel('Data retention (days)').fill('730');
     await page.getByLabel('Redistribution intent').selectOption('DERIVATIVES_ONLY');
     await page.getByLabel('Output type').selectOption('MODEL_WEIGHTS');
+    // Commercial intent makes this a builder request (#120): the form
+    // then requires the AI-builder context before it submits.
+    await page.getByLabel('Legal entity name').fill('Acme Health Inc.');
+    await page.getByLabel('Jurisdiction (ISO-2)').fill('CH');
+    await page.getByLabel('Deployment countries (ISO-2, comma-separated)').fill('KE, NG');
+    await page.getByLabel('Regulatory pathway').selectOption({ label: 'EU MDR Class IIa' });
+    await page
+      .getByLabel('Post-market data flow')
+      .selectOption({ label: 'Inference-only — nothing retained' });
     await page.getByRole('button', { name: /submit request/i }).click();
     // Lands on the dataset detail page with the confirmation banner.
     await expect(page).toHaveURL(new RegExp(`\\?requested=1$`));
@@ -272,7 +281,10 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     // Stays on the request-access page; the disposable-email error is
     // surfaced as a top-level form error mentioning the rejected domain.
     await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/request-access`));
-    await expect(page.getByText(/disposable email/i)).toBeVisible();
-    await expect(page.getByText(/mailinator\.com/i)).toBeVisible();
+    // The domain must be named in the error itself. The header also shows
+    // the signed-in address, so a page-wide match would find it twice.
+    const formError = page.getByRole('alert').filter({ hasText: /disposable email/i });
+    await expect(formError).toBeVisible();
+    await expect(formError).toContainText('mailinator.com');
   });
 });

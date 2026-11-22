@@ -1,0 +1,5 @@
+{
+  "profile": "radiology-workshop",
+  "evaluationTaskSlugs": ["nih-chestxray14-finding"],
+  "campaignSlugs": ["nih-chestxray14-reading"]
+}

@@ -145,10 +145,11 @@ test.describe('platform-hosted distributions', () => {
 
     // -- Detail page: "hosted" badge + a download link  --------------------
     await expect(page.getByText('hosted', { exact: true })).toBeVisible();
-    // The download link's accessible name uses the distribution's
-    // @id (`hello-bytes`), not the underlying filename — the @id is
-    // what the manifest declares as the canonical handle.
-    const downloadLink = page.getByRole('link', { name: /download hello-bytes/i });
+    // The files card labels a row with the file's name, not with the
+    // distribution's @id (`hello-bytes`), and so does the link.
+    const downloadLink = page.getByRole('link', {
+      name: 'Download hello.txt from platform storage',
+    });
     await expect(downloadLink).toBeVisible();
 
     // -- The /distributions/:id/download route returns a 302 to S3 ---------

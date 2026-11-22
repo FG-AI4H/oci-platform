@@ -7,7 +7,8 @@ import { test, expect, type Page } from '@playwright/test';
  *
  * What this exercises end-to-end:
  *   - The local-dev NextAuth Credentials provider (sign in as a host).
- *   - The header's host-only "New dataset" link.
+ *   - The host-only "New dataset" link. Since #248 it sits on the
+ *     catalogue page, not in the header.
  *   - /catalog/new — server action POST /v2/catalog/datasets.
  *   - /catalog/[slug]/publish — manifest paste, structured validation
  *     errors on bad input, redirect to detail page on happy path.
@@ -45,14 +46,19 @@ async function signInAs(page: Page, user: string, roles: string) {
 }
 
 test.describe('catalog host workflow', () => {
+  // The link is host-only and lives on the catalogue page. Each test
+  // waits for that page's heading first, so "no link" is asserted on the
+  // page that would carry it and not on one that never does.
   test('anonymous visitor sees no "New dataset" link', async ({ page }) => {
-    await page.goto('/');
-    // Header link is host-only; not present for anonymous.
+    await page.goto('/catalog');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByRole('link', { name: 'New dataset' })).toHaveCount(0);
   });
 
   test('participant cannot see "New dataset" link', async ({ page }) => {
     await signInAs(page, 'eve', 'participant');
+    await page.goto('/catalog');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByRole('link', { name: 'New dataset' })).toHaveCount(0);
   });
 
@@ -62,7 +68,8 @@ test.describe('catalog host workflow', () => {
     const slug = `e2e-${Date.now()}`;
     await signInAs(page, 'bob', 'host');
 
-    // Header host-only link is visible
+    // Host-only link on the catalogue page is visible
+    await page.goto('/catalog');
     const newLink = page.getByRole('link', { name: 'New dataset' });
     await expect(newLink).toBeVisible();
     await newLink.click();

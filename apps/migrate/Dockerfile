@@ -33,6 +33,11 @@ COPY apps/migrate/package.json ./package.json
 COPY apps/migrate/entrypoint.sh ./entrypoint.sh
 COPY apps/migrate/prisma.config.ts ./prisma.config.ts
 COPY apps/migrate/upload-fixtures.mjs ./upload-fixtures.mjs
+# Seed profiles (#644): the readiness check run before a profile is
+# replayed, and the one-off reset of a profile's objects. Both do nothing
+# unless the task is launched with OCI_SEED_PROFILES / OCI_SEED_RESET.
+COPY apps/migrate/seed-profile-check.mjs ./seed-profile-check.mjs
+COPY apps/migrate/reset-profile.mjs ./reset-profile.mjs
 COPY packages/database/prisma ./prisma
 # Demo-data seed file + bundled fixtures (#249, #251). Replayed by the
 # entrypoint after migrate when OCI_ENV != 'prod'. Idempotent — every

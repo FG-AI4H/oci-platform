@@ -57,11 +57,110 @@ The SQL-only seed works for simple inserts. When you reach for one of these you'
 
 - **Cascading inserts that need business-rule validation** (e.g. publish a manifest, run the DUO matcher). Use `apps/api/scripts/seed-catalog.ts` instead — it goes through the HTTP API.
 - **Conditional inserts based on application logic**. Move the seed to a TypeScript script using the Prisma client. The migrate image would gain a sidecar runtime — separate PR.
-- **Per-environment differences**. Currently the SQL is identical across dev and int. If they diverge meaningfully, add an `OCI_ENV` parameter to the entrypoint and pick the file accordingly.
+- **Per-environment differences**. The demo SQL is identical across dev and int. Content that belongs to one environment and one occasion goes in a **seed profile** (next section), not in `demo.sql`.
+
+## Seed profiles
+
+A seed profile is a second seed file with its own fixture set, under `packages/database/seed/profiles/<name>/`. It is replayed by the migrate task **after** the demo seed, and only on an environment that lists it:
+
+| Setting                                                | Where                                      | Default         |
+| ------------------------------------------------------ | ------------------------------------------ | --------------- |
+| `seedProfiles` of the environment                      | `infra/cdk/lib/environments.ts`            | `[]` everywhere |
+| `OCI_SEED_PROFILES` on the migrate task (from the row) | set by CDK only when the list is not empty | unset           |
+
+With the list empty, the migrate task runs the same commands and the same SQL as before profiles existed, and the task definition is unchanged. A profile is never replayed on prod: the entrypoint does not seed there, and CDK refuses a profile listed for prod at synth time.
+
+What the migrate task does for each listed profile:
+
+1. **Readiness check** (`apps/migrate/seed-profile-check.mjs`). Every file the profile's manifests list must be either bundled in the image or already in the datasets bucket, with the size and the sha256 the manifest states. A profile that is not ready is **skipped with one line in the log and the deploy continues**. A profile whose `selection.json` says `"standIn": true` is never replayed on a deployed environment.
+2. **Bundled files** are uploaded by `upload-fixtures.mjs` in profile mode, which stores the sha256 with the object.
+3. **`seed.sql`** is replayed in one transaction. A failure here does fail the migrate task and the deploy, like a failure of `demo.sql`: it means the SQL is wrong or the stored evaluation answer key differs from the repository (#464).
+
+Rules: the same as for `demo.sql` (replayable, a second run changes no row, slug-keyed, no real patient data in the repository). In addition, a profile's files are **generated**: change the inputs or the generator, never the output.
+
+## The `radiology-workshop` profile
+
+Content for the December 2026 radiology workshop ([#644](https://github.com/FG-AI4H/oci-platform/issues/644)). Off on every environment until the real images have been prepared.
+
+| Object          | Slug                         | What it is                                                                                                                |
+| --------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Dataset         | `nih-chestxray14-workshop`   | 200 chest radiographs from NIH ChestX-ray14, at most 1024 px, PUBLIC / OPEN, with `metadata.csv` and three teaching files |
+| Evaluation task | `nih-chestxray14-finding`    | One finding, present or absent. `GRADING` with grades 0 and 1 and the referable threshold at 1, until #650                |
+| Campaign        | `nih-chestxray14-reading`    | Reading exercise on 60 of the images, three readers per image, French instructions, `taskTimeoutHours: 1`, status READY   |
+| Model cards     | `workshop-cxr-model-a`, `-b` | Fictional teaching entries: A is PUBLISHED with a complete intended-use statement, B is a DRAFT                           |
+
+**What is in the repository today is a synthetic stand-in**: 200 placeholder images drawn by a script (not committed, 13 MB), invented metadata and invented labels. It exists so the profile can be built, seeded and reset before any real file is fetched. `selection.json` says `"standIn": true`.
+
+**Not created by the seed:**
+
+- **Annotation tasks.** They are created from the dataset's files by a campaign manager ([#646](https://github.com/FG-AI4H/oci-platform/issues/646)). The campaign is seeded READY so tasks can be loaded before it is started. The 60 images of the reading subset are the ones flagged `"campaign": true` in `selection.json`.
+- **Accounts.** They are created from a roster with `pnpm provision-users` (see [admin-user-management.md](./admin-user-management.md)). Give exactly one account the group `arbitration-annotator` **and no other reading group**: a user who is both reader and arbiter is only ever given reading tasks.
+
+### Files of the profile
+
+| File                                          | Role                                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `selection.json`                              | **Input.** The images, where each was fetched from and what it hashed to, sex, age band, reading subset |
+| `reference-labels.hidden.csv`                 | **Input.** The hidden reference labels. Never uploaded: it is not in the fixture directory              |
+| `fixtures/<slug>/manifest.json`               | Generated. Croissant 1.1; record set of image id, sex and age band                                      |
+| `fixtures/<slug>/metadata.csv`, `model-*.csv` | Generated. Bundled in the image and uploaded by the migrate task                                        |
+| `seed.sql`, `reset.json`                      | Generated. The SQL replayed on deploy; the objects the reset may touch                                  |
+
+`pnpm radiology-workshop check` fails when a generated file differs from what the inputs produce, and CI runs the same comparison as a test.
+
+**Hidden labels.** They are in the evaluation task's answer key (`evaluation.evaluation_tasks.ground_truth`, never returned by an endpoint), in `seed.sql` and in the hidden CSV, exactly as for the IDRiD demo task. They are not in the manifest, in `metadata.csv` or in any distribution. The two valid teaching files are built from them and give most labels away, which is accepted for a teaching task.
+
+**Teaching files.** Models A and B make the same number of missed findings and of false alarms, so their overall accuracy, sensitivity and specificity are identical. Model A's errors are spread over sex and age band; model B's are concentrated in the **60+** age band. Model C contains unknown identifiers, labels outside the range, duplicates and missing items, for the format check.
+
+### Preparing the real data
+
+Nothing below downloads anything by itself except `fetch --base-url`. Each download is a decision of the dataset's host.
+
+1. **Obtain the inputs**: the NIH metadata file and, for the preferred label source, the adjudicated label file. Read the README shipped in the NIH download.
+2. **Select.** Deterministic, with a fixed seed. Six strata (sex by age band 18-39, 40-59, 60+) of equal size, 40% of each with the finding, one image per patient, posterior-anterior films only. It stops, without selecting anything, if a cell cannot be filled.
+   ```bash
+   pnpm radiology-workshop select --metadata <Data_Entry file> \
+     --label-source adjudicated --labels <label file> --finding "Airspace opacity" \
+     --finding-fr "Opacité alvéolaire"
+   # or, with the labels NIH mined from the reports (weak; the dataset page then says so):
+   pnpm radiology-workshop select --metadata <Data_Entry file> \
+     --label-source report-mined --finding <NIH finding name> --finding-fr <French name>
+   ```
+3. **Record the README** in `selection.json`, under `source.readme`: its file name, the date and its text. `generate` refuses real data until this is done; until then the manifest carries a marked placeholder that does not present anyone else's wording as the README's.
+4. **Fetch, verify, resize.** From a directory holding the 200 files, or from a base address:
+   ```bash
+   pnpm radiology-workshop fetch --source-dir <dir> --work-dir <dir> --pin \
+     --fetched-from "<where the files came from>"
+   ```
+   `--pin` records the sha256 of each file as fetched; later runs must get the same bytes or stop. A file within 1024 px is hosted byte for byte; a larger one is shrunk.
+5. **Generate and review**: `pnpm radiology-workshop generate --work-dir <dir>`, then read the diff.
+6. **Upload** the prepared files to the `dev` datasets bucket, under the operator role: `pnpm radiology-workshop upload --work-dir <dir> --bucket <bucket>`. It checks every file against `selection.json` first and refuses a bucket whose name contains `prod`.
+7. **Switch the profile on** for `dev` in `infra/cdk/lib/environments.ts` (`seedProfiles: ['radiology-workshop']`) in the same pull request as the regenerated profile. The next deploy seeds it.
+
+### Reset
+
+Removes what people created **on the workshop objects**, between the rehearsal and the first day, or between two days: evaluation submissions on the task, annotation assignments with their answers and calibration flags on the campaign. Annotation tasks are put back at the first reading and a completed campaign is reopened. **Kept:** accounts, the dataset and its files, the answer key, the campaign with its tasks and instructions, the model cards, everything on every other dataset, task and campaign, and the audit trail.
+
+It is a one-off launch of the migrate task with `OCI_SEED_RESET` set, which then runs the reset and nothing else (no migration, no seed):
+
+```bash
+SPEC=$(aws ssm get-parameter --name /oci/dev/migrate/launch-spec --query Parameter.Value --output text)
+aws ecs run-task --launch-type FARGATE \
+  --cluster "$(echo "$SPEC" | jq -r .cluster)" \
+  --task-definition "$(echo "$SPEC" | jq -r .taskDefinition)" \
+  --network-configuration "awsvpcConfiguration={subnets=[$(echo "$SPEC" | jq -r '.subnets | join(",")')],securityGroups=[$(echo "$SPEC" | jq -r '.securityGroups | join(",")')],assignPublicIp=DISABLED}" \
+  --overrides '{"containerOverrides":[{"name":"migrate","environment":[{"name":"OCI_SEED_RESET","value":"radiology-workshop"}]}]}'
+```
+
+- **This is a dry run.** It prints, in the task's log stream (`migrate/migrate/<task-id>`), how many rows each step would remove, and changes nothing.
+- **To apply**, add `{"name":"OCI_SEED_RESET_CONFIRM","value":"radiology-workshop@dev"}` to the same list. Read the dry run first.
+- It runs on `dev` and on a local stack only. Any other environment name is refused before a connection is opened, and so is a database address containing `prod`.
+- Every statement is bound to the ids of the profile's own task and campaign (`reset.json`), in one transaction.
 
 ## Reference
 
 - File: [`packages/database/seed/demo.sql`](../../packages/database/seed/demo.sql)
+- Profiles: [`packages/database/seed/profiles/`](../../packages/database/seed/profiles/), generator in [`scripts/radiology-workshop/`](../../scripts/radiology-workshop/)
 - Runner: [`apps/migrate/entrypoint.sh`](../../apps/migrate/entrypoint.sh)
 - Local script: `pnpm --filter @oci/database db:seed:demo`
 - HTTP-layer alternative: [`apps/api/scripts/seed-catalog.ts`](../../apps/api/scripts/seed-catalog.ts)

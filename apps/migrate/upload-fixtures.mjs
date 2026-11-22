@@ -12,6 +12,8 @@
 //   OCI_DATASETS_BUCKET    Bucket name (e.g. oci-datasets-dev)
 //   AWS_REGION             For the SDK signer
 //   S3_ENDPOINT (optional) MinIO-style endpoint for local; absent in prod
+//   SEED_FIXTURES_PROFILE (optional) "1" when the directory is a seed
+//                          profile's fixture set (#644), see below
 //
 // Each fixture directory is expected to contain a `manifest.json` (the
 // Croissant manifest) plus the FileObject files it references. We
@@ -21,7 +23,19 @@
 //
 // — exactly mirroring what the demo SQL inserts on the row, so the
 // platform's `/download` route reads from the same S3 key.
+//
+// Profile mode (`SEED_FIXTURES_PROFILE=1`, #644). A seed profile lists
+// files that are not bundled in the image (an operator uploads them once),
+// and bundled files that can change content without changing length (a
+// regenerated CSV). So in this mode, and only in this mode:
+//   - a listed file that is not in the directory is counted, not warned
+//     about one line at a time;
+//   - a file whose bytes do not hash to the manifest's `sha256` is refused;
+//   - the sha256 is stored as object metadata, and an object is skipped only
+//     when its length AND that sha256 match.
+// Without the variable the behaviour is exactly what it was before.
 
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +46,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const BUCKET = process.env.OCI_DATASETS_BUCKET;
 const REGION = process.env.AWS_REGION ?? 'eu-central-1';
 const ENDPOINT = process.env.S3_ENDPOINT;
+const PROFILE_MODE = process.env.SEED_FIXTURES_PROFILE === '1';
 
 if (!BUCKET) {
   console.warn('seed-fixtures: OCI_DATASETS_BUCKET not set — skipping fixture upload');
@@ -62,6 +77,7 @@ try {
 
 let uploaded = 0;
 let skipped = 0;
+let notBundled = 0;
 
 for (const slug of fixtureDirs) {
   const fixtureDir = join(fixturesRoot, slug);
@@ -94,8 +110,15 @@ for (const slug of fixtureDirs) {
     try {
       body = readFileSync(filePath);
     } catch (err) {
-      console.warn(`seed-fixtures: ${slug}/${filename} not found in fixture dir — skipping`);
+      if (PROFILE_MODE) notBundled++;
+      else console.warn(`seed-fixtures: ${slug}/${filename} not found in fixture dir — skipping`);
       continue;
+    }
+
+    if (PROFILE_MODE && createHash('sha256').update(body).digest('hex') !== dist.sha256) {
+      throw new Error(
+        `seed-fixtures: ${slug}/${filename} is not the file its manifest describes (sha256 differs)`,
+      );
     }
 
     const key = `${slug}/${distId}/${filename}`;
@@ -114,7 +137,11 @@ for (const slug of fixtureDirs) {
       }
     }
 
-    if (head && head.ContentLength === body.length) {
+    if (
+      head &&
+      head.ContentLength === body.length &&
+      (!PROFILE_MODE || head.Metadata?.sha256 === dist.sha256)
+    ) {
       skipped++;
       continue;
     }
@@ -125,6 +152,7 @@ for (const slug of fixtureDirs) {
         Key: key,
         Body: body,
         ContentType: contentType,
+        ...(PROFILE_MODE ? { Metadata: { sha256: dist.sha256 } } : {}),
       }),
     );
     uploaded++;
@@ -132,4 +160,9 @@ for (const slug of fixtureDirs) {
   }
 }
 
+if (PROFILE_MODE && notBundled > 0) {
+  console.log(
+    `seed-fixtures: ${notBundled} listed file(s) are not bundled here (uploaded separately)`,
+  );
+}
 console.log(`seed-fixtures: done — uploaded=${uploaded} skipped=${skipped}`);

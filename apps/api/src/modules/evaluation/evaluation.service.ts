@@ -13,9 +13,11 @@ import { Prisma } from '@oci/database';
 import { GradingScoresSchema, TaskKindScoresSchema } from '@oci/shared-types';
 import type {
   CreateEvaluationTaskRequest,
+  EvaluationSubmissionDetail,
   EvaluationSubmissionResult,
   EvaluationTaskDetail,
   EvaluationTaskSummary,
+  ScoredSubmissionQuotaSummary,
   SealedRunMessage,
   SubmissionMode,
   SubmissionStatus,
@@ -37,8 +39,10 @@ import {
   SEALED_RUN_DEADLINE_SEC,
 } from './sealed-run.js';
 import {
+  consumesScoredQuota,
   nextQuotaWeekStart,
   quotaState,
+  quotaSummary,
   quotaWeekStart,
   resolveScoredQuotaLimits,
   type ScoredQuotaLimits,
@@ -90,8 +94,12 @@ export const SCORED_SUBMISSION_REQUIRES_IDENTITY_MESSAGE =
  *   - validation submissions (WP6): the same two shapes checked against the
  *     interface contract and answered with a report instead of a score. They
  *     write no row, enqueue nothing, and spend no quota;
- *   - the scored-submission quota (WP6): 3 per participant per task per
- *     calendar week, 10 per participant per task in total;
+ *   - the scored-submission quota (WP6): per participant per task, per
+ *     calendar week and in total, at the limits configured for the
+ *     environment. A predictions file refused before scoring does not count
+ *     (#645);
+ *   - one submission's own result, with the rule for who may read a FAILED
+ *     one (#645);
  *   - admin/host task creation (the only non-SQL way a task + hidden
  *     labels get created).
  *
@@ -184,6 +192,75 @@ export class EvaluationService {
   }
 
   /**
+   * One submission's full result (#645).
+   *
+   * A SCORED or PENDING submission is returned to anyone: it is already in the
+   * task's public result list, and this adds nothing to it but the task context.
+   * A FAILED one is returned to its submitter and to administrators only, with
+   * the reason. To anyone else it is a 404 with the same text as an id that does
+   * not exist, so the answer does not distinguish "not yours" from "not there".
+   *
+   * The reason is the stored participant-facing text. For a sealed run that is
+   * the sentence derived from the failure code, never the worker's detail.
+   */
+  async getSubmissionDetail(
+    slug: string,
+    submissionId: string,
+    user?: CognitoAccessTokenPayload,
+  ): Promise<EvaluationSubmissionDetail> {
+    const notFound = () =>
+      new NotFoundException(`submission "${submissionId}" not found on evaluation task "${slug}"`);
+
+    const row = await this.repo.findSubmissionDetail(slug, submissionId);
+    if (!row) throw notFound();
+
+    // A row with no submitter (created before scored submissions required an
+    // identity) matches nobody, so only an administrator reads its failure.
+    const viewerIsSubmitter =
+      !!user?.sub && row.submittedBy !== null && row.submittedBy === cognitoSubAsUuid(user.sub);
+    const failed = row.status === 'FAILED';
+    if (failed && !viewerIsSubmitter && !isAdministrator(user)) throw notFound();
+
+    return {
+      id: row.id,
+      task: row.task,
+      methodName: row.methodName,
+      mode: row.mode,
+      status: row.status,
+      scores: parseScores(row.scores),
+      attribution: attributionFor(row),
+      failure: failed
+        ? {
+            reason: row.error ?? 'No reason was recorded for this failure.',
+            quotaConsumed: consumesScoredQuota(row),
+          }
+        : null,
+      viewerIsSubmitter,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  /**
+   * What the caller has left on one task (#645), so a page can show it before
+   * a slot is spent. Same counts, same limits and same week as the gate in
+   * front of a scored submission — it reads through `readQuotaUsage`, the one
+   * place usage is counted, so the figure shown and the figure enforced cannot
+   * drift apart.
+   */
+  async getScoredQuota(
+    slug: string,
+    user?: CognitoAccessTokenPayload,
+  ): Promise<ScoredSubmissionQuotaSummary> {
+    const submittedBy = this.requireParticipant(user);
+    const task = await this.repo.findTaskRefBySlug(slug);
+    if (!task) throw new NotFoundException(`evaluation task "${slug}" not found`);
+
+    const now = new Date();
+    const usage = await this.readQuotaUsage(task.id, submittedBy, now);
+    return quotaSummary(task.slug, usage, this.quotaLimits, now);
+  }
+
+  /**
    * Mode 1 submit: load the task, score the predictions in-process against
    * the hidden ground truth, persist a SCORED submission + return its
    * scores. On a validation / scoring error, persist a FAILED submission
@@ -194,6 +271,12 @@ export class EvaluationService {
    * inside their per-task quota. Both run BEFORE anything is persisted and
    * before anything is scored, so a refused submission leaves no row and burns
    * no slot.
+   *
+   * A FAILED row written here does not count against the quota either (#645):
+   * every `failSubmission` below fires before `createSubmission` records a
+   * score, so the file was refused on its format and never compared with the
+   * labels. Keep it that way — a failure added AFTER scoring would be free
+   * oracle queries. See `consumesScoredQuota`.
    */
   async submitPredictions(
     slug: string,
@@ -556,24 +639,14 @@ export class EvaluationService {
     taskSlug: string,
     submittedBy: string,
   ): Promise<void> {
-    const totalUsed = await this.repo.countScoredSubmissionsForParticipant({
-      taskId,
-      submittedBy,
-    });
+    const now = new Date();
+    const { totalUsed, weekUsed } = await this.readQuotaUsage(taskId, submittedBy, now);
     if (totalUsed >= this.quotaLimits.perTask) {
       throw new ForbiddenException({
         message: totalQuotaExceededMessage(taskSlug, this.quotaLimits.perTask),
         quota: quotaState('TASK_TOTAL', totalUsed, null, this.quotaLimits),
       });
     }
-
-    const now = new Date();
-    const weekStart = quotaWeekStart(now);
-    const weekUsed = await this.repo.countScoredSubmissionsForParticipant({
-      taskId,
-      submittedBy,
-      since: weekStart,
-    });
     if (weekUsed >= this.quotaLimits.perWeek) {
       const resetsAt = nextQuotaWeekStart(now);
       throw new ForbiddenException({
@@ -582,6 +655,36 @@ export class EvaluationService {
       });
     }
   }
+
+  /**
+   * One participant's usage on one task: over the task's lifetime and inside
+   * the calendar week containing `now`. The only place usage is counted — the
+   * gate and the quota read both go through it.
+   */
+  private async readQuotaUsage(
+    taskId: string,
+    submittedBy: string,
+    now: Date,
+  ): Promise<{ totalUsed: number; weekUsed: number }> {
+    const [totalUsed, weekUsed] = await Promise.all([
+      this.repo.countScoredSubmissionsForParticipant({ taskId, submittedBy }),
+      this.repo.countScoredSubmissionsForParticipant({
+        taskId,
+        submittedBy,
+        since: quotaWeekStart(now),
+      }),
+    ]);
+    return { totalUsed, weekUsed };
+  }
+}
+
+/**
+ * Whether the caller is in the `admin` group — the operator override, as in
+ * `RolesGuard`. Read from the verified token's claim, never from the request.
+ */
+function isAdministrator(user?: CognitoAccessTokenPayload): boolean {
+  const groups: unknown = user?.['cognito:groups'];
+  return Array.isArray(groups) && groups.includes('admin');
 }
 
 /**
