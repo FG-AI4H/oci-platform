@@ -24,6 +24,7 @@ import {
   currentView,
   describeTransferSyntax,
   dragWindow,
+  firstRefusedEncoding,
   exactFromVoiRange,
   fromVoiRange,
   matchingPreset,
@@ -257,6 +258,18 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
           position,
           transferSyntaxUid: series.instances.at(position)?.transferSyntaxUid ?? null,
         });
+
+      // Refused before anything is fetched: this encoding decodes, but
+      // into a picture that is wrong and looks right (#778).
+      const refused = firstRefusedEncoding(series.instances);
+      if (refused !== null) {
+        fail(
+          'The viewer cannot show this series faithfully',
+          `Image ${refused + 1} is stored as ${describeTransferSyntax(series.instances.at(refused)?.transferSyntaxUid ?? null)}, ` +
+            'a compression this viewer decodes with errors in the grey levels. Download the files to open them in another viewer.',
+        );
+        return;
+      }
 
       // --- addresses -----------------------------------------------
       // When to renew, on the reader's own monotonic clock.

@@ -30,6 +30,8 @@ const VIDEO_SERIES = '1.2.826.0.1.3680043.8.498.674.82';
 /** Long enough that a jump lands where in-order loading would arrive last. */
 const LONG_SERIES = '1.2.826.0.1.3680043.8.498.674.83';
 const LONG_IMAGES = 60;
+/** Declared as lossy 12-bit JPEG, which the viewer refuses (#778). */
+const JPEG_EXTENDED_SERIES = '1.2.826.0.1.3680043.8.498.674.84';
 
 /** Air, a soft-tissue disc with a dense rim, and a ring that grows with the slice. */
 function phantom(n: number): Uint8Array {
@@ -153,6 +155,10 @@ test.beforeAll(async () => {
     for (let n = 1; n <= LONG_IMAGES; n += 1) {
       await upload(`long-${String(n).padStart(2, '0')}.dcm`, slice(LONG_SERIES, 3, n));
     }
+    for (let n = 1; n <= 2; n += 1) {
+      // Only the declared syntax matters: it is refused before any fetch.
+      await upload(`jpeg12-${n}.dcm`, slice(JPEG_EXTENDED_SERIES, 4, n, '1.2.840.10008.1.2.4.51'));
+    }
   } catch (err) {
     seedFailure = err instanceof Error ? err.message : String(err);
   }
@@ -181,7 +187,7 @@ test.describe('DICOM viewer on the dataset page', () => {
     const rows = page
       .getByRole('listitem')
       .filter({ has: page.getByRole('button', { name: /^View / }) });
-    await expect(rows).toHaveCount(3);
+    await expect(rows).toHaveCount(4);
     await expect(rows.nth(0)).toContainText('CT series 1');
     await expect(rows.nth(0)).toContainText(`${IMAGES} images · ${SIZE} × ${SIZE}`);
     await expect(rows.nth(1)).toContainText('CT series 2');
@@ -397,6 +403,26 @@ test.describe('DICOM viewer on the dataset page', () => {
     await expect(alert).toContainText('The viewer cannot decode this series', { timeout: 60_000 });
     await expect(alert).toContainText('MPEG-2 video (1.2.840.10008.1.2.4.100)');
     await expect(page.getByTestId('dicom-slider')).toHaveCount(0);
+  });
+
+  test('a series in lossy 12-bit JPEG is refused before any image is fetched', async ({ page }) => {
+    const storageOrigin = new URL(process.env.S3_PUBLIC_ENDPOINT ?? 'http://localhost:9000').origin;
+    const fetched: string[] = [];
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (url.origin === storageOrigin) fetched.push(url.pathname);
+    });
+    const dialog = await openSeries(page, 'CT series 4');
+
+    const alert = dialog.getByRole('alert');
+    await expect(alert).toContainText('The viewer cannot show this series faithfully', {
+      timeout: 60_000,
+    });
+    await expect(alert).toContainText('JPEG extended (1.2.840.10008.1.2.4.51)');
+    await expect(alert).toContainText('Download the files');
+    await expect(page.getByTestId('dicom-slider')).toHaveCount(0);
+    await expect(page.getByTestId('dicom-counter')).toHaveCount(0);
+    expect(fetched.filter((p) => p.endsWith('.dcm'))).toEqual([]);
   });
 
   test.describe('when storage refuses', () => {
