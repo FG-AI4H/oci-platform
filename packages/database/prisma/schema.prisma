@@ -1790,6 +1790,10 @@ enum EvaluationTaskKind {
   /// Nominal categories. Every confusion is equally wrong, so per-class
   /// precision/recall and balanced accuracy are the headline metrics (#428).
   CLASSIFICATION
+  /// One finding, present (1) or absent (0). Reported as sensitivity,
+  /// specificity and predictive values with Wilson intervals, and AUC when
+  /// every scored item carries a score (#650).
+  BINARY_DIAGNOSTIC
 
   @@schema("evaluation")
 }
@@ -1844,6 +1848,10 @@ model EvaluationTask {
   /// Referable threshold T: a label ≥ T is "referable" for the
   /// binary sensitivity/specificity split (IDRiD DR: grade ≥ 2).
   referableThreshold Int                @default(2) @map("referable_threshold")
+  /// `BINARY_DIAGNOSTIC` only: what label 1 means, in words (e.g.
+  /// "Pneumothorax present"). Public metric configuration (#650); null for
+  /// the other kinds and for a binary task created before it was required.
+  positiveClassName  String?            @map("positive_class_name") @db.VarChar(200)
   /// HIDDEN ground truth: a JSON map `{ imageId: integerLabel }`. Held
   /// server-side; NEVER serialised to a read DTO or a distribution.
   groundTruth        Json               @map("ground_truth")
