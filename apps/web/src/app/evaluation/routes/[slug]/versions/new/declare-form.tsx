@@ -16,9 +16,17 @@ import {
   Input,
   Textarea,
 } from '@oci/ui';
-import { PARTY_LABEL, TRUST_ANCHOR_LABEL } from '../../../../../../components/evaluation/route-labels';
+import {
+  PARTY_LABEL,
+  TRUST_ANCHOR_LABEL,
+} from '../../../../../../components/evaluation/route-labels';
 import { declareVersionAction, type DeclareState } from './actions';
-import { MAX_ROWS, type AdversaryRow, type DeclarationDraft, type ObservationRow } from './declaration-draft';
+import {
+  MAX_ROWS,
+  type AdversaryRow,
+  type DeclarationDraft,
+  type ObservationRow,
+} from './declaration-draft';
 import { DECLARE_TEXT } from './strings';
 
 const initial: DeclareState = { status: 'idle' };
@@ -89,8 +97,10 @@ function Fields({
   const [observations, setObservations] = useState<ObservationRow[]>(draft.observations);
   const [reproducible, setReproducible] = useState(draft.reproducible);
   const [fidelity, setFidelity] = useState(draft.fidelityMeasured);
-  const err = (name: string) => errors[name];
-  const described = (name: string) => (errors[name] ? { 'aria-describedby': `f-${name}-err` } : {});
+  const errorOf = new Map(Object.entries(errors));
+  const err = (name: string) => errorOf.get(name);
+  const described = (name: string) =>
+    errorOf.has(name) ? { 'aria-describedby': `f-${name}-err` } : {};
 
   return (
     <>
@@ -314,6 +324,7 @@ function Fields({
             <option value="">{DECLARE_TEXT.choose}</option>
             {TRUST_ANCHORS.map((anchor) => (
               <option key={anchor} value={anchor}>
+                {/* eslint-disable-next-line security/detect-object-injection -- typed enum key */}
                 {TRUST_ANCHOR_LABEL[anchor]}
               </option>
             ))}
@@ -474,6 +485,7 @@ function PartySelect(props: {
       <option value="">{DECLARE_TEXT.choose}</option>
       {PARTIES.map((party) => (
         <option key={party} value={party}>
+          {/* eslint-disable-next-line security/detect-object-injection -- typed enum key */}
           {PARTY_LABEL[party]}
         </option>
       ))}
@@ -481,7 +493,13 @@ function PartySelect(props: {
   );
 }
 
-function Lines(props: { name: string; label: string; hint: string; value: string; error?: string }) {
+function Lines(props: {
+  name: string;
+  label: string;
+  hint: string;
+  value: string;
+  error?: string;
+}) {
   const id = `f-${props.name}`;
   return (
     <Field label={props.label} htmlFor={id} required hint={props.hint} error={props.error}>

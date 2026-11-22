@@ -5,7 +5,7 @@ import { reviewNeedsRationale, type RouteReviewStatus } from '@oci/shared-types'
 import { Alert, AlertDescription, AlertTitle, Button, Field, Textarea } from '@oci/ui';
 import { recordReviewAction, type ReviewState } from './review-actions';
 import { decisionChoices, RATIONALE_MAX } from './review-outcome';
-import { DECISION_TEXT, REVIEW_TEXT } from './strings';
+import { decisionText, REVIEW_TEXT } from './strings';
 
 const initial: ReviewState = { status: 'idle' };
 
@@ -81,7 +81,7 @@ export function ReviewForm(props: Props) {
   );
 
   if (state.status === 'confirm') {
-    const text = DECISION_TEXT[state.to];
+    const text = decisionText(state.to);
     const choice = choices.find((c) => c.to === state.to);
     const destructive = state.to === 'REJECTED' || state.to === 'WITHDRAWN';
     const confirmHeading = `${REVIEW_TEXT.confirmHeadingPrefix} ${(choice?.label ?? text.label).toLowerCase()} version ${version} of ${methodName}`;
@@ -189,12 +189,7 @@ export function ReviewForm(props: Props) {
         // The version moved on while the reviewer wrote: keep the text.
         <div className="mt-4 space-y-2">
           <p className="text-sm">{REVIEW_TEXT.noLongerOpen}</p>
-          <Textarea
-            aria-label={REVIEW_TEXT.rationaleLabel}
-            readOnly
-            rows={4}
-            value={rationale}
-          />
+          <Textarea aria-label={REVIEW_TEXT.rationaleLabel} readOnly rows={4} value={rationale} />
         </div>
       ) : (
         <form action={action} className="mt-5 space-y-5">

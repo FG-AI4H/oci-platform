@@ -232,7 +232,11 @@ export type ReviewRouteVersionRequest = z.infer<typeof ReviewRouteVersionRequest
  * reviewer role, or they registered the route or declared the version
  * (review is in pairs).
  */
-export const RouteReviewBarSchema = z.enum(['NOT_A_REVIEWER', 'SUBMITTED_BY_YOU', 'DECLARED_BY_YOU']);
+export const RouteReviewBarSchema = z.enum([
+  'NOT_A_REVIEWER',
+  'SUBMITTED_BY_YOU',
+  'DECLARED_BY_YOU',
+]);
 export type RouteReviewBar = z.infer<typeof RouteReviewBarSchema>;
 
 /**

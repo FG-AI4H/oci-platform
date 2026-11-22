@@ -32,7 +32,8 @@ export const DECISION_TEXT: Record<
     label: 'Reject',
     consequence:
       'The version is published as failed, with your rationale, and cannot produce results. Results it already produced are withdrawn with it.',
-    finality: 'This is final: a rejected version cannot be reviewed again. A fix means a new version.',
+    finality:
+      'This is final: a rejected version cannot be reviewed again. A fix means a new version.',
     confirm: 'Reject version',
   },
   WITHDRAWN: {
@@ -78,7 +79,8 @@ export const REVIEW_TEXT = {
   notRecorded: 'Not recorded',
   chooseDecision: 'Choose a decision.',
   rationaleRequired: 'Write the rationale: it is published with the decision.',
-  rationaleTooShort: 'Write at least 10 characters: the rationale has to make the decision checkable.',
+  rationaleTooShort:
+    'Write at least 10 characters: the rationale has to make the decision checkable.',
   rationaleTooLong: 'Keep the rationale under 8,000 characters.',
   forbidden:
     'The platform refused this decision. Review is in pairs: whoever submitted the method or declared this version cannot review it, and only an evaluation reviewer can record an outcome. Nothing was changed; your text is kept below.',
@@ -123,3 +125,19 @@ export const DECLARE_LINK_TEXT = {
     'As an operator you can declare a version of this method. A change to its declarations is a new version, which is then reviewed.',
   link: 'Declare a new version',
 };
+
+const STATUS_WORDS = new Map(Object.entries(STATUS_WORD) as Array<[RouteReviewStatus, string]>);
+type DecisionText = (typeof DECISION_TEXT)['APPROVED'];
+const DECISION_TEXTS = new Map(
+  Object.entries(DECISION_TEXT) as Array<[RouteReviewStatus, DecisionText]>,
+);
+
+/** The status as a word in a sentence. */
+export function statusWord(status: RouteReviewStatus): string {
+  return STATUS_WORDS.get(status) ?? status;
+}
+
+/** The text of a decision, by the status it moves to. */
+export function decisionText(to: RouteReviewStatus): DecisionText {
+  return DECISION_TEXTS.get(to) ?? DECISION_TEXT.DECLARED;
+}

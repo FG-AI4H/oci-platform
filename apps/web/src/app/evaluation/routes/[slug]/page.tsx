@@ -49,7 +49,7 @@ import {
 } from '../../../../components/evaluation/route-labels';
 import { readRoutePermissions } from '../permissions';
 import { ReviewForm } from './review-form';
-import { DECLARE_LINK_TEXT, REVIEW_TEXT, STATUS_WORD } from './strings';
+import { DECLARE_LINK_TEXT, REVIEW_TEXT, statusWord } from './strings';
 
 /**
  * Evaluation method detail (#487, WP5 / ADR-0018). Anonymous —
@@ -298,7 +298,7 @@ function bannerFor(
   if (recorded && to.success) {
     const version = versions.find((v) => v.version === recorded);
     if (version && version.reviewStatus === to.data) {
-      return REVIEW_TEXT.recordedBanner(version.version, STATUS_WORD[to.data]);
+      return REVIEW_TEXT.recordedBanner(version.version, statusWord(to.data));
     }
   }
   const declared = typeof query.declared === 'string' ? query.declared : null;

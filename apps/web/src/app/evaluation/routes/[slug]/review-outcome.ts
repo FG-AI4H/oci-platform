@@ -3,7 +3,7 @@ import {
   RouteReviewStatusSchema,
   type RouteReviewStatus,
 } from '@oci/shared-types';
-import { DECISION_TEXT, REJECT_AFTER_APPROVAL, REVIEW_TEXT, STATUS_WORD } from './strings';
+import { decisionText, REJECT_AFTER_APPROVAL, REVIEW_TEXT, statusWord } from './strings';
 
 /**
  * Pure pieces of the review form (#649): which decisions to offer, how to
@@ -34,7 +34,7 @@ export function decisionChoices(
     .filter((to) => allowed.includes(to))
     .map((to) => {
       if (to === 'REJECTED' && from === 'APPROVED') return { to, ...REJECT_AFTER_APPROVAL };
-      const text = DECISION_TEXT[to];
+      const text = decisionText(to);
       return { to, label: text.label, consequence: text.consequence };
     });
 }
@@ -67,7 +67,13 @@ export function readReviewForm(values: ReviewValues): ReviewFormRead {
   return { ok: true, to: decision.data, rationale };
 }
 
-export type RefusalKind = 'forbidden' | 'stale' | 'not-reviewable' | 'rationale' | 'gone' | 'failed';
+export type RefusalKind =
+  | 'forbidden'
+  | 'stale'
+  | 'not-reviewable'
+  | 'rationale'
+  | 'gone'
+  | 'failed';
 
 export interface Refusal {
   kind: RefusalKind;
@@ -98,12 +104,12 @@ export function describeRefusal(args: {
   }
   if (httpStatus === 409 || httpStatus === 400) {
     if (current !== null && current !== expected) {
-      return { kind: 'stale', message: REVIEW_TEXT.stale(version, STATUS_WORD[current]) };
+      return { kind: 'stale', message: REVIEW_TEXT.stale(version, statusWord(current)) };
     }
     if (current !== null) {
       return {
         kind: 'not-reviewable',
-        message: REVIEW_TEXT.notReviewable(version, STATUS_WORD[current]),
+        message: REVIEW_TEXT.notReviewable(version, statusWord(current)),
       };
     }
   }
@@ -115,9 +121,9 @@ export function problemDetail(body: string): string {
   try {
     const parsed: unknown = JSON.parse(body);
     if (parsed && typeof parsed === 'object') {
-      const record = parsed as Record<string, unknown>;
+      const record = new Map(Object.entries(parsed as Record<string, unknown>));
       for (const key of ['detail', 'message', 'title']) {
-        const value = record[key];
+        const value = record.get(key);
         if (typeof value === 'string') return value;
         if (Array.isArray(value)) return value.filter((v) => typeof v === 'string').join(' ');
       }

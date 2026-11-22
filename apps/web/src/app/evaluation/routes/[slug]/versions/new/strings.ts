@@ -91,7 +91,8 @@ export function fieldMessage(field: string): string {
   if (field === 'trustAnchor') return 'Choose the trust anchor.';
   if (field === 'keyGovernance') return 'Say who holds the keys or attestation roots.';
   if (field === 'reproducibleMethod') return 'Say how a result reproduces.';
-  if (field === 'permittedOperations') return 'Give at least one permitted operation, one per line.';
+  if (field === 'permittedOperations')
+    return 'Give at least one permitted operation, one per line.';
   if (field === 'arithmeticPrecision') return 'Give the arithmetic precision, for example fp32.';
   if (field === 'maxRuntimeSec') return 'A whole number of seconds, at most 86,400.';
   if (field === 'maxMemoryMb') return 'A whole number of MiB, at most 1,048,576.';

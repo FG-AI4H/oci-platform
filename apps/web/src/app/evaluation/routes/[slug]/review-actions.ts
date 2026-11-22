@@ -130,7 +130,10 @@ export async function recordReviewAction(
 /** The version's status now, from the public read; null if it cannot be had. */
 async function currentStatus(routeUrl: string, version: string): Promise<RouteReviewStatus | null> {
   try {
-    const res = await fetch(routeUrl, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+    const res = await fetch(routeUrl, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
     if (!res.ok) return null;
     const route = (await res.json()) as EvaluationRouteResponse;
     return route.versions.find((v) => v.version === version)?.reviewStatus ?? null;

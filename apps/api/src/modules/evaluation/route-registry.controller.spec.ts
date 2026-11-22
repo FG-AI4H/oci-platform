@@ -233,10 +233,14 @@ describe('/v2/evaluation/routes authorization', () => {
       });
 
       it('403s the submitter before it looks at the rationale', async () => {
-        const res = await review('APPROVED', {
-          'x-test-user': 'route-owner',
-          'x-test-groups': 'evaluation-reviewer',
-        }, null);
+        const res = await review(
+          'APPROVED',
+          {
+            'x-test-user': 'route-owner',
+            'x-test-groups': 'evaluation-reviewer',
+          },
+          null,
+        );
 
         expect(res.statusCode).toBe(403);
       });
@@ -367,7 +371,11 @@ describe('/v2/evaluation/routes authorization', () => {
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      expect(body).toMatchObject({ slug: 'rival-sealed', isSubmitter: false, canDeclareVersion: false });
+      expect(body).toMatchObject({
+        slug: 'rival-sealed',
+        isSubmitter: false,
+        canDeclareVersion: false,
+      });
       expect(byVersion(body, '1.0.0')).toEqual({
         version: '1.0.0',
         reviewStatus: 'DECLARED',
@@ -425,7 +433,9 @@ describe('/v2/evaluation/routes authorization', () => {
         versions: [versionRow({ reviewStatus: 'UNDER_REVIEW', declaredByUserId: null })],
       });
 
-      const body = (await permissions({ 'x-test-user': 'admin-1', 'x-test-groups': 'admin' })).json();
+      const body = (
+        await permissions({ 'x-test-user': 'admin-1', 'x-test-groups': 'admin' })
+      ).json();
 
       expect(body).toMatchObject({ isSubmitter: false, canDeclareVersion: true });
       expect(byVersion(body, '1.0.0')).toMatchObject({

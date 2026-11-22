@@ -102,9 +102,14 @@ const text = (fd: FormData, name: string): string => {
 };
 
 /** Rows posted as `<prefix>.<i>.<field>`, in index order, up to `MAX_ROWS`. */
-function rows(fd: FormData, prefix: string): number[] {
+const ROW_KEY = {
+  adversaries: /^adversaries\.(\d{1,2})\./,
+  observations: /^observations\.(\d{1,2})\./,
+} as const;
+
+function rows(fd: FormData, prefix: keyof typeof ROW_KEY): number[] {
   const indexes = new Set<number>();
-  const pattern = new RegExp(`^${prefix}\\.(\\d{1,2})\\.`);
+  const pattern = prefix === 'adversaries' ? ROW_KEY.adversaries : ROW_KEY.observations;
   for (const key of fd.keys()) {
     const match = pattern.exec(key);
     if (match?.[1]) indexes.add(Number(match[1]));
@@ -233,10 +238,10 @@ export type DraftCheck =
 export function checkDraft(d: DeclarationDraft, messageFor: (field: string) => string): DraftCheck {
   const parsed = CreateRouteVersionRequestSchema.safeParse(requestFromDraft(d));
   if (parsed.success) return { ok: true, request: parsed.data };
-  const errors: Record<string, string> = {};
+  const errors = new Map<string, string>();
   for (const issue of parsed.error.issues) {
     const field = fieldForIssue(issue.path);
-    if (!(field in errors)) errors[field] = messageFor(field);
+    if (!errors.has(field)) errors.set(field, messageFor(field));
   }
-  return { ok: false, errors };
+  return { ok: false, errors: Object.fromEntries(errors) };
 }

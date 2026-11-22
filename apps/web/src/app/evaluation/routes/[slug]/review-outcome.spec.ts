@@ -6,9 +6,10 @@ describe('decisionChoices', () => {
     expect(
       decisionChoices('UNDER_REVIEW', ['WITHDRAWN', 'REJECTED', 'APPROVED']).map((c) => c.to),
     ).toEqual(['APPROVED', 'REJECTED', 'WITHDRAWN']);
-    expect(decisionChoices('DECLARED', ['UNDER_REVIEW', 'WITHDRAWN']).map((c) => c.label)).toEqual(
-      ['Begin the review', 'Withdraw'],
-    );
+    expect(decisionChoices('DECLARED', ['UNDER_REVIEW', 'WITHDRAWN']).map((c) => c.label)).toEqual([
+      'Begin the review',
+      'Withdraw',
+    ]);
     expect(decisionChoices('REJECTED', [])).toEqual([]);
   });
 
