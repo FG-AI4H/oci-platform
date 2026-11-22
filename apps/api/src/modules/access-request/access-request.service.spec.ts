@@ -149,6 +149,64 @@ describe('AccessRequestService.create', () => {
     );
   });
 
+  it('answers 404 for a PRIVATE dataset, as for an unknown slug, and stores nothing (#658)', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue(null);
+    const unknown = await service
+      .create('sample', validBody, user(REQUESTER_SUB))
+      .catch((e: unknown) => e);
+
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      visibility: 'PRIVATE',
+      duoTerms: ['DUO_0000042'],
+      accessTier: 'CONTROLLED',
+      emailDomainAllowlist: [],
+    });
+    for (const caller of [
+      user(REQUESTER_SUB),
+      user(REQUESTER_SUB, 'participant'),
+      user(ADMIN_SUB, 'admin'),
+    ]) {
+      const known = await service.create('sample', validBody, caller).catch((e: unknown) => e);
+      expect(known).toBeInstanceOf(NotFoundException);
+      // Nothing tells a private dataset from one that does not exist.
+      expect((known as Error).message).toBe((unknown as Error).message);
+    }
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps the "you host it" answer for the host of a PRIVATE dataset', async () => {
+    catalog.findOwnerBySlug.mockResolvedValue({
+      id: DATASET_ID,
+      hostId: HOST_SUB,
+      visibility: 'PRIVATE',
+      duoTerms: [],
+      accessTier: 'OPEN',
+      emailDomainAllowlist: [],
+    });
+    await expect(service.create('mine', validBody, user(HOST_SUB, 'host'))).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it.each(['RESTRICTED', 'PUBLIC'] as const)(
+    'still takes a request on a %s dataset',
+    async (visibility) => {
+      catalog.findOwnerBySlug.mockResolvedValue({
+        id: DATASET_ID,
+        hostId: HOST_SUB,
+        visibility,
+        duoTerms: ['DUO_0000042'],
+        accessTier: 'OPEN',
+        emailDomainAllowlist: [],
+      });
+      repo.create.mockResolvedValue({ id: REQUEST_ID });
+      const out = await service.create('rsna', validBody, user(REQUESTER_SUB));
+      expect(out.id).toBe(REQUEST_ID);
+    },
+  );
+
   it('persists a PENDING request and matches MATCHED on a GRU dataset', async () => {
     catalog.findOwnerBySlug.mockResolvedValue({
       id: DATASET_ID,

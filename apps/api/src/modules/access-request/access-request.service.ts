@@ -83,6 +83,16 @@ export class AccessRequestService {
       throw new BadRequestException("you can't request access to a dataset you host");
     }
 
+    // A PRIVATE dataset takes no access request (#658). Approval opens
+    // nothing there (`StorageService.authoriseDatasetBytes` reads no
+    // request for PRIVATE), and a stored request would hand the
+    // dataset's name, DUO terms and tier back to the requester through
+    // `listOwn`. The answer is the one for an unknown slug, so that a
+    // guessed slug is not confirmed.
+    if (target.visibility === 'PRIVATE') {
+      throw new NotFoundException(`dataset "${slug}" not found`);
+    }
+
     // Compute the normalised requester identity context (#115). Today
     // this consumes the email-domain classifier (#116) and the
     // certification quiz (#117); future PRs add ORCID, click-wrap,

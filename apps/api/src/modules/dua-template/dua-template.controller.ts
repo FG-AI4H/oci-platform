@@ -5,7 +5,8 @@ import {
   type PreviewDuaRequest,
   type PreviewDuaResponse,
 } from '@oci/shared-types';
-import { CognitoJwtGuard } from '../../auth/cognito-jwt.guard.js';
+import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
+import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
 import { ZodPipe } from '../catalog/dto/zod-pipe.js';
 import { DuaTemplateService } from './dua-template.service.js';
 
@@ -33,7 +34,8 @@ export class DuaTemplateController {
   @ApiOkResponse({ description: 'PreviewDuaResponse — templateId + LMIC flag + Markdown body.' })
   preview(
     @Body(new ZodPipe(PreviewDuaRequestSchema)) body: PreviewDuaRequest,
+    @CurrentUser() user: CognitoAccessTokenPayload,
   ): Promise<PreviewDuaResponse> {
-    return this.service.preview(body);
+    return this.service.previewFor(body, user);
   }
 }
