@@ -24,6 +24,7 @@ and (over time) federated health data. This page is the operating contract.
 
 - 3 AZs, public subnets only host the ALB; everything else is private.
 - WAFv2 attached to the ALB in int/prod with **AWSManagedRulesCommonRuleSet**, **KnownBadInputs**, **AmazonIpReputationList**.
+- One override (#736): the core rule set's `SizeRestrictions_BODY` (blocks bodies over 8 KB) is set to **Count**, for the whole web ACL. Manifests, predictions files, annotation results, server actions and DocuSeal signing all send larger bodies through the same ALB. The body limits are enforced by the origins instead, each written down and tested: the API per route (1 MiB by default, 10 MiB for predictions, 8 MiB for a manifest; see [api-reference.md](for-developers/api-reference.md#request-size-limits)) and Next.js server actions at 1 MiB. On an ALB the WAF inspects only the first 8 KB of a body, so the core rule set's body rules (cross-site scripting, LFI, RFI, SSRF) do not see what follows; input validation (Zod) and parameterised queries (Prisma) remain the controls for it. The cookie, query-string and URI-path size rules keep blocking. A CDK test pins this for every environment with the WAF on.
 - VPC flow logs to CloudWatch (REJECT in dev/int, ALL in prod).
 
 ## Code & supply chain

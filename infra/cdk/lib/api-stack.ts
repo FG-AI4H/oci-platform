@@ -20,6 +20,34 @@ import { Construct } from 'constructs';
 import { NagSuppressions } from 'cdk-nag';
 import type { OciEnvConfig } from './environments.js';
 
+/**
+ * Rules of the AWS managed core rule set whose action this web ACL changes
+ * (#736). Exported for the CDK test that pins it.
+ *
+ * `SizeRestrictions_BODY` blocks every request body over 8 KB (8,192 bytes).
+ * The platform sends larger ones as a matter of course, through the same
+ * ALB: manifest publishes (5 to 94 KB seeded, up to 8 MiB), predictions
+ * files, annotation results, the sealed-run outbox, Next.js server actions
+ * and DocuSeal signing. So the rule counts instead of blocking, for the
+ * whole web ACL, and the body limits are enforced by the origins: the API
+ * per route (`apps/api/src/common/http/body-limits.ts`) and Next.js for
+ * server actions. A path-scoped exemption was not chosen: the requests
+ * that are legitimately large span the API, the web app's server actions
+ * (posted to page paths) and a third-party host, and a route missing from
+ * the list would fail only where the WAF is on.
+ *
+ * The rule still labels the request
+ * (`awswaf:managed:aws:core-rule-set:SizeRestrictions_Body`) and still
+ * shows in the rule group's CloudWatch metrics. The cookie, query-string
+ * and URI-path size rules keep blocking.
+ *
+ * AWS WAF silently ignores an override whose rule name does not match
+ * exactly (case included), hence the test.
+ */
+export const CORE_RULE_SET_ACTION_OVERRIDES: wafv2.CfnWebACL.RuleActionOverrideProperty[] = [
+  { name: 'SizeRestrictions_BODY', actionToUse: { count: {} } },
+];
+
 export interface ApiStackProps extends cdk.StackProps {
   cfg: OciEnvConfig;
   tags: Record<string, string>;
@@ -706,7 +734,8 @@ export class ApiStack extends cdk.Stack {
       );
     }
 
-    // WAF (managed rules) for int/prod
+    // WAF (managed rules), where `cfg.enableWaf` is on (int/prod). The web
+    // ACL covers the whole ALB: API, web app and DocuSeal.
     if (props.cfg.enableWaf) {
       const acl = new wafv2.CfnWebACL(this, 'WebAcl', {
         scope: 'REGIONAL',
@@ -730,6 +759,7 @@ export class ApiStack extends cdk.Stack {
               managedRuleGroupStatement: {
                 vendorName: 'AWS',
                 name: 'AWSManagedRulesCommonRuleSet',
+                ruleActionOverrides: CORE_RULE_SET_ACTION_OVERRIDES,
               },
             },
           },
