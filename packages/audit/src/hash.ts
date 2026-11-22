@@ -7,6 +7,15 @@ import { canonicalize } from './canonicalize.js';
  * Postgres trigger uses for `record_hash`.
  */
 export function payloadHash(payload: Record<string, unknown>): string {
-  const canonical = canonicalize(payload);
-  return createHash('sha256').update(canonical, 'utf8').digest('hex');
+  return canonicalSha256(payload);
+}
+
+/**
+ * The same rule for any JSON value, for a reader that gets a stored
+ * payload back as `unknown`. The writer only ever hashes objects; a
+ * stored payload that is not one still gets a hash, which then cannot
+ * match, so a verifier reports it instead of throwing.
+ */
+export function canonicalSha256(value: unknown): string {
+  return createHash('sha256').update(canonicalize(value), 'utf8').digest('hex');
 }

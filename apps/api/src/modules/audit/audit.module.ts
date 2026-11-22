@@ -9,9 +9,16 @@ import {
 } from '@nestjs/common';
 import { AuditEmitter, type AuditPrismaPort, type AuditQueuePort } from '@oci/audit';
 import type { Queue, Worker } from 'bullmq';
+import { AuthModule } from '../../auth/auth.module.js';
+import { RolesGuard } from '../../auth/roles.guard.js';
 import { PrismaService } from '../../prisma.service.js';
+import { AuditController } from './audit.controller.js';
+import { AuditPseudonymiser } from './audit-pseudonym.js';
+import { AuditReaderRepository } from './audit-reader.repository.js';
+import { AuditReaderService } from './audit-reader.service.js';
+import { AUDIT_EMITTER } from './audit.tokens.js';
 
-export const AUDIT_EMITTER = Symbol.for('AUDIT_EMITTER');
+export { AUDIT_EMITTER } from './audit.tokens.js';
 
 /**
  * BullMQ bridge — declared first so `AuditModule` below can list it as
@@ -89,9 +96,14 @@ class AuditQueueBridge implements OnModuleInit, OnApplicationShutdown {
  * `emitter.emitSync(input, tx)` directly so the audit row commits with
  * the parent transaction. The queue path is for high-volume / non-
  * critical events.
+ *
+ * It also serves the trail's reader, `/v2/audit` (#653): the list,
+ * chain verification and the audited exports.
  */
 @Global()
 @Module({
+  imports: [AuthModule],
+  controllers: [AuditController],
   providers: [
     PrismaService,
     {
@@ -109,6 +121,10 @@ class AuditQueueBridge implements OnModuleInit, OnApplicationShutdown {
       inject: [PrismaService],
     },
     AuditQueueBridge,
+    RolesGuard,
+    AuditPseudonymiser,
+    AuditReaderRepository,
+    AuditReaderService,
   ],
   exports: [AUDIT_EMITTER],
 })
