@@ -27,6 +27,7 @@ import {
   fromVoiRange,
   matchingPreset,
   mergeRefreshedAddresses,
+  nextToLoad,
   sameInstances,
   sameView,
   toVoiRange,
@@ -393,7 +394,10 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
       setPhase('ready');
 
       // --- the rest of the stack -----------------------------------
-      let next = 1;
+      // Nearest the image on screen first, not in stack order: on a slow
+      // link a reader who jumps ahead finds the neighbours there.
+      /** Positions loaded, failed or being fetched. */
+      const taken = new Set<number>([0]);
       const loadOne = async (i: number, retried = false): Promise<void> => {
         // Renewed ahead of time when the time is known; if that fails,
         // the load goes ahead with the address there is.
@@ -414,9 +418,10 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
         }
       };
       const worker = async () => {
-        while (!cancelled && next < imageIds.length) {
-          const i = next;
-          next += 1;
+        while (!cancelled) {
+          const i = nextToLoad(current, imageIds.length, taken);
+          if (i === null) return;
+          taken.add(i);
           await loadOne(i);
         }
       };
