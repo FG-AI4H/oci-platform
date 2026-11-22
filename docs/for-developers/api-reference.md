@@ -410,7 +410,7 @@ For Croissant validation, the `400` body carries `issues[]` with JSON-pointer `p
 
 ## Rate limits
 
-Per-IP throttling at the ALB; default 100 requests/min. Bulk consumers (CLI, federation harvesters) should authenticate so they're rate-limited per token rather than per IP.
+Rate limits are not part of the documented contract yet and may be introduced. Clients should treat `429 Too Many Requests` as a signal to wait and retry, honouring `Retry-After` when it is present. Bulk consumers (CLI, federation harvesters) should authenticate.
 
 ## Versioning policy
 

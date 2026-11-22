@@ -55,7 +55,7 @@ Three things to remember:
 - It doesn't enforce retention deletion on your machines.
 - It doesn't watermark downloads (yet — discussed for evaluation challenges in Phase C).
 - It doesn't share information about other approved requesters with you.
-- It doesn't impose download quotas, but it does rate-limit per IP at the API gateway. Bulk downloads for legitimate offline work — coordinate with the host directly.
+- It doesn't impose download quotas. For bulk downloads for legitimate offline work, coordinate with the host directly.
 
 ## Audit trail
 
