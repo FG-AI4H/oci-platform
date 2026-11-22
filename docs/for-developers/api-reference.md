@@ -412,6 +412,36 @@ Body: `{ methodName, intent?, predictions: [{ imageId, grade }] }`. `intent` is 
 
 A SCORED or PENDING submission is public. A FAILED one is returned, with `failure: { reason, quotaConsumed }`, to its submitter and to `admin` only. For anyone else it is a `404`, the same as an unknown id.
 
+## Request size limits
+
+The API refuses a request body over its route's limit with `413`, before the route runs: nothing is validated, stored or counted against a quota (#741). The numbers are defined once, in `@oci/shared-types` (`request-limits.ts`), with their arithmetic.
+
+| Route                                         | Limit                 | What it holds                                                                                                                                                                                                                    |
+| --------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /v2/evaluation/tasks/:slug/submissions` | 10 MiB (10,485,760 B) | The schema's 100,000 predictions with identifiers of up to 64 characters (28 bytes a row plus the identifier: 9.2 MB). The schema allows identifiers of 200 characters; at that length about 46,000 rows fit, and more is `413`. |
+| `POST /v2/evaluation/seam/evalai/submissions` | 10 MiB                | The same rows as above.                                                                                                                                                                                                          |
+| `POST /v2/catalog/datasets/:slug/versions`    | 8 MiB (8,388,608 B)   | A manifest listing about 24,000 files one by one (about 350 bytes a file). The seeded manifests are 5 to 94 KB.                                                                                                                  |
+| Every other route                             | 1 MiB (1,048,576 B)   | Fastify's default, set explicitly.                                                                                                                                                                                               |
+
+The web app sends less than these limits. A server action's body is capped at 1 MiB by Next.js (`serverActions.bodySizeLimit` in `apps/web/next.config.ts`), and the predictions page refuses a file over 512 KiB, which becomes at most about 2.8 MB of JSON. Larger bodies come from scripts and machine clients calling the API directly.
+
+The `413` is a problem response (`Content-Type: application/problem+json`) that names the limit and what to do about it. `message` repeats `detail` for clients that read Nest's usual shape:
+
+```json
+{
+  "type": "https://oci.ai4h.net/errors/payload-too-large",
+  "title": "Payload Too Large",
+  "status": 413,
+  "detail": "The predictions submission is larger than 10 MiB, the most this endpoint accepts. Nothing was stored. A submission carries at most 100,000 predictions, and fewer when the identifiers are long. Check that the file holds one prediction for each item of the task and nothing else.",
+  "instance": "/v2/evaluation/tasks/idrid-grading/submissions",
+  "limitBytes": 10485760,
+  "statusCode": 413,
+  "message": "…the same as detail…"
+}
+```
+
+Where the load balancer's WAF is on (`int`, `prod`), it does not limit the body: the core rule set's 8 KB body rule only counts (#736, [security.md](../security.md)). Its other size rules still block: a query string over 2,048 bytes, a URI path over 1,024 bytes and a `Cookie` header over 10,240 bytes are refused with `403` before they reach the API.
+
 ## Errors
 
 The API emits RFC 7807 `application/problem+json` for all error responses:

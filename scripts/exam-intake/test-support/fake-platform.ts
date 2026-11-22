@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { parseDicomHeader } from '@oci/dicom';
+import { API_BODY_LIMIT_BYTES } from '../platform-api.js';
 
 /**
  * A stand-in for the platform, for the upload tests: a real HTTP server
@@ -62,8 +63,8 @@ export class FakePlatform {
   forceCheckStatus: string | null = null;
   /** Answer no check status at all, as the platform does for a file it does not see as DICOM. */
   silentAboutCheck = false;
-  /** Largest JSON body accepted, as the real API. */
-  bodyLimit = 1024 * 1024;
+  /** Largest JSON body accepted, as the real API's version publish. */
+  bodyLimit = API_BODY_LIMIT_BYTES;
 
   private readonly uploads = new Map<
     string,
