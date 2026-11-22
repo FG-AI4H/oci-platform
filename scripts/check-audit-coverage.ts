@@ -33,6 +33,8 @@ import { dirname, join, relative } from 'node:path';
 interface Taxonomy {
   expected: string[];
   unimplemented: Record<string, string>;
+  /** Actions written outside apps/api/src (#739): action -> repository-relative file. */
+  emittedOutsideApi?: Record<string, string>;
 }
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -133,6 +135,43 @@ function scanCallSites(files: string[]): FoundCall[] {
   return calls;
 }
 
+/**
+ * Actions written outside the API: by the one-off SQL runner, or by a
+ * reviewed statement it runs (#739). Such a file is not a TypeScript call
+ * site, so the declared file is read and must name the module and the
+ * action as literals; a file that no longer does fails the check.
+ */
+function scanOutsideApi(declared: Record<string, string>): {
+  calls: FoundCall[];
+  broken: string[];
+} {
+  const calls: FoundCall[] = [];
+  const broken: string[] = [];
+  for (const [action, file] of Object.entries(declared)) {
+    const dot = action.indexOf('.');
+    const module = action.slice(0, dot);
+    const rest = action.slice(dot + 1);
+    let src = '';
+    try {
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- a path declared in the checked-in taxonomy
+      src = readFileSync(join(REPO_ROOT, file), 'utf8');
+    } catch {
+      broken.push(`${action}: ${file} cannot be read`);
+      continue;
+    }
+    // The two literals side by side, as an INSERT ... VALUES lists them.
+    const escape = (part: string) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line security/detect-non-literal-regexp -- built from an escaped action declared in the checked-in taxonomy
+    const together = new RegExp(`'${escape(module)}'\\s*,\\s*'${escape(rest)}'`);
+    if (dot <= 0 || !together.test(src)) {
+      broken.push(`${action}: ${file} does not name '${module}' and '${rest}'`);
+      continue;
+    }
+    calls.push({ action, file });
+  }
+  return { calls, broken };
+}
+
 function asMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -140,7 +179,8 @@ function asMessage(err: unknown): string {
 function main(): void {
   const taxonomy = loadTaxonomy();
   const files = listTsFiles(SCAN_ROOT);
-  const calls = scanCallSites(files);
+  const outside = scanOutsideApi(taxonomy.emittedOutsideApi ?? {});
+  const calls = [...scanCallSites(files), ...outside.calls];
   const foundActions = new Set(calls.map((c) => c.action));
 
   const expected = new Set(taxonomy.expected);
@@ -167,6 +207,7 @@ function main(): void {
   console.log(`  expected actions:       ${expected.size}`);
   console.log(`  emit call sites:        ${calls.length} (${foundActions.size} distinct actions)`);
   console.log(`  deferred (allowlist):   ${unimplemented.size}`);
+  console.log(`  written outside the API: ${outside.calls.length}`);
 
   if (stale.length > 0) {
     console.warn(
@@ -182,6 +223,12 @@ function main(): void {
     for (const u of unknown.sort((a, b) => a.action.localeCompare(b.action))) {
       console.warn(`     - ${u.action}  (${u.file})`);
     }
+  }
+
+  if (outside.broken.length > 0) {
+    console.error('\n✗  actions declared as written outside the API, not found there:');
+    for (const b of outside.broken.sort()) console.error(`     - ${b}`);
+    process.exit(1);
   }
 
   if (missing.length > 0) {

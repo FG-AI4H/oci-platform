@@ -1,0 +1,17 @@
+{
+  "_comment": "Statements the one-off runner (apps/migrate/run-statement.mjs) may run on a deployed database. A statement is reviewed by the pull request that adds it here; it can be run once a deploy has built it into the migrate image. They live under apps/migrate, not docs, because a change under docs/ starts no deploy. Each placeholder __NAME__ in the file is declared under params with a type (uuid, slug, reference) and filled from OCI_SQL_PARAM_NAME at launch. writes: false runs in a READ ONLY transaction. Guide: docs/runbooks/one-off-sql.md.",
+  "statements": {
+    "exam-sample-deletion-count": {
+      "file": "exam-sample-deletion-count.sql",
+      "writes": false,
+      "runbook": "docs/runbooks/exam-sample-deletion.md",
+      "params": { "DATASET_ID": "uuid", "DATASET_SLUG": "slug" }
+    },
+    "exam-sample-deletion": {
+      "file": "exam-sample-deletion.sql",
+      "writes": true,
+      "runbook": "docs/runbooks/exam-sample-deletion.md",
+      "params": { "DATASET_ID": "uuid", "DATASET_SLUG": "slug", "REFERENCE": "reference" }
+    }
+  }
+}

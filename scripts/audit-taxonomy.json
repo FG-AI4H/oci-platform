@@ -1,5 +1,6 @@
 {
   "_comment": "Declared audit-event taxonomy (ADR-0014 §5). Every entry must appear in at least one audit.emit / emitSync call site under apps/api/src OR be listed in `unimplemented` below with a tracking issue. `scripts/check-audit-coverage.ts` enforces this. Add new entries here when an ADR or feature spec commits to emitting an event; remove `unimplemented` entries as their owning module wires them up.",
+  "_commentOutsideApi": "Actions written outside apps/api/src, by an operator's one-off run (#739): action -> the file that writes it. The check verifies the file names the module and the action as literals. Such events have no verified actor; see docs/runbooks/one-off-sql.md.",
   "expected": [
     "catalog.dataset.created",
     "catalog.dataset.published",
@@ -38,8 +39,16 @@
     "reporting.cear.generated",
     "reporting.mdr-bridge.generated",
     "reporting.pms.alert.fired",
-    "reporting.policy-use.recorded"
+    "reporting.policy-use.recorded",
+    "storage.dicom.findings_accepted",
+    "storage.dicom.file_released",
+    "catalog.dataset.deleted",
+    "platform.sql.statement_applied"
   ],
+  "emittedOutsideApi": {
+    "catalog.dataset.deleted": "apps/migrate/statements/exam-sample-deletion.sql",
+    "platform.sql.statement_applied": "apps/migrate/run-statement.mjs"
+  },
   "unimplemented": {
     "catalog.dataset.created": "Phase B catalog audit wiring — to be added in #257 follow-up",
     "catalog.dataset.published": "Phase B catalog audit wiring — to be added in #257 follow-up",

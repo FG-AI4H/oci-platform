@@ -9,7 +9,12 @@
 -- an earlier step of the runbook. Rows first would lose the list of
 -- what was stored.
 --
--- Before running, replace the three placeholders in this file:
+-- Run it through the one-off runner (docs/runbooks/one-off-sql.md), never
+-- by hand: the runner fills the three placeholders from checked launch
+-- parameters, shows a dry run first, and records who ran it. The
+-- statement refuses to run without the runner's run id. That guards
+-- against running it by mistake; it cannot stop someone who sets the id
+-- by hand, and such a run leaves a record that points at no run.
 --   __DATASET_ID__    the dataset's id (a UUID)
 --   __DATASET_SLUG__  the dataset's slug; must match the id, or nothing is done
 --   __REFERENCE__     the reference of the signed deletion record, for
@@ -47,7 +52,14 @@ DECLARE
   n_consents     bigint;
   n_audit        bigint;
   v_payload      text;
+  v_run          text := current_setting('oci.one_off_run', true);
 BEGIN
+  -- 0. Through the one-off runner, which records the run. Its run id goes
+  --    into this statement's own record, so that each points at the other.
+  IF v_run IS NULL OR v_run !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    RAISE EXCEPTION 'run this statement through the one-off runner (docs/runbooks/one-off-sql.md): nothing was deleted';
+  END IF;
+
   -- 1. The right dataset, and nobody else changing it meanwhile.
   SELECT d.slug INTO v_found_slug FROM catalog.datasets d WHERE d.id = v_dataset_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -150,9 +162,11 @@ BEGIN
       OR e.subject_id = ANY (v_campaigns::text[])
       OR e.subject_id = ANY (v_assignments::text[]);
 
-  -- 6. The record that the deletion happened: counts, the slug and the
-  --    reference of the signed record. No file name, no identifier from a
-  --    file, no header value. The payload is written in canonical JSON
+  -- 6. The record that the deletion happened: counts, the slug, the
+  --    reference of the signed record, and the one-off run, whose own
+  --    event names the people. No file name, no identifier from a file, no
+  --    header value. No actor: the task has no verified identity of its
+  --    operator (see the runner). The payload is written in canonical JSON
   --    (RFC 8785: keys in order, no spaces) so that its hash is the one
   --    the platform's own audit writer would compute; every value below
   --    is a number or was checked above to need no escaping.
@@ -160,11 +174,11 @@ BEGIN
     '{"accessRequests":%s,"annotationAssignments":%s,"annotationCampaigns":%s,"annotationTasks":%s,'
     || '"calibrationFlags":%s,"callbackReceipts":%s,"campaignInstructions":%s,"consentRecordsKept":%s,'
     || '"datasetSlug":"%s","datasetVersions":%s,"dicomFindings":%s,"dicomObjects":%s,"dicomSeries":%s,'
-    || '"distributions":%s,"reference":"%s","relatedAuditEventsKept":%s,"runbook":"exam-sample-deletion"}',
+    || '"distributions":%s,"oneOffRun":"%s","reference":"%s","relatedAuditEventsKept":%s,"runbook":"exam-sample-deletion"}',
     n_requests, n_assignments, n_campaigns, n_tasks,
     n_flags, n_receipts, n_instructions, n_consents,
     v_slug, n_versions, n_findings, n_objects, n_series,
-    n_distributions, v_reference, n_audit);
+    n_distributions, v_run, v_reference, n_audit);
 
   INSERT INTO platform.audit_events
     (module, action, subject_type, subject_id, actor_roles, payload, payload_hash)

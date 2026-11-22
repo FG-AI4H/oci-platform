@@ -91,7 +91,9 @@ export class DicomReviewRepository {
     decidedById: string;
     findings: readonly FindingRef[];
     audit: AuditEmitter;
-    auditEvent: (decision: RecordedDecision) => AuditEventInput;
+    /** Groups of the operator, as the audit event records them. */
+    actorRoles: readonly string[];
+    auditPayload: (decision: RecordedDecision) => AuditEventInput['payload'];
   }): Promise<RecordedDecision | null> {
     return this.prisma.client.$transaction(
       async (tx: Prisma.TransactionClient) => {
@@ -156,7 +158,18 @@ export class DicomReviewRepository {
         };
         // Same cast as the annotation module: the port is the insert only,
         // which Prisma's generated generic does not structurally match.
-        await args.audit.emitSync(args.auditEvent(recorded), tx as unknown as AuditTransactionPort);
+        await args.audit.emitSync(
+          {
+            module: 'storage',
+            action: 'dicom.findings_accepted',
+            subjectType: 'dataset',
+            subjectId: args.datasetId,
+            actorUserId: args.decidedById,
+            actorRoles: args.actorRoles,
+            payload: args.auditPayload(recorded),
+          },
+          tx as unknown as AuditTransactionPort,
+        );
         return recorded;
       },
       { timeout: DECISION_TIMEOUT_MS, maxWait: DECISION_MAX_WAIT_MS },
