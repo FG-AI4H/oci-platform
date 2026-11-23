@@ -142,7 +142,9 @@ export class EvaluationController {
   @Roles('host', 'admin')
   createTask(
     @Body(new ZodPipe(CreateEvaluationTaskRequestSchema)) body: CreateEvaluationTaskRequest,
+    @Req() req: FastifyLikeRequest,
   ) {
-    return this.evaluation.createTask(body);
+    // The caller is the actor of the `evaluation.task.created` audit event.
+    return this.evaluation.createTask(body, req.user);
   }
 }

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AuditEmitter, type AuditPrismaPort } from '@oci/audit';
 import type { PrismaClient } from '@oci/database';
 import { DatasetSlugSchema, SubmitPredictionsRequestSchema } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
@@ -135,6 +136,7 @@ describe.skipIf(!dockerAvailable)(
       evaluation = new EvaluationService(
         new EvaluationRepository({ client: prisma } as unknown as PrismaService),
         new EvalQueueProvider(),
+        new AuditEmitter({ prisma: prisma as unknown as AuditPrismaPort }),
       );
     }, 180_000);
 

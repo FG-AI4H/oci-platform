@@ -7,6 +7,7 @@ import {
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { RecordingAuditEmitter } from '../../test-support/recording-audit-emitter.js';
 import type { EvalQueueProvider } from './eval-queue.js';
 import type { EvaluationRepository } from './evaluation.repository.js';
 import { EvaluationService } from './evaluation.service.js';
@@ -44,6 +45,7 @@ function service(repo: Record<string, unknown>) {
   return new EvaluationService(
     repo as unknown as EvaluationRepository,
     { missingConfig: () => [] } as unknown as EvalQueueProvider,
+    new RecordingAuditEmitter().asEmitter(),
   );
 }
 
@@ -128,27 +130,30 @@ describe('submitPredictions stores the subgroup results with the scores', () => 
 describe('the outbox scores a sealed run by subgroup too', () => {
   it('stores the same breakdown the predictions path would', async () => {
     const applyResult = vi.fn().mockResolvedValue(1);
-    const outbox = new SubmissionResultService({
-      findSubmissionForResult: vi.fn().mockResolvedValue({
-        id: SUBMISSION_ID,
-        taskId: TASK_ID,
-        mode: 'CONTAINER',
-        status: 'PENDING',
-        routeVersion: null,
-        resultFingerprint: null,
-        failureCode: null,
-        scores: null,
-      }),
-      findScoringContextBySubmissionId: vi.fn().mockResolvedValue({
-        id: TASK_ID,
-        taskKind: 'CLASSIFICATION',
-        numClasses: 2,
-        referableThreshold: 1,
-        groundTruth: GROUND_TRUTH,
-        subgroups: { fields: [BAND], values: VALUES },
-      }),
-      applyResult,
-    } as unknown as EvaluationRepository);
+    const outbox = new SubmissionResultService(
+      {
+        findSubmissionForResult: vi.fn().mockResolvedValue({
+          id: SUBMISSION_ID,
+          taskId: TASK_ID,
+          mode: 'CONTAINER',
+          status: 'PENDING',
+          routeVersion: null,
+          resultFingerprint: null,
+          failureCode: null,
+          scores: null,
+        }),
+        findScoringContextBySubmissionId: vi.fn().mockResolvedValue({
+          id: TASK_ID,
+          taskKind: 'CLASSIFICATION',
+          numClasses: 2,
+          referableThreshold: 1,
+          groundTruth: GROUND_TRUTH,
+          subgroups: { fields: [BAND], values: VALUES },
+        }),
+        applyResult,
+      } as unknown as EvaluationRepository,
+      new RecordingAuditEmitter().asEmitter(),
+    );
     const predictions = Object.fromEntries(PREDICTIONS.map((p) => [p.imageId, p.grade]));
     await outbox.recordResult(SUBMISSION_ID, { durationMs: 10, predictions });
     expect(applyResult.mock.calls[0]?.[1]).toMatchObject({

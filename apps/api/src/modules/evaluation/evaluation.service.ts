@@ -9,6 +9,7 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { canonicalSha256, type AuditEmitter } from '@oci/audit';
 import { Prisma } from '@oci/database';
 import {
   GradingScoresSchema,
@@ -22,6 +23,7 @@ import type {
   EvaluationTaskDetail,
   EvaluationTaskSummary,
   ScoredSubmissionQuotaSummary,
+  SealedRunFailureCode,
   SealedRunMessage,
   SubmissionMode,
   SubmissionStatus,
@@ -34,6 +36,7 @@ import type {
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
+import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { attributionFor } from './route-registry.js';
 import { EvalQueueProvider } from './eval-queue.js';
 import { EvaluationRepository } from './evaluation.repository.js';
@@ -107,7 +110,11 @@ export const SCORED_SUBMISSION_REQUIRES_IDENTITY_MESSAGE =
  *   - one submission's own result, with the rule for who may read a FAILED
  *     one (#645);
  *   - admin/host task creation (the only non-SQL way a task + hidden
- *     labels get created).
+ *     labels get created);
+ *   - the audit events of all of the above (#653): `evaluation.task.created`,
+ *     `.submitted`, `.scored` and `.failed`. They carry ids, the method
+ *     version and sha256 hashes (`canonicalSha256` from `@oci/audit`), never a
+ *     prediction, a label or a refusal text that could quote one.
  *
  * The controller enforces role gating; this layer trusts that gate. It does NOT
  * trust the controller for participant identity on a scored path — `requireParticipant`
@@ -128,6 +135,7 @@ export class EvaluationService {
   constructor(
     @Inject(EvaluationRepository) private readonly repo: EvaluationRepository,
     @Inject(EvalQueueProvider) private readonly queue: EvalQueueProvider,
+    @Inject(AUDIT_EMITTER) private readonly audit: AuditEmitter,
   ) {
     const { limits, warnings } = resolveScoredQuotaLimits(process.env);
     this.quotaLimits = limits;
@@ -317,6 +325,10 @@ export class EvaluationService {
     // to one task read rather than two on the happy path.
     await this.assertWithinScoredQuota(ctx.id, slug, submittedBy);
 
+    // What the audit trail records of the file: its hash, never its content.
+    const predictionsSha256 = canonicalSha256(body.predictions);
+    const failure = { taskId: ctx.id, taskSlug: slug, predictionsSha256 };
+
     // Build the imageId -> grade map, rejecting duplicate imageIds (the DTO
     // validates the array shape but not cross-row uniqueness). Scores, where a
     // row has one, go into their own map: the registry decides whether this
@@ -326,7 +338,7 @@ export class EvaluationService {
     for (const p of body.predictions) {
       if (Object.prototype.hasOwnProperty.call(predictions, p.imageId)) {
         return await this.failSubmission(
-          ctx.id,
+          failure,
           body.methodName,
           submittedBy,
           `duplicate imageId "${p.imageId}" in predictions`,
@@ -356,7 +368,7 @@ export class EvaluationService {
       });
     } catch (err: unknown) {
       if (err instanceof ScoringError) {
-        return await this.failSubmission(ctx.id, body.methodName, submittedBy, err.message);
+        return await this.failSubmission(failure, body.methodName, submittedBy, err.message);
       }
       throw err;
     }
@@ -401,6 +413,43 @@ export class EvaluationService {
       routeVersionId: ref?.versionId ?? null,
       externalSubmissionId: seam?.externalSubmissionId ?? null,
       externalChallengeId: seam?.externalChallengeId ?? null,
+    });
+
+    // `emit`, not `emitSync`: the row is SCORED and the quota slot is spent, so
+    // an audit write that fails must not turn the answer into a 500 that hides
+    // the scores from the participant. `emit` queues when Redis is wired and
+    // otherwise logs the failure and swallows it (ADR-0014): a SCORED row
+    // without its two events is the visible gap. The two events share one
+    // payload apart from the scores hash.
+    const submitted = {
+      taskId: ctx.id,
+      taskSlug: slug,
+      taskKind: ctx.taskKind,
+      mode: 'PREDICTIONS' satisfies SubmissionMode,
+      methodName: body.methodName,
+      routeId: ref?.routeId ?? null,
+      routeVersion: ref?.version ?? null,
+      routeVersionId: ref?.versionId ?? null,
+      externalSubmissionId: seam?.externalSubmissionId ?? null,
+      externalChallengeId: seam?.externalChallengeId ?? null,
+      predictionCount: body.predictions.length,
+      predictionsSha256,
+    };
+    await this.audit.emit({
+      module: 'evaluation',
+      action: 'submitted',
+      subjectType: 'evaluation-submission',
+      subjectId: created.id,
+      actorUserId: submittedBy,
+      payload: submitted,
+    });
+    await this.audit.emit({
+      module: 'evaluation',
+      action: 'scored',
+      subjectType: 'evaluation-submission',
+      subjectId: created.id,
+      actorUserId: submittedBy,
+      payload: { ...submitted, scoresSha256: canonicalSha256(scores) },
     });
     return { id: created.id, scores };
   }
@@ -464,6 +513,26 @@ export class EvaluationService {
       routeVersion: null,
     });
 
+    // The image digest identifies what was submitted, as the predictions hash
+    // does in Mode 1. `emit` for the reason given in `submitPredictions`.
+    const audited = {
+      taskId: task.id,
+      taskSlug: task.slug,
+      mode: 'CONTAINER' satisfies SubmissionMode,
+      methodName: body.methodName,
+      routeId: null,
+      routeVersion: null,
+      imageDigest: body.imageDigest,
+    };
+    await this.audit.emit({
+      module: 'evaluation',
+      action: 'submitted',
+      subjectType: 'evaluation-submission',
+      subjectId: created.id,
+      actorUserId: submittedBy,
+      payload: audited,
+    });
+
     const message: SealedRunMessage = {
       submissionId: created.id,
       taskSlug: task.slug,
@@ -493,6 +562,16 @@ export class EvaluationService {
           err instanceof Error ? err.message : String(err)
         }`,
       );
+      // `emitSync`: the failure is in the trail, or the caller is told of the
+      // error rather than of a recorded failure.
+      await this.audit.emitSync({
+        module: 'evaluation',
+        action: 'failed',
+        subjectType: 'evaluation-submission',
+        subjectId: created.id,
+        actorUserId: submittedBy,
+        payload: { ...audited, failureCode: 'INTERNAL_ERROR' satisfies SealedRunFailureCode },
+      });
       throw new ServiceUnavailableException(
         'sealed execution dispatch failed; the submission was recorded as failed',
       );
@@ -563,9 +642,17 @@ export class EvaluationService {
     return validationReport(task.slug, 'CONTAINER', outcome);
   }
 
-  async createTask(body: CreateEvaluationTaskRequest): Promise<EvaluationTaskSummary> {
+  /**
+   * `user` is the host or admin the controller let through, recorded as the
+   * actor of `evaluation.task.created`.
+   */
+  async createTask(
+    body: CreateEvaluationTaskRequest,
+    user?: CognitoAccessTokenPayload,
+  ): Promise<EvaluationTaskSummary> {
+    let created: { id: string; slug: string };
     try {
-      const created = await this.repo.createTask({
+      created = await this.repo.createTask({
         slug: body.slug,
         name: body.name,
         datasetSlug: body.datasetSlug,
@@ -579,14 +666,6 @@ export class EvaluationService {
         // Validated against the answer key by the request schema (#410).
         subgroups: body.subgroups ?? null,
       });
-      return {
-        id: created.id,
-        slug: created.slug,
-        name: body.name,
-        datasetSlug: body.datasetSlug,
-        taskKind: body.taskKind,
-        submissionCount: 0,
-      };
     } catch (err: unknown) {
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
@@ -596,6 +675,30 @@ export class EvaluationService {
       }
       throw err;
     }
+
+    // `emitSync`, outside the try so an audit failure is not read as a slug
+    // conflict. The answer key is recorded by its hash only; the subgroup
+    // declaration by its field keys, and not the map of which item has which
+    // value, which is held like the answer key. Every kind has a class count
+    // and a threshold (the request schema defaults both and the columns are
+    // NOT NULL); `positiveClassName` is null except for BINARY_DIAGNOSTIC.
+    await this.audit.emitSync({
+      module: 'evaluation',
+      action: 'task.created',
+      subjectType: 'evaluation-task',
+      subjectId: created.id,
+      actorUserId: user?.sub ? cognitoSubAsUuid(user.sub) : null,
+      payload: taskCreatedPayload(created.slug, body),
+    });
+
+    return {
+      id: created.id,
+      slug: created.slug,
+      name: body.name,
+      datasetSlug: body.datasetSlug,
+      taskKind: body.taskKind,
+      submissionCount: 0,
+    };
   }
 
   /**
@@ -604,18 +707,41 @@ export class EvaluationService {
    * callers write `return await this.failSubmission(...)`.
    */
   private async failSubmission(
-    taskId: string,
+    task: { taskId: string; taskSlug: string; predictionsSha256: string },
     methodName: string,
     submittedBy: string | null,
     reason: string,
   ): Promise<never> {
     const created = await this.repo.createSubmission({
-      taskId,
+      taskId: task.taskId,
       methodName,
       submittedBy,
       status: 'FAILED' satisfies SubmissionStatus,
       scores: null,
       error: reason,
+    });
+    // `emitSync`, so a refused file is always in the trail: if the event
+    // cannot be written the caller gets the error, not a 400. The reason is
+    // left out: it can quote a predicted label. It stays on the row, which
+    // the submitter reads. No `submitted` event precedes this one: the file
+    // was refused on its format, before it was accepted for scoring.
+    await this.audit.emitSync({
+      module: 'evaluation',
+      action: 'failed',
+      subjectType: 'evaluation-submission',
+      subjectId: created.id,
+      actorUserId: submittedBy,
+      payload: {
+        taskId: task.taskId,
+        taskSlug: task.taskSlug,
+        mode: 'PREDICTIONS' satisfies SubmissionMode,
+        methodName,
+        routeId: null,
+        routeVersion: null,
+        routeVersionId: null,
+        failureCode: null,
+        predictionsSha256: task.predictionsSha256,
+      },
     });
     throw new BadRequestException({ message: reason, submissionId: created.id });
   }
@@ -729,6 +855,27 @@ export class EvaluationService {
 function isAdministrator(user?: CognitoAccessTokenPayload): boolean {
   const groups: unknown = user?.['cognito:groups'];
   return Array.isArray(groups) && groups.includes('admin');
+}
+
+/**
+ * Payload of `evaluation.task.created`. Ids, the declaration and hashes: the
+ * answer key and the item-to-subgroup map never appear in it.
+ */
+function taskCreatedPayload(
+  slug: string,
+  body: CreateEvaluationTaskRequest,
+): Record<string, unknown> {
+  return {
+    slug,
+    datasetSlug: body.datasetSlug,
+    taskKind: body.taskKind,
+    numClasses: body.numClasses,
+    referableThreshold: body.referableThreshold,
+    positiveClassName: body.positiveClassName ?? null,
+    itemCount: Object.keys(body.groundTruth).length,
+    subgroupFields: (body.subgroups?.fields ?? []).map((f) => f.key),
+    groundTruthSha256: canonicalSha256(body.groundTruth),
+  };
 }
 
 /**

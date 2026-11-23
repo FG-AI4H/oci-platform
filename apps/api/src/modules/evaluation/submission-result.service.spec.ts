@@ -1,6 +1,11 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { canonicalSha256 } from '@oci/audit';
 import type { EvaluationScores, SealedRunResult } from '@oci/shared-types';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  isFlatPayload,
+  RecordingAuditEmitter,
+} from '../../test-support/recording-audit-emitter.js';
 import type {
   EvaluationRepository,
   SubmissionResultContextRow,
@@ -81,8 +86,14 @@ function makeRepo(row: Partial<SubmissionResultContextRow> = {}) {
   };
 }
 
-function makeService(repo: ReturnType<typeof makeRepo>): SubmissionResultService {
-  return new SubmissionResultService(repo.mock as unknown as EvaluationRepository);
+function makeService(
+  repo: ReturnType<typeof makeRepo>,
+  audit: RecordingAuditEmitter = new RecordingAuditEmitter(),
+): SubmissionResultService {
+  return new SubmissionResultService(
+    repo.mock as unknown as EvaluationRepository,
+    audit.asEmitter(),
+  );
 }
 
 describe('SubmissionResultService — predictions branch', () => {
@@ -360,5 +371,167 @@ describe('SubmissionResultService — rejections', () => {
       result({ routeVersion: 'oci-sealed-mode2@2.1.0', predictions: WORKER_PREDICTIONS }),
     );
     expect(out.status).toBe('SCORED');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #653: an applied result is audited once, as evaluation.scored or
+// evaluation.failed, with ids, the method version and hashes. Never the
+// worker's predictions, a label, a score or the operator detail.
+// ---------------------------------------------------------------------------
+
+describe('SubmissionResultService — audit events (#653)', () => {
+  const BASE_KEYS = [
+    'durationMs',
+    'mode',
+    'predictionsSha256',
+    'resultKind',
+    'routeVersion',
+    'taskId',
+  ];
+  const SCORED_KEYS = [...BASE_KEYS, 'scoresSha256'].sort();
+  const FAILED_KEYS = [...BASE_KEYS, 'failureCode'].sort();
+  const keysOf = (payload: Record<string, unknown>) => Object.keys(payload).sort();
+
+  /** Every payload is flat, names no item and carries none of the worker's text. */
+  function expectNoResultContent(audit: RecordingAuditEmitter, extra: readonly string[] = []) {
+    expect(audit.events.length).toBeGreaterThan(0);
+    for (const e of audit.events) {
+      expect(isFlatPayload(e.payload)).toBe(true);
+      const json = JSON.stringify(e.payload);
+      for (const needle of [...Object.keys(GROUND_TRUTH), ...extra]) {
+        expect(json).not.toContain(needle);
+      }
+    }
+  }
+
+  it('records evaluation.scored for scored predictions, with their hash and the scores hash', async () => {
+    const repo = makeRepo({ routeVersion: 'oci-sealed-mode2@2.1.0' });
+    const audit = new RecordingAuditEmitter();
+    const out = await makeService(repo, audit).recordResult(
+      SUBMISSION_ID,
+      result({ routeVersion: 'oci-sealed-mode2@2.1.0', predictions: WORKER_PREDICTIONS }),
+    );
+
+    expect(audit.actions()).toEqual(['evaluation.scored']);
+    const scored = audit.only('evaluation.scored');
+    // `emit`: the score is stored; a failed audit write must not make the
+    // worker retry a result that has been applied.
+    expect(scored.via).toBe('emit');
+    expect(scored.subjectType).toBe('evaluation-submission');
+    expect(scored.subjectId).toBe(SUBMISSION_ID);
+    // A machine credential applied it: no person is the actor.
+    expect(scored.actorUserId).toBeUndefined();
+    expect(keysOf(scored.payload)).toEqual(SCORED_KEYS);
+    expect(scored.payload).toEqual({
+      taskId: TASK_ID,
+      mode: 'CONTAINER',
+      routeVersion: 'oci-sealed-mode2@2.1.0',
+      resultKind: 'predictions',
+      predictionsSha256: canonicalSha256(WORKER_PREDICTIONS),
+      durationMs: 4321,
+      scoresSha256: canonicalSha256(out.scores),
+    });
+    expectNoResultContent(audit);
+  });
+
+  it('records evaluation.scored for host metrics, with no predictions hash', async () => {
+    const repo = makeRepo();
+    const audit = new RecordingAuditEmitter();
+    await makeService(repo, audit).recordResult(SUBMISSION_ID, result({ metrics: HOST_METRICS }));
+
+    const scored = audit.only('evaluation.scored');
+    expect(keysOf(scored.payload)).toEqual(SCORED_KEYS);
+    expect(scored.payload).toMatchObject({
+      resultKind: 'metrics',
+      predictionsSha256: null,
+      scoresSha256: canonicalSha256({ kind: 'GRADING', metrics: HOST_METRICS }),
+    });
+    // No metric value in the payload: only its hash.
+    expect(JSON.stringify(scored.payload)).not.toContain('0.8123');
+    expectNoResultContent(audit);
+  });
+
+  it('records evaluation.failed synchronously for a worker failure, without the operator detail', async () => {
+    const repo = makeRepo();
+    const audit = new RecordingAuditEmitter();
+    const detail = 'stdout: idrid_01=0 idrid_02=1 SECRET-LABEL-DUMP';
+    await makeService(repo, audit).recordResult(
+      SUBMISSION_ID,
+      result({ failure: { code: 'TIMEOUT', detail } }),
+    );
+
+    expect(audit.actions()).toEqual(['evaluation.failed']);
+    const failed = audit.only('evaluation.failed');
+    expect(failed.via).toBe('emitSync');
+    expect(keysOf(failed.payload)).toEqual(FAILED_KEYS);
+    expect(failed.payload).toMatchObject({
+      resultKind: 'failure',
+      predictionsSha256: null,
+      failureCode: 'TIMEOUT',
+    });
+    expectNoResultContent(audit, ['SECRET-LABEL-DUMP', 'stdout']);
+  });
+
+  it('records evaluation.failed (MALFORMED_OUTPUT) for predictions that do not fit the task', async () => {
+    const repo = makeRepo();
+    const audit = new RecordingAuditEmitter();
+    const bad = { ...WORKER_PREDICTIONS, idrid_02: 99 };
+    await makeService(repo, audit).recordResult(SUBMISSION_ID, result({ predictions: bad }));
+
+    const failed = audit.only('evaluation.failed');
+    expect(failed.via).toBe('emitSync');
+    expect(keysOf(failed.payload)).toEqual(FAILED_KEYS);
+    expect(failed.payload).toMatchObject({
+      resultKind: 'predictions',
+      predictionsSha256: canonicalSha256(bad),
+      failureCode: 'MALFORMED_OUTPUT',
+    });
+    expectNoResultContent(audit);
+  });
+
+  it('records nothing for a replay, a conflict or a lost race', async () => {
+    const repo = makeRepo();
+    const audit = new RecordingAuditEmitter();
+    const service = makeService(repo, audit);
+    const payload = result({ predictions: WORKER_PREDICTIONS });
+
+    await service.recordResult(SUBMISSION_ID, payload);
+    expect(audit.actions()).toEqual(['evaluation.scored']);
+
+    // Replay of the same result: a 200 no-op, and no second event.
+    await service.recordResult(SUBMISSION_ID, payload);
+    // A different result for the terminal submission: a 409, and no event.
+    await expect(
+      service.recordResult(SUBMISSION_ID, result({ failure: { code: 'TIMEOUT' } })),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(audit.actions()).toEqual(['evaluation.scored']);
+
+    // A lost race applies nothing, so records nothing.
+    const raced = makeRepo();
+    const racedAudit = new RecordingAuditEmitter();
+    raced.mock.applyResult.mockImplementationOnce(async () => {
+      raced.state.status = 'FAILED';
+      raced.state.resultFingerprint = 'someone-elses-fingerprint';
+      return 0;
+    });
+    await expect(
+      makeService(raced, racedAudit).recordResult(SUBMISSION_ID, payload),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(racedAudit.events).toEqual([]);
+  });
+
+  it('tells the worker when the failure cannot be recorded, after the row is written', async () => {
+    const repo = makeRepo();
+    const audit = new RecordingAuditEmitter();
+    audit.emitSyncError = new Error('audit insert failed');
+
+    await expect(
+      makeService(repo, audit).recordResult(
+        SUBMISSION_ID,
+        result({ failure: { code: 'TIMEOUT' } }),
+      ),
+    ).rejects.toThrow('audit insert failed');
+    expect(repo.state.status).toBe('FAILED');
   });
 });
