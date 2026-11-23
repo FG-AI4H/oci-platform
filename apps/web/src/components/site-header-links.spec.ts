@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from 'next-auth';
-import en from '../i18n/messages/en';
-import fr from '../i18n/messages/fr';
-import {
-  accountHeaderLinks,
-  estimatedRowWidth,
-  primaryHeaderLinks,
-  rowBreakpoint,
-} from './site-header-links';
+import { accountHeaderLinks, primaryHeaderLinks, rowBreakpoint } from './site-header-links';
 
 function session(...groups: string[]): Session {
   return {
@@ -47,22 +40,12 @@ describe('primaryHeaderLinks', () => {
     expect(hrefOf(s, 'auditTrail')).toBe('/admin/audit');
   });
 
-  it('gives an admin the review queue but no second way to the audit trail', () => {
-    // Admins reach /admin/audit from the /admin page.
-    const s = session('admin');
-    expect(keys(s)).toEqual([
-      'catalog',
-      'models',
-      'evaluation',
-      'annotation',
-      'inbox',
-      'reviews',
-      'admin',
-    ]);
-  });
-
-  it('gives an admin who is also a regulator no audit-trail entry either', () => {
-    expect(keys(session('admin', 'regulator'))).not.toContain('auditTrail');
+  it('leaves an admin header as it was: both pages are on the /admin page', () => {
+    const before = ['catalog', 'models', 'evaluation', 'annotation', 'inbox', 'admin'];
+    expect(keys(session('admin'))).toEqual(before);
+    expect(keys(session('host', 'admin'))).toEqual(before);
+    // Holding the roles too adds nothing for an admin.
+    expect(keys(session('admin', 'evaluation-reviewer', 'regulator'))).toEqual(before);
   });
 
   it('gives a reviewer who is also a regulator both entries, once each', () => {
@@ -97,42 +80,49 @@ describe('primaryHeaderLinks', () => {
 });
 
 describe('rowBreakpoint', () => {
-  // The header's own labels, in each language.
-  const labels = (catalogue: typeof en, s: Session | null) =>
-    primaryHeaderLinks(s).map((link) => catalogue.Header[link.key]);
+  const ROLES = ['host', 'admin', 'regulator', 'evaluation-reviewer'] as const;
+  // Every combination of the roles that add a header link.
+  const combinations = Array.from({ length: 2 ** ROLES.length }, (_, mask) =>
+    ROLES.filter((_, i) => mask & (2 ** i)),
+  );
 
-  it('estimates nothing for no links, and gaps between links', () => {
-    expect(estimatedRowWidth([])).toBe(0);
-    expect(estimatedRowWidth(['ab', 'cd'])).toBeGreaterThan(estimatedRowWidth(['abcd']));
+  it('keeps the row from xl up to five links', () => {
+    for (const count of [3, 4, 5]) expect(rowBreakpoint(count)).toBe('xl');
   });
 
-  it('keeps the row from xl for a visitor, a reviewer and a regulator, in both languages', () => {
-    for (const catalogue of [en, fr]) {
-      expect(rowBreakpoint(labels(catalogue, null))).toBe('xl');
-      expect(rowBreakpoint(labels(catalogue, session('evaluation-reviewer')))).toBe('xl');
-      expect(rowBreakpoint(labels(catalogue, session('regulator')))).toBe('xl');
+  it('holds the menu up to 2xl for six or seven links', () => {
+    expect(rowBreakpoint(6)).toBe('2xl');
+    expect(rowBreakpoint(7)).toBe('2xl');
+  });
+
+  it('keeps the menu at every width beyond seven', () => {
+    expect(rowBreakpoint(8)).toBe('never');
+  });
+
+  it('shows every role combination a row by 2xl', () => {
+    for (const roles of combinations) {
+      expect(rowBreakpoint(primaryHeaderLinks(session(...roles)).length)).not.toBe('never');
     }
   });
 
-  it('keeps the row from xl for an admin in English', () => {
-    expect(rowBreakpoint(labels(en, session('host', 'admin')))).toBe('xl');
-  });
-
-  it('holds the menu up to 2xl for an admin in French, whose links no longer fit at xl', () => {
-    expect(rowBreakpoint(labels(fr, session('host', 'admin')))).toBe('2xl');
-  });
-
-  it('fits every role combination the header can show by 2xl', () => {
-    const everything = session('host', 'admin', 'regulator', 'evaluation-reviewer');
-    const allButAdmin = session('host', 'regulator', 'evaluation-reviewer');
-    for (const catalogue of [en, fr]) {
-      expect(rowBreakpoint(labels(catalogue, everything))).not.toBe('never');
-      expect(rowBreakpoint(labels(catalogue, allButAdmin))).not.toBe('never');
+  it('keeps a visitor, a plain user and every single non-admin role on the xl row', () => {
+    expect(rowBreakpoint(keys(null).length)).toBe('xl');
+    for (const roles of [[], ['host'], ['regulator'], ['evaluation-reviewer']]) {
+      expect(rowBreakpoint(keys(session(...roles)).length)).toBe('xl');
     }
   });
 
-  it('gives up on the row when the links would not fit even at 2xl', () => {
-    expect(rowBreakpoint(Array.from({ length: 12 }, () => 'Administration'))).toBe('never');
+  it('moves the six-link sets, which overflow at xl in French, to 2xl', () => {
+    for (const roles of [
+      ['host', 'evaluation-reviewer'],
+      ['evaluation-reviewer', 'regulator'],
+      ['host', 'regulator'],
+      ['admin'],
+    ]) {
+      const count = keys(session(...roles)).length;
+      expect(count).toBe(6);
+      expect(rowBreakpoint(count)).toBe('2xl');
+    }
   });
 });
 

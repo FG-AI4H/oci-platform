@@ -4,9 +4,11 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
  * The header's role links to the method review queue and the audit
  * trail (#776), at every width and in both languages. From `xl` (1280
  * px) up the links sit in a row; below it they are in the "Menu"
- * disclosure (#743). A caller whose links would not fit at `xl` keeps
- * the menu up to `2xl` (1536 px), so the test opens the menu wherever
- * it is shown, and checks that no header control overlaps another.
+ * disclosure (#743). A caller with more than five links keeps the menu
+ * up to `2xl` (1536 px). Each test checks which of the two the header
+ * shows, that no header control overlaps another and the page does not
+ * scroll sideways, then opens the menu where it is shown. Admins get
+ * neither entry: both pages are tiles on /admin.
  *
  * Signs in through the local dev form only and reads no data, so it
  * needs the web app alone (the pages it lands on may say the API is
@@ -64,18 +66,30 @@ async function signedInPage(
   return page;
 }
 
-/** The primary navigation as the caller sees it: the row, or the opened menu. */
-async function primaryNav(page: Page, vp: Viewport, lang: Language) {
+/** Whether the header should show the menu: below xl, or below 2xl past five links. */
+function expectsMenu(vp: Viewport, linkCount: number): boolean {
+  if (vp.width < 1280) return true;
+  if (vp.width < 1536) return linkCount > 5;
+  return false;
+}
+
+/**
+ * The primary navigation as the caller sees it, the row or the opened
+ * menu, after checking which of the two is shown and that nothing in
+ * the header overlaps.
+ */
+async function primaryNav(page: Page, vp: Viewport, lang: Language, linkCount: number) {
   const header = page.locator('header').first();
   const menu = header.locator('summary', { hasText: lang.menu });
-  // The menu is always there below xl; from xl it depends on the links.
-  if (vp.width < 1280) await expect(menu).toBeVisible();
-  // Overlaps are checked with the menu closed, as the header first shows.
+  if (expectsMenu(vp, linkCount)) await expect(menu).toBeVisible();
+  else await expect(menu).toBeHidden();
+  // Checked with the menu closed, as the header first shows.
   expect(await headerOverlaps(page)).toEqual([]);
   if (await menu.isVisible()) await menu.click();
   const nav = header.getByRole('navigation', { name: lang.nav });
   await expect(nav).toHaveCount(1);
   await expect(nav).toBeVisible();
+  await expect(nav.getByRole('link')).toHaveCount(linkCount + (expectsMenu(vp, linkCount) ? 2 : 0));
   return nav;
 }
 
@@ -114,7 +128,7 @@ test.describe('header role links (#776)', () => {
     for (const vp of VIEWPORTS) {
       test(`${lang.name} ${vp.name}: a reviewer reaches the review queue`, async ({ browser }) => {
         const page = await signedInPage(browser, vp, lang, 'evaluation-reviewer');
-        const nav = await primaryNav(page, vp, lang);
+        const nav = await primaryNav(page, vp, lang, 5);
         await expect(nav.getByRole('link', { name: lang.audit, exact: true })).toHaveCount(0);
         await nav.getByRole('link', { name: lang.reviews, exact: true }).click();
         await expect(page).toHaveURL(/\/evaluation\/routes\/reviews$/);
@@ -123,7 +137,7 @@ test.describe('header role links (#776)', () => {
 
       test(`${lang.name} ${vp.name}: a regulator reaches the audit trail`, async ({ browser }) => {
         const page = await signedInPage(browser, vp, lang, 'regulator');
-        const nav = await primaryNav(page, vp, lang);
+        const nav = await primaryNav(page, vp, lang, 5);
         await expect(nav.getByRole('link', { name: lang.reviews, exact: true })).toHaveCount(0);
         await expect(nav.getByRole('link', { name: lang.admin, exact: true })).toHaveCount(0);
         await nav.getByRole('link', { name: lang.audit, exact: true }).click();
@@ -131,36 +145,69 @@ test.describe('header role links (#776)', () => {
         await page.context().close();
       });
 
-      test(`${lang.name} ${vp.name}: an admin gets the queue once and the audit trail through Admin`, async ({
-        browser,
-      }) => {
-        // host + admin carries every link the header can show.
-        const page = await signedInPage(browser, vp, lang, 'host,admin,regulator');
-        const nav = await primaryNav(page, vp, lang);
-        await expect(nav.getByRole('link', { name: lang.reviews, exact: true })).toHaveCount(1);
-        await expect(nav.getByRole('link', { name: lang.audit, exact: true })).toHaveCount(0);
-        await expect(nav.getByRole('link', { name: lang.admin, exact: true })).toHaveCount(1);
-        await page.context().close();
-      });
+      for (const roles of ['admin', 'host,admin', 'admin,evaluation-reviewer,regulator']) {
+        test(`${lang.name} ${vp.name}: ${roles} keeps the links it had before`, async ({
+          browser,
+        }) => {
+          const page = await signedInPage(browser, vp, lang, roles);
+          // Catalog, Models, Evaluation, Annotation, Inbox, Admin.
+          const nav = await primaryNav(page, vp, lang, 6);
+          await expect(nav.getByRole('link', { name: lang.admin, exact: true })).toHaveCount(1);
+          await expect(nav.getByRole('link', { name: lang.reviews, exact: true })).toHaveCount(0);
+          await expect(nav.getByRole('link', { name: lang.audit, exact: true })).toHaveCount(0);
+          await page.context().close();
+        });
+      }
 
-      test(`${lang.name} ${vp.name}: a reviewer who hosts data and regulates gets both, uncrowded`, async ({
-        browser,
-      }) => {
-        const page = await signedInPage(browser, vp, lang, 'host,evaluation-reviewer,regulator');
-        const nav = await primaryNav(page, vp, lang);
-        await expect(nav.getByRole('link', { name: lang.reviews, exact: true })).toHaveCount(1);
-        await expect(nav.getByRole('link', { name: lang.audit, exact: true })).toHaveCount(1);
-        await page.context().close();
-      });
+      for (const [roles, count] of [
+        ['host,evaluation-reviewer', 6],
+        ['evaluation-reviewer,regulator', 6],
+        ['host,evaluation-reviewer,regulator', 7],
+      ] as const) {
+        test(`${lang.name} ${vp.name}: ${roles} gets its entries, uncrowded`, async ({
+          browser,
+        }) => {
+          const page = await signedInPage(browser, vp, lang, roles);
+          const nav = await primaryNav(page, vp, lang, count);
+          await expect(nav.getByRole('link', { name: lang.reviews, exact: true })).toHaveCount(1);
+          const audit = roles.includes('regulator') ? 1 : 0;
+          await expect(nav.getByRole('link', { name: lang.audit, exact: true })).toHaveCount(audit);
+          await page.context().close();
+        });
+      }
 
       test(`${lang.name} ${vp.name}: a plain user sees neither`, async ({ browser }) => {
         // An empty role list signs in as host + admin, so name a plain role.
         const page = await signedInPage(browser, vp, lang, 'participant');
-        const nav = await primaryNav(page, vp, lang);
+        const nav = await primaryNav(page, vp, lang, 4);
         await expect(nav.getByRole('link', { name: lang.reviews, exact: true })).toHaveCount(0);
         await expect(nav.getByRole('link', { name: lang.audit, exact: true })).toHaveCount(0);
         await page.context().close();
       });
     }
   }
+});
+
+test.describe('review queue tile on /admin (#776)', () => {
+  const desktop = VIEWPORTS[3];
+  const english = LANGUAGES[0];
+
+  test('an admin finds the review queue next to the audit trail', async ({ browser }) => {
+    const page = await signedInPage(browser, desktop, english, 'admin');
+    await page.goto('/admin');
+    const tiles = page.getByRole('main').getByRole('link');
+    await expect(tiles.filter({ hasText: 'Audit trail' })).toHaveAttribute('href', '/admin/audit');
+    const queue = tiles.filter({ hasText: 'Review queue' });
+    await expect(queue).toHaveAttribute('href', '/evaluation/routes/reviews');
+    await queue.click();
+    await expect(page).toHaveURL(/\/evaluation\/routes\/reviews$/);
+    await page.context().close();
+  });
+
+  test('a reviewer who is not an admin does not reach /admin', async ({ browser }) => {
+    const page = await signedInPage(browser, desktop, english, 'evaluation-reviewer');
+    await page.goto('/admin');
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await page.context().close();
+  });
 });

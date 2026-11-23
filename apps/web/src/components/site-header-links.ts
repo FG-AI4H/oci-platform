@@ -40,13 +40,13 @@ export function primaryHeaderLinks(session: Session | null | undefined): HeaderL
     ...(isHost(session)
       ? [{ href: '/dashboard/host/access-requests' as Route, key: 'inbox' as const }]
       : []),
-    // Method review queue (#776): evaluation reviewers, and admins, who
-    // have no other way in from the header.
-    ...(isEvaluationReviewer(session)
+    // Method review queue (#776) for evaluation reviewers. Admins, whom
+    // `isEvaluationReviewer` also admits, reach it from the /admin page.
+    ...(isEvaluationReviewer(session) && !admin
       ? [{ href: '/evaluation/routes/reviews' as Route, key: 'reviews' as const }]
       : []),
     // Audit trail reader (#776) for regulators. Admins reach it from the
-    // /admin page, so a second entry would only crowd their header.
+    // /admin page too, so a second entry would only crowd their header.
     ...(canReadAuditTrail(session) && !admin
       ? [{ href: '/admin/audit' as Route, key: 'auditTrail' as const }]
       : []),
@@ -55,38 +55,41 @@ export function primaryHeaderLinks(session: Session | null | undefined): HeaderL
 }
 
 /**
- * From which breakpoint the primary links fit in a row beside the
- * account area, or `never` when they need the menu at every width.
- *
- * Each role adds a link, and French labels run long: an admin's links
- * in French fill the row at 1280 px, and the review queue (#776) takes
- * them past it. Rather than let the row run into the account area, the
- * header keeps the menu up to the width where the row fits.
+ * From which breakpoint the primary links sit in a row beside the
+ * account area; below it they are in the menu (#743). `never` keeps the
+ * menu at every width.
  */
 export type RowBreakpoint = 'xl' | '2xl' | 'never';
 
-// Measured on the rendered header (text-sm, gap-5): labels average
-// about 7.5 px a character in both languages.
-const CHAR_PX = 7.6;
-const GAP_PX = 20;
-// Room for the row at 1280 px, beside the French account area with the
-// environment badge shown (the widest it gets): about 604 px.
-const XL_BUDGET_PX = 600;
-// Room at the header's 1536 px cap once the account name, which the
-// header otherwise shows from 2xl, is left out: about 860 px.
-const XXL_BUDGET_PX = 840;
+/*
+ * Decided on the number of links alone (#776), with French, whose
+ * labels are the longest, as the worst case. Measured on the rendered
+ * header (text-sm, 20 px between links), signed in, with the
+ * environment badge shown:
+ *
+ *   room for the row        en       fr
+ *   at 1280 px (xl)       704 px   604 px
+ *   at 1536 px (2xl)      960 px   860 px   (account name left out)
+ *
+ *   links (fr widths)                                 count    fr width
+ *   regulator / host / reviewer                          5    448 / 469 / 488 px
+ *   admin (Inbox + Admin)                                6    586 px
+ *   host + regulator                                     6    588 px
+ *   reviewer + regulator                                 6    608 px  overflows at xl
+ *   host + reviewer                                      6    629 px  overflows at xl
+ *   host + reviewer + regulator (the most links)         7    749 px
+ *
+ * Some sets of six overflow at 1280 px in French, so six or more wait
+ * for 2xl, in both languages. Seven fit at 1536 px with 111 px to spare;
+ * more than seven, which no role combination reaches today, keep the
+ * menu at every width.
+ */
+const MAX_LINKS_FROM_XL = 5;
+const MAX_LINKS_FROM_2XL = 7;
 
-/** An estimate of the row's width in pixels, from its labels. */
-export function estimatedRowWidth(labels: readonly string[]): number {
-  if (labels.length === 0) return 0;
-  const chars = labels.reduce((sum, label) => sum + label.length, 0);
-  return chars * CHAR_PX + (labels.length - 1) * GAP_PX;
-}
-
-export function rowBreakpoint(labels: readonly string[]): RowBreakpoint {
-  const width = estimatedRowWidth(labels);
-  if (width <= XL_BUDGET_PX) return 'xl';
-  if (width <= XXL_BUDGET_PX) return '2xl';
+export function rowBreakpoint(linkCount: number): RowBreakpoint {
+  if (linkCount <= MAX_LINKS_FROM_XL) return 'xl';
+  if (linkCount <= MAX_LINKS_FROM_2XL) return '2xl';
   return 'never';
 }
 

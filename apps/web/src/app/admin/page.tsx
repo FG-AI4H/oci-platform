@@ -11,6 +11,7 @@ import {
   GlobeIcon,
   FlowIcon,
   ShieldIcon,
+  CheckIcon,
 } from '@oci/ui';
 import { auth } from '../../auth';
 import { requireAdmin } from '../../lib/groups';
@@ -73,6 +74,14 @@ export default async function AdminIndexPage() {
           </li>
           <li>
             <AdminTile
+              href="/evaluation/routes/reviews"
+              title="Review queue"
+              description="Evaluation-method versions waiting for a review decision. Approve or reject, with a published rationale."
+              icon={<CheckIcon size={20} />}
+            />
+          </li>
+          <li>
+            <AdminTile
               href="/catalog/remotes"
               title="Federation peers"
               description="Remote catalogue mirrors harvested into this platform. Soft-deprecated path: this tile will move to /admin/federation."
@@ -106,7 +115,7 @@ function AdminTile({
           <div className="flex items-start gap-3">
             <span
               aria-hidden="true"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
             >
               {icon}
             </span>

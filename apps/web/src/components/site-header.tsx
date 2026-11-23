@@ -54,9 +54,8 @@ function envTone(env: string): 'info' | 'warning' | 'neutral' {
  *
  * From `xl` up the links sit in a row; below it they move into a menu
  * (#743), which keeps the account area clear at tablet width in both
- * languages. When a caller's roles add enough links that the row would
- * not fit at `xl`, the menu stays up to `2xl`, or at every width
- * (#776; see `rowBreakpoint`).
+ * languages. When a caller's roles add more links than fit at `xl`, the
+ * menu stays up to `2xl` (#776; see `rowBreakpoint`).
  *
  * The `dev` / `int` / `prod` env tag is rendered as a small badge so
  * operators can tell at a glance which environment they're looking at.
@@ -77,7 +76,7 @@ export async function SiteHeader() {
   const primaryLinks = primaryHeaderLinks(session).map(labelled);
   const accountLinks = accountHeaderLinks(session).map(labelled);
   const accountName = session?.user?.email ?? session?.user?.name ?? null;
-  const breakpoint = rowBreakpoint(primaryLinks.map((link) => link.label));
+  const breakpoint = rowBreakpoint(primaryLinks.length);
 
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-background)]/85 backdrop-blur supports-[backdrop-filter]:bg-[var(--color-background)]/70">
