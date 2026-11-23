@@ -31,15 +31,22 @@ const LABEL = 'oci-audit-pseudonym/v1\u0000';
  *
  * Without a key a deployed environment withholds actors from a
  * `regulator` entirely, rather than showing them in clear.
+ *
+ * CDK generates the key once per environment (`AuditPseudonymKey` in
+ * infra/cdk/lib/api-stack.ts) and never rotates it, since rotation
+ * would change every pseudonym.
  */
 @Injectable()
 export class AuditPseudonymiser {
   private readonly logger = new Logger(AuditPseudonymiser.name);
-  private readonly key: string | null;
+  // A runtime-private field, not a TypeScript `private` one: it is left
+  // out of JSON.stringify, util.inspect and any logger that serialises
+  // the instance, so the key cannot reach a log or a response that way.
+  readonly #key: string | null;
 
   constructor() {
-    this.key = resolveKey(process.env.OCI_AUDIT_PSEUDONYM_KEY, process.env.OCI_ENV);
-    if (this.key === null) {
+    this.#key = resolveKey(process.env.OCI_AUDIT_PSEUDONYM_KEY, process.env.OCI_ENV);
+    if (this.#key === null) {
       this.logger.warn(
         'OCI_AUDIT_PSEUDONYM_KEY is not set (or shorter than 32 characters): regulators see actors withheld',
       );
@@ -47,13 +54,13 @@ export class AuditPseudonymiser {
   }
 
   get configured(): boolean {
-    return this.key !== null;
+    return this.#key !== null;
   }
 
   /** The pseudonym of `value`, or null when no key is configured. */
   pseudonym(value: string): string | null {
-    if (this.key === null) return null;
-    const mac = createHmac('sha256', this.key)
+    if (this.#key === null) return null;
+    const mac = createHmac('sha256', this.#key)
       .update(LABEL + value, 'utf8')
       .digest('hex');
     return `ps-${mac.slice(0, 24)}`;
