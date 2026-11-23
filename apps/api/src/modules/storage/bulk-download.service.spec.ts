@@ -504,6 +504,22 @@ describe('BulkDownloadService.buildZip — failures (#772)', () => {
 
   const keyOf = (cmd: unknown) => (cmd as { input: { Key: string } }).input.Key;
 
+  // Delivers one chunk, then dies — but only once yazl starts reading it.
+  // A wall-clock timer raced buildZip: on a slow runner it fired before the
+  // body's listeners were attached, so the error went uncaught and the
+  // `close` was missed, parking yazl until the test timed out.
+  const bodyThatDiesOnceRead = (err?: Error): Readable => {
+    let started = false;
+    return new Readable({
+      read() {
+        if (started) return;
+        started = true;
+        this.push(Buffer.from('partial'));
+        setImmediate(() => this.destroy(err));
+      },
+    });
+  };
+
   it('destroys the archive stream and logs once when an object cannot be opened', async () => {
     s3.client.send.mockImplementation((cmd: unknown) =>
       keyOf(cmd) === 'idrid/r2/b.jpg'
@@ -521,10 +537,7 @@ describe('BulkDownloadService.buildZip — failures (#772)', () => {
   });
 
   it('destroys the archive stream and logs once when an object stream errors mid-read', async () => {
-    const failing = new Readable({ read() {} });
-    failing.push(Buffer.from('partial'));
-    setTimeout(() => failing.destroy(new Error('socket reset')), 5);
-    s3.client.send.mockResolvedValue({ Body: failing });
+    s3.client.send.mockResolvedValue({ Body: bodyThatDiesOnceRead(new Error('socket reset')) });
 
     await expect(collect(svc.buildZip(await plan()))).rejects.toMatchObject({
       code: 'ERR_STREAM_PREMATURE_CLOSE',
@@ -536,10 +549,7 @@ describe('BulkDownloadService.buildZip — failures (#772)', () => {
   });
 
   it('treats an object stream that closes without ending as a failure', async () => {
-    const closing = new Readable({ read() {} });
-    closing.push(Buffer.from('partial'));
-    setTimeout(() => closing.destroy(), 5);
-    s3.client.send.mockResolvedValue({ Body: closing });
+    s3.client.send.mockResolvedValue({ Body: bodyThatDiesOnceRead() });
 
     await expect(collect(svc.buildZip(await plan()))).rejects.toMatchObject({
       code: 'ERR_STREAM_PREMATURE_CLOSE',
