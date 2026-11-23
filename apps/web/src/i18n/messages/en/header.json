@@ -5,6 +5,8 @@
   "evaluation": "Evaluation",
   "annotation": "Annotation",
   "inbox": "Inbox",
+  "reviews": "Reviews",
+  "auditTrail": "Audit trail",
   "admin": "Admin",
   "dashboard": "Dashboard",
   "settings": "Settings",

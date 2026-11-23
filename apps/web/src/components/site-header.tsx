@@ -5,12 +5,41 @@ import { Badge, Button } from '@oci/ui';
 import { redirect } from 'next/navigation';
 import { auth, isLocal, signOut } from '../auth';
 import { cognitoLogoutUrl } from '../lib/cognito-logout';
-import { isAdmin, isHost } from '../lib/groups';
 import { activityReportSeconds, sessionIdleSeconds } from '../lib/token-refresh';
 import { BrandLockup } from './brand-mark';
 import { HeaderMenu } from './header-menu';
 import { LanguageSwitch } from './language-switch';
 import { SessionActivity } from './session-activity';
+import {
+  accountHeaderLinks,
+  primaryHeaderLinks,
+  rowBreakpoint,
+  type HeaderLink,
+  type RowBreakpoint,
+} from './site-header-links';
+
+// Whole class names, so Tailwind finds them in the source.
+function navRowClass(breakpoint: RowBreakpoint): string {
+  switch (breakpoint) {
+    case 'xl':
+      return 'hidden items-center gap-5 xl:flex';
+    case '2xl':
+      return 'hidden items-center gap-5 2xl:flex';
+    case 'never':
+      return 'hidden';
+  }
+}
+
+function accountRowClass(breakpoint: RowBreakpoint): string {
+  switch (breakpoint) {
+    case 'xl':
+      return 'hidden items-center gap-3 xl:flex';
+    case '2xl':
+      return 'hidden items-center gap-3 2xl:flex';
+    case 'never':
+      return 'hidden';
+  }
+}
 
 function envTone(env: string): 'info' | 'warning' | 'neutral' {
   if (env === 'dev') return 'info';
@@ -25,7 +54,8 @@ function envTone(env: string): 'info' | 'warning' | 'neutral' {
  *
  * From `xl` up the links sit in a row; below it they move into a menu
  * (#743), which keeps the account area clear at tablet width in both
- * languages.
+ * languages. When a caller's roles add more links than fit at `xl`, the
+ * menu stays up to `2xl` (#776; see `rowBreakpoint`).
  *
  * The `dev` / `int` / `prod` env tag is rendered as a small badge so
  * operators can tell at a glance which environment they're looking at.
@@ -33,34 +63,20 @@ function envTone(env: string): 'info' | 'warning' | 'neutral' {
 export async function SiteHeader() {
   const [session, t] = await Promise.all([auth(), getTranslations('Header')]);
   const env = process.env.OCI_ENV ?? 'local';
-  const showHostNav = isHost(session);
-  const showAdminNav = isAdmin(session);
   const signedIn = session?.user != null;
   const showEnvBadge = env !== 'prod';
   const idleSeconds = sessionIdleSeconds();
 
-  // One list, rendered twice: as a row from `xl` up, and inside the
-  // menu below it (#743).
-  const primaryLinks: { href: Route; label: string }[] = [
-    { href: '/catalog', label: t('catalog') },
-    // Public like /catalog: PUBLISHED model cards only (#591).
-    { href: '/models', label: t('models') },
-    // Public like /catalog: evaluation tasks and their scores are
-    // readable by anyone (ADR-0017); ground truth never is.
-    { href: '/evaluation', label: t('evaluation') },
-    ...(signedIn ? [{ href: '/annotation/campaigns' as Route, label: t('annotation') }] : []),
-    ...(showHostNav
-      ? [{ href: '/dashboard/host/access-requests' as Route, label: t('inbox') }]
-      : []),
-    ...(showAdminNav ? [{ href: '/admin' as Route, label: t('admin') }] : []),
-  ];
-  const accountLinks: { href: Route; label: string }[] = signedIn
-    ? [
-        { href: '/dashboard', label: t('dashboard') },
-        { href: '/settings', label: t('settings') },
-      ]
-    : [];
+  // One list, rendered twice: as a row from the breakpoint where it
+  // fits, and inside the menu below it (#743, #776).
+  const labelled = ({ href, key }: HeaderLink): { href: Route; label: string } => ({
+    href,
+    label: t(key),
+  });
+  const primaryLinks = primaryHeaderLinks(session).map(labelled);
+  const accountLinks = accountHeaderLinks(session).map(labelled);
   const accountName = session?.user?.email ?? session?.user?.name ?? null;
+  const breakpoint = rowBreakpoint(primaryLinks.length);
 
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-background)]/85 backdrop-blur supports-[backdrop-filter]:bg-[var(--color-background)]/70">
@@ -72,7 +88,7 @@ export async function SiteHeader() {
           >
             <BrandLockup />
           </Link>
-          <nav aria-label={t('primaryNav')} className="hidden items-center gap-5 xl:flex">
+          <nav aria-label={t('primaryNav')} className={navRowClass(breakpoint)}>
             {primaryLinks.map((link) => (
               <NavLink key={link.href} href={link.href}>
                 {link.label}
@@ -97,13 +113,15 @@ export async function SiteHeader() {
               {idleSeconds === null ? null : (
                 <SessionActivity reportEverySeconds={activityReportSeconds(idleSeconds)} />
               )}
-              <div className="hidden items-center gap-3 xl:flex">
+              <div className={accountRowClass(breakpoint)}>
                 {accountLinks.map((link) => (
                   <NavLink key={link.href} href={link.href}>
                     {link.label}
                   </NavLink>
                 ))}
-                {accountName ? (
+                {/* Left out when the row only fits from 2xl: it takes the
+                    room the links need there. */}
+                {accountName && breakpoint === 'xl' ? (
                   <span
                     className="hidden max-w-[14ch] truncate text-sm text-[var(--color-muted-foreground)] 2xl:inline"
                     title={accountName}
@@ -120,7 +138,7 @@ export async function SiteHeader() {
             </>
           ) : null}
 
-          <HeaderMenu label={t('menu')}>
+          <HeaderMenu label={t('menu')} hideFrom={breakpoint}>
             <nav aria-label={t('primaryNav')}>
               <ul className="flex flex-col">
                 {[...primaryLinks, ...accountLinks].map((link) => (
