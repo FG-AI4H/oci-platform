@@ -4,7 +4,7 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
  * The header's role links to the method review queue and the audit
  * trail (#776), at every width and in both languages. From `xl` (1280
  * px) up the links sit in a row; below it they are in the "Menu"
- * disclosure (#743). A caller with more than five links keeps the menu
+ * disclosure (#743). A caller with more than six links keeps the menu
  * up to `2xl` (1536 px). Each test checks which of the two the header
  * shows, that no header control overlaps another and the page does not
  * scroll sideways, then opens the menu where it is shown. Admins get
@@ -32,15 +32,25 @@ const LANGUAGES = [
     reviews: 'Reviews',
     audit: 'Audit trail',
     admin: 'Admin',
+    // An admin's row on main, which #776 leaves as it was.
+    adminRow: ['Catalog', 'Models', 'Evaluation', 'Annotation', 'Inbox', 'Admin'],
   },
   {
     name: 'fr',
     locale: 'fr-FR',
     nav: 'Navigation principale',
     menu: 'Menu',
-    reviews: 'Revues de méthodes',
+    reviews: 'Revues',
     audit: 'Journal d’audit',
     admin: 'Administration',
+    adminRow: [
+      'Catalogue',
+      'Modèles',
+      'Évaluation',
+      'Annotation',
+      'Demandes reçues',
+      'Administration',
+    ],
   },
 ] as const;
 
@@ -66,10 +76,10 @@ async function signedInPage(
   return page;
 }
 
-/** Whether the header should show the menu: below xl, or below 2xl past five links. */
+/** Whether the header should show the menu: below xl, or below 2xl past six links. */
 function expectsMenu(vp: Viewport, linkCount: number): boolean {
   if (vp.width < 1280) return true;
-  if (vp.width < 1536) return linkCount > 5;
+  if (vp.width < 1536) return linkCount > 6;
   return false;
 }
 
@@ -150,9 +160,10 @@ test.describe('header role links (#776)', () => {
           browser,
         }) => {
           const page = await signedInPage(browser, vp, lang, roles);
-          // Catalog, Models, Evaluation, Annotation, Inbox, Admin.
+          // Six links: the row from 1280 px, as on main.
           const nav = await primaryNav(page, vp, lang, 6);
-          await expect(nav.getByRole('link', { name: lang.admin, exact: true })).toHaveCount(1);
+          const names = (await nav.getByRole('link').allTextContents()).map((t) => t.trim());
+          expect(names.slice(0, 6)).toEqual([...lang.adminRow]);
           await expect(nav.getByRole('link', { name: lang.reviews, exact: true })).toHaveCount(0);
           await expect(nav.getByRole('link', { name: lang.audit, exact: true })).toHaveCount(0);
           await page.context().close();

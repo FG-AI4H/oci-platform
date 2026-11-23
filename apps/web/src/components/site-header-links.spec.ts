@@ -86,12 +86,11 @@ describe('rowBreakpoint', () => {
     ROLES.filter((_, i) => mask & (2 ** i)),
   );
 
-  it('keeps the row from xl up to five links', () => {
-    for (const count of [3, 4, 5]) expect(rowBreakpoint(count)).toBe('xl');
+  it('keeps the row from xl up to six links', () => {
+    for (const count of [3, 4, 5, 6]) expect(rowBreakpoint(count)).toBe('xl');
   });
 
-  it('holds the menu up to 2xl for six or seven links', () => {
-    expect(rowBreakpoint(6)).toBe('2xl');
+  it('holds the menu up to 2xl for seven links', () => {
     expect(rowBreakpoint(7)).toBe('2xl');
   });
 
@@ -112,17 +111,25 @@ describe('rowBreakpoint', () => {
     }
   });
 
-  it('moves the six-link sets, which overflow at xl in French, to 2xl', () => {
+  it('keeps every six-link set on the xl row, an admin as before', () => {
     for (const roles of [
+      ['admin'],
+      ['host', 'admin'],
+      ['admin', 'evaluation-reviewer', 'regulator'],
       ['host', 'evaluation-reviewer'],
       ['evaluation-reviewer', 'regulator'],
       ['host', 'regulator'],
-      ['admin'],
     ]) {
       const count = keys(session(...roles)).length;
       expect(count).toBe(6);
-      expect(rowBreakpoint(count)).toBe('2xl');
+      expect(rowBreakpoint(count)).toBe('xl');
     }
+  });
+
+  it('holds the menu up to 2xl for the one seven-link set', () => {
+    const count = keys(session('host', 'evaluation-reviewer', 'regulator')).length;
+    expect(count).toBe(7);
+    expect(rowBreakpoint(count)).toBe('2xl');
   });
 });
 

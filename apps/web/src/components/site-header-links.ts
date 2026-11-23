@@ -67,24 +67,26 @@ export type RowBreakpoint = 'xl' | '2xl' | 'never';
  * header (text-sm, 20 px between links), signed in, with the
  * environment badge shown:
  *
- *   room for the row        en       fr
- *   at 1280 px (xl)       704 px   604 px
- *   at 1536 px (2xl)      960 px   860 px   (account name left out)
+ *   room for the row                      en       fr
+ *   at 1280 px (xl)                     704 px   604 px
+ *   at 1536 px (xl, with account name)  824 px   724 px
+ *   at 1536 px (2xl, account name out)  960 px   860 px
  *
- *   links (fr widths)                                 count    fr width
- *   regulator / host / reviewer                          5    448 / 469 / 488 px
+ *   links, French row width (French label "Revues")   count   fr width
+ *   reviewer / regulator / host                          5    397 / 448 / 469 px
+ *   reviewer + regulator                                 6    517 px
+ *   host + reviewer                                      6    538 px
  *   admin (Inbox + Admin)                                6    586 px
- *   host + regulator                                     6    588 px
- *   reviewer + regulator                                 6    608 px  overflows at xl
- *   host + reviewer                                      6    629 px  overflows at xl
- *   host + reviewer + regulator (the most links)         7    749 px
+ *   host + regulator                                     6    589 px  (15 px to spare)
+ *   host + reviewer + regulator (the most links)         7    658 px  overflows at xl
  *
- * Some sets of six overflow at 1280 px in French, so six or more wait
- * for 2xl, in both languages. Seven fit at 1536 px with 111 px to spare;
+ * Every set of six fits at 1280 px in French, so up to six sit in a row
+ * from xl, in both languages. Seven fit at 1536 px with 202 px to spare;
  * more than seven, which no role combination reaches today, keep the
- * menu at every width.
+ * menu at every width. A longer label, or a new role link, needs these
+ * measurements taken again.
  */
-const MAX_LINKS_FROM_XL = 5;
+const MAX_LINKS_FROM_XL = 6;
 const MAX_LINKS_FROM_2XL = 7;
 
 export function rowBreakpoint(linkCount: number): RowBreakpoint {
