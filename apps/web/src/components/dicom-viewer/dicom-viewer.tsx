@@ -461,6 +461,13 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
       await viewport.setStack(imageIds, 0);
       if (cancelled) return;
       viewport.render();
+      // Without WebGL the library draws on the processor and announces no
+      // starting window, so the screen would show none, no preset would
+      // be marked, and an answer would record no window. Read it instead;
+      // with WebGL this is the value the event already gave.
+      const opening = viewport.getProperties();
+      if (opening.voiRange) setWindowSetting(fromVoiRange(opening.voiRange));
+      if (typeof opening.invert === 'boolean') setInverted(opening.invert);
       goToRef.current = goTo;
       setLoadedCount(1);
       setPhase('ready');

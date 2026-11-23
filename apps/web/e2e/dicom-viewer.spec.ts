@@ -666,3 +666,56 @@ test.describe('DICOM viewer on the dataset page', () => {
     });
   });
 });
+
+// A laptop with WebGL off, or a GPU the browser refuses: the library
+// draws on the processor instead. The test launches a browser of its own
+// with WebGL disabled.
+test.describe('DICOM viewer without WebGL', () => {
+  test('draws the series, says which window it shows, and windows and scrolls as with WebGL', async ({
+    playwright,
+    baseURL,
+  }) => {
+    const browser = await playwright.chromium.launch({
+      args: ['--disable-webgl', '--disable-webgl2', '--disable-3d-apis'],
+    });
+    const page = await browser.newPage({ baseURL, viewport: { width: 1280, height: 800 } });
+    try {
+      await withoutWebGl(page);
+    } finally {
+      await browser.close();
+    }
+  });
+});
+
+async function withoutWebGl(page: Page): Promise<void> {
+  await openSeries(page, 'CT series 1');
+  expect(
+    await page.evaluate(() => {
+      const canvas = document.createElement('canvas');
+      return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'));
+    }),
+  ).toBe(false);
+  await expect(page.getByTestId('dicom-status')).toHaveText(`All ${IMAGES} images loaded`, {
+    timeout: 60_000,
+  });
+
+  // The window the files propose, shown and recorded from the start.
+  await expect(windowReadout(page)).toHaveText('W 80 · L 40');
+  await expect(page.getByRole('button', { name: 'Brain', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  const viewport = page.getByTestId('dicom-viewport');
+  await expect(viewport).toHaveAttribute('data-view', /"window":\{"width":80,"center":40\}/);
+
+  const picture = async () => (await viewport.screenshot()).toString('base64');
+  const asBrain = await picture();
+  await page.getByRole('button', { name: 'Bone', exact: true }).click();
+  await expect(windowReadout(page)).toHaveText('W 2000 · L 500');
+  expect(await picture()).not.toBe(asBrain);
+
+  await viewport.focus();
+  await page.keyboard.press('End');
+  await expect(counter(page)).toHaveText(`${IMAGES} / ${IMAGES}`);
+  await expect(page.getByTestId('dicom-stand-in')).toHaveCount(0);
+}
