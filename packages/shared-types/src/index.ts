@@ -4777,6 +4777,34 @@ export const EvidenceStandingSchema = z.enum([
 ]);
 export type EvidenceStanding = z.infer<typeof EvidenceStandingSchema>;
 
+/**
+ * Sensitivity, specificity and predictive values of a two-class
+ * classification result, with class 1 as the positive class (#652). The four
+ * counts are recovered exactly from the stored per-class support and recall,
+ * and checked against the stored precision and accuracy; the rates and their
+ * Wilson intervals come from the same function as `BINARY_DIAGNOSTIC`
+ * scoring. `NOT_RECOVERABLE` when the stored figures do not determine the
+ * counts uniquely: nothing is approximated.
+ */
+export const EvidenceDerivedDiagnosticSchema = z.discriminatedUnion('status', [
+  z
+    .object({
+      status: z.literal('DERIVED'),
+      positiveLabel: z.literal(1),
+      truePositives: z.number().int().nonnegative(),
+      falsePositives: z.number().int().nonnegative(),
+      trueNegatives: z.number().int().nonnegative(),
+      falseNegatives: z.number().int().nonnegative(),
+      sensitivity: ProportionEstimateSchema.nullable(),
+      specificity: ProportionEstimateSchema.nullable(),
+      positivePredictiveValue: ProportionEstimateSchema.nullable(),
+      negativePredictiveValue: ProportionEstimateSchema.nullable(),
+    })
+    .strict(),
+  z.object({ status: z.literal('NOT_RECOVERABLE') }).strict(),
+]);
+export type EvidenceDerivedDiagnostic = z.infer<typeof EvidenceDerivedDiagnosticSchema>;
+
 /** One event of the submission's audit trail: what happened, when, and its hashes. */
 export const EvidenceTraceEventSchema = z
   .object({
@@ -4837,6 +4865,12 @@ export const EvidenceSummarySchema = z
          */
         positiveCases: z.number().int().nonnegative().nullable(),
         minPositiveCases: z.number().int().positive(),
+        /**
+         * Two-class classification only: the diagnostic measures derived
+         * from the stored per-class result, class 1 positive. Null for any
+         * other task kind or class count.
+         */
+        derivedDiagnostic: EvidenceDerivedDiagnosticSchema.nullable(),
       })
       .strict(),
     /** Stored already suppressed, read as the submission page reads it (ADR-0030). */

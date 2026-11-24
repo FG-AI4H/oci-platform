@@ -152,9 +152,22 @@ test.describe('evidence summary (#652)', () => {
     await expect(gaps.first()).toContainText('No model card is linked to this submission');
     await expect(page.getByText(`This evidence has ${gapCodes.length} gaps`)).toBeVisible();
     // The intervals are not invented for a task kind that has none.
+    // A two-class task: the diagnostic measures are derived from the stored
+    // result, class 1 positive, with Wilson intervals; the classification
+    // measures themselves carry none.
     await expect(page.getByRole('region', { name: 'Performance measures' })).not.toContainText(
       '95% CI',
     );
+    const derived = page.getByRole('region', {
+      name: 'Diagnostic measures derived from the two-class result',
+    });
+    await expect(derived).toContainText('Sensitivity');
+    await expect(derived).toContainText('95% CI');
+    await expect(derived).toContainText(/\d+ of \d+/);
+    await expect(
+      page.getByText('Sensitivity and specificity derived from the two-class result'),
+    ).toBeVisible();
+    expect(gapCodes).not.toContain('NO_INTERVALS');
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/evidence-en-1280.png`, fullPage: true });
     await page.context().close();
   });
@@ -180,6 +193,12 @@ test.describe('evidence summary (#652)', () => {
     await expect(page.getByRole('region', { name: 'Mesures de performance' })).toContainText(
       /89,7\s%/,
     );
+    const derived = page.getByRole('region', {
+      name: 'Mesures diagnostiques calculées à partir du résultat à deux classes',
+    });
+    await expect(derived).toContainText('Sensibilité');
+    await expect(derived).toContainText('Valeur prédictive négative (VPN)');
+    await expect(derived).toContainText('IC 95 %');
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/evidence-fr-1280.png`, fullPage: true });
     await page.context().close();
   });

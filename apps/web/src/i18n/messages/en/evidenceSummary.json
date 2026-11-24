@@ -27,7 +27,8 @@
   "glance": {
     "title": "At a glance",
     "gapCount": "{count, plural, =0 {No gap was found in what the platform holds.} one {This evidence has # gap, listed in section 6.} other {This evidence has # gaps, listed in section 6.}}",
-    "gapLink": "See what is missing"
+    "gapLink": "See what is missing",
+    "derived": "Sensitivity and specificity derived from the two-class result; positive: {positive}."
   },
   "section": {
     "intendedUse": "Intended use and risk tier",
@@ -131,7 +132,15 @@
     "recall": "Recall (sensitivity)",
     "f1": "F1",
     "images": "Items",
-    "notApplicable": "Not applicable: no item of this class"
+    "notApplicable": "Not applicable: no item of this class",
+    "derivedTitle": "Diagnostic measures, class 1 as positive",
+    "derivedNote": "Derived from the two-class result: {positive} is positive, {negative} negative. Counts recovered exactly from the stored result; Wilson 95% intervals.",
+    "derivedLabel": "Diagnostic measures derived from the two-class result",
+    "classPositive": "Class 1 ({name})",
+    "classNegative": "Class 0 ({name})",
+    "present": "present",
+    "absent": "absent",
+    "classificationTitle": "Two-class result as scored"
   },
   "metric": {
     "sensitivity": "Sensitivity",
@@ -206,7 +215,7 @@
     "AUDIT_RESULT_EVENT_MISSING": "The audit trail has no {eventType} event for this result."
   },
   "trace": {
-    "intro": "The submission’s events in the platform’s audit trail. Each record hash chains to the one before it, so an auditor can check these lines against an export of the trail.",
+    "intro": "The submission’s events in the audit trail. Each record hash chains to the one before it: check them against an export of the trail.",
     "none": "No audit event is recorded for this submission.",
     "tableLabel": "Audit events of this submission",
     "sequence": "No.",
@@ -221,7 +230,7 @@
       "failed": "Failed"
     }
   },
-  "footer": "OCI Platform evidence summary of submission {id}, generated {date} UTC. Figures as held by the platform at that time.",
+  "footer": "OCI Platform evidence summary of submission {id}, generated {date} UTC.",
   "unavailable": {
     "title": "Evidence summary unavailable",
     "fallback": "Unable to reach the evaluation API."

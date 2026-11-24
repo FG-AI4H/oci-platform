@@ -4,6 +4,7 @@ import en from '../../../../../../i18n/messages/en';
 import fr from '../../../../../../i18n/messages/fr';
 import { formattersFor } from '../../../../../../i18n/format';
 import {
+  diagnosticRows,
   excerpt,
   gapValues,
   gapsBySection,
@@ -128,6 +129,24 @@ describe('metricRows', () => {
       },
     };
     expect(metricRows(grading, FR)[0]?.value).toBe('-0,042');
+  });
+});
+
+describe('diagnosticRows', () => {
+  it('the four diagnostic measures with their intervals and counts', () => {
+    const m = BINARY.kind === 'BINARY_DIAGNOSTIC' ? BINARY.metrics : null;
+    const rows = diagnosticRows(m!, EN);
+    expect(rows.map((r) => r.key)).toStrictEqual([
+      'sensitivity',
+      'specificity',
+      'positivePredictiveValue',
+      'negativePredictiveValue',
+    ]);
+    expect(rows[1]).toMatchObject({
+      value: '90%',
+      interval: { lower: '83.3%', upper: '94.2%' },
+      basis: { numerator: '108', denominator: '120' },
+    });
   });
 });
 

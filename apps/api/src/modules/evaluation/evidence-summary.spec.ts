@@ -6,6 +6,7 @@ import {
   type DatasetDetail,
   type EvidenceGapCode,
   type SubgroupField,
+  type ClassificationScores,
   type TaskKindScores,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
@@ -14,6 +15,7 @@ import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import type { CatalogService } from '../catalog/catalog.service.js';
 import {
   assembleEvidence,
+  deriveTwoClassDiagnostic,
   positiveCasesOf,
   type EvidenceInput,
   type EvidenceModelCardRow,
@@ -440,7 +442,7 @@ describe('assembleEvidence', () => {
       });
     });
 
-    it('no intervals for a classification task, and few positive cases', () => {
+    it('a two-class classification has its diagnostic measures, so no NO_INTERVALS gap', () => {
       const classification = scoreByKind({
         kind: 'CLASSIFICATION',
         groundTruth: GROUND_TRUTH,
@@ -451,12 +453,43 @@ describe('assembleEvidence', () => {
         input({ submission: submission({ scores: classification, subgroupScores: null }) }),
       );
       expect(s.performance.positiveCases).toBe(60);
-      expect(s.gaps).toContainEqual({
+      expect(s.performance.derivedDiagnostic?.status).toBe('DERIVED');
+      const codes = s.gaps.map((g) => g.code);
+      expect(codes).not.toContain('NO_INTERVALS');
+      expect(codes).not.toContain('FEW_POSITIVE_CASES');
+    });
+
+    it('a classification of more than two classes, and a grading task, keep NO_INTERVALS', () => {
+      const three = scoreByKind({
+        kind: 'CLASSIFICATION',
+        groundTruth: Object.fromEntries(IDS.map((id, i) => [id, i % 3])),
+        predictions: Object.fromEntries(IDS.map((id, i) => [id, i % 3])),
+        config: { numClasses: 3, referableThreshold: 1 },
+      });
+      const s3 = assembleEvidence(
+        input({ submission: submission({ scores: three, subgroupScores: null }) }),
+      );
+      expect(s3.performance.derivedDiagnostic).toBeNull();
+      expect(s3.gaps).toContainEqual({
         code: 'NO_INTERVALS',
         section: 4,
         params: { taskKind: 'CLASSIFICATION' },
       });
-      expect(s.gaps.map((g) => g.code)).not.toContain('FEW_POSITIVE_CASES');
+      const grading = {
+        kind: 'GRADING',
+        metrics: {
+          qwk: 0.8,
+          accuracy: 0.7,
+          referableSensitivity: 0.9,
+          referableSpecificity: 0.8,
+          coverage: 1,
+        },
+      };
+      const sg = assembleEvidence(
+        input({ submission: submission({ scores: grading, subgroupScores: null }) }),
+      );
+      expect(sg.performance.derivedDiagnostic).toBeNull();
+      expect(sg.gaps.map((g) => g.code)).toContain('NO_INTERVALS');
     });
 
     it(`fewer than ${EVIDENCE_MIN_POSITIVE_CASES} positive cases`, () => {
@@ -627,5 +660,113 @@ describe('EvidenceSummaryService access', () => {
     const s = await svc.getEvidence(SUBMISSION_ID, user(SUBMITTER_SUB), NOW);
     expect(s.modelCard).toBeNull();
     expect(s.gaps[0]).toStrictEqual({ code: 'NO_MODEL_CARD', section: 1, params: {} });
+  });
+});
+
+// ---- Two-class classification: diagnostic measures from the stored result ----
+
+describe('deriveTwoClassDiagnostic', () => {
+  const classification = (truth: Record<string, number>, predicted: Record<string, number>) =>
+    (
+      scoreByKind({
+        kind: 'CLASSIFICATION',
+        groundTruth: truth,
+        predictions: predicted,
+        config: CONFIG,
+      }) as Extract<TaskKindScores, { kind: 'CLASSIFICATION' }>
+    ).metrics;
+  const binary = (truth: Record<string, number>, predicted: Record<string, number>) =>
+    (
+      scoreByKind({
+        kind: 'BINARY_DIAGNOSTIC',
+        groundTruth: truth,
+        predictions: predicted,
+        config: CONFIG,
+      }) as Extract<TaskKindScores, { kind: 'BINARY_DIAGNOSTIC' }>
+    ).metrics;
+
+  it('recovers the exact counts and gives the binary scorer’s figures and Wilson intervals', () => {
+    const derived = deriveTwoClassDiagnostic(classification(GROUND_TRUTH, PREDICTIONS));
+    const reference = binary(GROUND_TRUTH, PREDICTIONS);
+    expect(derived).toStrictEqual({
+      status: 'DERIVED',
+      positiveLabel: 1,
+      truePositives: reference.truePositives,
+      falsePositives: reference.falsePositives,
+      trueNegatives: reference.trueNegatives,
+      falseNegatives: reference.falseNegatives,
+      sensitivity: reference.sensitivity,
+      specificity: reference.specificity,
+      positivePredictiveValue: reference.positivePredictiveValue,
+      negativePredictiveValue: reference.negativePredictiveValue,
+    });
+  });
+
+  it('matches the binary scorer on awkward fractions and partial files', () => {
+    // 7 positives of 23, an odd error pattern, and a file that skips items.
+    const ids = Array.from({ length: 23 }, (_, i) => `x${i}`);
+    const truth = Object.fromEntries(ids.map((id, i) => [id, i % 3 === 0 ? 1 : 0]));
+    const predicted = Object.fromEntries(
+      ids
+        .slice(0, 21)
+        .map((id, i) => [id, i % 4 === 0 ? 1 - (i % 3 === 0 ? 1 : 0) : i % 3 === 0 ? 1 : 0]),
+    );
+    const derived = deriveTwoClassDiagnostic(classification(truth, predicted));
+    const reference = binary(truth, predicted);
+    expect(derived).toMatchObject({
+      status: 'DERIVED',
+      truePositives: reference.truePositives,
+      falsePositives: reference.falsePositives,
+      trueNegatives: reference.trueNegatives,
+      falseNegatives: reference.falseNegatives,
+      sensitivity: reference.sensitivity,
+      negativePredictiveValue: reference.negativePredictiveValue,
+    });
+  });
+
+  it('a class with no reference item: its rate is not estimable, never 0%', () => {
+    const allNegative = Object.fromEntries(IDS.map((id) => [id, 0]));
+    const derived = deriveTwoClassDiagnostic(classification(allNegative, allNegative));
+    expect(derived).toMatchObject({ status: 'DERIVED', truePositives: 0, falseNegatives: 0 });
+    expect(derived?.status === 'DERIVED' && derived.sensitivity).toBeNull();
+  });
+
+  it('not recoverable when a rounded recall fits two counts: nothing is approximated', () => {
+    // 10 000 / 20 001 and 10 001 / 20 001 both round to 0.5000.
+    const metrics: ClassificationScores = {
+      accuracy: 0.5,
+      balancedAccuracy: 0.5,
+      macroF1: 0.5,
+      microF1: 0.5,
+      coverage: 1,
+      perClass: [
+        { label: 0, precision: 0.5, recall: 0.5, f1: 0.5, support: 20001 },
+        { label: 1, precision: 0.5, recall: 0.5, f1: 0.5, support: 20001 },
+      ],
+    };
+    expect(deriveTwoClassDiagnostic(metrics)).toStrictEqual({ status: 'NOT_RECOVERABLE' });
+  });
+
+  it('not recoverable when the counts do not reproduce the stored precision', () => {
+    const metrics = structuredClone(classification(GROUND_TRUTH, PREDICTIONS));
+    const one = metrics.perClass.find((c) => c.label === 1)!;
+    one.precision = 0.1234;
+    expect(deriveTwoClassDiagnostic(metrics)).toStrictEqual({ status: 'NOT_RECOVERABLE' });
+    // And the summary then keeps the NO_INTERVALS gap: no interval is shown.
+    const s = assembleEvidence(
+      input({
+        submission: submission({
+          scores: { kind: 'CLASSIFICATION', metrics },
+          subgroupScores: null,
+        }),
+      }),
+    );
+    expect(s.gaps.map((g) => g.code)).toContain('NO_INTERVALS');
+  });
+
+  it('not applicable to a result without exactly the classes 0 and 1', () => {
+    const metrics = structuredClone(classification(GROUND_TRUTH, PREDICTIONS));
+    metrics.perClass = metrics.perClass.slice(0, 1);
+    expect(deriveTwoClassDiagnostic(metrics)).toBeNull();
   });
 });

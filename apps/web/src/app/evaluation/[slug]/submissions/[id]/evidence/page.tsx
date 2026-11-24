@@ -13,8 +13,8 @@ import {
   Section,
 } from '@oci/ui';
 import type {
-  BinaryDiagnosticScores,
   ClassMetrics,
+  EvidenceDerivedDiagnostic,
   EvidenceGap,
   EvidenceStanding,
   EvidenceSummary,
@@ -33,6 +33,7 @@ import {
   type ModelLabelTranslator,
 } from '../../../../../../lib/model-card-labels';
 import {
+  diagnosticRows,
   excerpt,
   gapValues,
   knownEvent,
@@ -356,7 +357,12 @@ function Facts({ items }: { items: ReadonlyArray<readonly [string, ReactNode] | 
 
 function Glance({ summary, t, f }: { summary: EvidenceSummary; t: Translator; f: Formatters }) {
   const { standing, scores } = summary.performance;
-  const headline = scores ? metricRows(scores, f).slice(0, 2) : [];
+  const derived = derivedOf(summary);
+  const headline = derived
+    ? diagnosticRows(derived, f).slice(0, 2)
+    : scores
+      ? metricRows(scores, f).slice(0, 2)
+      : [];
   return (
     <section
       aria-labelledby="glance-title"
@@ -396,6 +402,11 @@ function Glance({ summary, t, f }: { summary: EvidenceSummary; t: Translator; f:
             </div>
           ))}
         </dl>
+      ) : null}
+      {derived ? (
+        <p className={`mt-2 text-xs ${MUTED}`}>
+          {t('glance.derived', { positive: classNames(summary, t).positive })}
+        </p>
       ) : null}
       <p className="mt-4 text-sm font-medium">
         <a href="#gaps" className={LINK}>
@@ -693,58 +704,147 @@ function Performance({
   const scores = summary.performance.scores;
   if (!scores) return <p>{t('performance.notScored')}</p>;
   const rows = metricRows(scores, f);
-  const withIntervals = rows.some((r) => r.interval !== null);
   const threshold = f.number(summary.task.referableThreshold);
+  const derived = derivedOf(summary);
   return (
     <>
       <p className={MUTED}>{t('performance.intro', { task: summary.task.name })}</p>
-      <div tabIndex={0} role="region" aria-label={t('performance.tableLabel')} className={REGION}>
-        <table className="w-full border-collapse text-xs sm:text-sm">
-          <thead className={`bg-[var(--color-subtle)] ${MUTED}`}>
-            <tr>
-              <th scope="col" className={`${TH} text-start`}>
-                {t('performance.measure')}
-              </th>
-              <th scope="col" className={`${TH} text-end`}>
-                {t('performance.result')}
-              </th>
-              {withIntervals ? (
-                <>
-                  <th scope="col" className={`${TH} text-end`}>
-                    {t('performance.interval')}
-                  </th>
-                  <th scope="col" className={`${TH} text-end`}>
-                    {t('performance.basis')}
-                  </th>
-                </>
-              ) : null}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <MeasureRow
-                key={row.key}
-                row={row}
-                withIntervals={withIntervals}
-                gloss={t(`gloss.${row.key}`, { threshold })}
+      {derived ? (
+        // A two-class result: the diagnostic measures a reader looks for come
+        // first, then the classification measures as scored, without glosses.
+        <>
+          <div className="space-y-2">
+            <h3 className="font-semibold">{t('performance.derivedTitle')}</h3>
+            <MeasuresTable
+              rows={diagnosticRows(derived, f)}
+              label={t('performance.derivedLabel')}
+              threshold={threshold}
+              t={t}
+            />
+            <div className="grid items-start gap-3 sm:grid-cols-[1fr_auto]">
+              <p className={`text-xs ${MUTED}`}>
+                {t('performance.derivedNote', {
+                  positive: classNames(summary, t).positive,
+                  negative: classNames(summary, t).negative,
+                })}
+              </p>
+              <Confusion
+                m={derived}
+                positive={classNames(summary, t).positive}
+                negative={classNames(summary, t).negative}
                 t={t}
+                f={f}
               />
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <h3 className="font-semibold">{t('performance.classificationTitle')}</h3>
+            <MeasuresTable
+              rows={rows}
+              label={t('performance.tableLabel')}
+              threshold={threshold}
+              glosses={false}
+              t={t}
+            />
+          </div>
+        </>
+      ) : (
+        <MeasuresTable
+          rows={rows}
+          label={t('performance.tableLabel')}
+          threshold={threshold}
+          t={t}
+        />
+      )}
       {scores.kind === 'BINARY_DIAGNOSTIC' ? (
         <Confusion
           m={scores.metrics}
           positive={summary.task.positiveClassName ?? t('performance.positiveFallback')}
+          negative={t('performance.negative')}
           t={t}
           f={f}
         />
       ) : null}
-      {scores.kind === 'CLASSIFICATION' ? (
+      {!derived && scores.kind === 'CLASSIFICATION' ? (
         <PerClass perClass={scores.metrics.perClass} t={t} f={f} />
       ) : null}
     </>
+  );
+}
+
+/** The diagnostic measures of a two-class result, when its counts were recovered. */
+function derivedOf(
+  summary: EvidenceSummary,
+): Extract<EvidenceDerivedDiagnostic, { status: 'DERIVED' }> | null {
+  const d = summary.performance.derivedDiagnostic;
+  return d?.status === 'DERIVED' ? d : null;
+}
+
+/**
+ * Class 1 and class 0 of a two-class task, by number and in words. A task
+ * names only its positive class (`positiveClassName`); otherwise they are
+ * present and absent.
+ */
+function classNames(summary: EvidenceSummary, t: Translator) {
+  return {
+    positive: t('performance.classPositive', {
+      name: summary.task.positiveClassName ?? t('performance.present'),
+    }),
+    negative: t('performance.classNegative', { name: t('performance.absent') }),
+  };
+}
+
+function MeasuresTable({
+  rows,
+  label,
+  threshold,
+  glosses = true,
+  t,
+}: {
+  rows: MetricRow[];
+  label: string;
+  threshold: string;
+  /** One line under each measure saying what it measures. */
+  glosses?: boolean;
+  t: Translator;
+}) {
+  const withIntervals = rows.some((r) => r.interval !== null);
+  return (
+    <div tabIndex={0} role="region" aria-label={label} className={REGION}>
+      <table className="w-full border-collapse text-xs sm:text-sm">
+        <thead className={`bg-[var(--color-subtle)] ${MUTED}`}>
+          <tr>
+            <th scope="col" className={`${TH} text-start`}>
+              {t('performance.measure')}
+            </th>
+            <th scope="col" className={`${TH} text-end`}>
+              {t('performance.result')}
+            </th>
+            {withIntervals ? (
+              <>
+                <th scope="col" className={`${TH} text-end`}>
+                  {t('performance.interval')}
+                </th>
+                <th scope="col" className={`${TH} text-end`}>
+                  {t('performance.basis')}
+                </th>
+              </>
+            ) : null}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <MeasureRow
+              key={row.key}
+              row={row}
+              withIntervals={withIntervals}
+              gloss={glosses ? t(`gloss.${row.key}`, { threshold }) : null}
+              t={t}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -756,14 +856,14 @@ function MeasureRow({
 }: {
   row: MetricRow;
   withIntervals: boolean;
-  gloss: string;
+  gloss: string | null;
   t: Translator;
 }) {
   return (
     <tr className="border-t border-[var(--color-border)]">
       <th scope="row" className={`${TD} text-start font-medium`}>
         {t(`metric.${row.key}`)}
-        <span className={`block text-xs font-normal ${MUTED}`}>{gloss}</span>
+        {gloss ? <span className={`block text-xs font-normal ${MUTED}`}>{gloss}</span> : null}
       </th>
       <td className={`${TD} whitespace-nowrap text-end text-sm font-semibold tabular-nums`}>
         {row.value ??
@@ -797,14 +897,23 @@ function MeasureRow({
   );
 }
 
+interface Counts {
+  truePositives: number;
+  falsePositives: number;
+  trueNegatives: number;
+  falseNegatives: number;
+}
+
 function Confusion({
   m,
   positive,
+  negative,
   t,
   f,
 }: {
-  m: BinaryDiagnosticScores;
+  m: Counts;
   positive: string;
+  negative: string;
   t: Translator;
   f: Formatters;
 }) {
@@ -830,7 +939,7 @@ function Confusion({
                 {positive}
               </th>
               <th scope="col" className={`${TH} text-end`}>
-                {t('performance.negative')}
+                {negative}
               </th>
             </tr>
           </thead>
@@ -844,7 +953,7 @@ function Confusion({
             </tr>
             <tr className="border-t border-[var(--color-border)]">
               <th scope="row" className={`${TD} text-start font-medium`}>
-                {t('performance.negative')}
+                {negative}
               </th>
               {cell(m.falsePositives)}
               {cell(m.trueNegatives)}

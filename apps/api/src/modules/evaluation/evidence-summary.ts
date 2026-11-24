@@ -3,7 +3,9 @@ import {
   EVIDENCE_MIN_POSITIVE_CASES,
   IntendedUseStatementSchema,
   type DatasetDetail,
+  type ClassificationScores,
   type EvidenceDataset,
+  type EvidenceDerivedDiagnostic,
   type EvidenceGap,
   type EvidenceMethod,
   type EvidenceModelCard,
@@ -17,6 +19,7 @@ import {
 import { parseScores } from './evaluation.service.js';
 import type { EvidenceSubmissionRow, EvidenceTraceRow } from './evidence-summary.repository.js';
 import { attributionFor } from './route-registry.js';
+import { proportion } from './scoring-binary-diagnostic.js';
 import { parseSubgroupResults } from './subgroup-config.js';
 
 /**
@@ -91,6 +94,8 @@ export function assembleEvidence(input: EvidenceInput): EvidenceSummary {
       scores,
       positiveCases: positiveCasesOf(scores),
       minPositiveCases: EVIDENCE_MIN_POSITIVE_CASES,
+      derivedDiagnostic:
+        scores?.kind === 'CLASSIFICATION' ? deriveTwoClassDiagnostic(scores.metrics) : null,
     },
     // Only a scored submission has results by subgroup to show.
     subgroups: scores ? parseSubgroupResults(row.subgroupScores) : null,
@@ -238,6 +243,79 @@ export function positiveCasesOf(scores: TaskKindScores | null): number | null {
   return null;
 }
 
+/** Stored rates are rounded to 4 decimals: a count reproduces one within this. */
+const STORED_ROUNDING = 0.00005 + 1e-12;
+
+/**
+ * The integer `k` in [0, total] whose `k / total` rounds to `rate`, when there
+ * is exactly one. Null when none or several do: the count is then not known.
+ */
+function countFromRate(rate: number, total: number): number | null {
+  if (total === 0) return rate === 0 ? 0 : null;
+  const lo = Math.max(0, Math.floor((rate - STORED_ROUNDING) * total));
+  const hi = Math.min(total, Math.ceil((rate + STORED_ROUNDING) * total));
+  const found: number[] = [];
+  for (let k = lo; k <= hi; k += 1) {
+    if (Math.abs(k / total - rate) <= STORED_ROUNDING) found.push(k);
+  }
+  return found.length === 1 ? (found[0] ?? null) : null;
+}
+
+/** The stored rate a count gives, by the scorer's conventions (0 on an empty denominator). */
+function agrees(stored: number, numerator: number, denominator: number): boolean {
+  const exact = denominator === 0 ? 0 : numerator / denominator;
+  return Math.abs(exact - stored) <= STORED_ROUNDING;
+}
+
+/**
+ * Sensitivity, specificity and predictive values of a two-class
+ * classification result, class 1 positive (#652).
+ *
+ * The four counts come from what is stored per class, exactly: the class
+ * supports are the positive and negative reference counts, and each class's
+ * recall times its support is its correct count (TP for class 1, TN for
+ * class 0). A recall is stored rounded to 4 decimals, so the count is the one
+ * integer that rounds back to it; if none or several do, or the counts do not
+ * reproduce the stored precisions and accuracy, the result is
+ * `NOT_RECOVERABLE` and nothing is shown. The rates and Wilson intervals come
+ * from `proportion`, the function `BINARY_DIAGNOSTIC` scoring uses.
+ *
+ * Null when the result does not have exactly the classes 0 and 1.
+ */
+export function deriveTwoClassDiagnostic(
+  m: ClassificationScores,
+): EvidenceDerivedDiagnostic | null {
+  const negative = m.perClass.find((c) => c.label === 0);
+  const positive = m.perClass.find((c) => c.label === 1);
+  if (m.perClass.length !== 2 || !negative || !positive) return null;
+
+  const tp = countFromRate(positive.recall, positive.support);
+  const tn = countFromRate(negative.recall, negative.support);
+  if (tp === null || tn === null) return { status: 'NOT_RECOVERABLE' };
+  const fn = positive.support - tp;
+  const fp = negative.support - tn;
+  const n = positive.support + negative.support;
+
+  const consistent =
+    agrees(positive.precision, tp, tp + fp) &&
+    agrees(negative.precision, tn, tn + fn) &&
+    agrees(m.accuracy, tp + tn, n);
+  if (!consistent) return { status: 'NOT_RECOVERABLE' };
+
+  return {
+    status: 'DERIVED',
+    positiveLabel: 1,
+    truePositives: tp,
+    falsePositives: fp,
+    trueNegatives: tn,
+    falseNegatives: fn,
+    sensitivity: proportion(tp, tp + fn),
+    specificity: proportion(tn, tn + fp),
+    positivePredictiveValue: proportion(tp, tp + fp),
+    negativePredictiveValue: proportion(tn, tn + fn),
+  };
+}
+
 /**
  * Section 6: what this evidence does not show, in section order. Each entry
  * is a fact read off the summary, never a judgement of the model.
@@ -285,7 +363,11 @@ export function evidenceGaps(s: Unsectioned): EvidenceGap[] {
   if (!scores) {
     gap('NOT_SCORED', 4, { status: s.submission.status });
   } else {
-    if (scores.kind !== 'BINARY_DIAGNOSTIC') gap('NO_INTERVALS', 4, { taskKind: scores.kind });
+    // A two-class result whose counts were recovered has its intervals.
+    const derived = s.performance.derivedDiagnostic?.status === 'DERIVED';
+    if (scores.kind !== 'BINARY_DIAGNOSTIC' && !derived) {
+      gap('NO_INTERVALS', 4, { taskKind: scores.kind });
+    }
     const positives = s.performance.positiveCases;
     if (positives !== null && positives < s.performance.minPositiveCases) {
       gap('FEW_POSITIVE_CASES', 4, {

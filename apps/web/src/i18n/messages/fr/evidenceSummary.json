@@ -13,7 +13,7 @@
   "standing": {
     "PUBLISHED": "Résultat publié",
     "PROVISIONAL": "Résultat provisoire",
-    "RETRACTED": "Résultat retiré",
+    "RETRACTED": "Résultat rétracté",
     "NOT_ATTRIBUTED": "Résultat sans méthode revue",
     "NOT_SCORED": "Aucun résultat"
   },
@@ -27,7 +27,8 @@
   "glance": {
     "title": "En bref",
     "gapCount": "{count, plural, =0 {Aucune lacune n’a été trouvée dans ce que détient la plateforme.} one {Ces preuves présentent # lacune, détaillée en section 6.} other {Ces preuves présentent # lacunes, détaillées en section 6.}}",
-    "gapLink": "Voir ce qui manque"
+    "gapLink": "Voir ce qui manque",
+    "derived": "Sensibilité et spécificité calculées à partir du résultat à deux classes ; positif : {positive}."
   },
   "section": {
     "intendedUse": "Usage prévu et niveau de risque",
@@ -94,8 +95,8 @@
     "status": "Statut de revue",
     "reviewedOn": "Décision du {date}",
     "notReviewed": "Pas encore de décision",
-    "rationale": "Motivation de la décision",
-    "noRationale": "Aucune motivation n’a été enregistrée."
+    "rationale": "Justification",
+    "noRationale": "Aucune justification n’a été enregistrée."
   },
   "reviewStatus": {
     "DECLARED": "Déclarée, non revue",
@@ -131,7 +132,15 @@
     "recall": "Rappel (sensibilité)",
     "f1": "F1",
     "images": "Éléments",
-    "notApplicable": "Sans objet : aucun élément de cette classe"
+    "notApplicable": "Sans objet : aucun élément de cette classe",
+    "derivedTitle": "Mesures diagnostiques, classe 1 positive",
+    "derivedNote": "Calculées à partir du résultat à deux classes : {positive} positive, {negative} négative. Effectifs retrouvés exactement à partir du résultat enregistré ; IC 95 % de Wilson.",
+    "derivedLabel": "Mesures diagnostiques calculées à partir du résultat à deux classes",
+    "classPositive": "Classe 1 ({name})",
+    "classNegative": "Classe 0 ({name})",
+    "present": "présent",
+    "absent": "absent",
+    "classificationTitle": "Résultat à deux classes tel qu’évalué"
   },
   "metric": {
     "sensitivity": "Sensibilité",
@@ -167,14 +176,14 @@
   },
   "subgroups": {
     "none": "La tâche ne présente aucun résultat par sous-groupe.",
-    "intro": "Les mêmes mesures, calculées sur les éléments de chaque groupe seulement. Un groupe de moins de {min} éléments n’est pas présenté, ni un groupe qui permettrait d’en déduire un tel groupe.",
+    "intro": "Les mêmes mesures, calculées sur les éléments de chaque groupe seulement. Un groupe de moins de {min} éléments n’est pas communiqué, ni un groupe qui permettrait d’en déduire un tel groupe.",
     "tableLabel": "Résultats par sous-groupe : {field}",
     "group": "Groupe",
     "items": "Éléments",
     "overall": "Ensemble",
     "itemsOf": "{scored} sur {total}",
-    "notReported": "Non présenté",
-    "notReportedSpoken": "Non présenté pour {group} : le groupe est trop petit pour être publié, ou il est masqué pour qu’un groupe plus petit ne puisse pas être déduit.",
+    "notReported": "Non communiqué",
+    "notReportedSpoken": "Non communiqué pour {group} : le groupe est trop petit pour être publié, ou il est masqué pour qu’un groupe plus petit ne puisse pas être déduit.",
     "withheld": "Masqué",
     "withheldSpoken": "Masqué : la mesure repose sur moins d’éléments que le minimum.",
     "notEstimable": "n.d.",
@@ -195,18 +204,18 @@
     "READER_AGREEMENT_NOT_REPORTED": "La vérité terrain provient de {readers} lecteurs par élément, mais leur accord n’est pas indiqué.",
     "METHOD_NOT_ATTRIBUTED": "Le résultat n’est rattaché à aucune version revue d’une méthode d’évaluation.",
     "METHOD_NOT_APPROVED": "La version de la méthode d’évaluation n’est pas encore approuvée ({status, select, DECLARED {déclarée, non revue} UNDER_REVIEW {en cours de revue} other {{status}}}) : le résultat est provisoire.",
-    "METHOD_RETRACTED": "La version de la méthode d’évaluation a été {status, select, REJECTED {rejetée} WITHDRAWN {retirée} other {{status}}} : le résultat est retiré.",
+    "METHOD_RETRACTED": "La version de la méthode d’évaluation a été {status, select, REJECTED {rejetée} WITHDRAWN {retirée} other {{status}}} : le résultat est rétracté.",
     "NOT_SCORED": "Il n’y a pas de résultat : {status, select, PENDING {la soumission attend encore d’être évaluée} FAILED {la soumission a échoué} other {la soumission n’est pas évaluée}}.",
     "NO_INTERVALS": "Pas d’intervalles de confiance : ils ne sont pas calculés pour les tâches {taskKind, select, GRADING {de gradation} CLASSIFICATION {de classification} other {de ce type}}.",
     "FEW_POSITIVE_CASES": "Seulement {positives} cas présentant le signe parmi les éléments évalués, moins de {minimum} : la sensibilité est imprécise.",
     "INCOMPLETE_COVERAGE": "Le modèle a répondu pour {coverage} de la vérité terrain ; le reste n’est pas évalué.",
     "NO_SUBGROUP_DATA": "Aucun résultat par sous-groupe, par exemple par sexe ou par tranche d’âge.",
-    "SUBGROUPS_WITHHELD": "{withheld} sous-groupes sur {total} ne sont pas présentés car ils sont trop petits pour être publiés.",
+    "SUBGROUPS_WITHHELD": "{withheld} sous-groupes sur {total} ne sont pas communiqués car ils sont trop petits pour être publiés.",
     "NO_AUDIT_EVENTS": "Aucun événement d’audit n’est enregistré pour cette soumission.",
     "AUDIT_RESULT_EVENT_MISSING": "La piste d’audit ne contient pas d’événement {eventType} pour ce résultat."
   },
   "trace": {
-    "intro": "Les événements de la soumission dans la piste d’audit de la plateforme. Chaque empreinte d’enregistrement est chaînée à la précédente : un auditeur peut vérifier ces lignes sur un export de la piste.",
+    "intro": "Les événements de la soumission dans la piste d’audit. Chaque empreinte est chaînée à la précédente : à vérifier sur un export de la piste.",
     "none": "Aucun événement d’audit n’est enregistré pour cette soumission.",
     "tableLabel": "Événements d’audit de cette soumission",
     "sequence": "N°",
@@ -221,7 +230,7 @@
       "failed": "Échec"
     }
   },
-  "footer": "Synthèse des preuves de la plateforme OCI pour la soumission {id}, générée le {date} UTC. Chiffres tels que détenus par la plateforme à ce moment.",
+  "footer": "Synthèse des preuves OCI de la soumission {id}, générée le {date} UTC.",
   "unavailable": {
     "title": "Synthèse des preuves indisponible",
     "fallback": "Impossible de joindre l’API d’évaluation."

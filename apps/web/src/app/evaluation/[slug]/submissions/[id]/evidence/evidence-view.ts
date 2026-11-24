@@ -152,6 +152,27 @@ export function metricRows(scores: TaskKindScores, f: Formatters): MetricRow[] {
   }
 }
 
+/**
+ * Sensitivity, specificity and the predictive values, with their intervals
+ * and counts: of a binary finding, or derived from a two-class result (#652).
+ */
+export function diagnosticRows(
+  d: {
+    sensitivity: ProportionEstimate | null;
+    specificity: ProportionEstimate | null;
+    positivePredictiveValue: ProportionEstimate | null;
+    negativePredictiveValue: ProportionEstimate | null;
+  },
+  f: Formatters,
+): MetricRow[] {
+  return [
+    proportionRow('sensitivity', d.sensitivity, f),
+    proportionRow('specificity', d.specificity, f),
+    proportionRow('positivePredictiveValue', d.positivePredictiveValue, f),
+    proportionRow('negativePredictiveValue', d.negativePredictiveValue, f),
+  ];
+}
+
 // ---- Results by subgroup -----------------------------------------------------
 
 /** The columns of a group table, as the submission page shows them (#410). */

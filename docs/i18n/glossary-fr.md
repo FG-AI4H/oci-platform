@@ -257,11 +257,12 @@ clinical usage a radiologist reads in a diagnostic-accuracy study.
 | Precision / recall (per class)             | Précision (VPP) / rappel (sensibilité)          | new    |          |
 | Quadratic-weighted kappa                   | Kappa pondéré quadratique                       | new    |          |
 | Subgroup / result by subgroup              | Sous-groupe / résultat par sous-groupe          | new    |          |
-| Withheld (a small group's figure)          | Masqué ; « non présenté » for a whole group     | new    |          |
+| Withheld: one figure / a whole subgroup    | Masqué / non communiqué                         | new    |          |
 | Gap (what the evidence does not show)      | Lacune                                          | new    |          |
 | Evaluation method / review status          | Méthode d’évaluation / statut de revue          | new    |          |
-| Reviewer’s rationale                       | Motivation de la décision                       | new    |          |
-| Provisional / published / retracted result | Résultat provisoire / publié / retiré           | new    |          |
+| Reviewer’s rationale                       | Justification                                   | new    |          |
+| Provisional / published / retracted result | Résultat provisoire / publié / rétracté         | new    |          |
+| Withdrawn (a method version's status)      | Retirée (not « rétracté », which is a result)   | new    |          |
 | Audit trail / record hash                  | Piste d’audit / empreinte (d’enregistrement)    | new    |          |
 | Trace (section of the summary)             | Traçabilité                                     | new    |          |
 | Reader (of the reference labels)           | Lecteur                                         | repo   |          |

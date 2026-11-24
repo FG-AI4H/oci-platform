@@ -9,7 +9,7 @@
 
 @page evidence {
   size: A4;
-  margin: 11mm 12mm 12mm;
+  margin: 10mm 11mm 10mm;
 }
 
 @media print {
@@ -17,8 +17,8 @@
      are set to the light palette inside it, and the page behind it is white. */
   html:has(.evidence-summary) {
     color-scheme: light;
-    /* Every rem-sized type step scales with this: about 8.5pt body, 7.3pt small. */
-    font-size: 13px;
+    /* Every rem-sized type step scales with this: about 8.2pt body, 7pt small. */
+    font-size: 12.5px;
     background: oklch(1 0 0) !important;
   }
   body:has(.evidence-summary) {
@@ -67,7 +67,7 @@
   }
 
   .evidence-summary .evidence-section {
-    margin-top: 0.7rem !important;
+    margin-top: 0.55rem !important;
     padding-top: 0 !important;
     border-top: 0 !important;
   }
@@ -75,6 +75,9 @@
   .evidence-summary h2,
   .evidence-summary h3 {
     break-after: avoid;
+  }
+  .evidence-summary .evidence-section h2 {
+    font-size: 1rem !important;
   }
 
   /* Paper is denser than a screen: less air in tables and lists, same type. */
@@ -101,6 +104,13 @@
   }
   .evidence-summary dl > div + div {
     margin-top: 0.15rem !important;
+  }
+  .evidence-summary > header {
+    padding-bottom: 0.5rem !important;
+  }
+  .evidence-summary > footer {
+    margin-top: 0.6rem !important;
+    padding-top: 0.3rem !important;
   }
 
   .evidence-summary table,
