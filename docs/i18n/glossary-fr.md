@@ -104,8 +104,11 @@ changed there too (search the French files for it).
 
 ## Annotation and evaluation
 
-The annotation pages are not translated yet; these terms are fixed now so that they are used the
-same way when they are. The evaluation pages use them, and the evaluation rows added below.
+The annotator's reading path (the annotate page, the image viewer, the answer form) is translated
+(#646), and so are the evaluation pages, which use these terms and the evaluation rows added below.
+The other annotation pages are not translated yet; these terms are fixed now so that they are used
+the same way when they are. On the reading path the interface says « lecteur » and « lecture », as
+the campaign instructions do, and speaks of a reading room rather than of tooling.
 
 | English                         | French (draft)                                | Source | Reviewer |
 | ------------------------------- | --------------------------------------------- | ------ | -------- |
@@ -119,6 +122,16 @@ same way when they are. The evaluation pages use them, and the evaluation rows a
 | Grader                          | Évaluateur                                    | new    |          |
 | Inter-rater agreement           | Accord inter-évaluateurs                      | new    |          |
 | Ground truth / reference labels | Vérité terrain                                | new    |          |
+| Reader / reading (reading path) | Lecteur / lecture                             | new    |          |
+| Independent annotation (gate 1) | Lecture indépendante                          | new    |          |
+| Expert review (gate 3)          | Relecture par un expert                       | new    |          |
+| Cannot assess                   | Non interprétable                             | new    |          |
+| Final label (arbitration)       | Réponse retenue                               | new    |          |
+| Reason (for the final label)    | Justification                                 | new    |          |
+| Submit                          | Valider                                       | new    |          |
+| Skip / Start                    | Passer / Commencer                            | new    |          |
+| Image controls                  | Réglages de l’image                           | new    |          |
+| Sample (task reference)         | Référence                                     | new    |          |
 | Evaluation                      | Évaluation                                    | new    |          |
 | Benchmarking                    | Évaluation comparative                        | new    |          |
 | Submission                      | Soumission                                    | new    |          |

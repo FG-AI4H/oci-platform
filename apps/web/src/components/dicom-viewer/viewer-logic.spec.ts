@@ -95,6 +95,13 @@ describe('clampIndex', () => {
 });
 
 describe('actionForKey', () => {
+  it('does not zoom on the digit row, where AZERTY puts - and _ (#646 review)', () => {
+    expect(actionForKey('-', false, 'Digit6')).toBeNull();
+    expect(actionForKey('_', false, 'Digit8')).toBeNull();
+    expect(actionForKey('-', false, 'Minus')).toEqual({ type: 'zoom', factor: 1 / 1.2 });
+    expect(actionForKey('-', false, 'NumpadSubtract')).toEqual({ type: 'zoom', factor: 1 / 1.2 });
+  });
+
   it('moves through the stack with the arrows, by ten with the page keys, to the ends with Home and End', () => {
     expect(actionForKey('ArrowDown', false)).toEqual({ type: 'step', delta: 1 });
     expect(actionForKey('ArrowRight', false)).toEqual({ type: 'step', delta: 1 });

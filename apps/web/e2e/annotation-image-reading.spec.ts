@@ -360,7 +360,7 @@ test.describe('reading images in the browser (#646)', () => {
     await expect(page.getByText(/rien ne vous est réservé/i)).toBeVisible();
     await page.getByRole('button', { name: /^commencer$/i }).click();
 
-    const img = page.getByRole('img', { name: /image à lire à l’étape annotation indépendante/i });
+    const img = page.getByRole('img', { name: /image à lire \(étape : lecture indépendante\)/i });
     await expect(img).toBeVisible();
     await expect
       .poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0))
@@ -388,8 +388,8 @@ test.describe('reading images in the browser (#646)', () => {
     await press('&', 'Digit1');
     await expect(page.getByRole('radio', { name: 'No DR' })).toBeChecked();
 
-    await page.getByRole('button', { name: /^envoyer/i }).click();
-    await expect(page.getByRole('status')).toHaveText(/votre annotation a été enregistrée/i);
+    await page.getByRole('button', { name: /^valider/i }).click();
+    await expect(page.getByRole('status')).toHaveText(/votre réponse a été enregistrée/i);
   });
 
   for (const colorScheme of ['light', 'dark'] as const) {

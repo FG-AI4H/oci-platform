@@ -53,15 +53,18 @@ export async function startTaskAction(_prev: PullState, formData: FormData): Pro
     { method: 'POST', cache: 'no-store' },
   );
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    return {
-      status: 'error',
-      message: common('apiError', {
-        status: res.status,
-        statusText: res.statusText,
-        detail: body.slice(0, 300),
-      }),
-    };
+    // The reader sees a sentence in their language, never the API's
+    // English body (#646 review); the body goes to the server log.
+    logRefusal('start', res.status, await res.text().catch(() => ''));
+    const message =
+      res.status === 403
+        ? t('startForbidden')
+        : res.status === 404
+          ? t('campaignNotFound')
+          : res.status === 409
+            ? t('campaignNotRunning')
+            : t('serverError', { status: res.status });
+    return { status: 'error', message };
   }
   const out = (await res.json()) as PullNextResponse;
   revalidatePath(`/annotation/campaigns/${slug}/annotate`);
@@ -220,32 +223,28 @@ export async function submitAssignmentAction(
         submission: submissionRaw,
       };
     }
-  }
-  if (res.status === 422) {
-    // Refused by the campaign's rules (completeness or labels, #646).
-    const body = (await res.json().catch(() => null)) as { reasons?: unknown } | null;
-    const reasons = Array.isArray(body?.reasons)
-      ? body.reasons.filter((r) => typeof r === 'string')
-      : [];
-    return {
-      status: 'error',
-      message: reasons.length
-        ? t('notAcceptedReasons', { reasons: reasons.join('; ') })
-        : t('notAccepted'),
-      submission: submissionRaw,
-    };
+    // Any other 409: the task closed while the reader worked on it
+    // (another arbiter settled it, it moved on, it expired, or it was
+    // already answered). Nothing can be saved, so back to the queue,
+    // which says so and offers the next task.
+    logRefusal('submit', res.status, JSON.stringify(body));
+    revalidatePath(`/annotation/campaigns/${slug}/annotate`);
+    redirect(`/annotation/campaigns/${encodeURIComponent(slug)}/annotate?after=closed`);
   }
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    return {
-      status: 'error',
-      message: common('apiError', {
-        status: res.status,
-        statusText: res.statusText,
-        detail: body.slice(0, 300),
-      }),
-      submission: submissionRaw,
-    };
+    // The reader sees a sentence in their language, never the API's
+    // English body (#646 review). The 422 reasons are the API's
+    // English too; the form already checks what they cover.
+    logRefusal('submit', res.status, await res.text().catch(() => ''));
+    const message =
+      res.status === 422
+        ? t('notAccepted')
+        : res.status === 403
+          ? t('notYourTask')
+          : res.status === 404
+            ? t('taskNotFound')
+            : t('serverError', { status: res.status });
+    return { status: 'error', message, submission: submissionRaw };
   }
   // Back to the queue, which offers the next task. The gate the task
   // moved to is not shown: it would tell the last reader whether the
@@ -285,16 +284,20 @@ export async function releaseAssignmentAction(
   // 409: already submitted, expired or released — the task is no
   // longer the caller's either way, so carry on to the queue.
   if (!res.ok && res.status !== 409) {
-    const body = await res.text().catch(() => '');
-    return {
-      status: 'error',
-      message: common('apiError', {
-        status: res.status,
-        statusText: res.statusText,
-        detail: body.slice(0, 300),
-      }),
-    };
+    logRefusal('release', res.status, await res.text().catch(() => ''));
+    const message =
+      res.status === 403
+        ? t('skipForbidden')
+        : res.status === 404
+          ? t('taskNotFound')
+          : t('serverError', { status: res.status });
+    return { status: 'error', message };
   }
   revalidatePath(`/annotation/campaigns/${slug}/annotate`);
   redirect(`/annotation/campaigns/${encodeURIComponent(slug)}/annotate?after=skipped`);
+}
+
+/** What the API said, for the server log; the reader gets a translated sentence. */
+function logRefusal(action: string, status: number, body: string): void {
+  console.warn(`annotate ${action}: API answered ${status}: ${body.slice(0, 300)}`);
 }

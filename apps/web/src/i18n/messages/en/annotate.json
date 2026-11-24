@@ -14,9 +14,9 @@
     "instructions": "Instructions",
     "instructionsNewTab": "Instructions (opens in new tab)",
     "pausedTitle": "Queue paused",
-    "pausedBody": "This campaign is <code>{status}</code>. Annotators only pick up work while the campaign is RUNNING. Ask the campaign manager when it’s expected to resume.",
+    "pausedBody": "This campaign is {status} (<raw>{code}</raw>). Annotators only pick up work while the campaign is running. Ask the campaign manager when it’s expected to resume.",
     "queueUnreachableTitle": "Couldn’t reach the queue",
-    "queueReadFailed": "Could not read the queue.",
+    "queueReadFailed": "The queue could not be read. Reload the page to try again.",
     "sampleFailedTitle": "The image for this task could not be loaded",
     "sampleFailedBody": "Reload the page to try again. If it still does not load, skip the task: it goes back to the queue and you get another one.",
     "currentTask": "Your current task",
@@ -33,7 +33,8 @@
     "afterSubmitted": "Your annotation was saved.",
     "afterSkipped": "Task skipped. It goes back to the queue for someone else.",
     "readersAnswered": "What the readers answered",
-    "noReadings": "No readings recorded."
+    "noReadings": "No readings recorded.",
+    "afterClosed": "This task no longer needs your answer: someone else settled it first, or it was given back after the time limit. Your answer was not saved."
   },
   "start": {
     "starting": "Starting…"
@@ -100,7 +101,20 @@
     "unparseable": "unparseable",
     "notOnScreen": "The image is not on screen yet. Wait until it is drawn, then submit. Your answer was kept.",
     "instructionsChanged": "The instructions have changed (now version {version}). Read the current instructions and confirm them before submitting. Your annotation was kept.",
-    "notAccepted": "The answer was not accepted.",
-    "notAcceptedReasons": "The answer was not accepted: {reasons}"
+    "notAccepted": "The answer does not match what the campaign accepts. Check the answer and the reason, then submit again.",
+    "startForbidden": "Your account cannot take tasks in this campaign.",
+    "campaignNotFound": "This campaign no longer exists.",
+    "campaignNotRunning": "The campaign is not running, so it hands out no tasks. Reload the page.",
+    "notYourTask": "This task cannot be answered from your account. Your answer was not saved.",
+    "taskNotFound": "This task no longer exists. Start the next task.",
+    "skipForbidden": "This task cannot be skipped from your account.",
+    "serverError": "Something went wrong on the server (error {status}). Try again, or reload the page."
+  },
+  "campaignStatus": {
+    "DRAFT": "a draft",
+    "READY": "ready but not started",
+    "RUNNING": "running",
+    "COMPLETED": "completed",
+    "ARCHIVED": "archived"
   }
 }

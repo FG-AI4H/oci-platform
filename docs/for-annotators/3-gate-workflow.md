@@ -59,7 +59,7 @@ You produce a single arbitration label, chosen from the campaign's answers, and 
 
 You can also `SKIP` with a reason if the task is unfit for the campaign (image quality, PHI leakage, etc.).
 
-The `arbitration-annotator` group is a different Cognito group from `annotator`. People can hold both, but the router treats them as separate role buckets.
+The `arbitration-annotator` group is a different Cognito group from `annotator`. **Arbiters use a separate account.** An account that holds both groups is always given independent reading at gate 1, so it never arbitrates.
 
 ## Gate 3 — `AWAITING_EXPERT`
 

@@ -52,6 +52,7 @@ type Translator = Awaited<ReturnType<typeof getTranslations<'Annotate'>>>;
 function afterNoticeFor(t: Translator, after: string | string[] | undefined): string | null {
   if (after === 'submitted') return t('page.afterSubmitted');
   if (after === 'skipped') return t('page.afterSkipped');
+  if (after === 'closed') return t('page.afterClosed');
   return null;
 }
 
@@ -102,7 +103,9 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
       );
       assignment = body?.assignment ?? null;
     } catch (err) {
-      pullError = err instanceof Error ? err.message : t('page.queueReadFailed');
+      // The API's English text goes to the log, not to the reader.
+      console.warn(`annotate: reading the queue failed: ${String(err)}`);
+      pullError = t('page.queueReadFailed');
     }
   }
 
@@ -177,8 +180,11 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
             <CardContent>
               <p className="text-sm">
                 {t.rich('page.pausedBody', {
-                  status: detail.status,
-                  code: (chunks) => <code className="text-xs">{chunks}</code>,
+                  status: t(`campaignStatus.${detail.status}`),
+                  code: detail.status,
+                  // The raw status, beside its translation, for anyone
+                  // telling the campaign manager what they see.
+                  raw: (chunks) => <code className="text-xs">{chunks}</code>,
                 })}
               </p>
             </CardContent>

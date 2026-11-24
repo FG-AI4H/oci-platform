@@ -47,6 +47,9 @@ export function LabelChoices({ labels, reasonRequired = false, echoed }: LabelCh
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // A key the focused viewer already used (an arrow, a zoom key)
+      // is not also an answer (#646 review).
+      if (e.defaultPrevented) return;
       if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target)) return;
       const group = groupRef.current;
       if (!group) return;

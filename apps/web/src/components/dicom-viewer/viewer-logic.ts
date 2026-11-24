@@ -127,7 +127,17 @@ export type ViewerAction =
  * What a key does while the image has focus. Everything the mouse can
  * do has a key here or a control beside the image.
  */
-export function actionForKey(key: string, shiftKey: boolean): ViewerAction | null {
+export function actionForKey(
+  key: string,
+  shiftKey: boolean,
+  /**
+   * The physical key, when known. A key on the digit row never zooms:
+   * a French (AZERTY) keyboard puts - on the 6 key and _ on the 8 key,
+   * which pick labels on a task screen (#646 review).
+   */
+  code?: string,
+): ViewerAction | null {
+  const onDigitRow = code?.startsWith('Digit') ?? false;
   if (shiftKey) {
     switch (key) {
       case 'ArrowLeft':
@@ -159,10 +169,10 @@ export function actionForKey(key: string, shiftKey: boolean): ViewerAction | nul
       return { type: 'last' };
     case '+':
     case '=':
-      return { type: 'zoom', factor: ZOOM_STEP };
+      return onDigitRow ? null : { type: 'zoom', factor: ZOOM_STEP };
     case '-':
     case '_':
-      return { type: 'zoom', factor: 1 / ZOOM_STEP };
+      return onDigitRow ? null : { type: 'zoom', factor: 1 / ZOOM_STEP };
     case 'i':
     case 'I':
       return { type: 'invert' };
