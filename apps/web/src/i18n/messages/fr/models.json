@@ -58,7 +58,7 @@
     "noMatchTitle": "Aucun modèle correspondant",
     "noneTitle": "Aucun modèle publié pour l’instant",
     "noMatchBody": "Essayez avec moins de filtres ou élargissez votre recherche.",
-    "noneBody": "Les fiches de modèles apparaissent ici une fois publiées. Les brouillons et les soumissions en cours d’examen ne sont pas listés.",
+    "noneBody": "Les fiches de modèles apparaissent ici une fois publiées. Les brouillons et les soumissions en cours de revue ne sont pas listés.",
     "clearAll": "Effacer tous les filtres"
   },
   "detail": {
@@ -108,7 +108,7 @@
     "noMethodVersion": "aucune enregistrée",
     "standing": {
       "published": "Publié",
-      "provisional": "Provisoire (version de méthode en cours d’examen)",
+      "provisional": "Provisoire (version de méthode en cours de revue)",
       "notAttributed": "Provisoire (aucune version de méthode enregistrée)"
     }
   },
