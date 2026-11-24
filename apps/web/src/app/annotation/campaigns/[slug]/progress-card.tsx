@@ -1,18 +1,15 @@
-import type { AnnotationGateState, TaskSummary } from '@oci/shared-types';
+import { getTranslations } from 'next-intl/server';
+import type { TaskSummary } from '@oci/shared-types';
+import { getFormatters } from '../../../../i18n/server';
 import { GATE_ORDER, computeCampaignProgress, type BurndownPoint } from './campaign-progress';
 
-const GATE_LABEL: Record<AnnotationGateState, string> = {
-  INDEPENDENT: 'Independent',
-  AWAITING_ARBITRATION: 'Arbitration',
-  AWAITING_EXPERT: 'Expert review',
-  COMPLETED: 'Completed',
-  SKIPPED: 'Skipped',
-};
+type Translator = Awaited<ReturnType<typeof getTranslations<'Campaign'>>>;
 
-const dayFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: 'UTC' });
-const pctFmt = new Intl.NumberFormat('en-GB', { style: 'percent', maximumFractionDigits: 0 });
-const fmt = (n: number) => n.toLocaleString('en-GB');
-const formatDay = (day: string) => dayFmt.format(new Date(`${day}T00:00:00.000Z`));
+/** Numbers and days in the interface language. */
+interface Format {
+  n: (value: number) => string;
+  day: (isoDay: string) => string;
+}
 
 /**
  * Progress card on the campaign detail page (#556): counts per gate
@@ -20,21 +17,38 @@ const formatDay = (day: string) => dayFmt.format(new Date(`${day}T00:00:00.000Z`
  * Built from the task list the page already fetched; `today` is passed
  * in so the page decides the clock, not the card.
  */
-export function ProgressCard({ tasks, today }: { tasks: ReadonlyArray<TaskSummary>; today: Date }) {
+export async function ProgressCard({
+  tasks,
+  today,
+}: {
+  tasks: ReadonlyArray<TaskSummary>;
+  today: Date;
+}) {
+  const [t, formatters] = await Promise.all([getTranslations('Campaign'), getFormatters()]);
+  const f: Format = {
+    n: (value) => formatters.number(value),
+    day: (isoDay) =>
+      formatters.date(`${isoDay}T00:00:00.000Z`, { dateStyle: 'medium', timeZone: 'UTC' }),
+  };
   const p = computeCampaignProgress(tasks, today);
   if (p.total === 0) {
-    return <p className="text-sm text-[var(--color-muted-foreground)]">No tasks seeded yet.</p>;
+    return <p className="text-sm text-[var(--color-muted-foreground)]">{t('progress.noTasks')}</p>;
   }
+  const num = (chunks: React.ReactNode) => <span className="tabular-nums">{chunks}</span>;
 
   return (
     <div className="space-y-6">
       <div className="space-y-2">
         <p className="text-sm">
-          <span className="text-2xl font-semibold tabular-nums">{pctFmt.format(p.doneShare)}</span>{' '}
-          done: <span className="tabular-nums">{fmt(p.done)}</span> of{' '}
-          <span className="tabular-nums">{fmt(p.total)}</span> tasks (
-          <span className="tabular-nums">{fmt(p.counts.COMPLETED)}</span> completed,{' '}
-          <span className="tabular-nums">{fmt(p.counts.SKIPPED)}</span> skipped)
+          {t.rich('progress.done', {
+            share: formatters.percent(p.doneShare),
+            done: f.n(p.done),
+            total: f.n(p.total),
+            completed: f.n(p.counts.COMPLETED),
+            skipped: f.n(p.counts.SKIPPED),
+            big: (chunks) => <span className="text-2xl font-semibold tabular-nums">{chunks}</span>,
+            num,
+          })}
         </p>
         <div
           className="h-2 overflow-hidden rounded-full bg-[var(--color-muted)]"
@@ -57,19 +71,16 @@ export function ProgressCard({ tasks, today }: { tasks: ReadonlyArray<TaskSummar
       <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-5">
         {GATE_ORDER.map((gate) => (
           <div key={gate} className="space-y-0.5">
-            <dt className="text-xs text-[var(--color-muted-foreground)]">
-              {/* eslint-disable-next-line security/detect-object-injection -- typed enum key */}
-              {GATE_LABEL[gate]}
-            </dt>
+            <dt className="text-xs text-[var(--color-muted-foreground)]">{t(`gate.${gate}`)}</dt>
             <dd className="text-lg font-semibold tabular-nums">
               {/* eslint-disable-next-line security/detect-object-injection -- typed enum key */}
-              {fmt(p.counts[gate])}
+              {f.n(p.counts[gate])}
             </dd>
           </div>
         ))}
       </dl>
 
-      <Burndown points={p.burndown} total={p.total} />
+      <Burndown points={p.burndown} total={p.total} t={t} f={f} />
     </div>
   );
 }
@@ -80,7 +91,17 @@ export function ProgressCard({ tasks, today }: { tasks: ReadonlyArray<TaskSummar
 const W = 600;
 const H = 160;
 
-function Burndown({ points, total }: { points: BurndownPoint[]; total: number }) {
+function Burndown({
+  points,
+  total,
+  t,
+  f,
+}: {
+  points: BurndownPoint[];
+  total: number;
+  t: Translator;
+  f: Format;
+}) {
   const last = points.at(-1);
   const first = points.at(0);
   if (!last || !first) return null;
@@ -98,20 +119,24 @@ function Burndown({ points, total }: { points: BurndownPoint[]; total: number })
 
   return (
     <figure className="space-y-2">
-      <figcaption className="text-sm font-medium">Remaining tasks per day</figcaption>
+      <figcaption className="text-sm font-medium">{t('progress.burndownCaption')}</figcaption>
       <div className="grid grid-cols-[auto_1fr] gap-x-2">
         <div
           className="flex h-40 flex-col justify-between text-end text-xs tabular-nums text-[var(--color-muted-foreground)]"
           aria-hidden="true"
         >
-          <span>{fmt(max)}</span>
+          <span>{f.n(max)}</span>
           <span>0</span>
         </div>
         <svg
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
           role="img"
-          aria-label={`Burndown: ${fmt(last.remaining)} of ${fmt(total)} tasks remaining on ${formatDay(last.date)}.`}
+          aria-label={t('progress.burndownLabel', {
+            remaining: f.n(last.remaining),
+            total: f.n(total),
+            day: f.day(last.date),
+          })}
           className="h-40 w-full overflow-visible"
         >
           <line
@@ -145,26 +170,26 @@ function Burndown({ points, total }: { points: BurndownPoint[]; total: number })
           className="col-start-2 flex justify-between text-xs text-[var(--color-muted-foreground)]"
           aria-hidden="true"
         >
-          <span>{formatDay(first.date)}</span>
-          {points.length > 1 ? <span>{formatDay(last.date)}</span> : null}
+          <span>{f.day(first.date)}</span>
+          {points.length > 1 ? <span>{f.day(last.date)}</span> : null}
         </div>
       </div>
 
       <table className="sr-only">
-        <caption>Remaining tasks per day, oldest first</caption>
+        <caption>{t('progress.tableCaption')}</caption>
         <thead>
           <tr>
-            <th scope="col">Day</th>
-            <th scope="col">Remaining</th>
+            <th scope="col">{t('progress.day')}</th>
+            <th scope="col">{t('progress.remaining')}</th>
           </tr>
         </thead>
         <tbody>
           {points.map((pt) => (
             <tr key={pt.date}>
               <td>
-                <time dateTime={pt.date}>{formatDay(pt.date)}</time>
+                <time dateTime={pt.date}>{f.day(pt.date)}</time>
               </td>
-              <td>{fmt(pt.remaining)}</td>
+              <td>{f.n(pt.remaining)}</td>
             </tr>
           ))}
         </tbody>

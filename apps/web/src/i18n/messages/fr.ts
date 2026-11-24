@@ -10,6 +10,7 @@
 import type { Messages } from './en';
 import accessRequest from './fr/accessRequest.json';
 import annotate from './fr/annotate.json';
+import campaign from './fr/campaign.json';
 import catalog from './fr/catalog.json';
 import catalogNew from './fr/catalogNew.json';
 import common from './fr/common.json';
@@ -38,6 +39,7 @@ import signIn from './fr/signIn.json';
 const fr = {
   AccessRequest: accessRequest,
   Annotate: annotate,
+  Campaign: campaign,
   Catalog: catalog,
   CatalogNew: catalogNew,
   Common: common,
