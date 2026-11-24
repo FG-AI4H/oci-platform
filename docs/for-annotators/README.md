@@ -9,13 +9,14 @@ You've been invited to label data on an OCI campaign. As an annotator, you:
 
 The platform handles the bookkeeping (routing, gate progression, IRR scoring, provenance) so you can focus on the labelling. This section explains what you'll see and what's expected of you.
 
-| Guide                                                                   | Read when                                                                                                                                                             |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Getting started](./getting-started.md)                                 | First time on a campaign — what to set up before you claim your first task.                                                                                           |
-| [Working on tasks](./working-on-tasks.md)                               | The per-task lifecycle: claim → instructions ack → submit, plus what happens when you walk away.                                                                      |
-| [The 3-gate workflow](./3-gate-workflow.md)                             | You're curious why a task you submitted is now showing "AWAITING_ARBITRATION" or "AWAITING_EXPERT" — or what arbitration / expert reviewers actually do.              |
-| [Your rights, your work, the licensing](./your-rights-and-licensing.md) | You've been asked to sign an annotator agreement and want the plain-English version before clicking through.                                                          |
-| [Annotation tool integrations](../for-developers/annotation-module.md)  | You're switching between campaigns that use different annotation tools (CVAT, MD.ai, RedBrick AI…) and want the developer-side overview of how OCI hands off to them. |
+| Guide                                                                                        | Read when                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Getting started](./getting-started.md)                                                      | First time on a campaign — what to set up before you claim your first task.                                                                                           |
+| [Working on tasks](./working-on-tasks.md)                                                    | The per-task lifecycle: claim → instructions ack → submit, plus what happens when you walk away.                                                                      |
+| [Reading a CT series](./reading-a-ct-series.md) ([en français](./reading-a-ct-series.fr.md)) | Your campaign's samples are CT exams: moving through the images, setting the window, and what your answer records.                                                    |
+| [The 3-gate workflow](./3-gate-workflow.md)                                                  | You're curious why a task you submitted is now showing "AWAITING_ARBITRATION" or "AWAITING_EXPERT" — or what arbitration / expert reviewers actually do.              |
+| [Your rights, your work, the licensing](./your-rights-and-licensing.md)                      | You've been asked to sign an annotator agreement and want the plain-English version before clicking through.                                                          |
+| [Annotation tool integrations](../for-developers/annotation-module.md)                       | You're switching between campaigns that use different annotation tools (CVAT, MD.ai, RedBrick AI…) and want the developer-side overview of how OCI hands off to them. |
 
 ## Quick orientation
 
