@@ -24,6 +24,9 @@ const DATASET = `e2e-dicom-reading-${STAMP}`;
 const IMAGES = 8;
 const CT_SERIES = '1.2.826.0.1.3680043.8.498.674.91';
 const HELD_SERIES = '1.2.826.0.1.3680043.8.498.674.92';
+/** A dataset whose one series is declared lossy 12-bit JPEG, which the viewer refuses (#778). */
+const JPEG12_DATASET = `e2e-dicom-reading-jpeg12-${STAMP}`;
+const JPEG12_SERIES = '1.2.826.0.1.3680043.8.498.674.93';
 const SAVED = /your annotation was saved/i;
 
 let seedFailure: string | null = null;
@@ -43,6 +46,14 @@ test.beforeAll(async () => {
       'other-2.dcm',
       ctPhantomSlice(HELD_SERIES, 2, 2, [{ tag: '00100020', vr: 'LO', value: 'E2E-0001' }]),
     );
+    await createDicomDataset(JPEG12_DATASET, 'E2E DICOM reading, lossy JPEG');
+    for (let n = 1; n <= 2; n += 1) {
+      await uploadDicom(
+        JPEG12_DATASET,
+        `jpeg12-${n}.dcm`,
+        ctPhantomSlice(JPEG12_SERIES, 1, n, [], '1.2.840.10008.1.2.4.51'),
+      );
+    }
   } catch (err) {
     seedFailure = err instanceof Error ? err.message : String(err);
   }
@@ -56,11 +67,19 @@ async function signInAs(page: Page, user: string, roles: string) {
   await expect(page).toHaveURL(/\/(dashboard)?$/);
 }
 
-/** A started campaign with labels and three readers, its tasks made; returns its slug. */
-async function seriesCampaign(page: Page): Promise<string> {
+/**
+ * A started campaign with labels, its tasks made; returns its slug. The
+ * reading dataset has one series to read and one held; the other, one
+ * series and nothing held.
+ */
+async function seriesCampaign(
+  page: Page,
+  options: { dataset?: string; readers?: number } = {},
+): Promise<string> {
+  const dataset = options.dataset ?? DATASET;
   const slug = `e2e-series-${Date.now()}`;
   await signInAs(page, 'cm', 'campaign-manager');
-  await page.goto(`/annotation/campaigns/new?datasetSlug=${DATASET}`);
+  await page.goto(`/annotation/campaigns/new?datasetSlug=${dataset}`);
   await page.getByLabel('Slug').fill(slug);
   await page.getByLabel('Name').fill(`Series reading ${slug}`);
   await page.getByRole('radio', { name: 'Classification' }).check();
@@ -72,7 +91,7 @@ async function seriesCampaign(page: Page): Promise<string> {
     .first()
     .getAttribute('value');
   await tool.selectOption(value ?? '');
-  await page.getByLabel('Annotators per data point').fill('3');
+  await page.getByLabel('Annotators per data point').fill(String(options.readers ?? 3));
   await page.getByRole('button', { name: /create draft/i }).click();
   await expect(page).toHaveURL(new RegExp(`/annotation/campaigns/${slug}$`));
   await page.getByRole('button', { name: 'Mark ready' }).click();
@@ -83,11 +102,14 @@ async function seriesCampaign(page: Page): Promise<string> {
   await page.getByRole('button', { name: 'Count files and series' }).click();
   const status = page.getByRole('status');
   await expect(status).toContainText('1 sample matches: 1 new task.');
-  await expect(status).toContainText(
-    '1 DICOM series was left out: it has images held for de-identification findings.',
-  );
+  const held = dataset === DATASET;
+  if (held) {
+    await expect(status).toContainText(
+      '1 DICOM series was left out: it has images held for de-identification findings.',
+    );
+  }
   await page.getByRole('button', { name: /^Create 1 task$/ }).click();
-  await expect(page.getByText(/^Created 1 task\. 1 DICOM series was left out/)).toBeVisible();
+  await expect(page.getByText(/^Created 1 task\./)).toBeVisible();
   return slug;
 }
 
@@ -218,5 +240,25 @@ test.describe('reading a DICOM series as a task (#674)', () => {
         .locator('dd'),
     ).toHaveText('1');
     await manager.close();
+  });
+
+  test('a series the viewer refuses tells the reader to skip the task, not to download it', async ({
+    browser,
+    page,
+  }) => {
+    const manager = await browser.newPage();
+    const slug = await seriesCampaign(manager, { dataset: JPEG12_DATASET, readers: 1 });
+    await manager.close();
+
+    await signInAs(page, `ct-reader-jpeg12-${Date.now()}`, 'annotator');
+    await page.goto(`/annotation/campaigns/${slug}/annotate`);
+    await page.getByRole('button', { name: /^start$/i }).click();
+    const alert = page.getByRole('alert').filter({ hasText: 'cannot show this series faithfully' });
+    await expect(alert).toBeVisible({ timeout: 60_000 });
+    // On a task screen there is no viewer to close and no file to download.
+    await expect(alert).toContainText('Skip this task and tell the campaign manager.');
+    await expect(alert).not.toContainText('Download');
+    // Skip is there to do it.
+    await expect(page.getByRole('button', { name: /^skip/i })).toBeVisible();
   });
 });

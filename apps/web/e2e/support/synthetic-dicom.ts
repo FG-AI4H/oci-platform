@@ -38,30 +38,35 @@ function phantom(n: number): Uint8Array {
 
 /**
  * One CT slice of a series. `extra` adds header elements: a made-up
- * patient code, for instance, which holds the file (ADR-0026).
+ * patient code, for instance, which holds the file (ADR-0026). `syntax`
+ * declares a transfer syntax; the pixel data stays uncompressed.
  */
 export function ctPhantomSlice(
   series: string,
   seriesNumber: number,
   n: number,
   extra: Array<{ tag: string; vr: string; value: string }> = [],
+  syntax?: string,
 ): Uint8Array {
-  return ctSlice([
-    { tag: '00080018', vr: 'UI', value: `${series}.${n}` },
-    ...extra,
-    { tag: '0020000e', vr: 'UI', value: series },
-    { tag: '00200011', vr: 'IS', value: String(seriesNumber) },
-    { tag: '00200013', vr: 'IS', value: String(n) },
-    { tag: '00200032', vr: 'DS', value: `-16\\-16\\${n * 2}` },
-    { tag: '00280002', vr: 'US', value: 1 },
-    { tag: '00280010', vr: 'US', value: SIZE },
-    { tag: '00280011', vr: 'US', value: SIZE },
-    { tag: '00280101', vr: 'US', value: 16 },
-    { tag: '00280102', vr: 'US', value: 15 },
-    { tag: '00281052', vr: 'DS', value: '0' },
-    { tag: '00281053', vr: 'DS', value: '1' },
-    { tag: '7fe00010', vr: 'OW', value: phantom(n) },
-  ]);
+  return ctSlice(
+    [
+      { tag: '00080018', vr: 'UI', value: `${series}.${n}` },
+      ...extra,
+      { tag: '0020000e', vr: 'UI', value: series },
+      { tag: '00200011', vr: 'IS', value: String(seriesNumber) },
+      { tag: '00200013', vr: 'IS', value: String(n) },
+      { tag: '00200032', vr: 'DS', value: `-16\\-16\\${n * 2}` },
+      { tag: '00280002', vr: 'US', value: 1 },
+      { tag: '00280010', vr: 'US', value: SIZE },
+      { tag: '00280011', vr: 'US', value: SIZE },
+      { tag: '00280101', vr: 'US', value: 16 },
+      { tag: '00280102', vr: 'US', value: 15 },
+      { tag: '00281052', vr: 'DS', value: '0' },
+      { tag: '00281053', vr: 'DS', value: '1' },
+      { tag: '7fe00010', vr: 'OW', value: phantom(n) },
+    ],
+    syntax,
+  );
 }
 
 export async function hostApi<T>(path: string, init: RequestInit = {}): Promise<T> {

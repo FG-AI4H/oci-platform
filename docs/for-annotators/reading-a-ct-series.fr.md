@@ -74,5 +74,3 @@ Si vous êtes arbitre, vous ne recevez que des examens que vous n’avez pas lus
 | _La visionneuse ne peut pas afficher cette série fidèlement_ | Passez l’examen et prévenez le responsable de la campagne. Ses images sont stockées d’une façon que la visionneuse n’affiche pas correctement. |
 | _La visionneuse ne peut pas décoder cette série_             | Passez l’examen et prévenez le responsable de la campagne.                                                                                     |
 | _La série a changé_ ou _La visionneuse n’a pas pu démarrer_  | Rechargez la page. Si cela se reproduit, passez l’examen et prévenez le responsable de la campagne.                                            |
-
-Certains de ces messages proposent de télécharger les fichiers. En tant que lecteur, vous ne le pouvez pas et n’en avez pas besoin : passez l’examen.

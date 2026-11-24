@@ -72,5 +72,3 @@ If you are an arbiter, you only get exams you did not read. You see the exam in 
 | _The viewer cannot show this series faithfully_      | Skip the exam and tell the campaign manager. Its images are stored in a way the viewer cannot display correctly. |
 | _The viewer cannot decode this series_               | Skip the exam and tell the campaign manager.                                                                     |
 | _The series changed_ or _The viewer could not start_ | Reload the page. If it happens again, skip the exam and tell the campaign manager.                               |
-
-Some of these messages suggest downloading the files. As a reader you can't, and don't need to: skip the exam instead.
