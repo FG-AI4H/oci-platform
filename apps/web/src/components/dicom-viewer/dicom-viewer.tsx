@@ -85,9 +85,23 @@ export interface DicomViewerProps {
    * instead. Defaults to the dataset page.
    */
   context?: DicomViewerContext;
+  /**
+   * A recorded view to show: the viewer goes to its image and sets its
+   * window and inversion, once the series is open. Each request is a
+   * new object, so asking for the same view twice shows it again after
+   * the reader has moved on.
+   */
+  showView?: DicomViewRequest | null;
 }
 
 export type DicomViewerContext = 'dataset' | 'task';
+
+/** What `showView` restores: the image by its place from 1, the window, inversion. */
+export interface DicomViewRequest {
+  position: number;
+  window: { width: number; center: number } | null;
+  inverted: boolean;
+}
 
 type Phase = 'starting' | 'ready' | 'failed';
 
@@ -214,6 +228,7 @@ export function DicomViewer({
   label,
   onViewChange,
   context = 'dataset',
+  showView = null,
 }: DicomViewerProps) {
   const t = useTranslations('DicomViewer');
   const reactId = useId();
@@ -584,6 +599,24 @@ export function DicomViewer({
   }, []);
 
   const ready = phase === 'ready';
+
+  // A recorded view asked for from outside (an arbiter showing where a
+  // reader answered): its image, then its window and inversion. The
+  // window holds while the image loads.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    const goTo = goToRef.current;
+    if (!showView || !ready || !viewport || !goTo) return;
+    goTo(showView.position - 1);
+    if (showView.window) applyWindow(showView.window);
+    viewport.setProperties({ invert: showView.inverted });
+    setInverted(showView.inverted);
+    viewport.render();
+    // On a phone the answers sit below the viewer: bring it back into
+    // sight. Where it is already visible, nothing moves.
+    elementRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [showView, ready, applyWindow]);
+
   const activePreset = matchingPreset(windowSetting);
   const missingCount = failedPositions.size;
   const allLoaded = ready && loadedCount + missingCount >= count;

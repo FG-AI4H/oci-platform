@@ -202,12 +202,48 @@ describe('AssignmentSampleService.readings (#646)', () => {
     // Sorted by label then comment: the order of reading is not shown.
     expect(out).toEqual({
       readings: [
-        { label: 'abnormal', comment: 'haemorrhage at the macula' },
-        { label: 'normal', comment: null },
-        { label: 'normal', comment: 'small drusen only' },
+        { label: 'abnormal', comment: 'haemorrhage at the macula', view: null },
+        { label: 'normal', comment: null, view: null },
+        { label: 'normal', comment: 'small drusen only', view: null },
       ],
     });
-    for (const r of out.readings) expect(Object.keys(r).sort()).toEqual(['comment', 'label']);
+    for (const r of out.readings) {
+      expect(Object.keys(r).sort()).toEqual(['comment', 'label', 'view']);
+    }
+  });
+
+  it('on a series, gives each reading the image and window the reader answered on (#674)', async () => {
+    const at = (position: number, width: number, center: number) => ({
+      distributionId: `aaaaaaaa-0000-4000-8000-00000000000${position}`,
+      position,
+      imageCount: 8,
+      window: { width, center },
+      inverted: false,
+    });
+    tasks.findAssignmentById.mockResolvedValue(assignment({ gate: 'AWAITING_ARBITRATION' }));
+    tasks.submissionPayloadsAtGate.mockResolvedValue([
+      { label: 'bleed', view: at(7, 200, 75) },
+      { label: 'no-bleed', view: at(1, 80, 40) },
+      { label: 'bleed', view: at(5, 80, 40) },
+      // An answer from before views were required, and a malformed one.
+      { label: 'cannot-assess' },
+      { label: 'cannot-assess', view: { position: 'slice 3' } },
+    ]);
+
+    const out = await service.readings({
+      assignmentId: 'asn-1',
+      user: user(READER),
+      userGroups: ['arbitration-annotator'],
+    });
+
+    // Label, then comment, then the image: still nothing about who read first.
+    expect(out.readings).toEqual([
+      { label: 'bleed', comment: null, view: at(5, 80, 40) },
+      { label: 'bleed', comment: null, view: at(7, 200, 75) },
+      { label: 'cannot-assess', comment: null, view: null },
+      { label: 'cannot-assess', comment: null, view: null },
+      { label: 'no-bleed', comment: null, view: at(1, 80, 40) },
+    ]);
   });
 
   it('refuses at the independent step, where readers must not see each other', async () => {

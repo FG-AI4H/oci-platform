@@ -3513,10 +3513,15 @@ export type AssignmentSampleResponse = z.infer<typeof AssignmentSampleResponseSc
  * independent readers answered on an arbitration task, each label with
  * its comment, without who gave them. Sorted by label, so the order
  * says nothing about who read first.
+ *
+ * On a DICOM series each reading also says what the reader had on
+ * screen when they answered (#674): the image, by its place in the
+ * series, and the window. The arbiter can show it. Null on an image.
  */
 export const AssignmentReadingSchema = z.object({
   label: z.string(),
   comment: z.string().nullable(),
+  view: DicomViewSchemaLocal.nullable(),
 });
 export type AssignmentReading = z.infer<typeof AssignmentReadingSchema>;
 

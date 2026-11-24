@@ -7,8 +7,10 @@ import {
 } from '@nestjs/common';
 import type { AnnotationTask, AnnotationTaskAssignment } from '@oci/database';
 import {
+  DicomViewSchema,
   parseDicomSeriesSampleRef,
   parseFileSampleRef,
+  type AssignmentReading,
   type AssignmentReadingsResponse,
   type AssignmentSampleResponse,
 } from '@oci/shared-types';
@@ -111,13 +113,27 @@ export class AssignmentSampleService {
       );
     }
     const payloads = await this.tasks.submissionPayloadsAtGate(assignment.task.id, 'INDEPENDENT');
-    const readings = payloads.flatMap((p) =>
-      typeof p.label === 'string'
-        ? [{ label: p.label, comment: typeof p.comment === 'string' ? p.comment : null }]
-        : [],
-    );
+    const readings = payloads.flatMap((p): AssignmentReading[] => {
+      if (typeof p.label !== 'string') return [];
+      // On a series, where the reader was when they answered (#674).
+      // The submit path checked it against the series; an older answer
+      // without one, or with one that no longer parses, shows none.
+      const view = DicomViewSchema.safeParse(p.view);
+      return [
+        {
+          label: p.label,
+          comment: typeof p.comment === 'string' ? p.comment : null,
+          view: view.success ? view.data : null,
+        },
+      ];
+    });
+    // The image a reader stopped on is part of what they answered, not
+    // a hint at who they are: it breaks ties after label and comment.
     readings.sort(
-      (a, b) => a.label.localeCompare(b.label) || (a.comment ?? '').localeCompare(b.comment ?? ''),
+      (a, b) =>
+        a.label.localeCompare(b.label) ||
+        (a.comment ?? '').localeCompare(b.comment ?? '') ||
+        (a.view?.position ?? 0) - (b.view?.position ?? 0),
     );
     return { readings };
   }

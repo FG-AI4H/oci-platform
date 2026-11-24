@@ -33,6 +33,7 @@ import { apiFetch } from '../../../../../lib/api';
 import { annotationGateForCaller } from '../../../../../lib/groups';
 import { AnnotateForm } from './annotate-form';
 import { ImageViewer } from './image-viewer';
+import { ReaderView, ViewRequestProvider } from './reader-view';
 import { SampleReadyProvider } from './sample-ready';
 import { SkipTaskForm } from './skip-task-form';
 import { StartTaskForm } from './start-task-form';
@@ -313,7 +314,13 @@ function MaybeSampleReady({
   waitForSample: boolean;
   children: React.ReactNode;
 }) {
-  return waitForSample ? <SampleReadyProvider>{children}</SampleReadyProvider> : <>{children}</>;
+  // The readers' answers can ask the viewer to show where each one
+  // looked (#674); harmless where there is no series.
+  return (
+    <ViewRequestProvider>
+      {waitForSample ? <SampleReadyProvider>{children}</SampleReadyProvider> : children}
+    </ViewRequestProvider>
+  );
 }
 
 /**
@@ -353,6 +360,7 @@ function ReadersAnswers({
                   {r.comment}
                 </p>
               ) : null}
+              {r.view ? <ReaderView view={r.view} /> : null}
             </li>
           ))}
         </ul>
