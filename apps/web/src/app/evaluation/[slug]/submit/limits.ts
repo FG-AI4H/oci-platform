@@ -12,4 +12,9 @@
  */
 export const MAX_PREDICTIONS_FILE_BYTES = 512 * 1024;
 
-export const MAX_PREDICTIONS_FILE_LABEL = '512 KB';
+/**
+ * The limit as the page writes it, `512 KB` / `512 Ko` (#654): the number
+ * in kibibytes, formatted in the interface language, put into the
+ * `EvaluationSubmit.maxSize` message by the caller.
+ */
+export const MAX_PREDICTIONS_FILE_KIB = MAX_PREDICTIONS_FILE_BYTES / 1024;

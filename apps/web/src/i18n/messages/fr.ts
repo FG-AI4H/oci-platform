@@ -8,12 +8,20 @@
  * the ICU arguments match.
  */
 import type { Messages } from './en';
+import accessRequest from './fr/accessRequest.json';
 import catalog from './fr/catalog.json';
 import catalogNew from './fr/catalogNew.json';
 import common from './fr/common.json';
 import dashboard from './fr/dashboard.json';
 import dataset from './fr/dataset.json';
 import dicomViewer from './fr/dicomViewer.json';
+import evaluation from './fr/evaluation.json';
+import evaluationDeclare from './fr/evaluationDeclare.json';
+import evaluationMethods from './fr/evaluationMethods.json';
+import evaluationReview from './fr/evaluationReview.json';
+import evaluationSubmission from './fr/evaluationSubmission.json';
+import evaluationSubmit from './fr/evaluationSubmit.json';
+import evaluationTasks from './fr/evaluationTasks.json';
 import footer from './fr/footer.json';
 import header from './fr/header.json';
 import home from './fr/home.json';
@@ -26,12 +34,20 @@ import settings from './fr/settings.json';
 import signIn from './fr/signIn.json';
 
 const fr = {
+  AccessRequest: accessRequest,
   Catalog: catalog,
   CatalogNew: catalogNew,
   Common: common,
   Dashboard: dashboard,
   Dataset: dataset,
   DicomViewer: dicomViewer,
+  Evaluation: evaluation,
+  EvaluationDeclare: evaluationDeclare,
+  EvaluationMethods: evaluationMethods,
+  EvaluationReview: evaluationReview,
+  EvaluationSubmission: evaluationSubmission,
+  EvaluationSubmit: evaluationSubmit,
+  EvaluationTasks: evaluationTasks,
   Footer: footer,
   Header: header,
   Home: home,

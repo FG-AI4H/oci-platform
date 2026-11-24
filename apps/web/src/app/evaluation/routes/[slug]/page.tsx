@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -29,6 +30,8 @@ import {
   type ThreatModel,
 } from '@oci/shared-types';
 import { auth } from '../../../../auth';
+import type { Formatters } from '../../../../i18n/format';
+import { getFormatters } from '../../../../i18n/server';
 import { apiFetch } from '../../../../lib/api';
 import {
   describeAttribution,
@@ -36,20 +39,23 @@ import {
 } from '../../../../components/evaluation/review-status-badge';
 import {
   attributionForVersion,
-  DELTA_FORMATTER,
   describeMode,
   describeProvider,
+  formatDelta,
   formatMemory,
   formatRuntime,
-  PARTY_GLOSSARY,
-  PARTY_LABEL,
+  partyGlossary,
+  partyLabel,
   shortMode,
   sortVersionsLatestFirst,
-  TRUST_ANCHOR_LABEL,
+  trustAnchorLabel,
 } from '../../../../components/evaluation/route-labels';
 import { readRoutePermissions } from '../permissions';
 import { ReviewForm } from './review-form';
-import { DECLARE_LINK_TEXT, REVIEW_TEXT, statusWord } from './strings';
+import { statusWord } from './review-outcome';
+
+type MethodsT = Awaited<ReturnType<typeof getTranslations<'EvaluationMethods'>>>;
+type ReviewT = Awaited<ReturnType<typeof getTranslations<'EvaluationReview'>>>;
 
 /**
  * Evaluation method detail (#487, WP5 / ADR-0018). Anonymous —
@@ -72,15 +78,18 @@ import { DECLARE_LINK_TEXT, REVIEW_TEXT, statusWord } from './strings';
  * Only the latest decision and its rationale are shown: the API keeps one
  * outcome per version and does not expose who recorded it, so the page
  * names no reviewer.
+ *
+ * Every word the page adds is in the interface language (#654); what the
+ * method's provider declared (capabilities, assumptions, key governance…)
+ * is shown as written.
  */
-
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' });
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const t = await getTranslations('EvaluationMethods');
   return {
-    title: `${slug} — OCI Evaluation methods`,
-    description: `Threat model, disclosure profile and operational envelope declared by the ${slug} evaluation method, with the review status of each version.`,
+    title: t('detail.metaTitle', { slug }),
+    description: t('detail.metaDescription', { slug }),
   };
 }
 
@@ -93,6 +102,12 @@ export default async function EvaluationRouteDetailPage({
 }) {
   const { slug } = await params;
   const query = await searchParams;
+  const [t, tReview, tEvaluation, f] = await Promise.all([
+    getTranslations('EvaluationMethods'),
+    getTranslations('EvaluationReview'),
+    getTranslations('Evaluation'),
+    getFormatters(),
+  ]);
 
   let route: EvaluationRouteResponse | null = null;
   let error: string | null = null;
@@ -102,7 +117,7 @@ export default async function EvaluationRouteDetailPage({
       { revalidate: 0 },
     );
   } catch (err) {
-    error = err instanceof Error ? err.message : 'Unable to reach evaluation API';
+    error = err instanceof Error ? err.message : tEvaluation('unavailable.fallback');
   }
 
   if (error) {
@@ -110,7 +125,7 @@ export default async function EvaluationRouteDetailPage({
       <Container size="md">
         <Section spacing="md">
           <Alert tone="danger">
-            <AlertTitle as="h1">Evaluation unavailable</AlertTitle>
+            <AlertTitle as="h1">{tEvaluation('unavailable.title')}</AlertTitle>
             <AlertDescription>
               <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
             </AlertDescription>
@@ -126,7 +141,7 @@ export default async function EvaluationRouteDetailPage({
   const session = await auth();
   const access = await readRoutePermissions(route.slug, session);
   const permissions = access.status === 'ok' ? access.permissions : null;
-  const banner = bannerFor(versions, query);
+  const banner = bannerFor(versions, query, tReview);
 
   return (
     <>
@@ -137,7 +152,7 @@ export default async function EvaluationRouteDetailPage({
             className="inline-flex items-center gap-1.5 rounded text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
           >
             <ArrowLeftIcon size={14} />
-            <span>Evaluation methods</span>
+            <span>{t('detail.back')}</span>
           </Link>
           <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 flex-1">
@@ -146,16 +161,13 @@ export default async function EvaluationRouteDetailPage({
                 {route.name}
               </h1>
               <p className="mt-4 max-w-2xl text-[var(--color-muted-foreground)]">
-                {describeMode(route.mode)}. Every result on the Open Code Infrastructure (OCI) names
-                the evaluation method and version that produced it, and a method version is reviewed
-                before its results are published. The declarations below are what that review
-                examines.
+                {t('detail.lead', { mode: describeMode(route.mode, t) })}
               </p>
             </div>
             <div className="flex flex-row flex-wrap items-start gap-2 lg:flex-col lg:items-end">
-              <Badge tone="info">{shortMode(route.mode)}</Badge>
+              <Badge tone="info">{shortMode(route.mode, t)}</Badge>
               <Badge tone={route.isReference ? 'accent' : 'neutral'}>
-                {describeProvider(route)}
+                {describeProvider(route, t)}
               </Badge>
             </div>
           </div>
@@ -173,15 +185,15 @@ export default async function EvaluationRouteDetailPage({
           ) : null}
           {access.status === 'unavailable' ? (
             <Alert tone="warning">
-              <AlertDescription>{REVIEW_TEXT.permissionsUnavailable}</AlertDescription>
+              <AlertDescription>{tReview('permissionsUnavailable')}</AlertDescription>
             </Alert>
           ) : null}
           {permissions?.canDeclareVersion ? (
             <Card>
               <CardHeader>
-                <CardTitle as="h2">{DECLARE_LINK_TEXT.heading}</CardTitle>
+                <CardTitle as="h2">{t('declareLink.heading')}</CardTitle>
                 <CardDescription>
-                  {permissions.isSubmitter ? DECLARE_LINK_TEXT.body : DECLARE_LINK_TEXT.bodyAdmin}
+                  {permissions.isSubmitter ? t('declareLink.body') : t('declareLink.bodyAdmin')}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -189,7 +201,7 @@ export default async function EvaluationRouteDetailPage({
                   href={`/evaluation/routes/${route.slug}/versions/new`}
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-[var(--color-primary)] px-4 text-sm font-medium text-[var(--color-primary-foreground)] hover:bg-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] sm:h-10"
                 >
-                  {DECLARE_LINK_TEXT.link}
+                  {t('declareLink.link')}
                   <ArrowRightIcon size={14} />
                 </Link>
               </CardContent>
@@ -197,33 +209,32 @@ export default async function EvaluationRouteDetailPage({
           ) : null}
           <Card>
             <CardHeader>
-              <CardTitle as="h2">About this method</CardTitle>
-              <CardDescription>
-                Who provides it, how a submission runs, and who the four parties named in the
-                declarations are.
-              </CardDescription>
+              <CardTitle as="h2">{t('detail.about.title')}</CardTitle>
+              <CardDescription>{t('detail.about.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <DefinitionList>
-                <DefinitionItem term="Slug" mono>
+                <DefinitionItem term={t('detail.about.slug')} mono>
                   {route.slug}
                 </DefinitionItem>
-                <DefinitionItem term="How it runs">{describeMode(route.mode)}</DefinitionItem>
-                <DefinitionItem term="Provider">{describeProvider(route)}</DefinitionItem>
-                <DefinitionItem term="Versions">
-                  <span className="tabular-nums">{versions.length.toLocaleString('en-GB')}</span>{' '}
+                <DefinitionItem term={t('detail.about.howItRuns')}>
+                  {describeMode(route.mode, t)}
+                </DefinitionItem>
+                <DefinitionItem term={t('detail.about.provider')}>
+                  {describeProvider(route, t)}
+                </DefinitionItem>
+                <DefinitionItem term={t('detail.about.versions')}>
+                  <span className="tabular-nums">{f.number(versions.length)}</span>{' '}
                   <span className="text-[var(--color-muted-foreground)]">
-                    {versions.length === 1 ? '— shown below.' : '— latest first below.'}
+                    {t('detail.about.versionsNote', { count: versions.length })}
                   </span>
                 </DefinitionItem>
-                <DefinitionItem term="Registered">
-                  <time dateTime={route.createdAt}>
-                    {DATE_FORMATTER.format(new Date(route.createdAt))}
-                  </time>
+                <DefinitionItem term={t('detail.about.registered')}>
+                  <time dateTime={route.createdAt}>{f.date(route.createdAt)}</time>
                 </DefinitionItem>
-                <DefinitionItem term="Parties">
+                <DefinitionItem term={t('detail.about.parties')}>
                   <ul className="space-y-1">
-                    {PARTY_GLOSSARY.map(({ party, label, description }) => (
+                    {partyGlossary(t).map(({ party, label, description }) => (
                       <li key={party}>
                         <span className="font-medium">{label}</span>
                         <span className="text-[var(--color-muted-foreground)]">
@@ -239,19 +250,13 @@ export default async function EvaluationRouteDetailPage({
           </Card>
 
           <Alert tone="info">
-            <AlertTitle as="h2">Declarations are frozen once review begins</AlertTitle>
-            <AlertDescription>
-              A version&rsquo;s threat model, disclosure profile and operational envelope cannot
-              change after it enters review, so the outcome applies to exactly what was reviewed. A
-              change means a new version. Only an approved version produces published results;
-              results from a version still under review are provisional, and results from a rejected
-              or withdrawn version are withdrawn with it.
-            </AlertDescription>
+            <AlertTitle as="h2">{t('detail.frozen.title')}</AlertTitle>
+            <AlertDescription>{t('detail.frozen.body')}</AlertDescription>
           </Alert>
 
           {versions.length === 0 ? (
             <p className="rounded-lg border border-dashed border-[var(--color-border-strong)] bg-[var(--color-subtle)] p-8 text-center text-sm text-[var(--color-muted-foreground)]">
-              This method has no version declared yet, so it has produced no results.
+              {t('detail.noVersions')}
             </p>
           ) : (
             versions.map((version) => (
@@ -261,6 +266,9 @@ export default async function EvaluationRouteDetailPage({
                 methodName={route.name}
                 version={version}
                 permissions={permissions}
+                t={t}
+                tReview={tReview}
+                f={f}
               />
             ))
           )}
@@ -268,13 +276,12 @@ export default async function EvaluationRouteDetailPage({
           <Separator />
 
           <p className="text-center text-xs text-[var(--color-muted-foreground)]">
-            {versions.length.toLocaleString('en-GB')}{' '}
-            {versions.length === 1 ? 'version' : 'versions'} declared.{' '}
+            {t('detail.footerCount', { count: versions.length, n: f.number(versions.length) })}{' '}
             <Link
               href="/evaluation/routes"
               className="underline underline-offset-2 hover:text-[var(--color-foreground)]"
             >
-              Back to evaluation methods
+              {t('detail.backToList')}
             </Link>
             .
           </p>
@@ -292,47 +299,57 @@ export default async function EvaluationRouteDetailPage({
 function bannerFor(
   versions: RouteVersionResponse[],
   query: Record<string, string | string[] | undefined>,
+  t: ReviewT,
 ): string | null {
   const recorded = typeof query.recorded === 'string' ? query.recorded : null;
   const to = RouteReviewStatusSchema.safeParse(query.to);
   if (recorded && to.success) {
     const version = versions.find((v) => v.version === recorded);
     if (version && version.reviewStatus === to.data) {
-      return REVIEW_TEXT.recordedBanner(version.version, statusWord(to.data));
+      return t('recordedBanner', { version: version.version, status: statusWord(to.data, t) });
     }
   }
   const declared = typeof query.declared === 'string' ? query.declared : null;
   if (declared) {
     const version = versions.find((v) => v.version === declared);
     if (version && version.reviewStatus === 'DECLARED') {
-      return REVIEW_TEXT.declaredBanner(version.version);
+      return t('declaredBanner', { version: version.version });
     }
   }
   return null;
 }
 
-function VersionBlock({
+async function VersionBlock({
   routeSlug,
   methodName,
   version,
   permissions,
+  t,
+  tReview,
+  f,
 }: {
   routeSlug: string;
   methodName: string;
   version: RouteVersionResponse;
   permissions: RoutePermissionsResponse | null;
+  t: MethodsT;
+  tReview: ReviewT;
+  f: Formatters;
 }) {
   const headingId = `version-${version.id}`;
   const attribution = attributionForVersion(routeSlug, version);
-  const { description: reviewDescription } = describeAttribution(attribution);
+  const { description: reviewDescription } = describeAttribution(
+    attribution,
+    await getTranslations('Evaluation'),
+  );
   const mine = permissions?.versions.find((v) => v.version === version.version) ?? null;
   const allowed = mine?.allowedTransitions ?? [];
   const mode = permissions?.isSubmitter ? 'withdraw' : 'review';
   const barred =
     mine?.reviewBar === 'SUBMITTED_BY_YOU'
-      ? REVIEW_TEXT.barredSubmitted
+      ? tReview('barredSubmitted')
       : mine?.reviewBar === 'DECLARED_BY_YOU'
-        ? REVIEW_TEXT.barredDeclared
+        ? tReview('barredDeclared')
         : null;
 
   return (
@@ -344,7 +361,10 @@ function VersionBlock({
       <header className="space-y-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h2 id={`${headingId}-title`} className="text-2xl font-semibold tracking-tight">
-            Version <span className="font-mono tabular-nums">{version.version}</span>
+            {t.rich('detail.version.heading', {
+              version: version.version,
+              mono: (chunks) => <span className="font-mono tabular-nums">{chunks}</span>,
+            })}
           </h2>
           {/* The sentence behind the badge is printed just below, so the
               badge does not repeat it for assistive technology. */}
@@ -353,33 +373,29 @@ function VersionBlock({
         <p className="max-w-2xl text-sm text-[var(--color-muted-foreground)]">
           {reviewDescription}{' '}
           <span>
-            Declared{' '}
-            <time dateTime={version.createdAt}>
-              {DATE_FORMATTER.format(new Date(version.createdAt))}
-            </time>
-            {version.reviewedAt ? (
-              <>
-                ; reviewed{' '}
-                <time dateTime={version.reviewedAt}>
-                  {DATE_FORMATTER.format(new Date(version.reviewedAt))}
-                </time>
-              </>
-            ) : (
-              '; not yet reviewed'
-            )}
-            .
+            {version.reviewedAt
+              ? t.rich('detail.version.declaredReviewed', {
+                  declaredOn: f.date(version.createdAt),
+                  reviewedOn: f.date(version.reviewedAt),
+                  declared: (chunks) => <time dateTime={version.createdAt}>{chunks}</time>,
+                  reviewed: (chunks) => <time dateTime={version.reviewedAt ?? ''}>{chunks}</time>,
+                })
+              : t.rich('detail.version.declaredNotReviewed', {
+                  declaredOn: f.date(version.createdAt),
+                  declared: (chunks) => <time dateTime={version.createdAt}>{chunks}</time>,
+                })}
           </span>
         </p>
         {version.reviewNotes ? (
           <div className="max-w-2xl rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-4 text-sm">
             <h3 className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
-              {REVIEW_TEXT.reviewRecord}
+              {tReview('reviewRecord')}
             </h3>
             <p className="mt-1 whitespace-pre-wrap break-words text-[var(--color-foreground)]">
               {version.reviewNotes}
             </p>
             <p className="mt-2 text-xs text-[var(--color-muted-foreground)]">
-              {REVIEW_TEXT.reviewRecordHint}
+              {tReview('reviewRecordHint')}
             </p>
           </div>
         ) : null}
@@ -388,7 +404,7 @@ function VersionBlock({
             href={`#review-${version.id}`}
             className="inline-flex min-h-11 items-center gap-1.5 rounded text-sm font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] sm:min-h-6"
           >
-            {mode === 'withdraw' ? REVIEW_TEXT.withdrawLink : REVIEW_TEXT.reviewLink}
+            {mode === 'withdraw' ? tReview('withdrawLink') : tReview('reviewLink')}
           </a>
         ) : null}
         {barred ? (
@@ -400,9 +416,9 @@ function VersionBlock({
         ) : null}
       </header>
 
-      <ThreatModelCard model={version.threatModel} />
-      <DisclosureProfileCard profile={version.disclosureProfile} />
-      <OperationalEnvelopeCard envelope={version.operationalEnvelope} />
+      <ThreatModelCard model={version.threatModel} t={t} />
+      <DisclosureProfileCard profile={version.disclosureProfile} t={t} />
+      <OperationalEnvelopeCard envelope={version.operationalEnvelope} t={t} f={f} />
 
       {permissions ? (
         <ReviewForm
@@ -429,19 +445,16 @@ function SubHeading({ children }: { children: ReactNode }) {
   );
 }
 
-function ThreatModelCard({ model }: { model: ThreatModel }) {
+function ThreatModelCard({ model, t }: { model: ThreatModel; t: MethodsT }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h3">Threat model</CardTitle>
-        <CardDescription>
-          Who might try to learn something they should not, what this method does about each of
-          them, what it takes for granted, and what it makes no promise about.
-        </CardDescription>
+        <CardTitle as="h3">{t('detail.threat.title')}</CardTitle>
+        <CardDescription>{t('detail.threat.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
-          <SubHeading>Adversaries</SubHeading>
+          <SubHeading>{t('detail.threat.adversaries')}</SubHeading>
           {/*
            * Three wrapping columns fit at 375px, so the verdict column stays
            * in view without a horizontal scroll. The wrapper still scrolls
@@ -452,7 +465,7 @@ function ThreatModelCard({ model }: { model: ThreatModel }) {
            */}
           <div
             role="region"
-            aria-label="Adversaries this version considers"
+            aria-label={t('detail.threat.adversariesRegion')}
             tabIndex={0}
             className="overflow-x-auto rounded-lg border border-[var(--color-border)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
           >
@@ -460,13 +473,13 @@ function ThreatModelCard({ model }: { model: ThreatModel }) {
               <thead className="bg-[var(--color-subtle)] text-left text-xs uppercase tracking-wide text-[var(--color-muted-foreground)]">
                 <tr>
                   <th scope="col" className="px-3 py-2 font-medium sm:px-4">
-                    Party
+                    {t('detail.threat.party')}
                   </th>
                   <th scope="col" className="px-3 py-2 font-medium sm:px-4">
-                    Capability
+                    {t('detail.threat.capability')}
                   </th>
                   <th scope="col" className="px-3 py-2 font-medium sm:px-4">
-                    Defended
+                    {t('detail.threat.defended')}
                   </th>
                 </tr>
               </thead>
@@ -478,16 +491,20 @@ function ThreatModelCard({ model }: { model: ThreatModel }) {
                   >
                     <th
                       scope="row"
-                      className="px-3 py-3 text-left font-medium text-[var(--color-foreground)] sm:px-4"
+                      // `hyphens-auto`: the French party names (« opérateur de
+                      // la plateforme ») are longer than the English ones and
+                      // made the table scroll at 375 px; they break at a
+                      // hyphen instead (#654).
+                      className="px-3 py-3 text-start font-medium text-[var(--color-foreground)] hyphens-auto sm:px-4"
                     >
-                      {PARTY_LABEL[adversary.party]}
+                      {partyLabel(adversary.party, t)}
                     </th>
                     <td className="px-3 py-3 text-[var(--color-foreground)] sm:px-4">
                       {adversary.capability}
                     </td>
                     <td className="w-px whitespace-nowrap px-3 py-3 sm:px-4">
                       <Badge tone={adversary.defended ? 'success' : 'warning'}>
-                        {adversary.defended ? 'yes' : 'no'}
+                        {adversary.defended ? t('detail.threat.yes') : t('detail.threat.no')}
                       </Badge>
                     </td>
                   </tr>
@@ -496,29 +513,26 @@ function ThreatModelCard({ model }: { model: ThreatModel }) {
             </table>
           </div>
           <p className="text-xs text-[var(--color-muted-foreground)]">
-            A party marked <em>no</em> is named so nobody mistakes it for a guarantee: this method
-            does not defend against it.
+            {t.rich('detail.threat.noNote', { em: (chunks) => <em>{chunks}</em> })}
           </p>
         </div>
 
         <div className="space-y-2">
-          <SubHeading>Assumptions</SubHeading>
+          <SubHeading>{t('detail.threat.assumptions')}</SubHeading>
           <ul className="list-disc space-y-1 pl-5 text-sm text-[var(--color-foreground)]">
             {model.assumptions.map((assumption, i) => (
               <li key={i}>{assumption}</li>
             ))}
           </ul>
           <p className="text-xs text-[var(--color-muted-foreground)]">
-            What has to hold for the defences above to work. If an assumption fails, so does the
-            guarantee that rests on it.
+            {t('detail.threat.assumptionsHint')}
           </p>
         </div>
 
         <div className="space-y-2 rounded-lg border-l-4 border-[var(--color-primary)] bg-[var(--color-subtle)] p-4">
-          <SubHeading>Out of scope</SubHeading>
+          <SubHeading>{t('detail.threat.outOfScope')}</SubHeading>
           <p className="text-sm text-[var(--color-foreground)]">
-            A threat model with nothing out of scope is rejected on entry; naming the boundaries is
-            the point.
+            {t('detail.threat.outOfScopeBody')}
           </p>
           <ul className="list-disc space-y-1 pl-5 text-sm text-[var(--color-foreground)]">
             {model.outOfScope.map((item, i) => (
@@ -531,55 +545,43 @@ function ThreatModelCard({ model }: { model: ThreatModel }) {
   );
 }
 
-function DisclosureProfileCard({ profile }: { profile: DisclosureProfile }) {
-  const trustAnchor = TRUST_ANCHOR_LABEL[profile.trustAnchor];
+function DisclosureProfileCard({ profile, t }: { profile: DisclosureProfile; t: MethodsT }) {
+  const trustAnchor = trustAnchorLabel(profile.trustAnchor, t);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h3">Disclosure profile</CardTitle>
-        <CardDescription>
-          Who gets to see what while an evaluation runs, what that guarantee ultimately rests on,
-          and whether a result can be reproduced.
-        </CardDescription>
+        <CardTitle as="h3">{t('detail.disclosure.title')}</CardTitle>
+        <CardDescription>{t('detail.disclosure.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <DefinitionList>
-          <DefinitionItem term="Trust anchor">
-            The guarantees rest on <span className="font-medium">{trustAnchor}</span>
-            {profile.trustAnchor === 'CONTRACTUAL' ? (
-              <span className="text-[var(--color-muted-foreground)]">
-                {' '}
-                — an operating agreement between the parties, not a technical mechanism.
-              </span>
-            ) : profile.trustAnchor === 'HARDWARE_ATTESTATION' ? (
-              <span className="text-[var(--color-muted-foreground)]">
-                {' '}
-                — the processor proves what code it is running before any data is released to it.
-              </span>
-            ) : (
-              <span className="text-[var(--color-muted-foreground)]">
-                {' '}
-                — breaking the guarantee would mean solving a problem believed to be computationally
-                infeasible.
-              </span>
-            )}
+          <DefinitionItem term={t('detail.disclosure.trustAnchor')}>
+            {t.rich('detail.disclosure.restsOn', {
+              anchor: trustAnchor,
+              strong: (chunks) => <span className="font-medium">{chunks}</span>,
+            })}
+            <span className="text-[var(--color-muted-foreground)]">
+              {' '}
+              {t(`detail.disclosure.anchorNote.${profile.trustAnchor}`)}
+            </span>
           </DefinitionItem>
-          <DefinitionItem term="Key governance">{profile.keyGovernance}</DefinitionItem>
-          <DefinitionItem term="Reproducible">
+          <DefinitionItem term={t('detail.disclosure.keyGovernance')}>
+            {profile.keyGovernance}
+          </DefinitionItem>
+          <DefinitionItem term={t('detail.disclosure.reproducible')}>
             {profile.reproducible.value ? (
               <>
-                <span className="font-medium">Yes.</span>{' '}
+                <span className="font-medium">{t('detail.disclosure.yes')}</span>{' '}
                 <span className="text-[var(--color-muted-foreground)]">
                   {profile.reproducible.method}
                 </span>
               </>
             ) : (
               <>
-                <span className="font-medium">No.</span>{' '}
+                <span className="font-medium">{t('detail.disclosure.no')}</span>{' '}
                 <span className="text-[var(--color-muted-foreground)]">
-                  {profile.reproducible.method ??
-                    'Running the same submission again is not guaranteed to give the same result.'}
+                  {profile.reproducible.method ?? t('detail.disclosure.notGuaranteed')}
                 </span>
               </>
             )}
@@ -587,15 +589,15 @@ function DisclosureProfileCard({ profile }: { profile: DisclosureProfile }) {
         </DefinitionList>
 
         <div className="space-y-2">
-          <SubHeading>Who observes what</SubHeading>
+          <SubHeading>{t('detail.disclosure.observes')}</SubHeading>
           <p className="text-xs text-[var(--color-muted-foreground)]">
-            Everything each party can see during an evaluation, including what it already holds.
+            {t('detail.disclosure.observesHint')}
           </p>
           <DefinitionList className="rounded-lg border border-[var(--color-border)] p-4">
             {profile.observations.map((observation, i) => (
               <DefinitionItem
                 key={`${observation.party}-${i}`}
-                term={PARTY_LABEL[observation.party]}
+                term={partyLabel(observation.party, t)}
               >
                 {observation.observes}
               </DefinitionItem>
@@ -607,71 +609,75 @@ function DisclosureProfileCard({ profile }: { profile: DisclosureProfile }) {
   );
 }
 
-function OperationalEnvelopeCard({ envelope }: { envelope: OperationalEnvelope }) {
+function OperationalEnvelopeCard({
+  envelope,
+  t,
+  f,
+}: {
+  envelope: OperationalEnvelope;
+  t: MethodsT;
+  f: Formatters;
+}) {
   const gap = envelope.fidelityGap ?? null;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h3">Operational envelope</CardTitle>
-        <CardDescription>
-          The limits a submission must be designed to run within. The runtime and memory caps are
-          enforced by the sandbox, not merely documented. Memory is given in mebibytes (MiB) and
-          gibibytes (GiB).
-        </CardDescription>
+        <CardTitle as="h3">{t('detail.envelope.title')}</CardTitle>
+        <CardDescription>{t('detail.envelope.description')}</CardDescription>
       </CardHeader>
       <CardContent>
         <DefinitionList>
-          <DefinitionItem term="Permitted operations">
+          <DefinitionItem term={t('detail.envelope.permittedOperations')}>
             <ul className="list-disc space-y-1 pl-5">
               {envelope.permittedOperations.map((operation, i) => (
                 <li key={i}>{operation}</li>
               ))}
             </ul>
           </DefinitionItem>
-          <DefinitionItem term="Arithmetic precision">
+          <DefinitionItem term={t('detail.envelope.arithmeticPrecision')}>
             {envelope.arithmeticPrecision}
           </DefinitionItem>
-          <DefinitionItem term="Maximum runtime">
+          <DefinitionItem term={t('detail.envelope.maxRuntime')}>
             <span className="tabular-nums">{formatRuntime(envelope.maxRuntimeSec)}</span>{' '}
             <span className="text-[var(--color-muted-foreground)] tabular-nums">
-              ({envelope.maxRuntimeSec.toLocaleString('en-GB')} seconds)
+              {t('detail.envelope.seconds', { n: f.number(envelope.maxRuntimeSec) })}
             </span>
           </DefinitionItem>
-          <DefinitionItem term="Maximum memory">
-            <span className="tabular-nums">{formatMemory(envelope.maxMemoryMb)}</span>
+          <DefinitionItem term={t('detail.envelope.maxMemory')}>
+            <span className="tabular-nums">{formatMemory(envelope.maxMemoryMb, t, f)}</span>
             {envelope.maxMemoryMb >= 1024 ? (
               <span className="text-[var(--color-muted-foreground)] tabular-nums">
                 {' '}
-                ({envelope.maxMemoryMb.toLocaleString('en-GB')} MiB)
+                {t('detail.envelope.mib', { n: f.number(envelope.maxMemoryMb) })}
               </span>
             ) : null}
           </DefinitionItem>
-          <DefinitionItem term="Model constraints">
+          <DefinitionItem term={t('detail.envelope.modelConstraints')}>
             {envelope.modelConstraints ? (
               envelope.modelConstraints
             ) : (
-              <span className="text-[var(--color-muted-foreground)]">None declared.</span>
+              <span className="text-[var(--color-muted-foreground)]">
+                {t('detail.envelope.noneDeclared')}
+              </span>
             )}
           </DefinitionItem>
-          <DefinitionItem term="Fidelity gap">
+          <DefinitionItem term={t('detail.envelope.fidelityGap')}>
             {gap ? (
               <>
                 <span className="font-medium">
-                  {gap.metric}:{' '}
-                  <span className="tabular-nums">{DELTA_FORMATTER.format(gap.delta)}</span>
+                  {t('detail.envelope.gapMetric', { metric: gap.metric })}{' '}
+                  <span className="tabular-nums">{formatDelta(gap.delta, f)}</span>
                 </span>{' '}
                 <span className="text-[var(--color-muted-foreground)]">
-                  measured on {gap.measuredOn}. The difference between a score produced through this
-                  method and the same model scored in the clear.
+                  {t('detail.envelope.measuredOn', { on: gap.measuredOn })}
                 </span>
               </>
             ) : (
               <>
-                <span className="font-medium">Not yet measured.</span>{' '}
+                <span className="font-medium">{t('detail.envelope.notMeasured')}</span>{' '}
                 <span className="text-[var(--color-muted-foreground)]">
-                  The fidelity gap is the difference between a score produced through this method
-                  and the same model scored in the clear; it is reported once measured.
+                  {t('detail.envelope.notMeasuredBody')}
                 </span>
               </>
             )}

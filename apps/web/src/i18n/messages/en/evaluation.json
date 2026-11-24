@@ -1,0 +1,225 @@
+{
+  "taskKind": {
+    "GRADING": "Grading",
+    "CLASSIFICATION": "Classification",
+    "BINARY_DIAGNOSTIC": "Binary finding"
+  },
+  "status": {
+    "SCORED": "scored",
+    "PENDING": "pending",
+    "FAILED": "failed"
+  },
+  "unavailable": {
+    "title": "Evaluation unavailable",
+    "fallback": "Unable to reach evaluation API"
+  },
+  "attribution": {
+    "label": {
+      "published": "published",
+      "provisional": "provisional",
+      "withdrawn": "withdrawn",
+      "retracted": "retracted",
+      "legacy": "legacy"
+    },
+    "description": {
+      "published": "Published: the evaluation method that produced this result has passed review.",
+      "provisional": "Provisional: the evaluation method that produced this result has not yet passed review, so it is excluded from published reporting.",
+      "withdrawn": "Withdrawn: the evaluation method that produced this result was rejected or withdrawn from review, so it is excluded from published reporting.",
+      "retracted": "Results from this method version were withdrawn after review.",
+      "legacy": "Scored before the evaluation-route registry existed (ADR-0018 / WP5). This result carries no route declaration and is excluded from published reporting."
+    }
+  },
+  "metric": {
+    "accuracy": "Accuracy",
+    "balancedAccuracy": "Balanced accuracy",
+    "coverage": {
+      "label": "Coverage",
+      "explanation": "The share of the task’s items this file gave a label for. Items left out are not scored."
+    },
+    "classification": {
+      "macroF1": {
+        "label": "Macro F1",
+        "explanation": "The average of the per-class F1 scores, each class weighing the same however many items it has."
+      },
+      "balancedAccuracy": "The average, over the classes, of the share of each class that was found.",
+      "accuracy": "The share of items given exactly the reference label.",
+      "microF1": {
+        "label": "Micro F1",
+        "explanation": "F1 over all items pooled. Equal to accuracy when each item has one label."
+      }
+    },
+    "grading": {
+      "qwk": {
+        "label": "QWK",
+        "explanation": "Quadratic-weighted kappa: agreement with the reference grades, from −1 to 1. 1 is perfect, 0 is what chance would give, and a grade that is far off costs more than a near miss."
+      },
+      "accuracy": "The share of items given exactly the reference grade.",
+      "referableSensitivity": {
+        "label": "Referable sensitivity",
+        "explanation": "Of the items whose reference grade is {threshold} or more, the share this file also graded {threshold} or more."
+      },
+      "referableSpecificity": {
+        "label": "Referable specificity",
+        "explanation": "Of the items whose reference grade is below {threshold}, the share this file also graded below {threshold}."
+      }
+    },
+    "binary": {
+      "balancedAccuracy": "The average of sensitivity and specificity. Results are ordered by it.",
+      "sensitivity": {
+        "label": "Sensitivity",
+        "explanation": "Of the items that are positive ({positive}), the share this file labelled positive."
+      },
+      "specificity": {
+        "label": "Specificity",
+        "explanation": "Of the items that are negative, the share this file labelled negative."
+      },
+      "positivePredictiveValue": {
+        "label": "Positive predictive value",
+        "explanation": "Of the items this file labelled positive, the share that are positive ({positive}). Depends on how common the finding is in this set."
+      },
+      "negativePredictiveValue": {
+        "label": "Negative predictive value",
+        "explanation": "Of the items this file labelled negative, the share that are negative. Depends on how common the finding is in this set."
+      },
+      "accuracy": "The share of items given the reference label.",
+      "prevalence": {
+        "label": "Prevalence",
+        "explanation": "The share of scored items that are positive ({positive}) in the reference labels. It is a property of the evaluation set, not of the file."
+      },
+      "auc": {
+        "label": "Area under the ROC curve (AUC)",
+        "explanation": "How well the scores rank positive items above negative ones, from 0 to 1. 0.5 is chance and 1 a perfect ranking."
+      }
+    }
+  },
+  "binary": {
+    "positiveClassFallback": "Finding present",
+    "about": {
+      "description": "What is being scored, on which dataset, and which finding counts as positive.",
+      "positiveClassTerm": "Positive class",
+      "positiveClass": "{name}, written as label 1. Sensitivity and the positive predictive value are about this class.",
+      "positiveClassMissing": "Not stated for this task. Label 1 means the finding is present, label 0 that it is absent.",
+      "classesTerm": "Labels",
+      "classes": "1 for positive, 0 for negative"
+    },
+    "results": {
+      "ordering": "Ordered best first by balanced accuracy, the average of sensitivity and specificity, so a file cannot rank high by flagging every item or none.",
+      "intervals": "Each rate is shown with its 95% confidence interval (Wilson score): the range the true rate plausibly lies in, given how many items it rests on. AUC appears only for a submission that gave a score for every item."
+    },
+    "interval": "95% CI {lower} to {upper}",
+    "intervalSpoken": "95% confidence interval {lower} to {upper}",
+    "basis": "{numerator} of {denominator}",
+    "aucBasis": "Interval from {resamples} bootstrap resamples with a fixed seed, so the same file gets the same interval.",
+    "notEstimable": "Not estimable",
+    "notEstimableReason": "No item in the set falls in this rate’s denominator.",
+    "notEstimableBalanced": "Needs both sensitivity and specificity, and the scored items hold only one reference class.",
+    "aucAbsent": "Not reported",
+    "aucAbsentReason": "AUC needs a score for every scored item, and this file did not give one for each.",
+    "confusion": {
+      "title": "Counts",
+      "description": "Each scored item falls in one cell: its reference label down the side, the label this file gave across the top. Every rate above is a ratio of these counts.",
+      "tableLabel": "Counts of scored items by reference label and submitted label",
+      "corner": "Reference ↓ · File →",
+      "positive": "Positive: {name}",
+      "negative": "Negative",
+      "truePositive": "True positives",
+      "falseNegative": "False negatives",
+      "falsePositive": "False positives",
+      "trueNegative": "True negatives"
+    },
+    "submit": {
+      "fillIn": "In the label column, type 1 where the finding is positive ({positive}) and 0 where it is not.",
+      "scoreHint": "The score column is optional: the model’s confidence that the finding is present, a number from 0 to 1 such as 0.83. Give it for every item and the result includes an AUC; leave it empty and the item is scored on its label alone.",
+      "templateDescription": "A spreadsheet file with one line for each of the {items} in this task, an empty column for your labels and an optional column for scores."
+    }
+  },
+  "formatReport": {
+    "duplicates": {
+      "title": "Identifiers that appear more than once",
+      "detail": "Each item takes one line. Keep one line for each of these and delete the rest."
+    },
+    "unknown": {
+      "title": "Identifiers this task does not have",
+      "detailNone": "None of the identifiers in the file belong to this task. The file may be for another task, or the identifiers were changed. Start again from the template.",
+      "detailSome": "Check these for a typing mistake, or delete their lines. The template lists every identifier the task has."
+    },
+    "labels": {
+      "title": "Labels outside the range of this task",
+      "detail": "A label is a whole number from 0 to {top}. These items have a different value."
+    },
+    "scores": {
+      "title": "Scores this task does not take",
+      "detail": "This task takes one label per item and no score. Delete the score column, or the \"score\" values in a JSON file."
+    },
+    "checkFailed": "Check failed",
+    "allScored": "Every matched line has a score, so the result can include an AUC: it is reported when the scored items include both positive and negative cases.",
+    "noneScored": "No line has a score, so the result will not include an AUC. That is allowed.",
+    "someUnscored": "{count, plural, one {{n} matched line has} other {{n} matched lines have}} no score, so the result will not include an AUC. That is allowed; add a score to every line to get one."
+  },
+  "quota": {
+    "reset": "{date} UTC",
+    "totalUsedSummary": "No scored submissions left on this task.",
+    "totalUsedDetail": "All {limit} allowed on this task are used. This limit does not reset. Checking the format stays free.",
+    "weekUsedSummary": "No scored submissions left this week.",
+    "weekUsedDetail": "All {limit} for this week are used. The limit resets on {reset}. Checking the format stays free.",
+    "summary": "{remaining} of {limit} scored submissions left this week.",
+    "detail": "{remaining} of {limit} left on this task in total.",
+    "refusedWeek": "Not submitted: all {limit} scored submissions for this week are used. The limit resets on {reset}.",
+    "refusedTotal": "Not submitted: all {limit} scored submissions allowed on this task are used. This limit does not reset."
+  },
+  "subgroup": {
+    "section": {
+      "title": "Results by subgroup",
+      "description": "The same figures, computed on the items of each group only. A model can have a good overall result and still do worse for one group of patients: this is where that shows.",
+      "byField": "By {field}",
+      "tableLabel": "Results by {field}",
+      "groupColumn": "Group",
+      "itemsColumn": "Items",
+      "overallRow": "All scored items",
+      "itemsOf": "{scored} of {total}"
+    },
+    "suppression": {
+      "notReported": "Not reported",
+      "notReportedSpoken": "Not reported for {group}: the group is too small to publish, or is withheld so that a smaller group cannot be worked out.",
+      "rateWithheld": "Withheld",
+      "rateWithheldSpoken": "Withheld: it rests on fewer than the minimum number of items, or would let such a number be worked out.",
+      "notEstimable": "n/a",
+      "notEstimableSpoken": "Not estimable: no item of this group falls in this rate’s denominator.",
+      "note": "Groups with fewer than {min} scored items are not reported, and neither is any figure resting on fewer than {min} items. Where one group is withheld, another may be withheld with it, so that the withheld figures cannot be worked out from the overall result and the other groups. The same rule applies to every reader, the submitter and administrators included."
+    },
+    "caution": {
+      "title": "Read group results with care",
+      "body": "Each group’s figures rest on fewer items than the overall result, so they are less certain. A difference between groups of this size can arise by chance; a large difference that also appears on another dataset is the signal to act on.",
+      "intervals": "The ranges under each rate are 95% confidence intervals. They are wider for a group than for the whole set, because a group holds fewer items."
+    },
+    "intervalShort": "{lower}–{upper}",
+    "intervalSpoken": "95% confidence interval {lower} to {upper}",
+    "task": {
+      "fieldsTerm": "Subgroups",
+      "fields": "Results are also reported by {list}. Which item belongs to which group is held by the platform, like the reference labels.",
+      "rowLink": "Results by subgroup",
+      "compareTitle": "Compare two results by subgroup",
+      "compareDescription": "Put two submissions side by side, group by group. Two models with the same overall result can differ for one group of patients.",
+      "compareFirst": "First result",
+      "compareSecond": "Second result",
+      "compareSubmit": "Compare by subgroup"
+    },
+    "compare": {
+      "eyebrow": "Comparison by subgroup",
+      "title": "{a} and {b}",
+      "metaTitle": "Compare by subgroup — {slug} — OCI Evaluation",
+      "metaDescription": "Two results of the {slug} evaluation task, side by side for each subgroup.",
+      "metricChoice": "Figure shown",
+      "metricChoiceLabel": "Figure shown:",
+      "tableLabel": "Results by {field}: {metric}",
+      "difference": "Difference",
+      "differenceSpoken": "{b} minus {a}",
+      "points": "{value} pts",
+      "notComparable": "These two results cannot be compared by subgroup: one of them has no results by subgroup.",
+      "differentTask": "Both results must belong to this task.",
+      "pickTwo": "Choose two different scored submissions of this task to compare.",
+      "back": "Back to the task",
+      "explain": "The difference is the second result minus the first, in percentage points. A group withheld in either result is withheld in the comparison."
+    }
+  }
+}

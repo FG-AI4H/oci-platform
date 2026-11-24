@@ -7,25 +7,26 @@ import type {
   SubgroupResults,
   TaskKindScores,
 } from '@oci/shared-types';
-import { BINARY_DIAGNOSTIC_TEXT as BD } from './binary-diagnostic-text';
+import type { EvaluationI18n } from './i18n';
 import { formatQwk, formatRate } from './metrics';
-import { SUBGROUP_TEXT as T } from './subgroup-text';
 
 /**
  * Results by subgroup as tables (#410): which columns a task kind shows, and
- * what each cell says. No JSX, so it is unit-tested under Vitest's node
- * environment and the page only lays the model out.
+ * what each cell says, in the interface language (#654). No JSX, so it is
+ * unit-tested under Vitest's node environment and the page only lays the
+ * model out.
  *
  * The API has already withheld what may not be published; this module never
  * decides what to hide. It only says, in words, that something was withheld.
+ *
+ * The field and group labels (`Sex`, `Female`) come from the task's
+ * declaration through the API and are shown as declared.
  */
 
 /* eslint-disable security/detect-object-injection --
  * Every computed member access indexes a closed record or a parsed object
  * with a key of a closed literal union (`SubgroupMetricKey`, the task kind),
  * narrowed before use. No request string reaches an index. */
-
-const COUNT = new Intl.NumberFormat('en-GB');
 
 /** A figure a column can show. */
 export type SubgroupMetricKey =
@@ -37,17 +38,6 @@ export type SubgroupMetricKey =
   | 'referableSpecificity'
   | 'sensitivity'
   | 'specificity';
-
-const LABEL: Record<SubgroupMetricKey, string> = {
-  qwk: 'QWK',
-  accuracy: 'Accuracy',
-  balancedAccuracy: 'Balanced accuracy',
-  macroF1: 'Macro F1',
-  referableSensitivity: 'Referable sensitivity',
-  referableSpecificity: 'Referable specificity',
-  sensitivity: BD.metric.sensitivity.label,
-  specificity: BD.metric.specificity.label,
-};
 
 /**
  * The columns of a group table, headline first. Kept to what reads at 375 px:
@@ -67,7 +57,27 @@ export const COMPARE_METRICS: Record<EvaluationTaskKindDb, SubgroupMetricKey[]> 
   BINARY_DIAGNOSTIC: ['balancedAccuracy', 'sensitivity', 'specificity', 'accuracy'],
 };
 
-export const metricLabel = (key: SubgroupMetricKey) => LABEL[key];
+/** A figure's column heading. */
+export function metricLabel({ t }: EvaluationI18n, key: SubgroupMetricKey): string {
+  switch (key) {
+    case 'qwk':
+      return t('metric.grading.qwk.label');
+    case 'accuracy':
+      return t('metric.accuracy');
+    case 'balancedAccuracy':
+      return t('metric.balancedAccuracy');
+    case 'macroF1':
+      return t('metric.classification.macroF1.label');
+    case 'referableSensitivity':
+      return t('metric.grading.referableSensitivity.label');
+    case 'referableSpecificity':
+      return t('metric.grading.referableSpecificity.label');
+    case 'sensitivity':
+      return t('metric.binary.sensitivity.label');
+    case 'specificity':
+      return t('metric.binary.specificity.label');
+  }
+}
 
 /** One figure as the table prints it. */
 export interface FigureCell {
@@ -102,90 +112,96 @@ export interface SubgroupTable {
 /** A figure is a rate (shown as a percentage) unless it is QWK. */
 const isRate = (key: SubgroupMetricKey) => key !== 'qwk';
 
-function numberCell(key: SubgroupMetricKey, value: number | null | undefined): FigureCell {
-  if (value === null || value === undefined) {
-    return {
-      text: T.suppression.notEstimable,
-      spoken: T.suppression.notEstimableSpoken,
-      state: 'na',
-      value: null,
-    };
-  }
-  return { text: isRate(key) ? formatRate(value) : formatQwk(value), state: 'value', value };
+function withheldCell({ t }: EvaluationI18n): FigureCell {
+  return {
+    text: t('subgroup.suppression.rateWithheld'),
+    spoken: t('subgroup.suppression.rateWithheldSpoken'),
+    state: 'withheld',
+    value: null,
+  };
 }
 
-function proportionCell(p: ProportionEstimate | null, withheld: boolean): FigureCell {
-  if (withheld) {
-    return {
-      text: T.suppression.rateWithheld,
-      spoken: T.suppression.rateWithheldSpoken,
-      state: 'withheld',
-      value: null,
-    };
-  }
-  if (!p) {
-    return {
-      text: T.suppression.notEstimable,
-      spoken: T.suppression.notEstimableSpoken,
-      state: 'na',
-      value: null,
-    };
-  }
-  const lower = formatRate(p.lower);
-  const upper = formatRate(p.upper);
+function notEstimableCell({ t }: EvaluationI18n): FigureCell {
   return {
-    text: formatRate(p.estimate),
-    interval: T.intervalShort(lower, upper),
-    spoken: `${formatRate(p.estimate)}, ${T.intervalSpoken(lower, upper)}`,
+    text: t('subgroup.suppression.notEstimable'),
+    spoken: t('subgroup.suppression.notEstimableSpoken'),
+    state: 'na',
+    value: null,
+  };
+}
+
+function numberCell(
+  i18n: EvaluationI18n,
+  key: SubgroupMetricKey,
+  value: number | null | undefined,
+): FigureCell {
+  if (value === null || value === undefined) return notEstimableCell(i18n);
+  return {
+    text: isRate(key) ? formatRate(i18n.f, value) : formatQwk(i18n.f, value),
+    state: 'value',
+    value,
+  };
+}
+
+function proportionCell(
+  i18n: EvaluationI18n,
+  p: ProportionEstimate | null,
+  withheld: boolean,
+): FigureCell {
+  if (withheld) return withheldCell(i18n);
+  if (!p) return notEstimableCell(i18n);
+  const { t, f } = i18n;
+  const bounds = { lower: formatRate(f, p.lower), upper: formatRate(f, p.upper) };
+  const text = formatRate(f, p.estimate);
+  return {
+    text,
+    interval: t('subgroup.intervalShort', bounds),
+    spoken: `${text}, ${t('subgroup.intervalSpoken', bounds)}`,
     state: 'value',
     value: p.estimate,
   };
 }
 
 /** One figure of one published group. */
-export function groupFigure(m: SubgroupMetrics, key: SubgroupMetricKey): FigureCell {
+export function groupFigure(
+  i18n: EvaluationI18n,
+  m: SubgroupMetrics,
+  key: SubgroupMetricKey,
+): FigureCell {
   switch (m.kind) {
     case 'CLASSIFICATION':
       return numberCell(
+        i18n,
         key,
         key === 'macroF1' || key === 'accuracy' || key === 'balancedAccuracy' ? m[key] : null,
       );
     case 'GRADING':
       if (key === 'referableSensitivity' || key === 'referableSpecificity') {
-        return m.ratesWithheld
-          ? {
-              text: T.suppression.rateWithheld,
-              spoken: T.suppression.rateWithheldSpoken,
-              state: 'withheld',
-              value: null,
-            }
-          : numberCell(key, m[key]);
+        return m.ratesWithheld ? withheldCell(i18n) : numberCell(i18n, key, m[key]);
       }
-      return numberCell(key, key === 'qwk' || key === 'accuracy' ? m[key] : null);
+      return numberCell(i18n, key, key === 'qwk' || key === 'accuracy' ? m[key] : null);
     case 'BINARY_DIAGNOSTIC':
-      if (key === 'accuracy') return proportionCell(m.accuracy, false);
+      if (key === 'accuracy') return proportionCell(i18n, m.accuracy, false);
       if (key === 'sensitivity' || key === 'specificity')
-        return proportionCell(m[key], m.ratesWithheld);
+        return proportionCell(i18n, m[key], m.ratesWithheld);
       if (key === 'balancedAccuracy') {
-        return m.ratesWithheld
-          ? {
-              text: T.suppression.rateWithheld,
-              spoken: T.suppression.rateWithheldSpoken,
-              state: 'withheld',
-              value: null,
-            }
-          : numberCell(key, m.balancedAccuracy);
+        return m.ratesWithheld ? withheldCell(i18n) : numberCell(i18n, key, m.balancedAccuracy);
       }
-      return numberCell(key, null);
+      return numberCell(i18n, key, null);
   }
 }
 
 /** One figure of the whole-set result, for the first row of every table. */
-export function overallFigure(scores: TaskKindScores, key: SubgroupMetricKey): FigureCell {
+export function overallFigure(
+  i18n: EvaluationI18n,
+  scores: TaskKindScores,
+  key: SubgroupMetricKey,
+): FigureCell {
   switch (scores.kind) {
     case 'CLASSIFICATION': {
       const m = scores.metrics;
       return numberCell(
+        i18n,
         key,
         key === 'macroF1' || key === 'accuracy' || key === 'balancedAccuracy' ? m[key] : null,
       );
@@ -193,6 +209,7 @@ export function overallFigure(scores: TaskKindScores, key: SubgroupMetricKey): F
     case 'GRADING': {
       const m = scores.metrics;
       return numberCell(
+        i18n,
         key,
         key === 'qwk' ||
           key === 'accuracy' ||
@@ -205,41 +222,51 @@ export function overallFigure(scores: TaskKindScores, key: SubgroupMetricKey): F
     case 'BINARY_DIAGNOSTIC': {
       const m = scores.metrics;
       if (key === 'sensitivity' || key === 'specificity' || key === 'accuracy')
-        return proportionCell(m[key], false);
-      if (key === 'balancedAccuracy') return numberCell(key, m.balancedAccuracy);
-      return numberCell(key, null);
+        return proportionCell(i18n, m[key], false);
+      if (key === 'balancedAccuracy') return numberCell(i18n, key, m.balancedAccuracy);
+      return numberCell(i18n, key, null);
     }
   }
 }
 
 /** Scored items of the whole set, where the scores say so. */
-function overallItems(scores: TaskKindScores): string | null {
+function overallItems({ f }: EvaluationI18n, scores: TaskKindScores): string | null {
   if (scores.kind === 'CLASSIFICATION') {
-    return COUNT.format(scores.metrics.perClass.reduce((n, c) => n + c.support, 0));
+    return f.number(scores.metrics.perClass.reduce((n, c) => n + c.support, 0));
   }
   if (scores.kind === 'BINARY_DIAGNOSTIC') {
     const m = scores.metrics;
-    return COUNT.format(m.truePositives + m.falsePositives + m.trueNegatives + m.falseNegatives);
+    return f.number(m.truePositives + m.falsePositives + m.trueNegatives + m.falseNegatives);
   }
   return null;
 }
 
-function groupItems(cell: Extract<SubgroupCell, { status: 'REPORTED' }>): string {
+function groupItems(
+  { t, f }: EvaluationI18n,
+  cell: Extract<SubgroupCell, { status: 'REPORTED' }>,
+): string {
   return cell.scoredCount === cell.itemCount
-    ? COUNT.format(cell.scoredCount)
-    : T.section.itemsOf(COUNT.format(cell.scoredCount), COUNT.format(cell.itemCount));
+    ? f.number(cell.scoredCount)
+    : t('subgroup.section.itemsOf', {
+        scored: f.number(cell.scoredCount),
+        total: f.number(cell.itemCount),
+      });
 }
 
 /** The table of one field: the whole-set row, then one row per declared group. */
-export function subgroupTable(field: SubgroupFieldResult, scores: TaskKindScores): SubgroupTable {
+export function subgroupTable(
+  i18n: EvaluationI18n,
+  field: SubgroupFieldResult,
+  scores: TaskKindScores,
+): SubgroupTable {
   const keys = SUBGROUP_COLUMNS[scores.kind];
   const rows: SubgroupRow[] = [
     {
       key: '__overall',
-      label: T.section.overallRow,
+      label: i18n.t('subgroup.section.overallRow'),
       kind: 'overall',
-      cells: keys.map((k) => overallFigure(scores, k)),
-      items: overallItems(scores),
+      cells: keys.map((k) => overallFigure(i18n, scores, k)),
+      items: overallItems(i18n, scores),
     },
     ...field.cells.map(
       (cell): SubgroupRow =>
@@ -249,22 +276,26 @@ export function subgroupTable(field: SubgroupFieldResult, scores: TaskKindScores
               key: cell.value,
               label: cell.label,
               kind: 'group',
-              cells: keys.map((k) => groupFigure(cell.metrics, k)),
-              items: groupItems(cell),
+              cells: keys.map((k) => groupFigure(i18n, cell.metrics, k)),
+              items: groupItems(i18n, cell),
             },
     ),
   ];
   return {
     key: field.key,
     label: field.label,
-    columns: keys.map((k) => ({ key: k, label: LABEL[k] })),
+    columns: keys.map((k) => ({ key: k, label: metricLabel(i18n, k) })),
     rows,
   };
 }
 
 /** Every field's table, in the declared order. */
-export function subgroupTables(results: SubgroupResults, scores: TaskKindScores): SubgroupTable[] {
-  return results.fields.map((f) => subgroupTable(f, scores));
+export function subgroupTables(
+  i18n: EvaluationI18n,
+  results: SubgroupResults,
+  scores: TaskKindScores,
+): SubgroupTable[] {
+  return results.fields.map((field) => subgroupTable(i18n, field, scores));
 }
 
 // ---- Comparison of two results -------------------------------------------
@@ -287,22 +318,21 @@ export interface CompareTable {
   rows: CompareRow[];
 }
 
-const SIGNED_POINTS = new Intl.NumberFormat('en-GB', {
-  maximumFractionDigits: 1,
-  signDisplay: 'exceptZero',
-});
-const SIGNED_QWK = new Intl.NumberFormat('en-GB', {
-  minimumFractionDigits: 3,
-  maximumFractionDigits: 3,
-  signDisplay: 'exceptZero',
-});
-
-function formatDifference(key: SubgroupMetricKey, d: number): string {
+function formatDifference({ t, f }: EvaluationI18n, key: SubgroupMetricKey, d: number): string {
   // A rate's difference in percentage points; QWK's on its own scale.
-  return isRate(key) ? T.compare.points(SIGNED_POINTS.format(d * 100)) : SIGNED_QWK.format(d);
+  return isRate(key)
+    ? t('subgroup.compare.points', {
+        value: f.number(d * 100, { maximumFractionDigits: 1, signDisplay: 'exceptZero' }),
+      })
+    : f.number(d, {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+        signDisplay: 'exceptZero',
+      });
 }
 
 function compareRow(
+  i18n: EvaluationI18n,
   key: string,
   label: string,
   kind: CompareRow['kind'],
@@ -317,7 +347,7 @@ function compareRow(
     kind,
     a,
     b,
-    difference: d === null ? null : formatDifference(metric, d),
+    difference: d === null ? null : formatDifference(i18n, metric, d),
     differenceValue: d,
   };
 }
@@ -328,6 +358,7 @@ function compareRow(
  * never shows half of a withheld pair.
  */
 export function compareTables(
+  i18n: EvaluationI18n,
   metric: SubgroupMetricKey,
   a: { scores: TaskKindScores; subgroups: SubgroupResults },
   b: { scores: TaskKindScores; subgroups: SubgroupResults },
@@ -336,27 +367,29 @@ export function compareTables(
     const fb = b.subgroups.fields.find((f) => f.key === fa.key);
     const rows: CompareRow[] = [
       compareRow(
+        i18n,
         '__overall',
-        T.section.overallRow,
+        i18n.t('subgroup.section.overallRow'),
         'overall',
         metric,
-        overallFigure(a.scores, metric),
-        overallFigure(b.scores, metric),
+        overallFigure(i18n, a.scores, metric),
+        overallFigure(i18n, b.scores, metric),
       ),
     ];
     for (const ca of fa.cells) {
       const cb = fb?.cells.find((c) => c.value === ca.value);
       if (ca.status !== 'REPORTED' || cb?.status !== 'REPORTED') {
-        rows.push(compareRow(ca.value, ca.label, 'suppressed', metric, null, null));
+        rows.push(compareRow(i18n, ca.value, ca.label, 'suppressed', metric, null, null));
       } else {
         rows.push(
           compareRow(
+            i18n,
             ca.value,
             ca.label,
             'group',
             metric,
-            groupFigure(ca.metrics, metric),
-            groupFigure(cb.metrics, metric),
+            groupFigure(i18n, ca.metrics, metric),
+            groupFigure(i18n, cb.metrics, metric),
           ),
         );
       }

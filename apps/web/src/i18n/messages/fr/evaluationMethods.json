@@ -1,0 +1,175 @@
+{
+  "mode": {
+    "long": {
+      "PREDICTIONS": "Fichier de prédictions noté sur la plateforme",
+      "CONTAINER": "Conteneur scellé exécuté à côté des données",
+      "ENCRYPTED": "Calcul sur des valeurs chiffrées"
+    },
+    "short": {
+      "PREDICTIONS": "Fichier de prédictions",
+      "CONTAINER": "Conteneur scellé",
+      "ENCRYPTED": "Calcul chiffré"
+    }
+  },
+  "party": {
+    "label": {
+      "DATA_HOST": "hôte des données",
+      "MODEL_DEVELOPER": "développeur du modèle",
+      "PLATFORM_OPERATOR": "opérateur de la plateforme",
+      "ROUTE_PROVIDER": "fournisseur de la méthode"
+    },
+    "description": {
+      "DATA_HOST": "l’institution qui détient le jeu de données et ses étiquettes de référence",
+      "MODEL_DEVELOPER": "le participant dont le modèle est évalué",
+      "PLATFORM_OPERATOR": "l’équipe qui exploite l’Open Code Infrastructure",
+      "ROUTE_PROVIDER": "la partie qui a conçu la méthode d’évaluation et qui l’exploite"
+    }
+  },
+  "trustAnchor": {
+    "CONTRACTUAL": "un contrat",
+    "HARDWARE_ATTESTATION": "l’attestation matérielle",
+    "CRYPTOGRAPHIC": "une hypothèse cryptographique"
+  },
+  "provider": {
+    "reference": "Implémentation de référence",
+    "unnamed": "Fournisseur non précisé"
+  },
+  "unit": {
+    "mib": "{n} Mio",
+    "gib": "{n} Gio"
+  },
+  "list": {
+    "metaTitle": "Méthodes d’évaluation — OCI Platform",
+    "metaDescription": "Les méthodes d’évaluation enregistrées sur la plateforme OCI. Chaque résultat indique la méthode et la version qui l’ont produit ; une version de méthode fait l’objet d’une revue avant que ses résultats ne soient publiés.",
+    "back": "Évaluation",
+    "title": "Méthodes d’évaluation",
+    "methodWord": "{count, plural, one {méthode} other {méthodes}}",
+    "lead": "Chaque résultat de la plateforme indique la méthode d’évaluation et la version qui l’ont produit, et une version de méthode fait l’objet d’une revue avant que ses résultats ne soient publiés. Chaque méthode déclare contre quoi elle protège, qui peut observer quoi, et les limites dans lesquelles une soumission doit s’exécuter. La spécification de conformité appelle ces méthodes des <em>routes</em> ; les deux mots désignent ici la même chose.",
+    "review": {
+      "heading": "File de revue",
+      "body": "{count, plural, =0 {Aucune version de méthode n’attend de revue.} one {1 version de méthode attend une revue.} other {{n} versions de méthode attendent une revue.}}",
+      "link": "Ouvrir la file de revue"
+    },
+    "provider": "Fournisseur",
+    "latestVersion": "Dernière version",
+    "noVersion": "Aucune version déclarée pour l’instant",
+    "versionCount": "{count, plural, one {{n} version} other {{n} versions}}",
+    "emptyTitle": "Aucune méthode d’évaluation enregistrée pour l’instant.",
+    "emptyBody": "Une méthode d’évaluation est enregistrée avec un modèle de menace, un profil de divulgation et une enveloppe opérationnelle, puis fait l’objet d’une revue. Dès que la première sera enregistrée, elle apparaîtra ici."
+  },
+  "detail": {
+    "metaTitle": "{slug} — Méthodes d’évaluation OCI",
+    "metaDescription": "Modèle de menace, profil de divulgation et enveloppe opérationnelle déclarés par la méthode d’évaluation {slug}, avec le statut de revue de chaque version.",
+    "back": "Méthodes d’évaluation",
+    "lead": "{mode}. Chaque résultat de l’Open Code Infrastructure (OCI) indique la méthode d’évaluation et la version qui l’ont produit, et une version de méthode fait l’objet d’une revue avant que ses résultats ne soient publiés. Les déclarations ci-dessous sont ce que cette revue examine.",
+    "about": {
+      "title": "À propos de cette méthode",
+      "description": "Qui la fournit, comment une soumission s’exécute, et qui sont les quatre parties nommées dans les déclarations.",
+      "slug": "Slug",
+      "howItRuns": "Fonctionnement",
+      "provider": "Fournisseur",
+      "versions": "Versions",
+      "versionsNote": "{count, plural, =1 {— présentée ci-dessous.} other {— ci-dessous, la plus récente en premier.}}",
+      "registered": "Enregistrée le",
+      "parties": "Parties"
+    },
+    "frozen": {
+      "title": "Les déclarations sont figées dès l’ouverture de la revue",
+      "body": "Le modèle de menace, le profil de divulgation et l’enveloppe opérationnelle d’une version ne peuvent plus changer une fois sa revue ouverte : la décision porte donc exactement sur ce qui a été revu. Toute modification nécessite une nouvelle version. Seule une version approuvée produit des résultats publiés ; les résultats d’une version encore en cours de revue sont provisoires, et ceux d’une version rejetée ou retirée sont retirés avec elle."
+    },
+    "noVersions": "Aucune version de cette méthode n’a encore été déclarée : elle n’a donc produit aucun résultat.",
+    "footerCount": "{count, plural, =1 {{n} version déclarée} other {{n} versions déclarées}}.",
+    "backToList": "Retour aux méthodes d’évaluation",
+    "version": {
+      "heading": "Version <mono>{version}</mono>",
+      "declaredReviewed": "Déclarée le <declared>{declaredOn}</declared> ; revue le <reviewed>{reviewedOn}</reviewed>.",
+      "declaredNotReviewed": "Déclarée le <declared>{declaredOn}</declared> ; pas encore revue."
+    },
+    "threat": {
+      "title": "Modèle de menace",
+      "description": "Qui pourrait chercher à apprendre ce qu’il ne devrait pas, ce que cette méthode fait face à chacun, ce qu’elle tient pour acquis, et ce qu’elle ne garantit pas.",
+      "adversaries": "Adversaires",
+      "adversariesRegion": "Adversaires pris en compte par cette version",
+      "party": "Partie",
+      "capability": "Capacité",
+      "defended": "Protégé",
+      "yes": "oui",
+      "no": "non",
+      "noNote": "Une partie marquée <em>non</em> est nommée pour que personne ne la prenne pour une garantie : cette méthode ne protège pas contre elle.",
+      "assumptions": "Hypothèses",
+      "assumptionsHint": "Ce qui doit être vrai pour que les protections ci-dessus fonctionnent. Si une hypothèse tombe, la garantie qui en dépend tombe aussi.",
+      "outOfScope": "Hors périmètre",
+      "outOfScopeBody": "Un modèle de menace sans rien hors périmètre est refusé dès l’enregistrement : nommer les limites, c’est tout l’intérêt."
+    },
+    "disclosure": {
+      "title": "Profil de divulgation",
+      "description": "Qui peut voir quoi pendant une évaluation, sur quoi repose finalement cette garantie, et si un résultat peut être reproduit.",
+      "trustAnchor": "Ancre de confiance",
+      "restsOn": "Les garanties reposent sur <strong>{anchor}</strong>",
+      "anchorNote": {
+        "CONTRACTUAL": "— un accord d’exploitation entre les parties, et non un mécanisme technique.",
+        "HARDWARE_ATTESTATION": "— le processeur prouve quel code il exécute avant que la moindre donnée ne lui soit transmise.",
+        "CRYPTOGRAPHIC": "— contourner la garantie reviendrait à résoudre un problème réputé impossible à résoudre en pratique par le calcul."
+      },
+      "keyGovernance": "Gouvernance des clés",
+      "reproducible": "Reproductible",
+      "yes": "Oui.",
+      "no": "Non.",
+      "notGuaranteed": "Relancer la même soumission ne donne pas nécessairement le même résultat.",
+      "observes": "Qui observe quoi",
+      "observesHint": "Tout ce que chaque partie peut voir pendant une évaluation, y compris ce qu’elle détient déjà."
+    },
+    "envelope": {
+      "title": "Enveloppe opérationnelle",
+      "description": "Les limites dans lesquelles une soumission doit être conçue pour s’exécuter. Les plafonds de durée d’exécution et de mémoire sont imposés par le bac à sable, pas seulement documentés. La mémoire est exprimée en mébioctets (Mio) et en gibioctets (Gio).",
+      "permittedOperations": "Opérations autorisées",
+      "arithmeticPrecision": "Précision arithmétique",
+      "maxRuntime": "Durée d’exécution maximale",
+      "seconds": "({n} secondes)",
+      "maxMemory": "Mémoire maximale",
+      "mib": "({n} Mio)",
+      "modelConstraints": "Contraintes sur le modèle",
+      "noneDeclared": "Aucune déclarée.",
+      "fidelityGap": "Écart de fidélité",
+      "gapMetric": "{metric} :",
+      "measuredOn": "mesuré sur {on}. L’écart entre un score produit par cette méthode et celui du même modèle noté en clair.",
+      "notMeasured": "Pas encore mesuré.",
+      "notMeasuredBody": "L’écart de fidélité est la différence entre un score produit par cette méthode et celui du même modèle noté en clair ; il est indiqué une fois mesuré."
+    }
+  },
+  "declareLink": {
+    "heading": "Déclarer une nouvelle version",
+    "body": "Vous êtes l’auteur de cette méthode. Toute modification de son modèle de menace, de son profil de divulgation ou de son enveloppe opérationnelle est déclarée comme une nouvelle version, qui fait ensuite l’objet d’une revue.",
+    "bodyAdmin": "En tant qu’opérateur, vous pouvez déclarer une version de cette méthode. Toute modification de ses déclarations constitue une nouvelle version, qui fait ensuite l’objet d’une revue.",
+    "link": "Déclarer une nouvelle version"
+  },
+  "queue": {
+    "metaTitle": "Revues — Méthodes d’évaluation OCI",
+    "metaDescription": "Versions de méthodes d’évaluation en attente d’une décision de revue.",
+    "back": "Méthodes d’évaluation",
+    "eyebrow": "Relecteur des méthodes d’évaluation",
+    "title": "Versions en attente de revue",
+    "lead": "Un résultat ne compte qu’une fois approuvée la version de la méthode qui l’a produit. Ces versions attendent une décision. La revue se fait à deux : une version que vous avez soumise figure dans la liste, mais c’est un autre relecteur qui en décide.",
+    "signedOutTitle": "Connectez-vous pour voir la file de revue",
+    "signedOut": "La file de revue est réservée aux relecteurs des méthodes d’évaluation.",
+    "signIn": "Se connecter",
+    "notReviewerTitle": "Réservé aux relecteurs des méthodes d’évaluation",
+    "notReviewer": "La file de revue est ouverte aux relecteurs des méthodes d’évaluation et aux opérateurs de la plateforme. Chaque méthode et son statut de revue restent publics sur la page des méthodes d’évaluation.",
+    "unavailable": "Les méthodes d’évaluation n’ont pas pu être lues pour le moment. Rechargez la page pour réessayer.",
+    "underReviewHeading": "En cours de revue : en attente d’une décision",
+    "underReviewHint": "Les déclarations sont figées. Approuvez ou rejetez, avec une justification publiée.",
+    "declaredHeading": "Déclarées : revue pas encore ouverte",
+    "declaredHint": "Ouvrir la revue fige les déclarations.",
+    "empty": "Rien en attente ici.",
+    "allEmpty": "Aucune version n’attend de revue.",
+    "declaredOn": "Déclarée le",
+    "open": "Relire la version {version}",
+    "openFor": "Relire la version {version} de {method}",
+    "view": "Voir la version {version}",
+    "viewFor": "Voir la version {version} de {method}",
+    "yoursSubmitted": "Vous avez soumis cette méthode : c’est un autre relecteur qui en décide.",
+    "yoursDeclared": "Vous avez déclaré cette version : c’est un autre relecteur qui en décide.",
+    "permissionsUnknown": "Ouvrez la version pour voir ce que vous pouvez y faire.",
+    "count": "{count, plural, one {{n} version en attente} other {{n} versions en attente}}"
+  }
+}

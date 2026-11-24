@@ -1,11 +1,11 @@
 'use client';
 
 import { useActionState, useEffect, useId, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { reviewNeedsRationale, type RouteReviewStatus } from '@oci/shared-types';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Textarea } from '@oci/ui';
 import { recordReviewAction, type ReviewState } from './review-actions';
-import { decisionChoices, RATIONALE_MAX } from './review-outcome';
-import { decisionText, REVIEW_TEXT } from './strings';
+import { decisionChoices, decisionText, RATIONALE_MAX } from './review-outcome';
 
 const initial: ReviewState = { status: 'idle' };
 
@@ -34,8 +34,10 @@ interface Props {
  */
 export function ReviewForm(props: Props) {
   const { slug, methodName, version, versionId, reviewStatus, allowed, mode } = props;
+  const t = useTranslations('EvaluationReview');
+  const tCommon = useTranslations('Common');
   const [state, action, pending] = useActionState(recordReviewAction, initial);
-  const choices = decisionChoices(reviewStatus, allowed);
+  const choices = decisionChoices(reviewStatus, allowed, t);
   const echoed = state.status === 'confirm' ? undefined : state.values;
 
   const [decision, setDecision] = useState<string>(
@@ -80,7 +82,7 @@ export function ReviewForm(props: Props) {
   // Nothing is open to this caller and nothing to report: no form.
   if (choices.length === 0 && state.status !== 'error') return null;
 
-  const heading = mode === 'withdraw' ? REVIEW_TEXT.withdrawHeading : REVIEW_TEXT.reviewHeading;
+  const heading = mode === 'withdraw' ? t('withdrawHeading') : t('reviewHeading');
   const hidden = (
     <>
       <input type="hidden" name="slug" value={slug} />
@@ -91,10 +93,9 @@ export function ReviewForm(props: Props) {
   );
 
   if (state.status === 'confirm') {
-    const text = decisionText(state.to);
+    const text = decisionText(state.to, t, { version, method: methodName });
     const choice = choices.find((c) => c.to === state.to);
     const destructive = state.to === 'REJECTED' || state.to === 'WITHDRAWN';
-    const confirmHeading = REVIEW_TEXT.confirmHeading(text.confirm, version, methodName);
     return (
       <section
         id={`review-${versionId}`}
@@ -115,21 +116,21 @@ export function ReviewForm(props: Props) {
               tabIndex={-1}
               className="text-xl font-semibold tracking-tight focus:outline-none"
             >
-              {confirmHeading}
+              {text.confirmHeading}
             </h3>
-            <p className="text-sm">{REVIEW_TEXT.confirmLead}</p>
+            <p className="text-sm">{t('confirmLead')}</p>
           </div>
           <ul className="list-disc space-y-1 pl-5 text-sm">
             <li>{choice?.consequence ?? text.consequence}</li>
             <li>{text.finality}</li>
-            {props.replacesRationale ? <li>{REVIEW_TEXT.replacesPrevious}</li> : null}
+            {props.replacesRationale ? <li>{t('replacesPrevious')}</li> : null}
           </ul>
           <figure className="space-y-1">
             <figcaption className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
-              {REVIEW_TEXT.publishedAs}
+              {t('publishedAs')}
             </figcaption>
             <blockquote className="whitespace-pre-wrap break-words rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-4 text-sm">
-              {state.rationale.length > 0 ? state.rationale : REVIEW_TEXT.noNote}
+              {state.rationale.length > 0 ? state.rationale : t('noNote')}
             </blockquote>
           </figure>
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center">
@@ -141,7 +142,7 @@ export function ReviewForm(props: Props) {
               disabled={pending}
               className="h-11 sm:h-10"
             >
-              {REVIEW_TEXT.backToEdit}
+              {t('backToEdit')}
             </Button>
             <Button
               type="submit"
@@ -151,7 +152,7 @@ export function ReviewForm(props: Props) {
               disabled={pending}
               className="h-11 sm:h-10"
             >
-              {pending ? REVIEW_TEXT.recording : `${text.confirm} ${version}`}
+              {pending ? t('recording') : text.confirmButton}
             </Button>
           </div>
         </form>
@@ -181,13 +182,13 @@ export function ReviewForm(props: Props) {
         {heading}
       </h3>
       <p className="mt-2 max-w-prose text-sm text-[var(--color-muted-foreground)]">
-        {mode === 'withdraw' ? REVIEW_TEXT.withdrawIntro : REVIEW_TEXT.reviewIntro}
+        {mode === 'withdraw' ? t('withdrawIntro') : t('reviewIntro')}
       </p>
 
       {error?.message ? (
         <div ref={alertRef} tabIndex={-1} className="mt-4 focus:outline-none">
           <Alert tone="danger">
-            <AlertTitle as="h4">{REVIEW_TEXT.notRecorded}</AlertTitle>
+            <AlertTitle as="h4">{t('notRecorded')}</AlertTitle>
             <AlertDescription>{error.message}</AlertDescription>
           </Alert>
         </div>
@@ -196,8 +197,8 @@ export function ReviewForm(props: Props) {
       {choices.length === 0 ? (
         // The version moved on while the reviewer wrote: keep the text.
         <div className="mt-4 space-y-2">
-          <p className="text-sm">{REVIEW_TEXT.noLongerOpen}</p>
-          <Textarea aria-label={REVIEW_TEXT.rationaleLabel} readOnly rows={4} value={rationale} />
+          <p className="text-sm">{t('noLongerOpen')}</p>
+          <Textarea aria-label={t('rationaleLabel')} readOnly rows={4} value={rationale} />
         </div>
       ) : (
         <form key={answer} action={action} className="mt-5 space-y-5">
@@ -208,7 +209,7 @@ export function ReviewForm(props: Props) {
             aria-describedby={error?.decisionError ? decisionErrorId : undefined}
           >
             <legend className="text-sm font-medium">
-              {REVIEW_TEXT.decisionLegend}
+              {t('decisionLegend')}
               <span aria-hidden="true" className="ms-0.5 text-[var(--color-danger)]">
                 *
               </span>
@@ -241,13 +242,14 @@ export function ReviewForm(props: Props) {
           </fieldset>
 
           <Field
-            label={optionalNote ? REVIEW_TEXT.noteLabel : REVIEW_TEXT.rationaleLabel}
+            label={optionalNote ? t('noteLabel') : t('rationaleLabel')}
             htmlFor={rationaleId}
             required={!optionalNote}
+            requiredLabel={tCommon('required')}
             hint={
               <>
-                {optionalNote ? REVIEW_TEXT.noteHint : REVIEW_TEXT.rationaleHint}
-                {props.replacesRationale ? ` ${REVIEW_TEXT.replacesPrevious}` : null}
+                {optionalNote ? t('noteHint') : t('rationaleHint')}
+                {props.replacesRationale ? ` ${t('replacesPrevious')}` : null}
               </>
             }
             error={error?.rationaleError}
@@ -273,7 +275,7 @@ export function ReviewForm(props: Props) {
               disabled={pending}
               className="h-11 w-full sm:h-10 sm:w-auto"
             >
-              {REVIEW_TEXT.continue}
+              {t('continue')}
             </Button>
           </div>
         </form>

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -17,11 +18,14 @@ import { auth } from '../../../../auth';
 import { apiFetch } from '../../../../lib/api';
 import { RequestAccessForm } from './request-access-form';
 
-export const metadata = {
-  title: 'Request access — OCI Catalog',
-  // Auth-gated form, no value to crawlers.
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata() {
+  const t = await getTranslations('AccessRequest');
+  return {
+    title: t('page.metaTitle'),
+    // Auth-gated form, no value to crawlers.
+    robots: { index: false, follow: false },
+  };
+}
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -29,7 +33,7 @@ interface PageProps {
 
 export default async function RequestAccessPage({ params }: PageProps) {
   const { slug } = await params;
-  const session = await auth();
+  const [session, t] = await Promise.all([auth(), getTranslations('AccessRequest')]);
 
   // Anonymous → bounce to /signin with a callback back here so the
   // user lands on the form straight after authentication.
@@ -45,7 +49,7 @@ export default async function RequestAccessPage({ params }: PageProps) {
       revalidate: 0,
     });
   } catch (err) {
-    error = err instanceof Error ? err.message : 'Unable to reach catalog API';
+    error = err instanceof Error ? err.message : t('page.unavailableFallback');
   }
 
   if (error) {
@@ -53,7 +57,7 @@ export default async function RequestAccessPage({ params }: PageProps) {
       <Container size="md">
         <Section spacing="md">
           <Alert tone="danger">
-            <AlertTitle>Catalog unavailable</AlertTitle>
+            <AlertTitle>{t('page.unavailableTitle')}</AlertTitle>
             <AlertDescription>
               <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
             </AlertDescription>
@@ -76,33 +80,31 @@ export default async function RequestAccessPage({ params }: PageProps) {
             <span>{detail.name}</span>
           </Link>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Restricted dataset
+            {t('page.eyebrow')}
           </p>
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Request access</h1>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">{t('page.title')}</h1>
           <p className="max-w-prose text-[var(--color-muted-foreground)]">
-            The host will review your justification and attestations. You&apos;ll see the decision
-            on{' '}
-            <Link
-              href="/dashboard/access-requests"
-              className="font-medium text-[var(--color-primary)] underline underline-offset-2"
-            >
-              your dashboard
-            </Link>
-            .
+            {t.rich('page.lead', {
+              link: (chunks) => (
+                <Link
+                  href="/dashboard/access-requests"
+                  className="font-medium text-[var(--color-primary)] underline underline-offset-2"
+                >
+                  {chunks}
+                </Link>
+              ),
+            })}
           </p>
         </header>
 
         <Alert tone="info" className="mb-6">
-          <AlertTitle>Your request is auditable</AlertTitle>
-          <AlertDescription>
-            Justification + attestations are stored as part of the dataset&apos;s consent + DPIA
-            record. Be specific — the host audits these later.
-          </AlertDescription>
+          <AlertTitle>{t('page.auditableTitle')}</AlertTitle>
+          <AlertDescription>{t('page.auditableBody')}</AlertDescription>
         </Alert>
 
         <Card>
           <CardHeader>
-            <CardTitle>Request details</CardTitle>
+            <CardTitle>{t('page.detailsTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
             <RequestAccessForm slug={detail.slug} datasetDuoTerms={detail.duoTerms ?? []} />

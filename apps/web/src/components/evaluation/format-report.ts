@@ -3,11 +3,12 @@ import type {
   PredictionRow,
   SubmissionValidationReport,
 } from '@oci/shared-types';
-import { BINARY_DIAGNOSTIC_TEXT as BD } from './binary-diagnostic-text';
+import type { EvaluationI18n } from './i18n';
 
 /**
  * Turns the API's validation report into what the submit page prints under
- * the file field (#645). Pure, so the wording is unit-tested without a browser.
+ * the file field (#645), in the interface language (#654). Pure, so the
+ * wording is unit-tested without a browser.
  *
  * The API's own `detail` strings are written for someone calling the endpoint
  * (they mention `index.json` and the scored path). The reader here filled in a
@@ -57,8 +58,11 @@ export function buildFormatReport(args: {
   report: SubmissionValidationReport;
   predictions: readonly PredictionRow[];
   task: { itemIds: readonly string[]; numClasses: number; taskKind: EvaluationTaskKindDb };
+  /** The interface language's words and formats (#654). */
+  i18n: EvaluationI18n;
 }): FormatReportView {
-  const { report, predictions, task } = args;
+  const { report, predictions, task, i18n } = args;
+  const { t, f } = i18n;
 
   const submitted = new Set(predictions.map((p) => p.imageId));
   const missing = task.itemIds.filter((id) => !submitted.has(id));
@@ -73,27 +77,27 @@ export function buildFormatReport(args: {
       case 'DUPLICATE_ITEM_IDS':
         problems.push({
           key: 'duplicates',
-          title: 'Identifiers that appear more than once',
-          detail: 'Each item takes one line. Keep one line for each of these and delete the rest.',
+          title: t('formatReport.duplicates.title'),
+          detail: t('formatReport.duplicates.detail'),
           ...ids,
         });
         break;
       case 'ITEM_IDS_RECOGNISED':
         problems.push({
           key: 'unknown',
-          title: 'Identifiers this task does not have',
+          title: t('formatReport.unknown.title'),
           detail:
             recognised === 0
-              ? 'None of the identifiers in the file belong to this task. The file may be for another task, or the identifiers were changed. Start again from the template.'
-              : 'Check these for a typing mistake, or delete their lines. The template lists every identifier the task has.',
+              ? t('formatReport.unknown.detailNone')
+              : t('formatReport.unknown.detailSome'),
           ...ids,
         });
         break;
       case 'LABEL_RANGE':
         problems.push({
           key: 'labels',
-          title: 'Labels outside the range of this task',
-          detail: `A label is a whole number from 0 to ${topLabel}. These items have a different value.`,
+          title: t('formatReport.labels.title'),
+          detail: t('formatReport.labels.detail', { top: f.number(topLabel) }),
           ...ids,
         });
         break;
@@ -106,15 +110,20 @@ export function buildFormatReport(args: {
           task.taskKind !== 'BINARY_DIAGNOSTIC' && predictions.some((p) => p.score !== undefined)
             ? {
                 key: 'scores',
-                title: BD.formatCheck.scoresRefusedTitle,
-                detail: BD.formatCheck.scoresRefusedDetail,
+                title: t('formatReport.scores.title'),
+                detail: t('formatReport.scores.detail'),
                 ...ids,
               }
-            : { key: 'other', title: 'Check failed', detail: check.detail, ...ids },
+            : { key: 'other', title: t('formatReport.checkFailed'), detail: check.detail, ...ids },
         );
         break;
       default:
-        problems.push({ key: 'other', title: 'Check failed', detail: check.detail, ...ids });
+        problems.push({
+          key: 'other',
+          title: t('formatReport.checkFailed'),
+          detail: check.detail,
+          ...ids,
+        });
     }
   }
 
@@ -129,7 +138,7 @@ export function buildFormatReport(args: {
     problems,
     missing: { itemIds: missing.slice(0, MAX_LISTED_ITEM_IDS), count: missing.length },
     scoreNote:
-      task.taskKind === 'BINARY_DIAGNOSTIC' ? scoreNoteFor(predictions, task.itemIds) : null,
+      task.taskKind === 'BINARY_DIAGNOSTIC' ? scoreNoteFor(i18n, predictions, task.itemIds) : null,
   };
 }
 
@@ -140,6 +149,7 @@ export function buildFormatReport(args: {
  * belongs to the task: there is nothing to say about scores until there is.
  */
 function scoreNoteFor(
+  { t, f }: EvaluationI18n,
   predictions: readonly PredictionRow[],
   itemIds: readonly string[],
 ): string | null {
@@ -147,7 +157,7 @@ function scoreNoteFor(
   const matched = predictions.filter((p) => taskIds.has(p.imageId));
   if (matched.length === 0) return null;
   const unscored = matched.filter((p) => p.score === undefined).length;
-  if (unscored === 0) return BD.formatCheck.allScored;
-  if (unscored === matched.length) return BD.formatCheck.noneScored;
-  return BD.formatCheck.someUnscored(unscored.toLocaleString('en-GB'));
+  if (unscored === 0) return t('formatReport.allScored');
+  if (unscored === matched.length) return t('formatReport.noneScored');
+  return t('formatReport.someUnscored', { count: unscored, n: f.number(unscored) });
 }

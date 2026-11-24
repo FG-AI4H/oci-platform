@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect, unstable_rethrow } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   RouteReviewStatusSchema,
   type EvaluationRouteResponse,
@@ -10,7 +11,6 @@ import {
 import { fetchAsUser } from '../../../../lib/api-action';
 import { sessionForAction } from '../../../../lib/session-recovery';
 import { describeRefusal, problemDetail, readReviewForm, type RefusalKind } from './review-outcome';
-import { REVIEW_TEXT } from './strings';
 
 export type ReviewState =
   | { status: 'idle'; values?: { decision: string; rationale: string } }
@@ -49,16 +49,17 @@ export async function recordReviewAction(
   };
   const intent = String(formData.get('intent') ?? 'preview');
   if (intent === 'edit') return { status: 'idle', values };
+  const t = await getTranslations('EvaluationReview');
 
   const slug = String(formData.get('slug') ?? '');
   const version = String(formData.get('version') ?? '');
   const versionId = String(formData.get('versionId') ?? '');
   const expected = RouteReviewStatusSchema.safeParse(formData.get('expectedStatus'));
   if (!SLUG.test(slug) || !VERSION.test(version) || !UUID.test(versionId) || !expected.success) {
-    return { status: 'error', kind: 'gone', message: REVIEW_TEXT.gone, values };
+    return { status: 'error', kind: 'gone', message: t('gone'), values };
   }
 
-  const read = readReviewForm(values);
+  const read = readReviewForm(values, t);
   if (!read.ok) {
     return {
       status: 'error',
@@ -74,7 +75,7 @@ export async function recordReviewAction(
   // reviewer to sign in and back to this page.
   await sessionForAction(`/evaluation/routes/${slug}`);
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!base) return { status: 'error', kind: 'failed', message: REVIEW_TEXT.unreachable, values };
+  if (!base) return { status: 'error', kind: 'failed', message: t('unreachable'), values };
   const routePath = `/v2/evaluation/routes/${encodeURIComponent(slug)}`;
 
   let res: Response;
@@ -95,26 +96,29 @@ export async function recordReviewAction(
     );
   } catch (err) {
     unstable_rethrow(err);
-    return { status: 'error', kind: 'failed', message: REVIEW_TEXT.unreachable, values };
+    return { status: 'error', kind: 'failed', message: t('unreachable'), values };
   }
 
   if (!res.ok) {
     const detail = problemDetail(await res.text().catch(() => ''));
     const current = await currentStatus(`${base}${routePath}`, version);
-    const refusal = describeRefusal({
-      httpStatus: res.status,
-      detail,
-      version,
-      expected: expected.data,
-      current,
-    });
+    const refusal = describeRefusal(
+      {
+        httpStatus: res.status,
+        detail,
+        version,
+        expected: expected.data,
+        current,
+      },
+      t,
+    );
     // The page behind the form shows the version as it is now.
     revalidatePath(`/evaluation/routes/${slug}`);
     return {
       status: 'error',
       kind: refusal.kind,
       message: refusal.message,
-      rationaleError: refusal.kind === 'rationale' ? REVIEW_TEXT.rationaleRequired : undefined,
+      rationaleError: refusal.kind === 'rationale' ? t('rationaleRequired') : undefined,
       values,
     };
   }

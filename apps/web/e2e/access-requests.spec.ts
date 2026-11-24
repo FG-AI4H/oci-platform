@@ -99,7 +99,8 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await expect(page).toHaveURL(new RegExp(`/catalog/${datasetSlug}/request-access$`));
 
     // Form sees the dataset's DUO terms inline above the fields.
-    await expect(page.getByText("This dataset's permitted uses")).toBeVisible();
+    // A typographic apostrophe since the text moved to message files (#654).
+    await expect(page.getByText('This dataset’s permitted uses')).toBeVisible();
 
     await page.getByLabel('Project title').fill(`Replication study ${stamp}`);
     await page

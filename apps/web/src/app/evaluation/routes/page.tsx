@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -16,6 +17,8 @@ import {
 } from '@oci/ui';
 import type { EvaluationRouteResponse } from '@oci/shared-types';
 import { auth } from '../../../auth';
+import type { Formatters } from '../../../i18n/format';
+import { getFormatters } from '../../../i18n/server';
 import { apiFetch } from '../../../lib/api';
 import { isEvaluationReviewer } from '../../../lib/groups';
 import { ReviewStatusBadge } from '../../../components/evaluation/review-status-badge';
@@ -26,7 +29,8 @@ import {
   latestVersion,
 } from '../../../components/evaluation/route-labels';
 import { awaitingReview } from './queue';
-import { LIST_REVIEW_TEXT } from './strings';
+
+type MethodsT = Awaited<ReturnType<typeof getTranslations<'EvaluationMethods'>>>;
 
 /**
  * Evaluation methods list (#487, WP5 / ADR-0018). Read-only, anonymous:
@@ -46,15 +50,22 @@ import { LIST_REVIEW_TEXT } from './strings';
  * An evaluation reviewer (or admin) also sees how many versions wait for a
  * decision and the way to the review queue (#649). Everyone else sees the
  * public page unchanged.
+ *
+ * Every word is in the interface language (#654); method and provider
+ * names are shown as registered.
  */
 
-export const metadata = {
-  title: 'Evaluation methods — OCI Platform',
-  description:
-    'The evaluation methods registered on the OCI Platform. Every result names the method and version that produced it; a method version is reviewed before its results are published.',
-};
+export async function generateMetadata() {
+  const t = await getTranslations('EvaluationMethods');
+  return { title: t('list.metaTitle'), description: t('list.metaDescription') };
+}
 
 export default async function EvaluationRoutesPage() {
+  const [t, tEvaluation, f] = await Promise.all([
+    getTranslations('EvaluationMethods'),
+    getTranslations('Evaluation'),
+    getFormatters(),
+  ]);
   let routes: EvaluationRouteResponse[] | null = null;
   let error: string | null = null;
   try {
@@ -62,7 +73,7 @@ export default async function EvaluationRoutesPage() {
       revalidate: 0,
     });
   } catch (err) {
-    error = err instanceof Error ? err.message : 'Unable to reach evaluation API';
+    error = err instanceof Error ? err.message : tEvaluation('unavailable.fallback');
   }
 
   const count = routes?.length ?? 0;
@@ -79,41 +90,35 @@ export default async function EvaluationRoutesPage() {
             className="inline-flex items-center gap-1.5 rounded text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
           >
             <ArrowLeftIcon size={14} />
-            <span>Evaluation</span>
+            <span>{t('list.back')}</span>
           </Link>
           <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
-            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
-              Evaluation methods
-            </h1>
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">{t('list.title')}</h1>
             {routes ? (
               <p className="text-sm text-[var(--color-muted-foreground)]">
                 <span className="text-[var(--color-foreground)] font-medium tabular-nums">
-                  {count.toLocaleString('en-GB')}
+                  {f.number(count)}
                 </span>{' '}
-                {count === 1 ? 'method' : 'methods'}
+                {t('list.methodWord', { count })}
               </p>
             ) : null}
           </div>
           <p className="max-w-2xl text-[var(--color-muted-foreground)]">
-            Every result on the platform names the evaluation method and version that produced it,
-            and a method version is reviewed before its results are published. Each method declares
-            what it defends against, who gets to observe what, and the limits a submission must run
-            within. The conformance specification calls these methods <em>routes</em>; the two words
-            mean the same thing here.
+            {t.rich('list.lead', { em: (chunks) => <em>{chunks}</em> })}
           </p>
         </header>
 
         {reviewer && routes ? (
           <div className="mb-6">
             <Alert tone="info">
-              <AlertTitle as="h2">{LIST_REVIEW_TEXT.heading}</AlertTitle>
+              <AlertTitle as="h2">{t('list.review.heading')}</AlertTitle>
               <AlertDescription>
-                {LIST_REVIEW_TEXT.body(waiting)}{' '}
+                {t('list.review.body', { count: waiting, n: f.number(waiting) })}{' '}
                 <Link
                   href="/evaluation/routes/reviews"
                   className="font-medium underline underline-offset-2"
                 >
-                  {LIST_REVIEW_TEXT.link}
+                  {t('list.review.link')}
                 </Link>
               </AlertDescription>
             </Alert>
@@ -122,18 +127,18 @@ export default async function EvaluationRoutesPage() {
 
         {error ? (
           <Alert tone="danger">
-            <AlertTitle as="h2">Evaluation unavailable</AlertTitle>
+            <AlertTitle as="h2">{tEvaluation('unavailable.title')}</AlertTitle>
             <AlertDescription>
               <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
             </AlertDescription>
           </Alert>
         ) : !routes || routes.length === 0 ? (
-          <EmptyState />
+          <EmptyState t={t} />
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2">
             {routes.map((r) => (
               <li key={r.id}>
-                <RouteCard route={r} />
+                <RouteCard route={r} t={t} f={f} />
               </li>
             ))}
           </ul>
@@ -143,7 +148,15 @@ export default async function EvaluationRoutesPage() {
   );
 }
 
-function RouteCard({ route }: { route: EvaluationRouteResponse }) {
+function RouteCard({
+  route,
+  t,
+  f,
+}: {
+  route: EvaluationRouteResponse;
+  t: MethodsT;
+  f: Formatters;
+}) {
   const latest = latestVersion(route.versions);
   const versionCount = route.versions.length;
 
@@ -160,19 +173,19 @@ function RouteCard({ route }: { route: EvaluationRouteResponse }) {
             {route.name}
           </Link>
         </CardTitle>
-        <CardDescription>{describeMode(route.mode)}.</CardDescription>
+        <CardDescription>{describeMode(route.mode, t)}.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
-              Provider
+              {t('list.provider')}
             </dt>
-            <dd className="mt-1 text-[var(--color-foreground)]">{describeProvider(route)}</dd>
+            <dd className="mt-1 text-[var(--color-foreground)]">{describeProvider(route, t)}</dd>
           </div>
           <div>
             <dt className="text-xs font-medium uppercase tracking-wide text-[var(--color-muted-foreground)]">
-              Latest version
+              {t('list.latestVersion')}
             </dt>
             <dd className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[var(--color-foreground)]">
               {latest ? (
@@ -181,9 +194,7 @@ function RouteCard({ route }: { route: EvaluationRouteResponse }) {
                   <ReviewStatusBadge attribution={attributionForVersion(route.slug, latest)} />
                 </>
               ) : (
-                <span className="text-[var(--color-muted-foreground)]">
-                  No version declared yet
-                </span>
+                <span className="text-[var(--color-muted-foreground)]">{t('list.noVersion')}</span>
               )}
             </dd>
           </div>
@@ -191,7 +202,7 @@ function RouteCard({ route }: { route: EvaluationRouteResponse }) {
         <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-4 text-xs text-[var(--color-muted-foreground)]">
           <span className="min-w-0 truncate font-mono">{route.slug}</span>
           <Badge tone={versionCount > 0 ? 'primary' : 'neutral'}>
-            {versionCount.toLocaleString('en-GB')} {versionCount === 1 ? 'version' : 'versions'}
+            {t('list.versionCount', { count: versionCount, n: f.number(versionCount) })}
           </Badge>
         </div>
       </CardContent>
@@ -199,7 +210,7 @@ function RouteCard({ route }: { route: EvaluationRouteResponse }) {
   );
 }
 
-function EmptyState() {
+function EmptyState({ t }: { t: MethodsT }) {
   return (
     <div className="rounded-xl border border-dashed border-[var(--color-border-strong)] bg-[var(--color-subtle)] p-12 text-center">
       <span
@@ -208,10 +219,9 @@ function EmptyState() {
       >
         <ShieldIcon size={20} />
       </span>
-      <h2 className="mt-4 text-lg font-semibold">No evaluation methods registered yet.</h2>
+      <h2 className="mt-4 text-lg font-semibold">{t('list.emptyTitle')}</h2>
       <p className="mx-auto mt-2 max-w-md text-sm text-[var(--color-muted-foreground)]">
-        An evaluation method is registered with a threat model, a disclosure profile and an
-        operational envelope, then reviewed. Once the first one is registered, it will appear here.
+        {t('list.emptyBody')}
       </p>
     </div>
   );

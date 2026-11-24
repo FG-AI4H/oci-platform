@@ -6,12 +6,20 @@
  * Its shape is the `Messages` type next-intl checks keys against
  * (`next-intl.d.ts`), and the shape the French catalogue must match.
  */
+import accessRequest from './en/accessRequest.json';
 import catalog from './en/catalog.json';
 import catalogNew from './en/catalogNew.json';
 import common from './en/common.json';
 import dashboard from './en/dashboard.json';
 import dataset from './en/dataset.json';
 import dicomViewer from './en/dicomViewer.json';
+import evaluation from './en/evaluation.json';
+import evaluationDeclare from './en/evaluationDeclare.json';
+import evaluationMethods from './en/evaluationMethods.json';
+import evaluationReview from './en/evaluationReview.json';
+import evaluationSubmission from './en/evaluationSubmission.json';
+import evaluationSubmit from './en/evaluationSubmit.json';
+import evaluationTasks from './en/evaluationTasks.json';
 import footer from './en/footer.json';
 import header from './en/header.json';
 import home from './en/home.json';
@@ -24,12 +32,20 @@ import settings from './en/settings.json';
 import signIn from './en/signIn.json';
 
 const en = {
+  AccessRequest: accessRequest,
   Catalog: catalog,
   CatalogNew: catalogNew,
   Common: common,
   Dashboard: dashboard,
   Dataset: dataset,
   DicomViewer: dicomViewer,
+  Evaluation: evaluation,
+  EvaluationDeclare: evaluationDeclare,
+  EvaluationMethods: evaluationMethods,
+  EvaluationReview: evaluationReview,
+  EvaluationSubmission: evaluationSubmission,
+  EvaluationSubmit: evaluationSubmit,
+  EvaluationTasks: evaluationTasks,
   Footer: footer,
   Header: header,
   Home: home,

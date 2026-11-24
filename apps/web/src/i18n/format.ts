@@ -19,7 +19,7 @@ export interface Formatters {
   dateTime(value: Date | string | number, options?: Intl.DateTimeFormatOptions): string;
   /** A number with the language's grouping and decimal separators. */
   number(value: number, options?: Intl.NumberFormatOptions): string;
-  /** A ratio (0.25) as a percentage (`25%`, `25 %`). */
+  /** A ratio (0.25) as a percentage (`25%`; `25 %` with a narrow no-break space). */
   percent(value: number, options?: Intl.NumberFormatOptions): string;
   /** A size in bytes with a binary unit (`1.5 MB`, `1,5 Mo` in French). */
   bytes(value: number): string;
@@ -55,7 +55,11 @@ export function formattersFor(locale: AppLocale): Formatters {
       return new Intl.NumberFormat(tag, options).format(value);
     },
     percent(value, options = { maximumFractionDigits: 0 }) {
-      return new Intl.NumberFormat(tag, { ...options, style: 'percent' }).format(value);
+      const text = new Intl.NumberFormat(tag, { ...options, style: 'percent' }).format(value);
+      // CLDR puts a full no-break space before the French percent sign;
+      // French typography (and the evaluation pages, #654) want the narrow
+      // one, as Intl already uses between thousands: `85,3 %`.
+      return locale === 'fr' ? text.replace(/\u00a0%/g, '\u202f%') : text;
     },
     bytes(value) {
       const units = locale === 'fr' ? BYTE_UNITS_FR : BYTE_UNITS_EN;

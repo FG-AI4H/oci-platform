@@ -1,11 +1,13 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { getLocale, getTranslations } from 'next-intl/server';
 import {
   CreateAccessRequestRequestSchema,
   audienceFromIntendedUse,
   safeClassifyEmailDomain,
 } from '@oci/shared-types';
+import { zodParseParams } from '../../../../i18n/zod';
 import { fetchAsUser } from '../../../../lib/api-action';
 import { sessionForAction } from '../../../../lib/session-recovery';
 
@@ -47,15 +49,23 @@ export type RequestAccessState =
  * schema the API uses, then forwards. The API runs the DUO matcher +
  * persists matchStatus; on success we redirect to the requester's
  * dashboard which shows the badge.
+ *
+ * Messages are in the interface language (`AccessRequest`, `Common`).
+ * Zod's own messages follow it too; the messages the shared schema
+ * states itself stay as written there (English).
  */
 export async function requestAccessAction(
   slug: string,
   _prev: RequestAccessState,
   formData: FormData,
 ): Promise<RequestAccessState> {
+  const [t, tCommon] = await Promise.all([
+    getTranslations('AccessRequest'),
+    getTranslations('Common'),
+  ]);
   const session = await sessionForAction();
   if (!session?.user) {
-    return { status: 'error', message: 'Sign in required.' };
+    return { status: 'error', message: t('action.signInRequired') };
   }
 
   // Disposable-email guard (#116). Form-side rejection so requesters
@@ -69,7 +79,7 @@ export async function requestAccessAction(
     if (classification?.category === 'disposable') {
       return {
         status: 'error',
-        message: `Requests from disposable email providers are not accepted (${classification.domain}). Please use an institutional or organisational address.`,
+        message: t('action.disposableEmail', { domain: classification.domain }),
       };
     }
   }
@@ -152,7 +162,10 @@ export async function requestAccessAction(
     builderContext,
   };
 
-  const parsed = CreateAccessRequestRequestSchema.safeParse(candidate);
+  const parsed = CreateAccessRequestRequestSchema.safeParse(
+    candidate,
+    zodParseParams(await getLocale()),
+  );
   if (!parsed.success) {
     const fieldErrors = new Map<string, string>();
     for (const issue of parsed.error.issues) {
@@ -170,7 +183,7 @@ export async function requestAccessAction(
     }
     return {
       status: 'error',
-      message: 'Please correct the errors below.',
+      message: tCommon('correctErrors'),
       fieldErrors,
       values: raw,
     };
@@ -178,7 +191,7 @@ export async function requestAccessAction(
 
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
   if (!base) {
-    return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
+    return { status: 'error', message: t('action.apiBaseUrlMissing') };
   }
   const res = await fetchAsUser(
     `${base}/v2/catalog/datasets/${encodeURIComponent(slug)}/access-requests`,
@@ -196,7 +209,11 @@ export async function requestAccessAction(
     const body = await res.text().catch(() => '');
     return {
       status: 'error',
-      message: `API ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
+      message: tCommon('apiError', {
+        status: res.status,
+        statusText: res.statusText,
+        detail: body.slice(0, 300),
+      }),
       values: raw,
     };
   }

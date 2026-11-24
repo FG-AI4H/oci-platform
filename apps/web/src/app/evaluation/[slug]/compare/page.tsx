@@ -1,5 +1,7 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -15,8 +17,9 @@ import {
 } from '@oci/ui';
 import type { EvaluationSubmissionDetail } from '@oci/shared-types';
 import { apiFetch } from '../../../../lib/api';
+import type { EvaluationI18n } from '../../../../components/evaluation/i18n';
+import { getEvaluationI18n } from '../../../../components/evaluation/server-i18n';
 import { Figure } from '../../../../components/evaluation/subgroup-results';
-import { SUBGROUP_TEXT as T } from '../../../../components/evaluation/subgroup-text';
 import {
   COMPARE_METRICS,
   compareTables,
@@ -34,6 +37,9 @@ import {
  * scored results are compared, and those are public. A failed or unknown id is
  * "not found". Every figure here was already published on each submission's own
  * page, withheld groups withheld; this page computes only differences.
+ *
+ * Text in the interface language (#654): `Evaluation.subgroup`. Method names
+ * and the field and group labels come from the API.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -45,11 +51,15 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const [{ slug }, t] = await Promise.all([params, getTranslations('Evaluation')]);
   return {
-    title: T.compare.metaTitle(slug),
-    description: T.compare.metaDescription(slug),
+    title: t('subgroup.compare.metaTitle', { slug }),
+    description: t('subgroup.compare.metaDescription', { slug }),
     robots: { index: false, follow: false },
   };
 }
@@ -63,12 +73,14 @@ export default async function CompareBySubgroupPage({
 }) {
   const { slug } = await params;
   const query = await searchParams;
+  const i18n = await getEvaluationI18n();
+  const { t, f } = i18n;
   const a = one(query['a']) ?? '';
   const b = one(query['b']) ?? '';
   const taskHref = `/evaluation/${encodeURIComponent(slug)}` as const;
 
   if (!UUID.test(a) || !UUID.test(b) || a === b) {
-    return <Message slug={slug} title={T.compare.pickTwo} />;
+    return <Message slug={slug} title={t('subgroup.compare.pickTwo')} i18n={i18n} />;
   }
 
   const load = (id: string) =>
@@ -80,7 +92,7 @@ export default async function CompareBySubgroupPage({
   if (!first || !second) notFound();
 
   if (!first.scores || !second.scores || !first.subgroups || !second.subgroups) {
-    return <Message slug={slug} title={T.compare.notComparable} />;
+    return <Message slug={slug} title={t('subgroup.compare.notComparable')} i18n={i18n} />;
   }
 
   const kind = first.scores.kind;
@@ -91,6 +103,7 @@ export default async function CompareBySubgroupPage({
   const metric: SubgroupMetricKey =
     options.find((o) => o === requested) ?? (options[0] as SubgroupMetricKey);
   const tables = compareTables(
+    i18n,
     metric,
     { scores: first.scores, subgroups: first.subgroups },
     { scores: second.scores, subgroups: second.subgroups },
@@ -110,20 +123,25 @@ export default async function CompareBySubgroupPage({
             <span>{first.task.name}</span>
           </Link>
           <p className="mt-4 text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            {T.compare.eyebrow}
+            {t('subgroup.compare.eyebrow')}
           </p>
           <h1 className="mt-2 break-words text-3xl font-semibold tracking-tight text-[var(--color-foreground)] sm:text-4xl">
-            {T.compare.title(first.methodName, second.methodName)}
+            {t('subgroup.compare.title', { a: first.methodName, b: second.methodName })}
           </h1>
-          <p className="mt-4 max-w-2xl text-[var(--color-muted-foreground)]">{T.compare.explain}</p>
+          <p className="mt-4 max-w-2xl text-[var(--color-muted-foreground)]">
+            {t('subgroup.compare.explain')}
+          </p>
         </Container>
       </Section>
 
       <Container size="lg">
         <Section spacing="md" className="space-y-8">
-          <nav aria-label={T.compare.metricChoice} className="flex flex-wrap items-center gap-2">
+          <nav
+            aria-label={t('subgroup.compare.metricChoice')}
+            className="flex flex-wrap items-center gap-2"
+          >
             <span className="text-sm font-medium text-[var(--color-muted-foreground)]">
-              {T.compare.metricChoice}:
+              {t('subgroup.compare.metricChoiceLabel')}
             </span>
             {options.map((m) => (
               <Link
@@ -137,7 +155,7 @@ export default async function CompareBySubgroupPage({
                     : 'border-[var(--color-border)] text-[var(--color-foreground)] hover:border-[var(--color-primary)]')
                 }
               >
-                {metricLabel(m)}
+                {metricLabel(i18n, m)}
               </Link>
             ))}
           </nav>
@@ -148,13 +166,16 @@ export default async function CompareBySubgroupPage({
               table={table}
               metric={metric}
               names={[first.methodName, second.methodName]}
+              i18n={i18n}
             />
           ))}
 
           <div className="space-y-2 rounded-lg bg-[var(--color-subtle)] p-4 text-sm text-[var(--color-muted-foreground)]">
-            <p className="font-medium text-[var(--color-foreground)]">{T.caution.title}</p>
-            <p>{T.caution.body}</p>
-            <p>{T.suppression.note(first.subgroups.minCellSize.toLocaleString('en-GB'))}</p>
+            <p className="font-medium text-[var(--color-foreground)]">
+              {t('subgroup.caution.title')}
+            </p>
+            <p>{t('subgroup.caution.body')}</p>
+            <p>{t('subgroup.suppression.note', { min: f.number(first.subgroups.minCellSize) })}</p>
           </div>
 
           <p className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
@@ -165,7 +186,7 @@ export default async function CompareBySubgroupPage({
               {second.methodName}
             </Link>
             <Link href={taskHref} className={LINK}>
-              {T.compare.back}
+              {t('subgroup.compare.back')}
             </Link>
           </p>
         </Section>
@@ -178,29 +199,34 @@ function CompareCard({
   table,
   metric,
   names,
+  i18n,
 }: {
   table: CompareTable;
   metric: SubgroupMetricKey;
   names: [string, string];
+  i18n: EvaluationI18n;
 }) {
+  const { t } = i18n;
+  const field = table.label.toLowerCase();
+  const label = metricLabel(i18n, metric);
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h2">{T.section.byField(table.label)}</CardTitle>
-        <CardDescription>{metricLabel(metric)}</CardDescription>
+        <CardTitle as="h2">{t('subgroup.section.byField', { field })}</CardTitle>
+        <CardDescription>{label}</CardDescription>
       </CardHeader>
       <CardContent>
         <div
           tabIndex={0}
           role="region"
-          aria-label={`${T.section.tableLabel(table.label)}: ${metricLabel(metric)}`}
+          aria-label={t('subgroup.compare.tableLabel', { field, metric: label })}
           className="overflow-x-auto rounded-lg border border-[var(--color-border)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
         >
           <table className="w-full border-collapse text-xs sm:text-sm">
             <thead className="bg-[var(--color-subtle)] text-[var(--color-muted-foreground)]">
               <tr>
                 <th scope="col" className="px-1.5 py-2.5 text-start font-medium sm:px-4">
-                  {T.section.groupColumn}
+                  {t('subgroup.section.groupColumn')}
                 </th>
                 <th scope="col" className="break-words px-1.5 py-2.5 text-end font-medium sm:px-4">
                   {names[0]}
@@ -209,10 +235,10 @@ function CompareCard({
                   {names[1]}
                 </th>
                 <th scope="col" className="px-1.5 py-2.5 text-end font-medium sm:px-4">
-                  {T.compare.difference}
+                  {t('subgroup.compare.difference')}
                   <span className="sr-only">
                     {' '}
-                    ({T.compare.differenceSpoken(names[1], names[0])})
+                    ({t('subgroup.compare.differenceSpoken', { b: names[1], a: names[0] })})
                   </span>
                 </th>
               </tr>
@@ -240,8 +266,10 @@ function CompareCard({
                       colSpan={3}
                       className="px-1.5 py-2.5 text-end text-[var(--color-muted-foreground)] sm:px-4"
                     >
-                      <span aria-hidden="true">{T.suppression.notReported}</span>
-                      <span className="sr-only">{T.suppression.notReportedSpoken(row.label)}</span>
+                      <span aria-hidden="true">{t('subgroup.suppression.notReported')}</span>
+                      <span className="sr-only">
+                        {t('subgroup.suppression.notReportedSpoken', { group: row.label })}
+                      </span>
                     </td>
                   ) : (
                     <>
@@ -273,7 +301,7 @@ function CompareCard({
   );
 }
 
-function Message({ slug, title }: { slug: string; title: string }) {
+function Message({ slug, title, i18n }: { slug: string; title: string; i18n: EvaluationI18n }) {
   return (
     <Container size="md">
       <Section spacing="md">
@@ -281,7 +309,7 @@ function Message({ slug, title }: { slug: string; title: string }) {
           <AlertTitle as="h1">{title}</AlertTitle>
           <AlertDescription>
             <Link href={`/evaluation/${encodeURIComponent(slug)}`} className={LINK}>
-              {T.compare.back}
+              {i18n.t('subgroup.compare.back')}
             </Link>
           </AlertDescription>
         </Alert>

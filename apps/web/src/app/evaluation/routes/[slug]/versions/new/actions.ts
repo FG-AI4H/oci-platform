@@ -2,11 +2,13 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect, unstable_rethrow } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import type { RouteVersionResponse } from '@oci/shared-types';
+import { getFormatters } from '../../../../../../i18n/server';
 import { fetchAsUser } from '../../../../../../lib/api-action';
 import { sessionForAction } from '../../../../../../lib/session-recovery';
 import { checkDraft, draftFromFormData, type DeclarationDraft } from './declaration-draft';
-import { DECLARE_TEXT, fieldMessage } from './strings';
+import { fieldMessage } from './strings';
 
 export type DeclareState =
   | { status: 'idle' }
@@ -31,18 +33,19 @@ export async function declareVersionAction(
   formData: FormData,
 ): Promise<DeclareState> {
   const values = draftFromFormData(formData);
+  const [t, f] = await Promise.all([getTranslations('EvaluationDeclare'), getFormatters()]);
   const slug = String(formData.get('slug') ?? '');
   if (!SLUG.test(slug)) {
-    return { status: 'error', message: DECLARE_TEXT.gone, errors: {}, values };
+    return { status: 'error', message: t('gone'), errors: {}, values };
   }
-  const check = checkDraft(values, fieldMessage);
+  const check = checkDraft(values, (field) => fieldMessage(field, t, f));
   if (!check.ok) {
-    return { status: 'error', message: DECLARE_TEXT.fixFields, errors: check.errors, values };
+    return { status: 'error', message: t('fixFields'), errors: check.errors, values };
   }
 
   await sessionForAction(`/evaluation/routes/${slug}/versions/new`);
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!base) return { status: 'error', message: DECLARE_TEXT.unreachable, errors: {}, values };
+  if (!base) return { status: 'error', message: t('unreachable'), errors: {}, values };
 
   let res: Response;
   try {
@@ -58,20 +61,20 @@ export async function declareVersionAction(
     );
   } catch (err) {
     unstable_rethrow(err);
-    return { status: 'error', message: DECLARE_TEXT.unreachable, errors: {}, values };
+    return { status: 'error', message: t('unreachable'), errors: {}, values };
   }
 
   if (!res.ok) {
     const message =
       res.status === 403
-        ? DECLARE_TEXT.forbidden
+        ? t('forbidden')
         : res.status === 404
-          ? DECLARE_TEXT.gone
+          ? t('gone')
           : res.status === 409
-            ? DECLARE_TEXT.conflict(check.request.version)
-            : DECLARE_TEXT.failed(res.status);
+            ? t('conflict', { version: check.request.version })
+            : t('failed', { status: String(res.status) });
     const errors: Record<string, string> =
-      res.status === 409 ? { version: DECLARE_TEXT.conflict(check.request.version) } : {};
+      res.status === 409 ? { version: t('conflict', { version: check.request.version }) } : {};
     return { status: 'error', message, errors, values };
   }
 

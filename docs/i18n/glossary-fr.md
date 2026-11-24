@@ -17,7 +17,12 @@ changed there too (search the French files for it).
 ## Conventions
 
 - Typographic apostrophe (`’`) everywhere, never `'`.
-- A space before `:` `;` `?` `!`, and inside « guillemets ».
+- A space before `:` `;` `?` `!`, and inside « guillemets ». The evaluation and access-request
+  messages use a no-break space (U+00A0) there, so the sign never starts a line; the earlier files
+  still have ordinary spaces.
+- Percentages with a decimal comma and a narrow no-break space (U+202F) before `%`: `85,3 %`. The
+  formatting helper (`apps/web/src/i18n/format.ts`) writes them; the messages never format a number
+  themselves.
 - Proper names stay as they are: OCI Platform (written « plateforme OCI » in running text),
   GI-AI4H, Croissant, BIOCroissant, DICOM, DUO, Cognito, GitHub, Model Facts.
 - The organisations are UIT, OMS and OMPI in French text (ITU, WHO, WIPO in English).
@@ -99,8 +104,8 @@ changed there too (search the French files for it).
 
 ## Annotation and evaluation
 
-The annotation and evaluation pages are not translated in this slice; these terms are fixed now so
-that they are used the same way when they are.
+The annotation pages are not translated yet; these terms are fixed now so that they are used the
+same way when they are. The evaluation pages use them, and the evaluation rows added below.
 
 | English                         | French (draft)                                | Source | Reviewer |
 | ------------------------------- | --------------------------------------------- | ------ | -------- |
@@ -120,6 +125,120 @@ that they are used the same way when they are.
 | Leaderboard                     | Classement                                    | new    |          |
 | Metric / score                  | Métrique / score                              | new    |          |
 | Evidence summary                | Synthèse des preuves                          | new    |          |
+
+## Evaluation: tasks, submissions and results
+
+Added with the evaluation pages. Every row is a draft.
+
+| English                                                  | French (draft)                                                  | Source | Reviewer |
+| -------------------------------------------------------- | --------------------------------------------------------------- | ------ | -------- |
+| Task (evaluation task) / task kind                       | Tâche (d’évaluation) / type de tâche                            | new    |          |
+| Grading / classification / binary finding (task kinds)   | Gradation / classification / diagnostic binaire                 | new    |          |
+| Item (one image or case a task scores)                   | Élément                                                         | new    |          |
+| Item identifier                                          | Identifiant d’élément                                           | new    |          |
+| Predictions file                                         | Fichier de prédictions                                          | new    |          |
+| Template (the predictions file to fill in)               | Fichier à remplir (not « modèle », which means the AI model)    | new    |          |
+| Method name (a submission’s name)                        | Nom de la méthode                                               | new    |          |
+| Score (verb) / scored / scoring                          | Noter / noté / notation                                         | new    |          |
+| Submit for scoring / scored submission                   | Soumettre à la notation / soumission notée                      | new    |          |
+| Check format / format check                              | Vérifier le format / vérification du format                     | new    |          |
+| Status: scored / pending / failed                        | noté / en attente / échoué                                      | new    |          |
+| Reference labels                                         | Étiquettes de référence                                         | new    |          |
+| Positive class / finding present                         | Classe positive / anomalie présente                             | new    |          |
+| Grade / referable / referable threshold                  | Grade / cas à adresser / seuil d’adressage                      | new    |          |
+| Coverage                                                 | Couverture                                                      | new    |          |
+| Accuracy / balanced accuracy                             | Exactitude / exactitude équilibrée                              | new    |          |
+| Sensitivity / specificity                                | Sensibilité / spécificité                                       | new    |          |
+| Positive / negative predictive value                     | Valeur prédictive positive (VPP) / négative (VPN)               | new    |          |
+| Prevalence                                               | Prévalence                                                      | new    |          |
+| Area under the ROC curve (AUC)                           | Aire sous la courbe ROC (ASC)                                   | new    |          |
+| 95% confidence interval / 95% CI                         | Intervalle de confiance à 95 % / IC 95 %                        | new    |          |
+| Wilson score (interval)                                  | Méthode de Wilson                                               | new    |          |
+| Bootstrap resamples / fixed seed                         | Rééchantillonnages bootstrap / graine fixe                      | new    |          |
+| QWK, quadratic-weighted kappa                            | Kappa pondéré (QWK), kappa pondéré quadratique                  | new    |          |
+| Macro F1 / micro F1                                      | F1 macro / F1 micro                                             | new    |          |
+| Precision / recall (per class)                           | Précision / rappel                                              | new    |          |
+| True / false positives, true / false negatives           | Vrais / faux positifs, vrais / faux négatifs                    | new    |          |
+| Counts (the 2 × 2 table)                                 | Effectifs                                                       | new    |          |
+| Not estimable / not reported                             | Non estimable / non communiqué                                  | new    |          |
+| Subgroup / results by subgroup                           | Sous-groupe / résultats par sous-groupe                         | new    |          |
+| Withheld (a figure or group not published)               | Masqué                                                          | new    |          |
+| n/a (in a table cell)                                    | n.d.                                                            | new    |          |
+| Percentage points (difference)                           | Points de pourcentage, « pts »                                  | new    |          |
+| Published / provisional / withdrawn / retracted / legacy | Publié / provisoire / retiré / rétracté / historique (a result) | new    |          |
+| Not attributed yet (no method version)                   | Pas encore attribué                                             | new    |          |
+| Quota: resets on                                         | Remise à zéro le                                                | new    |          |
+
+## Evaluation methods and their review
+
+Added with the evaluation-method pages. Every row is a draft.
+
+| English                                                             | French (draft)                                                                                    | Source | Reviewer |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------ | -------- |
+| Evaluation method (the specification’s “route”)                     | Méthode d’évaluation                                                                              | new    |          |
+| Review (of a method version) / to review                            | Revue / relire (not « examen », which is an imaging exam here)                                    | new    |          |
+| Evaluation reviewer                                                 | Relecteur (des méthodes d’évaluation)                                                             | new    |          |
+| Review queue                                                        | File de revue                                                                                     | new    |          |
+| Begin the review / under review                                     | Ouvrir la revue / en cours de revue                                                               | new    |          |
+| Review is in pairs                                                  | La revue se fait à deux                                                                           | new    |          |
+| Declared / approved / rejected / withdrawn (a version)              | Déclarée / approuvée / rejetée / retirée                                                          | new    |          |
+| Reject after approval                                               | Rejeter après approbation                                                                         | new    |          |
+| Published as failed                                                 | Publiée comme ayant échoué                                                                        | new    |          |
+| Taken out of use                                                    | Mise hors service                                                                                 | new    |          |
+| Rationale / decision                                                | Justification / décision                                                                          | new    |          |
+| Submitter (of a method)                                             | Auteur de la méthode; of a submission: auteur de la soumission                                    | new    |          |
+| Threat model / adversary / capability                               | Modèle de menace / adversaire / capacité                                                          | new    |          |
+| Defended against                                                    | Protégé ; « Protection assurée » (form checkbox)                                                  | new    |          |
+| Assumptions / out of scope                                          | Hypothèses / hors périmètre                                                                       | new    |          |
+| Disclosure profile / who observes what                              | Profil de divulgation / qui observe quoi                                                          | new    |          |
+| Trust anchor: a contract / hardware attestation / crypto            | Ancre de confiance : un contrat / l’attestation matérielle / une hypothèse cryptographique        | new    |          |
+| Key governance / decryption keys / attestation roots                | Gouvernance des clés / clés de déchiffrement / racines d’attestation                              | new    |          |
+| Reproducible                                                        | Reproductible                                                                                     | new    |          |
+| Operational envelope                                                | Enveloppe opérationnelle                                                                          | new    |          |
+| Permitted operations / arithmetic precision                         | Opérations autorisées / précision arithmétique                                                    | new    |          |
+| Maximum runtime / maximum memory                                    | Durée d’exécution maximale / mémoire maximale                                                     | new    |          |
+| Model constraints / sandbox                                         | Contraintes sur le modèle / bac à sable                                                           | new    |          |
+| Fidelity gap / plaintext baseline / scored in the clear             | Écart de fidélité / référence en clair / noté en clair                                            | new    |          |
+| MiB / GiB                                                           | Mio / Gio (mébioctets / gibioctets)                                                               | new    |          |
+| Predictions file / sealed container / encrypted computation (modes) | Fichier de prédictions / conteneur scellé / calcul chiffré                                        | new    |          |
+| Data host / model developer / platform operator / method provider   | Hôte des données / développeur du modèle / opérateur de la plateforme / fournisseur de la méthode | new    |          |
+| Reference implementation / provider not named                       | Implémentation de référence / fournisseur non précisé                                             | new    |          |
+| MAJOR.MINOR.PATCH                                                   | MAJEUR.MINEUR.CORRECTIF                                                                           | new    |          |
+| Audit trail                                                         | Piste d’audit                                                                                     | new    |          |
+
+## Access requests
+
+Added with the access-request pages. Every row is a draft.
+
+| English                                                                      | French (draft)                                                         | Source | Reviewer |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------ | -------- |
+| Restricted dataset                                                           | Jeu de données restreint                                               | new    |          |
+| Institution                                                                  | Établissement                                                          | new    |          |
+| Project title / project description                                          | Titre / description du projet                                          | new    |          |
+| Justification / attestation / compliance attestations                        | Justification / attestation / attestations de conformité               | new    |          |
+| Attest to (DUO terms)                                                        | S’engager à                                                            | new    |          |
+| Auditable (a request)                                                        | Conservé pour audit                                                    | new    |          |
+| DPIA                                                                         | AIPD (analyse d’impact relative à la protection des données)           | new    |          |
+| Data retention (days)                                                        | Durée de conservation des données (jours)                              | new    |          |
+| Redistribution intent / derivatives only                                     | Rediffusion prévue / données dérivées uniquement                       | new    |          |
+| Output type / peer-reviewed publication                                      | Type de résultat / publication évaluée par les pairs                   | new    |          |
+| Model weights / derivative dataset / aggregate statistics                    | Poids du modèle / jeu de données dérivé / statistiques agrégées        | new    |          |
+| Intended use: non-commercial / commercial research, clinical care, education | Recherche non commerciale / commerciale, soins cliniques, enseignement | new    |          |
+| AI-solution builder (audience)                                               | Développeur de solutions d’IA                                          | new    |          |
+| Legal entity / jurisdiction (ISO-2)                                          | Entité juridique / juridiction (code ISO à 2 lettres)                  | new    |          |
+| Deployment countries                                                         | Pays de déploiement                                                    | new    |          |
+| Regulatory pathway                                                           | Voie réglementaire                                                     | new    |          |
+| EU MDR / IVDR                                                                | Règlement (UE) 2017/745 (MDR) / 2017/746 (IVDR)                        | new    |          |
+| LMIC                                                                         | Pays à revenu faible ou intermédiaire                                  | new    |          |
+| WHO priority alignment                                                       | Lien avec les priorités de l’OMS                                       | new    |          |
+| Accreditations                                                               | Accréditations                                                         | new    |          |
+| Royalty / commercialisation plan                                             | Plan de redevances ou de commercialisation                             | new    |          |
+| Post-market data flow                                                        | Flux de données après commercialisation                                | new    |          |
+| Inference-only                                                               | Inférence uniquement                                                   | new    |          |
+| Pseudonymised / identifiable rows                                            | Lignes pseudonymisées / identifiantes                                  | new    |          |
+| Auto-match (DUO)                                                             | Comparaison automatique                                                | new    |          |
+| Disposable e-mail address                                                    | Adresse e-mail jetable                                                 | new    |          |
+| Submitted (date of a request)                                                | Envoyée le                                                             | new    |          |
 
 ## Models
 
@@ -185,3 +304,12 @@ that they are used the same way when they are.
 - **Window / level readout.** « L 80 · N 40 » (largeur, niveau) mirrors « W 80 · L 40 »; a
   radiologist may expect the English letters, which are what most consoles show.
 - **Scanner vs TDM.** « Scanner (TDM) » is used for CT; check which a radiologist expects on a label.
+- **Accuracy.** « Exactitude » (the HAS term for diagnostic accuracy) rather than « précision »,
+  which the per-class table keeps for precision (the class’s positive predictive value).
+- **Referable.** « Cas à adresser » / « seuil d’adressage » for the grading tasks’ referable split;
+  « référable » is heard in screening programmes but is an anglicism.
+- **Binary finding.** « Diagnostic binaire » for the task kind, « anomalie » for the finding. A
+  radiologist may prefer « signe » or the finding’s own name.
+- **Review of a method.** « Revue » / « relecteur », to keep « examen » for imaging exams.
+- **AUC.** « ASC » after « aire sous la courbe ROC », the strict French abbreviation, as the
+  evidence summary (#652) writes it; « AUC » is also common in French clinical papers.

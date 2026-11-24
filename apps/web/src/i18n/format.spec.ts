@@ -22,6 +22,11 @@ describe('formattersFor', () => {
     expect(spaces(fr.percent(0.25))).toBe('25 %');
   });
 
+  it('puts a narrow no-break space before the French percent sign', () => {
+    expect(fr.percent(0.853, { maximumFractionDigits: 1 })).toBe('85,3 %');
+    expect(fr.percent(-0.1)).toBe('-10 %');
+  });
+
   it('formats sizes with the units the app used, and octets in French', () => {
     expect(en.bytes(512)).toBe('512 B');
     expect(en.bytes(1536)).toBe('1.5 KB');

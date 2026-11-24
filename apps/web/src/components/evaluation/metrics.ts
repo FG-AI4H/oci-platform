@@ -5,53 +5,41 @@ import type {
   ProportionEstimate,
   TaskKindScores,
 } from '@oci/shared-types';
-import { BINARY_DIAGNOSTIC_TEXT as BD } from './binary-diagnostic-text';
+import type { Formatters } from '../../i18n/format';
+import type { EvaluationI18n } from './i18n';
 
 /**
  * How a submission's metrics are named, formatted and explained. Shared by the
  * task page (one row per submission) and the submission's own page (#645), so a
- * number reads the same in both places. No JSX here: the vocabulary is plain
- * data and is unit-tested under Vitest's node environment.
+ * number reads the same in both places. No JSX here: the vocabulary comes from
+ * the `Evaluation` messages (#654) and the numbers from the interface
+ * language's formatters, and both are unit-tested under Vitest's node
+ * environment.
  */
+
+/** The bounded 0–1 rates read better as percentages: `85.3%`, `85,3 %`. */
+export const formatRate = (f: Formatters, value: number) =>
+  f.percent(value, { maximumFractionDigits: 1 });
 
 /**
  * QWK stays a 0–1-scale figure (and can be negative — worse than chance),
  * so it is never rendered as a percentage. `signDisplay: 'negative'` keeps
  * the minus sign without prefixing positives with a `+`.
  */
-const QWK_FORMATTER = new Intl.NumberFormat('en-GB', {
-  minimumFractionDigits: 3,
-  maximumFractionDigits: 3,
-  signDisplay: 'negative',
-});
-
-/** The bounded 0–1 rates read better as percentages. */
-const RATE_FORMATTER = new Intl.NumberFormat('en-GB', {
-  style: 'percent',
-  maximumFractionDigits: 1,
-});
-
-export const formatRate = (value: number) => RATE_FORMATTER.format(value);
-
-/** QWK as the pages print it: three decimals, never a percentage. */
-export const formatQwk = (value: number) => QWK_FORMATTER.format(value);
+export const formatQwk = (f: Formatters, value: number) =>
+  f.number(value, { minimumFractionDigits: 3, maximumFractionDigits: 3, signDisplay: 'negative' });
 
 /** AUC is a 0–1 figure like QWK, never a percentage. */
-const AUC_FORMATTER = new Intl.NumberFormat('en-GB', {
-  minimumFractionDigits: 3,
-  maximumFractionDigits: 3,
-});
+const formatAuc = (f: Formatters, value: number) =>
+  f.number(value, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
-const COUNT_FORMATTER = new Intl.NumberFormat('en-GB');
-
-export const TASK_KIND_LABEL: Record<EvaluationTaskKindDb, string> = {
-  GRADING: 'Grading',
-  CLASSIFICATION: 'Classification',
-  BINARY_DIAGNOSTIC: BD.taskKindLabel,
-};
+/** The task kind as a badge names it. */
+export function taskKindLabel({ t }: EvaluationI18n, kind: EvaluationTaskKindDb): string {
+  return t(`taskKind.${kind}`);
+}
 
 export interface MetricCell {
-  /** Stable key; the label may be translated. */
+  /** Stable key; the label is translated. */
   key: string;
   label: string;
   /** Formatted value; `null` when the submission has no scores. */
@@ -70,11 +58,15 @@ export interface MetricCell {
 }
 
 /** The positive class as the pages name it. */
-export function positiveClassOf(task: { positiveClassName?: string | null }): string {
-  return task.positiveClassName ?? BD.positiveClassFallback;
+export function positiveClassOf(
+  { t }: EvaluationI18n,
+  task: { positiveClassName?: string | null },
+): string {
+  return task.positiveClassName ?? t('binary.positiveClassFallback');
 }
 
 function proportionCell(
+  { t, f }: EvaluationI18n,
   key: string,
   label: string,
   explanation: string,
@@ -87,42 +79,46 @@ function proportionCell(
       label,
       value: null,
       explanation,
-      absent: scored ? { label: BD.notEstimable, reason: BD.notEstimableReason } : null,
+      absent: scored
+        ? { label: t('binary.notEstimable'), reason: t('binary.notEstimableReason') }
+        : null,
     };
   }
-  const lower = formatRate(p.lower);
-  const upper = formatRate(p.upper);
+  const bounds = { lower: formatRate(f, p.lower), upper: formatRate(f, p.upper) };
   return {
     key,
     label,
-    value: formatRate(p.estimate),
+    value: formatRate(f, p.estimate),
     explanation,
-    interval: { text: BD.interval(lower, upper), spoken: BD.intervalSpoken(lower, upper) },
-    basis: BD.basis(COUNT_FORMATTER.format(p.numerator), COUNT_FORMATTER.format(p.denominator)),
+    interval: { text: t('binary.interval', bounds), spoken: t('binary.intervalSpoken', bounds) },
+    basis: t('binary.basis', {
+      numerator: f.number(p.numerator),
+      denominator: f.number(p.denominator),
+    }),
   };
 }
 
-function aucCell(scored: boolean, auc: AucEstimate | null): MetricCell {
-  const { label, explanation } = BD.metric.auc;
+function aucCell({ t, f }: EvaluationI18n, scored: boolean, auc: AucEstimate | null): MetricCell {
+  const label = t('metric.binary.auc.label');
+  const explanation = t('metric.binary.auc.explanation');
   if (!auc) {
     return {
       key: 'auc',
       label,
       value: null,
       explanation,
-      absent: scored ? { label: BD.aucAbsent, reason: BD.aucAbsentReason } : null,
+      absent: scored ? { label: t('binary.aucAbsent'), reason: t('binary.aucAbsentReason') } : null,
     };
   }
-  const lower = AUC_FORMATTER.format(auc.lower);
-  const upper = AUC_FORMATTER.format(auc.upper);
+  const bounds = { lower: formatAuc(f, auc.lower), upper: formatAuc(f, auc.upper) };
   // How the interval was made goes with the explanation, not on the value
   // line: it is a sentence, not a count, and would crowd the figure.
   return {
     key: 'auc',
     label,
-    value: AUC_FORMATTER.format(auc.estimate),
-    explanation: `${explanation} ${BD.aucBasis(COUNT_FORMATTER.format(auc.resamples))}`,
-    interval: { text: BD.interval(lower, upper), spoken: BD.intervalSpoken(lower, upper) },
+    value: formatAuc(f, auc.estimate),
+    explanation: `${explanation} ${t('binary.aucBasis', { resamples: f.number(auc.resamples) })}`,
+    interval: { text: t('binary.interval', bounds), spoken: t('binary.intervalSpoken', bounds) },
     basis: null,
   };
 }
@@ -133,76 +129,83 @@ function aucCell(scored: boolean, auc: AucEstimate | null): MetricCell {
  * AUC. `full` adds accuracy, prevalence and coverage for the submission page.
  */
 export function binaryDiagnosticCells(
+  i18n: EvaluationI18n,
   m: BinaryDiagnosticScores | null,
   positive: string,
   scope: 'row' | 'full' = 'full',
 ): MetricCell[] {
+  const { t, f } = i18n;
   const scored = m !== null;
-  const t = BD.metric;
   const cells: MetricCell[] = [
     {
       key: 'balancedAccuracy',
-      label: t.balancedAccuracy.label,
-      value: m && m.balancedAccuracy !== null ? formatRate(m.balancedAccuracy) : null,
-      explanation: t.balancedAccuracy.explanation,
+      label: t('metric.balancedAccuracy'),
+      value: m && m.balancedAccuracy !== null ? formatRate(f, m.balancedAccuracy) : null,
+      explanation: t('metric.binary.balancedAccuracy'),
       // Not estimable when the scored items hold only one reference class.
       absent:
         m && m.balancedAccuracy === null
-          ? { label: BD.notEstimable, reason: BD.notEstimableBalanced }
+          ? { label: t('binary.notEstimable'), reason: t('binary.notEstimableBalanced') }
           : null,
     },
     proportionCell(
+      i18n,
       'sensitivity',
-      t.sensitivity.label,
-      t.sensitivity.explanation(positive),
+      t('metric.binary.sensitivity.label'),
+      t('metric.binary.sensitivity.explanation', { positive }),
       scored,
       m?.sensitivity ?? null,
     ),
     proportionCell(
+      i18n,
       'specificity',
-      t.specificity.label,
-      t.specificity.explanation,
+      t('metric.binary.specificity.label'),
+      t('metric.binary.specificity.explanation'),
       scored,
       m?.specificity ?? null,
     ),
     proportionCell(
+      i18n,
       'positivePredictiveValue',
-      t.positivePredictiveValue.label,
-      t.positivePredictiveValue.explanation(positive),
+      t('metric.binary.positivePredictiveValue.label'),
+      t('metric.binary.positivePredictiveValue.explanation', { positive }),
       scored,
       m?.positivePredictiveValue ?? null,
     ),
     proportionCell(
+      i18n,
       'negativePredictiveValue',
-      t.negativePredictiveValue.label,
-      t.negativePredictiveValue.explanation,
+      t('metric.binary.negativePredictiveValue.label'),
+      t('metric.binary.negativePredictiveValue.explanation'),
       scored,
       m?.negativePredictiveValue ?? null,
     ),
-    aucCell(scored, m?.auc ?? null),
+    aucCell(i18n, scored, m?.auc ?? null),
   ];
   if (scope === 'row') return cells;
   return [
     ...cells,
     proportionCell(
+      i18n,
       'accuracy',
-      t.accuracy.label,
-      t.accuracy.explanation,
+      t('metric.accuracy'),
+      t('metric.binary.accuracy'),
       scored,
       m?.accuracy ?? null,
     ),
     proportionCell(
+      i18n,
       'prevalence',
-      t.prevalence.label,
-      t.prevalence.explanation(positive),
+      t('metric.binary.prevalence.label'),
+      t('metric.binary.prevalence.explanation', { positive }),
       scored,
       m?.prevalence ?? null,
     ),
     {
       key: 'coverage',
-      label: t.coverage.label,
-      value: m ? formatRate(m.coverage) : null,
-      explanation: t.coverage.explanation,
+      label: t('metric.coverage.label'),
+      value: m ? formatRate(f, m.coverage) : null,
+      explanation: t('metric.coverage.explanation'),
     },
   ];
 }
@@ -225,6 +228,7 @@ export function binaryDiagnosticCells(
  * reflowing as results arrive.
  */
 export function metricCells(
+  i18n: EvaluationI18n,
   task: {
     taskKind: EvaluationTaskKindDb;
     referableThreshold: number;
@@ -233,13 +237,18 @@ export function metricCells(
   scores: TaskKindScores | null,
   scope: 'row' | 'full' = 'full',
 ): MetricCell[] {
+  const { t, f } = i18n;
   const kind = scores?.kind ?? task.taskKind;
-  const coverage =
-    'The share of the task’s items this file gave a label for. Items left out are not scored.';
+  const coverage = (value: number | undefined): MetricCell => ({
+    key: 'coverage',
+    label: t('metric.coverage.label'),
+    value: value === undefined ? null : formatRate(f, value),
+    explanation: t('metric.coverage.explanation'),
+  });
 
   if (kind === 'BINARY_DIAGNOSTIC') {
     const m = scores?.kind === 'BINARY_DIAGNOSTIC' ? scores.metrics : null;
-    return binaryDiagnosticCells(m, positiveClassOf(task), scope);
+    return binaryDiagnosticCells(i18n, m, positiveClassOf(i18n, task), scope);
   }
 
   if (kind === 'CLASSIFICATION') {
@@ -247,71 +256,59 @@ export function metricCells(
     return [
       {
         key: 'macroF1',
-        label: 'Macro F1',
-        value: m ? formatRate(m.macroF1) : null,
-        explanation:
-          'The average of the per-class F1 scores, each class weighing the same however many items it has.',
+        label: t('metric.classification.macroF1.label'),
+        value: m ? formatRate(f, m.macroF1) : null,
+        explanation: t('metric.classification.macroF1.explanation'),
       },
       {
         key: 'balancedAccuracy',
-        label: 'Balanced accuracy',
-        value: m ? formatRate(m.balancedAccuracy) : null,
-        explanation: 'The average, over the classes, of the share of each class that was found.',
+        label: t('metric.balancedAccuracy'),
+        value: m ? formatRate(f, m.balancedAccuracy) : null,
+        explanation: t('metric.classification.balancedAccuracy'),
       },
       {
         key: 'accuracy',
-        label: 'Accuracy',
-        value: m ? formatRate(m.accuracy) : null,
-        explanation: 'The share of items given exactly the reference label.',
+        label: t('metric.accuracy'),
+        value: m ? formatRate(f, m.accuracy) : null,
+        explanation: t('metric.classification.accuracy'),
       },
       {
         key: 'microF1',
-        label: 'Micro F1',
-        value: m ? formatRate(m.microF1) : null,
-        explanation: 'F1 over all items pooled. Equal to accuracy when each item has one label.',
+        label: t('metric.classification.microF1.label'),
+        value: m ? formatRate(f, m.microF1) : null,
+        explanation: t('metric.classification.microF1.explanation'),
       },
-      {
-        key: 'coverage',
-        label: 'Coverage',
-        value: m ? formatRate(m.coverage) : null,
-        explanation: coverage,
-      },
+      coverage(m?.coverage),
     ];
   }
 
-  const t = task.referableThreshold.toLocaleString('en-GB');
+  const threshold = f.number(task.referableThreshold);
   const m = scores?.kind === 'GRADING' ? scores.metrics : null;
   return [
     {
       key: 'qwk',
-      label: 'QWK',
-      value: m ? QWK_FORMATTER.format(m.qwk) : null,
-      explanation:
-        'Quadratic-weighted kappa: agreement with the reference grades, from −1 to 1. 1 is perfect, 0 is what chance would give, and a grade that is far off costs more than a near miss.',
+      label: t('metric.grading.qwk.label'),
+      value: m ? formatQwk(f, m.qwk) : null,
+      explanation: t('metric.grading.qwk.explanation'),
     },
     {
       key: 'accuracy',
-      label: 'Accuracy',
-      value: m ? formatRate(m.accuracy) : null,
-      explanation: 'The share of items given exactly the reference grade.',
+      label: t('metric.accuracy'),
+      value: m ? formatRate(f, m.accuracy) : null,
+      explanation: t('metric.grading.accuracy'),
     },
     {
       key: 'referableSensitivity',
-      label: 'Referable sensitivity',
-      value: m ? formatRate(m.referableSensitivity) : null,
-      explanation: `Of the items whose reference grade is ${t} or more, the share this file also graded ${t} or more.`,
+      label: t('metric.grading.referableSensitivity.label'),
+      value: m ? formatRate(f, m.referableSensitivity) : null,
+      explanation: t('metric.grading.referableSensitivity.explanation', { threshold }),
     },
     {
       key: 'referableSpecificity',
-      label: 'Referable specificity',
-      value: m ? formatRate(m.referableSpecificity) : null,
-      explanation: `Of the items whose reference grade is below ${t}, the share this file also graded below ${t}.`,
+      label: t('metric.grading.referableSpecificity.label'),
+      value: m ? formatRate(f, m.referableSpecificity) : null,
+      explanation: t('metric.grading.referableSpecificity.explanation', { threshold }),
     },
-    {
-      key: 'coverage',
-      label: 'Coverage',
-      value: m ? formatRate(m.coverage) : null,
-      explanation: coverage,
-    },
+    coverage(m?.coverage),
   ];
 }
