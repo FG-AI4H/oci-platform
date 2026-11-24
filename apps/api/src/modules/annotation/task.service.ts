@@ -152,8 +152,14 @@ export class TaskService {
       this.campaigns.findHostedImages(campaign.manifestVersionId),
       prefix ? Promise.resolve([]) : this.dicomSeries.listTaskSamples(campaign.manifestVersionId),
     ]);
+    // In file-name order, as the form and the API promise: the storage
+    // key starts with a random id per file, so its order is arbitrary
+    // and "at most N" would take an arbitrary N. The key breaks ties
+    // between two files of the same name.
     const imageRefs = images
-      .filter((f) => fileNameOf(f.s3Key).startsWith(prefix))
+      .map((f) => ({ id: f.id, key: f.s3Key, name: fileNameOf(f.s3Key) }))
+      .filter((f) => f.name.startsWith(prefix))
+      .sort((x, y) => compareCodeUnits(x.name, y.name) || compareCodeUnits(x.key, y.key))
       .map((f) => fileSampleRef(f.id));
     const seriesRefs = series.filter((c) => c.heldImageCount === 0).map((c) => c.sampleRef);
     const held = series.length - seriesRefs.length;
@@ -754,6 +760,11 @@ function assertCanSeed(status: string): void {
   if (status === 'COMPLETED') {
     throw new ConflictException('Cannot seed tasks on a COMPLETED campaign');
   }
+}
+
+/** Plain code-unit order: the same on every server, whatever its locale. */
+function compareCodeUnits(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /** The file name at the end of a storage key. */
