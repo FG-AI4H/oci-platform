@@ -1,5 +1,7 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -17,9 +19,10 @@ import {
 } from '@oci/ui';
 import type { EvaluationTaskDetail, ScoredSubmissionQuotaSummary } from '@oci/shared-types';
 import { auth } from '../../../../auth';
-import { BINARY_DIAGNOSTIC_TEXT as BD } from '../../../../components/evaluation/binary-diagnostic-text';
+import type { EvaluationI18n } from '../../../../components/evaluation/i18n';
 import { positiveClassOf } from '../../../../components/evaluation/metrics';
 import { describeQuota } from '../../../../components/evaluation/quota-text';
+import { getEvaluationI18n } from '../../../../components/evaluation/server-i18n';
 import { ApiError, apiFetch } from '../../../../lib/api';
 import { SubmitPredictionsForm, type ScoringAccess } from './submit-form';
 
@@ -34,23 +37,32 @@ import { SubmitPredictionsForm, type ScoringAccess } from './submit-form';
  * The page is three numbered steps in reading order — get the template, fill
  * it in, check and submit — because the reader is expected to be doing this
  * for the first time.
+ *
+ * Text in the interface language (#654): `EvaluationTasks.submitPage`, the
+ * form's own `EvaluationSubmit`, and the shared `Evaluation` vocabulary. The
+ * example file keeps its column names (`item_id,label`): they are what the
+ * platform reads.
  */
 
 const LINK =
   'rounded font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]';
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const [{ slug }, t] = await Promise.all([params, getTranslations('EvaluationTasks')]);
   return {
-    title: `Submit predictions — ${slug} — OCI Evaluation`,
-    description: `Check and submit a predictions file for the ${slug} evaluation task.`,
+    title: t('submitPage.metaTitle', { slug }),
+    description: t('submitPage.metaDescription', { slug }),
     // A form, not content: nothing here for a crawler.
     robots: { index: false, follow: false },
   };
 }
 
 /** What the signed-in reader may do, without the token leaving the server. */
-async function scoringAccess(slug: string): Promise<ScoringAccess> {
+async function scoringAccess(slug: string, i18n: EvaluationI18n): Promise<ScoringAccess> {
   const session = await auth();
   if (!session?.user) return { kind: 'signed-out' };
   try {
@@ -58,7 +70,7 @@ async function scoringAccess(slug: string): Promise<ScoringAccess> {
       `/v2/evaluation/tasks/${encodeURIComponent(slug)}/quota`,
       { session, revalidate: 0 },
     );
-    return quota ? { kind: 'ready', quota: describeQuota(quota) } : { kind: 'unknown' };
+    return quota ? { kind: 'ready', quota: describeQuota(i18n, quota) } : { kind: 'unknown' };
   } catch (err) {
     return err instanceof ApiError && err.status === 401
       ? { kind: 'expired' }
@@ -72,6 +84,8 @@ export default async function SubmitPredictionsPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const [t, i18n] = await Promise.all([getTranslations('EvaluationTasks'), getEvaluationI18n()]);
+  const { f } = i18n;
 
   let task: EvaluationTaskDetail | null = null;
   let error: string | null = null;
@@ -81,7 +95,7 @@ export default async function SubmitPredictionsPage({
       { revalidate: 0 },
     );
   } catch (err) {
-    error = err instanceof Error ? err.message : 'Unable to reach evaluation API';
+    error = err instanceof Error ? err.message : i18n.t('unavailable.fallback');
   }
 
   if (error) {
@@ -89,7 +103,7 @@ export default async function SubmitPredictionsPage({
       <Container size="md">
         <Section spacing="md">
           <Alert tone="danger">
-            <AlertTitle as="h1">Evaluation unavailable</AlertTitle>
+            <AlertTitle as="h1">{i18n.t('unavailable.title')}</AlertTitle>
             <AlertDescription>
               <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
             </AlertDescription>
@@ -100,22 +114,23 @@ export default async function SubmitPredictionsPage({
   }
   if (!task) notFound();
 
-  const access = await scoringAccess(task.slug);
+  const access = await scoringAccess(task.slug, i18n);
   const taskHref = `/evaluation/${encodeURIComponent(task.slug)}` as const;
   const templateHref = `${taskHref}/template.csv`;
   const topLabel = task.numClasses - 1;
-  const n = (value: number) => value.toLocaleString('en-GB');
   // Two real identifiers make the example recognisable next to the template.
   const exampleIds = task.itemIds.slice(0, 2);
   const isBinary = task.taskKind === 'BINARY_DIAGNOSTIC';
-  const itemsText = `${n(task.itemCount)} ${task.itemCount === 1 ? 'item' : 'items'}`;
-  // A binary task's example shows the optional score column filled in.
+  const itemsText = t('submitPage.items', { count: task.itemCount, n: f.number(task.itemCount) });
+  // A binary task's example shows the optional score column filled in. The
+  // file itself is not translated: these are the columns the platform reads.
   const exampleLines = isBinary
     ? [
         'item_id,label,score',
         ...exampleIds.map((id, i) => `${id},${i % 2},${i % 2 ? '0.83' : '0.12'}`),
       ]
     : ['item_id,label', ...exampleIds.map((id, i) => `${id},${Math.min(i, topLabel)}`)];
+  const stepLabel = (step: number) => t('submitPage.step', { step });
 
   return (
     <Container size="md">
@@ -129,47 +144,47 @@ export default async function SubmitPredictionsPage({
             <span>{task.name}</span>
           </Link>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Evaluation
+            {t('submitPage.eyebrow')}
           </p>
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">Submit predictions</h1>
-          <p className="max-w-prose text-[var(--color-muted-foreground)]">
-            Send one label per item and get the metrics back. The file is compared with reference
-            labels the platform holds; those labels are never shown, to you or to anyone else.
-          </p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+            {t('submitPage.heading')}
+          </h1>
+          <p className="max-w-prose text-[var(--color-muted-foreground)]">{t('submitPage.lead')}</p>
         </header>
 
         {task.itemCount === 0 ? (
           <Alert tone="warning">
-            <AlertTitle as="h2">This task has no items yet</AlertTitle>
-            <AlertDescription>
-              There is nothing to predict until its host adds them.
-            </AlertDescription>
+            <AlertTitle as="h2">{t('submitPage.noItemsTitle')}</AlertTitle>
+            <AlertDescription>{t('submitPage.noItemsBody')}</AlertDescription>
           </Alert>
         ) : (
           <ol className="space-y-6">
             <li>
               <Card>
                 <CardHeader>
-                  <StepTitle step={1}>Get the template</StepTitle>
+                  <StepTitle step={1} label={stepLabel(1)}>
+                    {t('submitPage.step1Title')}
+                  </StepTitle>
                   <CardDescription>
                     {isBinary
-                      ? BD.submit.templateDescription(itemsText)
-                      : `A spreadsheet file with one line for each of the ${itemsText} in this task, and an empty column for your labels.`}
+                      ? i18n.t('binary.submit.templateDescription', { items: itemsText })
+                      : t('submitPage.step1Description', { items: itemsText })}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {/* A plain link: the route answers with a file, not a page. */}
                   <a href={templateHref} download className={buttonVariants({ size: 'lg' })}>
                     <DownloadIcon size={18} />
-                    Download template
+                    {t('submitPage.download')}
                   </a>
                   <p className="text-sm text-[var(--color-muted-foreground)]">
-                    If the file opens with everything in one column, your spreadsheet expects
-                    semicolons, as it does wherever decimals are written with a comma. Use the{' '}
-                    <a href={`${templateHref}?sep=semicolon`} download className={LINK}>
-                      semicolon-separated template
-                    </a>{' '}
-                    instead. Both are accepted.
+                    {t.rich('submitPage.semicolon', {
+                      link: (chunks) => (
+                        <a href={`${templateHref}?sep=semicolon`} download className={LINK}>
+                          {chunks}
+                        </a>
+                      ),
+                    })}
                   </p>
                 </CardContent>
               </Card>
@@ -178,22 +193,23 @@ export default async function SubmitPredictionsPage({
             <li>
               <Card>
                 <CardHeader>
-                  <StepTitle step={2}>Fill in the labels</StepTitle>
+                  <StepTitle step={2} label={stepLabel(2)}>
+                    {t('submitPage.step2Title')}
+                  </StepTitle>
                   <CardDescription>
                     {isBinary ? (
-                      BD.submit.fillIn(positiveClassOf(task))
+                      i18n.t('binary.submit.fillIn', { positive: positiveClassOf(i18n, task) })
                     ) : (
                       <>
-                        In the <code className="font-mono text-xs">label</code> column, type a whole
-                        number from 0 to {n(topLabel)} for each item.{' '}
-                        {task.taskKind === 'GRADING' ? (
-                          <>
-                            The number is the grade; {n(task.referableThreshold)} or more counts as
-                            referable.
-                          </>
-                        ) : (
-                          <>Each number stands for one of the {n(task.numClasses)} classes.</>
-                        )}
+                        {t.rich('submitPage.fillIn', {
+                          top: f.number(topLabel),
+                          code: (chunks) => <code className="font-mono text-xs">{chunks}</code>,
+                        })}{' '}
+                        {task.taskKind === 'GRADING'
+                          ? t('submitPage.fillGrading', {
+                              threshold: f.number(task.referableThreshold),
+                            })
+                          : t('submitPage.fillClasses', { n: f.number(task.numClasses) })}
                       </>
                     )}
                   </CardDescription>
@@ -203,22 +219,19 @@ export default async function SubmitPredictionsPage({
                       everyone must do (the label) is not buried under it. */}
                   {isBinary ? (
                     <p className="max-w-prose text-sm text-[var(--color-muted-foreground)]">
-                      {BD.submit.scoreHint}
+                      {i18n.t('binary.submit.scoreHint')}
                     </p>
                   ) : null}
                   <pre
-                    aria-label="Example of a filled-in file"
+                    aria-label={t('submitPage.exampleLabel')}
                     className="overflow-x-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-subtle)] p-4 font-mono text-xs text-[var(--color-foreground)]"
                   >
                     {[...exampleLines, '…'].join('\n')}
                   </pre>
                   <ul className="list-disc space-y-1 ps-5 text-sm text-[var(--color-muted-foreground)]">
-                    <li>Do not change the identifiers or the first line.</li>
-                    <li>
-                      To leave an item out, delete its line. It is then not scored, and the result
-                      shows lower coverage.
-                    </li>
-                    <li>Save the file as CSV, not as a spreadsheet workbook.</li>
+                    <li>{t('submitPage.keepIds')}</li>
+                    <li>{t('submitPage.leaveOut')}</li>
+                    <li>{t('submitPage.saveCsv')}</li>
                   </ul>
                 </CardContent>
               </Card>
@@ -227,12 +240,10 @@ export default async function SubmitPredictionsPage({
             <li>
               <Card accent="primary">
                 <CardHeader>
-                  <StepTitle step={3}>Check the format, then submit</StepTitle>
-                  <CardDescription>
-                    Checking is free and can be repeated as often as you like: it reads the file and
-                    tells you what to correct, without scoring it. Submitting for scoring is
-                    limited, so check first.
-                  </CardDescription>
+                  <StepTitle step={3} label={stepLabel(3)}>
+                    {t('submitPage.step3Title')}
+                  </StepTitle>
+                  <CardDescription>{t('submitPage.step3Description')}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <SubmitPredictionsForm slug={task.slug} access={access} />
@@ -246,7 +257,16 @@ export default async function SubmitPredictionsPage({
   );
 }
 
-function StepTitle({ step, children }: { step: number; children: string }) {
+function StepTitle({
+  step,
+  label,
+  children,
+}: {
+  step: number;
+  /** "Step 1: ", read before the title by a screen reader. */
+  label: string;
+  children: string;
+}) {
   return (
     <CardTitle as="h2" className="flex items-baseline gap-3">
       <span
@@ -256,7 +276,7 @@ function StepTitle({ step, children }: { step: number; children: string }) {
         {step}
       </span>
       <span>
-        <span className="sr-only">Step {step}: </span>
+        <span className="sr-only">{label}</span>
         {children}
       </span>
     </CardTitle>

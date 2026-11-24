@@ -1,7 +1,11 @@
 import type { SubmissionValidationCheck, SubmissionValidationReport } from '@oci/shared-types';
 import { describe, expect, it } from 'vitest';
 import { buildFormatReport, MAX_LISTED_ITEM_IDS } from './format-report';
+import { evaluationI18n } from './i18n.testing';
 import { metricCells } from './metrics';
+
+const en = evaluationI18n('en');
+const fr = evaluationI18n('fr');
 
 const TASK = {
   itemIds: ['img_a', 'img_b', 'img_c', 'img_d'],
@@ -43,6 +47,7 @@ describe('buildFormatReport (#645)', () => {
       report: report([check('PAYLOAD_SHAPE', true), check('DUPLICATE_ITEM_IDS', true)], 2),
       predictions: [row('img_a'), row('img_c')],
       task: TASK,
+      i18n: en,
     });
     expect(view).toEqual({
       ok: true,
@@ -68,6 +73,7 @@ describe('buildFormatReport (#645)', () => {
       ),
       predictions: [row('img_a'), row('img_a'), row('img_b', 7), row('img_z')],
       task: TASK,
+      i18n: en,
     });
 
     expect(view.ok).toBe(false);
@@ -88,6 +94,7 @@ describe('buildFormatReport (#645)', () => {
       report: report([check('ITEM_IDS_RECOGNISED', false, ['x', 'y'])], 0),
       predictions: [row('x'), row('y')],
       task: TASK,
+      i18n: en,
     });
     expect(view.problems[0]?.detail).toMatch(/^None of the identifiers in the file belong/);
     expect(view.missing.count).toBe(4);
@@ -99,6 +106,7 @@ describe('buildFormatReport (#645)', () => {
       report: report([check('PAYLOAD_SHAPE', true)], 1),
       predictions: [row('img_00')],
       task: { itemIds, numClasses: 2, taskKind: 'CLASSIFICATION' },
+      i18n: en,
     });
     expect(view.missing.itemIds).toHaveLength(MAX_LISTED_ITEM_IDS);
     expect(view.missing.count).toBe(49);
@@ -109,6 +117,7 @@ describe('buildFormatReport (#645)', () => {
       report: report([check('DISPATCH_AVAILABLE', false)], 1),
       predictions: [row('img_a')],
       task: TASK,
+      i18n: en,
     });
     expect(view.ok).toBe(false);
     expect(view.problems).toEqual([
@@ -126,6 +135,7 @@ describe('buildFormatReport (#645)', () => {
 describe('metricCells (#645)', () => {
   it('leads a grading task with QWK and explains the referable split at its threshold', () => {
     const cells = metricCells(
+      en,
       { taskKind: 'GRADING', referableThreshold: 1 },
       {
         kind: 'GRADING',
@@ -152,6 +162,7 @@ describe('metricCells (#645)', () => {
 
   it('leads a classification task with macro F1 and has no ordinal metric', () => {
     const cells = metricCells(
+      en,
       { taskKind: 'CLASSIFICATION', referableThreshold: 1 },
       {
         kind: 'CLASSIFICATION',
@@ -176,7 +187,7 @@ describe('metricCells (#645)', () => {
   });
 
   it('takes the cells from the task kind when there are no scores, with no values', () => {
-    const cells = metricCells({ taskKind: 'CLASSIFICATION', referableThreshold: 1 }, null);
+    const cells = metricCells(en, { taskKind: 'CLASSIFICATION', referableThreshold: 1 }, null);
     expect(cells[0]?.label).toBe('Macro F1');
     expect(cells.every((c) => c.value === null)).toBe(true);
   });
@@ -200,6 +211,7 @@ describe('buildFormatReport — scores (#650)', () => {
       ),
       predictions: [{ imageId: 'img_a', grade: 1, score: 0.4 }],
       task: TASK,
+      i18n: en,
     });
     expect(view.problems).toEqual([
       expect.objectContaining({
@@ -233,6 +245,7 @@ describe('buildFormatReport — scores (#650)', () => {
       report: report([check('PAYLOAD_SHAPE', true)], 2),
       predictions,
       task: BINARY_TASK,
+      i18n: en,
     });
     expect(view.ok).toBe(true);
     expect(view.scoreNote).toBe(note);
@@ -245,6 +258,7 @@ describe('buildFormatReport — no score note without a matched line (#650)', ()
       report: report([check('ITEM_IDS_RECOGNISED', false, ['zz'])], 0),
       predictions: [{ imageId: 'zz', grade: 1, score: 0.9 }],
       task: BINARY_TASK,
+      i18n: en,
     });
     expect(view.scoreNote).toBeNull();
   });
@@ -286,7 +300,7 @@ describe('metricCells — binary finding (#650)', () => {
   };
 
   it('names every metric in full, with its interval and what it rests on', () => {
-    const cells = metricCells(task, { kind: 'BINARY_DIAGNOSTIC', metrics });
+    const cells = metricCells(en, task, { kind: 'BINARY_DIAGNOSTIC', metrics });
     expect(cells.map((c) => c.label)).toEqual([
       'Balanced accuracy',
       'Sensitivity',
@@ -306,14 +320,14 @@ describe('metricCells — binary finding (#650)', () => {
   });
 
   it('says why AUC is missing on a scored submission, and leaves it blank on an unscored one', () => {
-    const scored = metricCells(task, { kind: 'BINARY_DIAGNOSTIC', metrics });
+    const scored = metricCells(en, task, { kind: 'BINARY_DIAGNOSTIC', metrics });
     expect(scored.find((c) => c.key === 'auc')?.absent?.label).toBe('Not reported');
-    const unscored = metricCells(task, null);
+    const unscored = metricCells(en, task, null);
     expect(unscored.every((c) => c.value === null && !c.absent)).toBe(true);
   });
 
   it('formats AUC on a 0 to 1 scale, not as a percentage', () => {
-    const cells = metricCells(task, {
+    const cells = metricCells(en, task, {
       kind: 'BINARY_DIAGNOSTIC',
       metrics: {
         ...metrics,
@@ -326,20 +340,89 @@ describe('metricCells — binary finding (#650)', () => {
   });
 
   it('keeps the task page row to the headline, the four rates and AUC', () => {
-    expect(metricCells(task, null, 'row')).toHaveLength(6);
+    expect(metricCells(en, task, null, 'row')).toHaveLength(6);
   });
 
   it('falls back to "Finding present" when the task names no positive class', () => {
-    const cells = metricCells({ ...task, positiveClassName: null }, null);
+    const cells = metricCells(en, { ...task, positiveClassName: null }, null);
     expect(cells[1]?.explanation).toContain('Finding present');
   });
 
   it('shows a not-estimable balanced accuracy in words, never as 0%', () => {
-    const cells = metricCells(task, {
+    const cells = metricCells(en, task, {
       kind: 'BINARY_DIAGNOSTIC',
       metrics: { ...metrics, specificity: null, balancedAccuracy: null },
     });
     expect(cells[0]?.value).toBeNull();
     expect(cells[0]?.absent?.label).toBe('Not estimable');
+  });
+
+  it('names the diagnostic measures as French clinicians do, with French numbers (#654)', () => {
+    const cells = metricCells(fr, task, { kind: 'BINARY_DIAGNOSTIC', metrics });
+    expect(cells.map((c) => c.label)).toEqual([
+      'Exactitude équilibrée',
+      'Sensibilité',
+      'Spécificité',
+      'Valeur prédictive positive (VPP)',
+      'Valeur prédictive négative (VPN)',
+      'Aire sous la courbe ROC (ASC)',
+      'Exactitude',
+      'Prévalence',
+      'Couverture',
+    ]);
+    const sensitivity = cells[1];
+    // Decimal comma, narrow no-break space before the percent sign.
+    expect(sensitivity?.value).toBe('80 %');
+    expect(sensitivity?.interval?.text).toBe('IC 95 % : 67 % à 88,8 %');
+    expect(sensitivity?.interval?.spoken).toBe('intervalle de confiance à 95 % : de 67 % à 88,8 %');
+    expect(sensitivity?.basis).toBe('40 sur 50');
+    const auc = metricCells(fr, task, {
+      kind: 'BINARY_DIAGNOSTIC',
+      metrics: {
+        ...metrics,
+        auc: { estimate: 0.875, lower: 0.5, upper: 1, resamples: 2000, seed: 650 },
+      },
+    }).find((c) => c.key === 'auc');
+    expect(auc?.value).toBe('0,875');
+    expect(auc?.explanation).toContain('2 000 rééchantillonnages bootstrap');
+  });
+});
+
+describe('French format check (#654)', () => {
+  it('words the problems and the score note in French', () => {
+    const view = buildFormatReport({
+      report: report([check('LABEL_RANGE', false, ['img_b'])], 2),
+      predictions: [
+        { imageId: 'img_a', grade: 1, score: 0.9 },
+        { imageId: 'img_b', grade: 7 },
+        { imageId: 'img_c', grade: 0 },
+      ],
+      task: BINARY_TASK,
+      i18n: fr,
+    });
+    expect(view.problems[0]?.title).toBe('Étiquettes hors de la plage de cette tâche');
+    expect(view.scoreNote).toBe(
+      '2 lignes reconnues n’ont pas de score : le résultat n’inclura donc pas d’ASC. C’est autorisé ; ajoutez un score à chaque ligne pour en obtenir une.',
+    );
+  });
+
+  it('formats a QWK below zero with a decimal comma', () => {
+    const cells = metricCells(
+      fr,
+      { taskKind: 'GRADING', referableThreshold: 2 },
+      {
+        kind: 'GRADING',
+        metrics: {
+          qwk: -0.25,
+          accuracy: 0.6667,
+          referableSensitivity: 0.5,
+          referableSpecificity: 1,
+          coverage: 0.75,
+        },
+      },
+    );
+    expect(cells[0]?.label).toBe('Kappa pondéré (QWK)');
+    expect(cells[0]?.value).toBe('-0,250');
+    expect(cells[1]?.value).toBe('66,7 %');
   });
 });

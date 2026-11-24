@@ -1,0 +1,56 @@
+{
+  "metaTitle": "Soumission — {slug} — Évaluation OCI",
+  "metaDescription": "Résultat d’une soumission à la tâche d’évaluation {slug}.",
+  "eyebrow": "Soumission",
+  "submitted": "Soumise le <time>{date} UTC</time>",
+  "yours": "C’est votre soumission.",
+  "failure": {
+    "title": "Ce fichier n’a pas été noté",
+    "quotaConsumed": "Cette tentative a compté comme une soumission notée.",
+    "quotaNotConsumed": "Cette tentative n’a pas compté comme une soumission notée.",
+    "visibleToYou": "Cette page n’est visible que par vous et par les administrateurs de la plateforme.",
+    "visibleToSubmitter": "Cette page n’est visible que par l’auteur de la soumission et par les administrateurs de la plateforme.",
+    "checkCorrected": "Vérifier un fichier corrigé"
+  },
+  "pending": {
+    "title": "Résultat en attente",
+    "body": "Cette soumission a été acceptée mais n’est pas encore notée. Rechargez la page plus tard."
+  },
+  "metrics": {
+    "title": "Métriques",
+    "description": "Calculées au regard des étiquettes de référence de <link>{task}</link>. Elles peuvent être comparées aux autres soumissions à cette tâche, et à aucune autre tâche."
+  },
+  "task": {
+    "title": "Tâche",
+    "taskTerm": "Tâche",
+    "kindTerm": "Type de tâche",
+    "datasetTerm": "Jeu de données noté",
+    "gradesTerm": "Grades",
+    "grades": "0 à {top}",
+    "thresholdTerm": "Seuil d’adressage",
+    "threshold": "<num>{threshold}</num> <muted>— un grade supérieur ou égal à {threshold} correspond à un cas à adresser.</muted>",
+    "classesTerm": "Classes",
+    "classes": "<num>{n}</num> <muted>(étiquettes 0 à {top})</muted>"
+  },
+  "allResults": "Tous les résultats de cette tâche",
+  "submitAnother": "Soumettre un autre fichier",
+  "submit": "Soumettre des prédictions",
+  "perClass": {
+    "title": "Résultats par classe",
+    "description": "Les performances du fichier pour chaque classe. Précision : parmi les éléments auxquels il a donné cette étiquette, la part qui la porte réellement (la VPP de la classe). Rappel : parmi les éléments qui portent cette étiquette, la part qu’il a retrouvée (la sensibilité de la classe). Le F1 combine les deux. Éléments : le nombre d’éléments notés ayant cette étiquette de référence.",
+    "tableLabel": "Tableau des résultats par classe",
+    "class": "Classe",
+    "precision": "Précision",
+    "recall": "Rappel",
+    "f1": "F1",
+    "items": "Éléments",
+    "notApplicable": "Sans objet : aucun élément de cette classe"
+  },
+  "method": {
+    "title": "Méthode d’évaluation",
+    "description": "La procédure de notation qui a produit ces chiffres, et si elle a fait l’objet d’une revue.",
+    "version": "version {version}",
+    "notAttributed": "pas encore attribué",
+    "notAttributedBody": "Ce résultat n’est rattaché à aucune version d’une méthode d’évaluation : il n’a donc pas de statut de revue à afficher et ne fait pas partie des rapports publiés."
+  }
+}

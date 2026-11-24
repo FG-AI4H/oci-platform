@@ -1,0 +1,81 @@
+{
+  "decision": {
+    "UNDER_REVIEW": {
+      "label": "Ouvrir la revue",
+      "consequence": "Fige les trois déclarations ci-dessus : désormais, toute modification nécessite une nouvelle version. Les résultats restent provisoires jusqu’à ce qu’une décision soit enregistrée.",
+      "finality": "Une revue ouverte ne peut pas être annulée.",
+      "confirmHeading": "Confirmer : ouvrir la revue de la version {version} de {method}",
+      "confirmButton": "Ouvrir la revue de la version {version}"
+    },
+    "APPROVED": {
+      "label": "Approuver",
+      "consequence": "Les résultats notés avec cette version comptent : ils sont publiés au lieu d’être provisoires.",
+      "finality": "Pour revenir plus tard sur une approbation, il faudra rejeter ou retirer la version, avec un motif publié.",
+      "confirmHeading": "Confirmer : approuver la version {version} de {method}",
+      "confirmButton": "Approuver la version {version}"
+    },
+    "REJECTED": {
+      "label": "Rejeter",
+      "consequence": "La version est publiée comme ayant échoué, avec votre justification, et ne peut plus produire de résultats. Les résultats qu’elle a déjà produits sont retirés avec elle.",
+      "finality": "Cette décision est définitive : une version rejetée ne peut pas faire l’objet d’une nouvelle revue. Une correction nécessite une nouvelle version.",
+      "confirmHeading": "Confirmer : rejeter la version {version} de {method}",
+      "confirmButton": "Rejeter la version {version}"
+    },
+    "WITHDRAWN": {
+      "label": "Retirer",
+      "consequence": "La version est mise hors service et ne peut plus produire de résultats. Les résultats qu’elle a déjà produits sont retirés avec elle, et le motif est publié.",
+      "finality": "Cette décision est définitive : une version retirée ne peut pas faire l’objet d’une nouvelle revue.",
+      "confirmHeading": "Confirmer : retirer la version {version} de {method}",
+      "confirmButton": "Retirer la version {version}"
+    }
+  },
+  "rejectAfterApproval": {
+    "label": "Rejeter après approbation",
+    "consequence": "Révoque l’approbation. La version est publiée comme ayant échoué, avec votre justification, et les résultats déjà publiés avec cette version sont retirés."
+  },
+  "statusWord": {
+    "DECLARED": "déclarée, pas encore en revue",
+    "UNDER_REVIEW": "en cours de revue",
+    "APPROVED": "approuvée",
+    "REJECTED": "rejetée",
+    "WITHDRAWN": "retirée"
+  },
+  "reviewHeading": "Relire cette version",
+  "withdrawHeading": "Retirer cette version",
+  "reviewLink": "Relire cette version",
+  "withdrawLink": "Retirer cette version",
+  "reviewIntro": "Lisez d’abord les trois déclarations ci-dessus. Votre décision et sa justification sont publiées sur cette page, pour tous, dès que vous confirmez.",
+  "withdrawIntro": "Vous êtes l’auteur de cette méthode : vous pouvez donc en retirer une version. Vous ne pouvez pas la relire : la revue se fait à deux.",
+  "decisionLegend": "Décision",
+  "rationaleLabel": "Justification",
+  "noteLabel": "Note (facultative)",
+  "rationaleHint": "Publiée avec la décision. Donnez le verdict, la catégorie de chaque constat éventuel et le raisonnement qui rend le verdict vérifiable. Jamais de code d’exploitation, de valeurs de paramètres ni de données individuelles de patients.",
+  "noteHint": "Ouvrir une revue ne décide rien : la note est donc facultative. Si vous en rédigez une, elle est publiée.",
+  "replacesPrevious": "Elle remplace la justification actuellement publiée.",
+  "continue": "Continuer",
+  "confirmLead": "Vérifiez avant de confirmer. Rien n’est enregistré tant que vous n’avez pas confirmé.",
+  "publishedAs": "Publié avec la décision :",
+  "noNote": "Pas de note.",
+  "backToEdit": "Revenir à la saisie",
+  "recording": "Enregistrement…",
+  "notRecorded": "Non enregistrée",
+  "chooseDecision": "Choisissez une décision.",
+  "rationaleRequired": "Rédigez la justification : elle est publiée avec la décision.",
+  "rationaleTooShort": "Écrivez au moins 10 caractères : la justification doit rendre la décision vérifiable.",
+  "rationaleTooLong": "La justification doit faire moins de 8 000 caractères.",
+  "forbidden": "La plateforme a refusé cette décision. La revue se fait à deux : la personne qui a soumis la méthode ou déclaré cette version ne peut pas la relire, et seul un relecteur des méthodes d’évaluation peut enregistrer une décision. Rien n’a été modifié ; votre texte est conservé ci-dessous.",
+  "stale": "La version {version} est désormais {status} : une décision a été enregistrée pendant votre saisie. Vous n’avez rien modifié ; la page montre la version dans son état actuel, et votre texte est conservé ci-dessous.",
+  "notReviewable": "La version {version} est {status}, ce qui ne permet pas cette décision. Rien n’a été modifié ; votre texte est conservé ci-dessous.",
+  "rationaleRefused": "La plateforme exige une justification pour cette décision.",
+  "gone": "Cette méthode ou cette version n’existe plus. Rien n’a été enregistré.",
+  "unreachable": "La plateforme est injoignable. Rien n’a été enregistré ; réessayez.",
+  "failed": "La décision n’a pas pu être enregistrée (erreur {status}). Rien n’a été modifié ; votre texte est conservé ci-dessous.",
+  "noLongerOpen": "Aucune décision ne vous est plus ouverte sur cette version. Votre texte est conservé ci-dessous :",
+  "barredSubmitted": "Vous avez soumis cette méthode : vous ne pouvez donc pas la relire. La revue se fait à deux : un autre relecteur des méthodes d’évaluation enregistre la décision.",
+  "barredDeclared": "Vous avez déclaré cette version : vous ne pouvez donc pas la relire. La revue se fait à deux : un autre relecteur des méthodes d’évaluation enregistre la décision.",
+  "recordedBanner": "Enregistré : la version {version} est désormais {status}. La décision et sa justification sont publiées ci-dessous.",
+  "declaredBanner": "La version {version} est déclarée. Elle attend maintenant un relecteur des méthodes d’évaluation.",
+  "reviewRecord": "Justification publiée avec la décision",
+  "reviewRecordHint": "Seules la dernière décision et sa justification sont affichées. La piste d’audit de la plateforme conserve chaque étape.",
+  "permissionsUnavailable": "Vos droits sur cette méthode n’ont pas pu être lus pour le moment : aucun formulaire de revue ou de déclaration n’est donc affiché. Rechargez la page pour réessayer."
+}

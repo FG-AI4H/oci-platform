@@ -1,6 +1,10 @@
 import type { SubgroupResults, TaskKindScores } from '@oci/shared-types';
 import { describe, expect, it } from 'vitest';
+import { evaluationI18n } from './i18n.testing';
 import { compareTables, subgroupTable, subgroupTables } from './subgroup-table';
+
+const en = evaluationI18n('en');
+const fr = evaluationI18n('fr');
 
 const classification = (accuracy: number): TaskKindScores => ({
   kind: 'CLASSIFICATION',
@@ -57,7 +61,7 @@ const byBand = (sixtyPlus: number): SubgroupResults => ({
 });
 
 describe('subgroupTable', () => {
-  const table = subgroupTable(byBand(0.7313).fields[0]!, classification(0.9));
+  const table = subgroupTable(en, byBand(0.7313).fields[0]!, classification(0.9));
 
   it('leads with the whole set, then the groups in their declared order', () => {
     expect(table.rows.map((r) => [r.kind, r.label])).toEqual([
@@ -149,7 +153,7 @@ describe('binary groups', () => {
   };
 
   it('shows each rate with its interval, and a withheld rate as withheld, in words', () => {
-    const [table] = subgroupTables(results, scores);
+    const [table] = subgroupTables(en, results, scores);
     expect(table?.columns.map((c) => c.key)).toEqual(['sensitivity', 'specificity', 'accuracy']);
     expect(table?.rows[0]?.cells[0]).toMatchObject({ text: '80%', interval: '67%–89%' });
     const group = table?.rows[1]?.cells ?? [];
@@ -162,6 +166,7 @@ describe('binary groups', () => {
 
 describe('compareTables', () => {
   const tables = compareTables(
+    en,
     'accuracy',
     { scores: classification(0.9), subgroups: byBand(0.8955) },
     { scores: classification(0.9), subgroups: byBand(0.7313) },
@@ -182,10 +187,24 @@ describe('compareTables', () => {
     const other = byBand(0.7313);
     other.fields[0]!.cells[0] = { status: 'SUPPRESSED', value: '18-39', label: '18 to 39' };
     const t = compareTables(
+      en,
       'accuracy',
       { scores: classification(0.9), subgroups: byBand(0.8955) },
       { scores: classification(0.9), subgroups: other },
     );
     expect(t[0]?.rows[1]).toMatchObject({ kind: 'suppressed', a: null, b: null });
+  });
+
+  it('words and formats the comparison in French (#654)', () => {
+    const rows =
+      compareTables(
+        fr,
+        'accuracy',
+        { scores: classification(0.9), subgroups: byBand(0.8955) },
+        { scores: classification(0.9), subgroups: byBand(0.7313) },
+      )[0]?.rows ?? [];
+    expect(rows[0]?.label).toBe('Tous les éléments notés');
+    expect(rows[3]?.b?.text).toBe('73,1 %');
+    expect(rows[3]?.difference).toBe('-16,4 pts');
   });
 });

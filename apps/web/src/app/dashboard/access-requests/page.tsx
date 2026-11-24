@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -15,12 +16,21 @@ import {
 } from '@oci/ui';
 import type { AccessRequestStatus, AccessRequestSummary } from '@oci/shared-types';
 import { auth } from '../../../auth';
+import { getFormatters } from '../../../i18n/server';
 import { apiFetch } from '../../../lib/api';
 
-export const metadata = {
-  title: 'My access requests — OCI Platform',
-  robots: { index: false, follow: false },
-};
+/**
+ * The participant's own access requests, in the interface language
+ * (#654). Dataset names and the host's decision note are content and
+ * are shown as written.
+ */
+export async function generateMetadata() {
+  const t = await getTranslations('AccessRequest');
+  return {
+    title: t('dashboard.metaTitle'),
+    robots: { index: false, follow: false },
+  };
+}
 
 const statusTone: Record<AccessRequestStatus, 'neutral' | 'info' | 'success' | 'danger'> = {
   PENDING: 'info',
@@ -29,16 +39,12 @@ const statusTone: Record<AccessRequestStatus, 'neutral' | 'info' | 'success' | '
   REVOKED: 'neutral',
 };
 
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
-
 export default async function MyAccessRequestsPage() {
   const session = await auth();
   if (!session?.user) {
     redirect('/signin?callbackUrl=%2Fdashboard%2Faccess-requests');
   }
+  const t = await getTranslations('AccessRequest');
 
   let items: AccessRequestSummary[] | null = null;
   let error: string | null = null;
@@ -48,7 +54,7 @@ export default async function MyAccessRequestsPage() {
       revalidate: 0,
     });
   } catch (err) {
-    error = err instanceof Error ? err.message : 'Unable to reach catalog API';
+    error = err instanceof Error ? err.message : t('page.unavailableFallback');
   }
 
   return (
@@ -56,17 +62,17 @@ export default async function MyAccessRequestsPage() {
       <Section spacing="md">
         <header className="mb-6 space-y-3">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Dashboard
+            {t('dashboard.eyebrow')}
           </p>
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">My access requests</h1>
-          <p className="max-w-prose text-[var(--color-muted-foreground)]">
-            Restricted datasets you&apos;ve asked to access. Hosts decide each request.
-          </p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">
+            {t('dashboard.title')}
+          </h1>
+          <p className="max-w-prose text-[var(--color-muted-foreground)]">{t('dashboard.lead')}</p>
         </header>
 
         {error ? (
           <Alert tone="danger">
-            <AlertTitle>Could not load requests</AlertTitle>
+            <AlertTitle>{t('dashboard.loadErrorTitle')}</AlertTitle>
             <AlertDescription>
               <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
             </AlertDescription>
@@ -74,13 +80,15 @@ export default async function MyAccessRequestsPage() {
         ) : !items || items.length === 0 ? (
           <Card tone="subtle">
             <CardHeader>
-              <CardTitle>No requests yet</CardTitle>
+              <CardTitle>{t('dashboard.emptyTitle')}</CardTitle>
               <CardDescription>
-                Browse the{' '}
-                <Link href="/catalog" className="underline">
-                  catalog
-                </Link>{' '}
-                and submit a request from any RESTRICTED dataset&apos;s detail page.
+                {t.rich('dashboard.emptyBody', {
+                  link: (chunks) => (
+                    <Link href="/catalog" className="underline">
+                      {chunks}
+                    </Link>
+                  ),
+                })}
               </CardDescription>
             </CardHeader>
           </Card>
@@ -98,7 +106,8 @@ export default async function MyAccessRequestsPage() {
   );
 }
 
-function RequestRow({ req }: { req: AccessRequestSummary }) {
+async function RequestRow({ req }: { req: AccessRequestSummary }) {
+  const [t, f] = await Promise.all([getTranslations('AccessRequest'), getFormatters()]);
   return (
     <Card>
       <CardHeader>
@@ -115,17 +124,19 @@ function RequestRow({ req }: { req: AccessRequestSummary }) {
             <CardDescription>
               <span className="font-mono text-xs">{req.dataset.slug}</span>
               {' · '}
-              Submitted{' '}
-              <time dateTime={req.createdAt}>{DATE_FORMATTER.format(new Date(req.createdAt))}</time>
+              {t.rich('dashboard.submitted', {
+                date: f.dateTime(req.createdAt),
+                time: (chunks) => <time dateTime={req.createdAt}>{chunks}</time>,
+              })}
             </CardDescription>
           </div>
-          <Badge tone={statusTone[req.status]}>{req.status.toLowerCase()}</Badge>
+          <Badge tone={statusTone[req.status]}>{t(`status.${req.status}`)}</Badge>
         </div>
       </CardHeader>
       {req.status !== 'PENDING' && req.decisionNote ? (
         <CardContent>
           <p className="text-sm">
-            <span className="font-medium">Host&apos;s note: </span>
+            <span className="font-medium">{t('dashboard.hostNote')} </span>
             {req.decisionNote}
           </p>
         </CardContent>

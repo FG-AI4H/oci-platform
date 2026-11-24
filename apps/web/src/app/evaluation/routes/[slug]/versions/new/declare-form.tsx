@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useTranslations } from 'next-intl';
 import { RoutePartySchema } from '@oci/shared-types';
 import {
   Alert,
@@ -16,10 +17,7 @@ import {
   Input,
   Textarea,
 } from '@oci/ui';
-import {
-  PARTY_LABEL,
-  TRUST_ANCHOR_LABEL,
-} from '../../../../../../components/evaluation/route-labels';
+import { TRUST_ANCHORS } from '../../../../../../components/evaluation/route-labels';
 import { declareVersionAction, type DeclareState } from './actions';
 import {
   MAX_ROWS,
@@ -27,11 +25,9 @@ import {
   type DeclarationDraft,
   type ObservationRow,
 } from './declaration-draft';
-import { DECLARE_TEXT } from './strings';
 
 const initial: DeclareState = { status: 'idle' };
 const PARTIES = RoutePartySchema.options;
-const TRUST_ANCHORS = Object.keys(TRUST_ANCHOR_LABEL) as Array<keyof typeof TRUST_ANCHOR_LABEL>;
 
 const SELECT =
   'block w-full rounded-md border bg-[var(--color-background)] px-3 py-2 text-sm min-h-11 sm:min-h-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]';
@@ -48,6 +44,7 @@ interface Props {
  * lists are one item per line. After a refusal every entry comes back.
  */
 export function DeclareForm({ slug, existingVersions, start }: Props) {
+  const t = useTranslations('EvaluationDeclare');
   const [state, action, pending] = useActionState(declareVersionAction, initial);
   const draft = state.status === 'error' ? state.values : start;
   const errors = state.status === 'error' ? state.errors : {};
@@ -70,7 +67,7 @@ export function DeclareForm({ slug, existingVersions, start }: Props) {
       {state.status === 'error' ? (
         <div ref={alertRef} tabIndex={-1} className="focus:outline-none">
           <Alert tone="danger">
-            <AlertTitle as="h2">{DECLARE_TEXT.notDeclared}</AlertTitle>
+            <AlertTitle as="h2">{t('notDeclared')}</AlertTitle>
             <AlertDescription>{state.message}</AlertDescription>
           </Alert>
         </div>
@@ -78,7 +75,7 @@ export function DeclareForm({ slug, existingVersions, start }: Props) {
       <Fields draft={draft} errors={errors} existingVersions={existingVersions} />
       <div className="flex justify-end">
         <Button type="submit" disabled={pending} className="h-11 w-full sm:h-10 sm:w-auto">
-          {pending ? DECLARE_TEXT.submitting : DECLARE_TEXT.submit}
+          {pending ? t('submitting') : t('submit')}
         </Button>
       </div>
     </form>
@@ -94,6 +91,8 @@ function Fields({
   errors: Record<string, string>;
   existingVersions: string[];
 }) {
+  const t = useTranslations('EvaluationDeclare');
+  const requiredLabel = useTranslations('Common')('required');
   const [adversaries, setAdversaries] = useState<AdversaryRow[]>(draft.adversaries);
   const [observations, setObservations] = useState<ObservationRow[]>(draft.observations);
   const [reproducible, setReproducible] = useState(draft.reproducible);
@@ -106,10 +105,11 @@ function Fields({
   return (
     <>
       <Field
-        label={DECLARE_TEXT.versionLabel}
+        label={t('versionLabel')}
         htmlFor="f-version"
         required
-        hint={DECLARE_TEXT.versionHint(existingVersions.join(', ') || '—')}
+        requiredLabel={requiredLabel}
+        hint={t('versionHint', { existing: existingVersions.join(', ') || '—' })}
         error={err('version')}
       >
         <Input
@@ -125,9 +125,9 @@ function Fields({
         />
       </Field>
 
-      <Section title={DECLARE_TEXT.threatHeading} hint={DECLARE_TEXT.threatHint}>
+      <Section title={t('threatHeading')} hint={t('threatHint')}>
         <fieldset className="space-y-3">
-          <legend className="text-sm font-medium">{DECLARE_TEXT.adversariesLegend}</legend>
+          <legend className="text-sm font-medium">{t('adversariesLegend')}</legend>
           {err('adversaries') ? (
             <p className="text-xs text-[var(--color-danger)]">{err('adversaries')}</p>
           ) : null}
@@ -137,9 +137,10 @@ function Fields({
               className="grid gap-3 rounded-lg border border-[var(--color-border)] p-3 sm:grid-cols-[12rem_1fr_auto] sm:items-start"
             >
               <Field
-                label={DECLARE_TEXT.partyLabel}
+                label={t('partyLabel')}
                 htmlFor={`f-adversaries.${i}.party`}
                 required
+                requiredLabel={requiredLabel}
                 error={err(`adversaries.${i}.party`)}
               >
                 <PartySelect
@@ -153,9 +154,10 @@ function Fields({
                 />
               </Field>
               <Field
-                label={DECLARE_TEXT.capabilityLabel}
+                label={t('capabilityLabel')}
                 htmlFor={`f-adversaries.${i}.capability`}
                 required
+                requiredLabel={requiredLabel}
                 error={err(`adversaries.${i}.capability`)}
               >
                 <Textarea
@@ -188,7 +190,7 @@ function Fields({
                     }}
                     className="h-4 w-4 accent-[var(--color-primary)]"
                   />
-                  {DECLARE_TEXT.defendedLabel}
+                  {t('defendedLabel')}
                 </label>
                 {adversaries.length > 1 ? (
                   <Button
@@ -198,7 +200,7 @@ function Fields({
                     className="h-11 sm:h-8"
                     onClick={() => setAdversaries((rows) => rows.filter((_, j) => j !== i))}
                   >
-                    {DECLARE_TEXT.removeRow(i + 1)}
+                    {t('removeRow', { n: i + 1 })}
                   </Button>
                 ) : null}
               </div>
@@ -214,29 +216,29 @@ function Fields({
                 setAdversaries((rows) => [...rows, { party: '', capability: '', defended: true }])
               }
             >
-              {DECLARE_TEXT.addAdversary}
+              {t('addAdversary')}
             </Button>
           ) : null}
         </fieldset>
         <Lines
           name="assumptions"
-          label={DECLARE_TEXT.assumptionsLabel}
-          hint={DECLARE_TEXT.linesHint}
+          label={t('assumptionsLabel')}
+          hint={t('linesHint')}
           value={draft.assumptions}
           error={err('assumptions')}
         />
         <Lines
           name="outOfScope"
-          label={DECLARE_TEXT.outOfScopeLabel}
-          hint={DECLARE_TEXT.outOfScopeHint}
+          label={t('outOfScopeLabel')}
+          hint={t('outOfScopeHint')}
           value={draft.outOfScope}
           error={err('outOfScope')}
         />
       </Section>
 
-      <Section title={DECLARE_TEXT.disclosureHeading} hint={DECLARE_TEXT.disclosureHint}>
+      <Section title={t('disclosureHeading')} hint={t('disclosureHint')}>
         <fieldset className="space-y-3">
-          <legend className="text-sm font-medium">{DECLARE_TEXT.observationsLegend}</legend>
+          <legend className="text-sm font-medium">{t('observationsLegend')}</legend>
           {err('observations') ? (
             <p className="text-xs text-[var(--color-danger)]">{err('observations')}</p>
           ) : null}
@@ -246,9 +248,10 @@ function Fields({
               className="grid gap-3 rounded-lg border border-[var(--color-border)] p-3 sm:grid-cols-[12rem_1fr_auto] sm:items-start"
             >
               <Field
-                label={DECLARE_TEXT.partyLabel}
+                label={t('partyLabel')}
                 htmlFor={`f-observations.${i}.party`}
                 required
+                requiredLabel={requiredLabel}
                 error={err(`observations.${i}.party`)}
               >
                 <PartySelect
@@ -262,9 +265,10 @@ function Fields({
                 />
               </Field>
               <Field
-                label={DECLARE_TEXT.observesLabel}
+                label={t('observesLabel')}
                 htmlFor={`f-observations.${i}.observes`}
                 required
+                requiredLabel={requiredLabel}
                 error={err(`observations.${i}.observes`)}
               >
                 <Textarea
@@ -291,7 +295,7 @@ function Fields({
                     className="h-11 sm:h-8"
                     onClick={() => setObservations((rows) => rows.filter((_, j) => j !== i))}
                   >
-                    {DECLARE_TEXT.removeRow(i + 1)}
+                    {t('removeRow', { n: i + 1 })}
                   </Button>
                 ) : null}
               </div>
@@ -305,14 +309,15 @@ function Fields({
               className="h-11 sm:h-8"
               onClick={() => setObservations((rows) => [...rows, { party: '', observes: '' }])}
             >
-              {DECLARE_TEXT.addObservation}
+              {t('addObservation')}
             </Button>
           ) : null}
         </fieldset>
         <Field
-          label={DECLARE_TEXT.trustAnchorLabel}
+          label={t('trustAnchorLabel')}
           htmlFor="f-trustAnchor"
           required
+          requiredLabel={requiredLabel}
           error={err('trustAnchor')}
         >
           <select
@@ -322,20 +327,20 @@ function Fields({
             className={`${SELECT} ${err('trustAnchor') ? 'border-[var(--color-danger)]' : 'border-[var(--color-border)]'}`}
             {...described('trustAnchor')}
           >
-            <option value="">{DECLARE_TEXT.choose}</option>
+            <option value="">{t('choose')}</option>
             {TRUST_ANCHORS.map((anchor) => (
               <option key={anchor} value={anchor}>
-                {/* eslint-disable-next-line security/detect-object-injection -- typed enum key */}
-                {TRUST_ANCHOR_LABEL[anchor]}
+                {t(`trustAnchor.${anchor}`)}
               </option>
             ))}
           </select>
         </Field>
         <Field
-          label={DECLARE_TEXT.keyGovernanceLabel}
+          label={t('keyGovernanceLabel')}
           htmlFor="f-keyGovernance"
           required
-          hint={DECLARE_TEXT.keyGovernanceHint}
+          requiredLabel={requiredLabel}
+          hint={t('keyGovernanceHint')}
           error={err('keyGovernance')}
         >
           <Textarea
@@ -350,15 +355,16 @@ function Fields({
         </Field>
         <Check
           name="reproducible"
-          label={DECLARE_TEXT.reproducibleLabel}
+          label={t('reproducibleLabel')}
           checked={reproducible}
           onChange={setReproducible}
         />
         <Field
-          label={DECLARE_TEXT.reproducibleMethodLabel}
+          label={t('reproducibleMethodLabel')}
           htmlFor="f-reproducibleMethod"
           required={reproducible}
-          hint={DECLARE_TEXT.reproducibleMethodHint}
+          requiredLabel={requiredLabel}
+          hint={t('reproducibleMethodHint')}
           error={err('reproducibleMethod')}
         >
           <Textarea
@@ -373,25 +379,25 @@ function Fields({
         </Field>
       </Section>
 
-      <Section title={DECLARE_TEXT.envelopeHeading} hint={DECLARE_TEXT.envelopeHint}>
+      <Section title={t('envelopeHeading')} hint={t('envelopeHint')}>
         <Lines
           name="permittedOperations"
-          label={DECLARE_TEXT.permittedOperationsLabel}
-          hint={DECLARE_TEXT.linesHint}
+          label={t('permittedOperationsLabel')}
+          hint={t('linesHint')}
           value={draft.permittedOperations}
           error={err('permittedOperations')}
         />
         <div className="grid gap-4 sm:grid-cols-3">
           <Text
             name="arithmeticPrecision"
-            label={DECLARE_TEXT.arithmeticPrecisionLabel}
+            label={t('arithmeticPrecisionLabel')}
             value={draft.arithmeticPrecision}
             error={err('arithmeticPrecision')}
             required
           />
           <Text
             name="maxRuntimeSec"
-            label={DECLARE_TEXT.maxRuntimeLabel}
+            label={t('maxRuntimeLabel')}
             value={draft.maxRuntimeSec}
             error={err('maxRuntimeSec')}
             numeric
@@ -399,7 +405,7 @@ function Fields({
           />
           <Text
             name="maxMemoryMb"
-            label={DECLARE_TEXT.maxMemoryLabel}
+            label={t('maxMemoryLabel')}
             value={draft.maxMemoryMb}
             error={err('maxMemoryMb')}
             numeric
@@ -407,7 +413,7 @@ function Fields({
           />
         </div>
         <Field
-          label={DECLARE_TEXT.modelConstraintsLabel}
+          label={t('modelConstraintsLabel')}
           htmlFor="f-modelConstraints"
           error={err('modelConstraints')}
         >
@@ -421,7 +427,7 @@ function Fields({
         </Field>
         <Check
           name="fidelityMeasured"
-          label={DECLARE_TEXT.fidelityMeasuredLabel}
+          label={t('fidelityMeasuredLabel')}
           checked={fidelity}
           onChange={setFidelity}
         />
@@ -429,21 +435,21 @@ function Fields({
           <div className="grid gap-4 sm:grid-cols-3">
             <Text
               name="fidelityMetric"
-              label={DECLARE_TEXT.fidelityMetricLabel}
+              label={t('fidelityMetricLabel')}
               value={draft.fidelityMetric}
               error={err('fidelityMetric')}
               required
             />
             <Text
               name="fidelityDelta"
-              label={DECLARE_TEXT.fidelityDeltaLabel}
+              label={t('fidelityDeltaLabel')}
               value={draft.fidelityDelta}
               error={err('fidelityDelta')}
               required
             />
             <Text
               name="fidelityMeasuredOn"
-              label={DECLARE_TEXT.fidelityMeasuredOnLabel}
+              label={t('fidelityMeasuredOnLabel')}
               value={draft.fidelityMeasuredOn}
               error={err('fidelityMeasuredOn')}
               required
@@ -474,6 +480,7 @@ function PartySelect(props: {
   invalid: boolean;
   onChange: (party: string) => void;
 }) {
+  const t = useTranslations('EvaluationDeclare');
   return (
     <select
       id={props.id}
@@ -483,11 +490,10 @@ function PartySelect(props: {
       aria-describedby={props.invalid ? `${props.id}-err` : undefined}
       className={`${SELECT} ${props.invalid ? 'border-[var(--color-danger)]' : 'border-[var(--color-border)]'}`}
     >
-      <option value="">{DECLARE_TEXT.choose}</option>
+      <option value="">{t('choose')}</option>
       {PARTIES.map((party) => (
         <option key={party} value={party}>
-          {/* eslint-disable-next-line security/detect-object-injection -- typed enum key */}
-          {PARTY_LABEL[party]}
+          {t(`party.${party}`)}
         </option>
       ))}
     </select>
@@ -502,8 +508,16 @@ function Lines(props: {
   error?: string;
 }) {
   const id = `f-${props.name}`;
+  const requiredLabel = useTranslations('Common')('required');
   return (
-    <Field label={props.label} htmlFor={id} required hint={props.hint} error={props.error}>
+    <Field
+      label={props.label}
+      htmlFor={id}
+      required
+      requiredLabel={requiredLabel}
+      hint={props.hint}
+      error={props.error}
+    >
       <Textarea
         id={id}
         name={props.name}
@@ -525,8 +539,15 @@ function Text(props: {
   required?: boolean;
 }) {
   const id = `f-${props.name}`;
+  const requiredLabel = useTranslations('Common')('required');
   return (
-    <Field label={props.label} htmlFor={id} required={props.required} error={props.error}>
+    <Field
+      label={props.label}
+      htmlFor={id}
+      required={props.required}
+      requiredLabel={requiredLabel}
+      error={props.error}
+    >
       <Input
         id={id}
         name={props.name}

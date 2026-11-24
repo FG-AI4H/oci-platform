@@ -5,7 +5,10 @@ import { DUO_REGISTRY } from '@oci/croissant';
  * The workshop path in French (#654). A browser set to French walks the
  * pages translated in this slice and must find no English left on them:
  * header, footer and home; sign-in; dashboard; catalogue list, dataset
- * page and the publish wizard; model pages; settings.
+ * page and the publish wizard; model pages; settings; the evaluation task
+ * list, task page, submit page, a submission's result, the comparison by
+ * subgroup and the evaluation methods; the access-request form and the
+ * participant's list of requests.
  *
  * "English left" means an English word from the list below, in the
  * visible text or in an `aria-label`, `title`, `placeholder` or `alt`.
@@ -21,8 +24,11 @@ import { DUO_REGISTRY } from '@oci/croissant';
  *     `@oci/croissant` and are shown as published by the ontology.
  *
  * Pre-conditions: the API and the web app running locally as for the
- * rest of the suite, with the demo seed (it needs one public dataset
- * and one published model card).
+ * rest of the suite, with the demo seed (it needs one public dataset,
+ * one published model card, the gated `oci-demo-chest-xr` dataset and
+ * an evaluation method). The evaluation test creates its own
+ * `e2e-eval-*` task, which `global-setup` removes; with PW_NO_RESET=1
+ * it stays.
  */
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
@@ -263,6 +269,154 @@ test.describe('French interface — workshop path (#654)', () => {
       await page.getByRole('button', { name: /^Suivant\s*:/ }).click();
       await expectFrench(page, draft);
     }
+  });
+
+  test('evaluation: task list, task page, submit page, a result, the comparison and the methods', async ({
+    page,
+    request,
+  }) => {
+    // A binary-finding task with subgroups and two scored results, made
+    // through the API as the evaluation specs do. Its own wording (name,
+    // positive class, subgroup labels) is French, as a French host's would be.
+    const stamp = Date.now();
+    const slug = `e2e-eval-fr-${stamp}`;
+    const ids = Array.from({ length: 40 }, (_, i) => `img${String(i).padStart(2, '0')}`);
+    const truth = Object.fromEntries(ids.map((id, i) => [id, i % 2]));
+    const created = await request.post(`${API}/v2/evaluation/tasks`, {
+      headers: { Authorization: 'Bearer dev:e2e-eval-host:host' },
+      data: {
+        slug,
+        name: 'Pneumothorax sur radiographie thoracique',
+        datasetSlug: 'e2e-eval-dataset',
+        taskKind: 'BINARY_DIAGNOSTIC',
+        numClasses: 2,
+        referableThreshold: 1,
+        positiveClassName: 'Pneumothorax présent',
+        groundTruth: truth,
+        subgroups: {
+          fields: [
+            {
+              key: 'sexe',
+              label: 'Sexe',
+              values: [
+                { value: 'F', label: 'Femmes' },
+                { value: 'M', label: 'Hommes' },
+              ],
+            },
+          ],
+          values: Object.fromEntries(ids.map((id, i) => [id, { sexe: i < 20 ? 'F' : 'M' }])),
+        },
+      },
+    });
+    expect(created.ok(), `create task: ${created.status()}`).toBe(true);
+    const submit = async (methodName: string, wrong: number[]) => {
+      const res = await request.post(`${API}/v2/evaluation/tasks/${slug}/submissions`, {
+        headers: { Authorization: `Bearer dev:e2e-fr-participant-${stamp}:researcher` },
+        data: {
+          methodName,
+          predictions: ids.map((id, i) => ({
+            imageId: id,
+            grade: wrong.includes(i) ? 1 - (i % 2) : i % 2,
+            score: wrong.includes(i) ? 0.4 : i % 2 ? 0.9 : 0.1,
+          })),
+        },
+      });
+      expect(res.ok(), `submit ${methodName}: ${res.status()}`).toBe(true);
+      return ((await res.json()) as { id: string }).id;
+    };
+    const first = await submit('Lecture A', [1, 4, 25]);
+    const second = await submit('Lecture B', [3, 21, 22, 30, 33]);
+
+    const taskStrings = await apiStrings(page, [
+      '/v2/evaluation/tasks',
+      `/v2/evaluation/tasks/${slug}`,
+    ]);
+
+    await page.goto('/evaluation');
+    await expect(page.getByRole('heading', { level: 1, name: 'Tâches' })).toBeVisible();
+    await expectFrench(page, taskStrings);
+
+    await page.goto(`/evaluation/${slug}`);
+    await expect(page.getByRole('heading', { name: 'À propos de cette tâche' })).toBeVisible();
+    await expect(page.getByText('Diagnostic binaire').first()).toBeVisible();
+    await expectFrench(page, taskStrings);
+
+    await page.goto(`/evaluation/${slug}/submit`);
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Soumettre des prédictions' }),
+    ).toBeVisible();
+    await expectFrench(page, taskStrings);
+
+    const result = await apiStrings(page, [`/v2/evaluation/tasks/${slug}/submissions/${first}`]);
+    await page.goto(`/evaluation/${slug}/submissions/${first}`);
+    await expect(page.getByRole('heading', { level: 2, name: 'Métriques' })).toBeVisible();
+    // The diagnostic measures as French clinicians name them, with French numbers.
+    for (const label of [
+      'Sensibilité',
+      'Spécificité',
+      'Valeur prédictive positive (VPP)',
+      'Valeur prédictive négative (VPN)',
+      'Aire sous la courbe ROC (ASC)',
+    ]) {
+      await expect(
+        page.locator('dt', { hasText: new RegExp(`^${label.replace(/[()]/g, '\\$&')}$`) }),
+      ).toBeVisible();
+    }
+    await expect(page.getByText(/IC 95\s%\s:\s[\d,]+\s%\sà\s[\d,]+\s%/).first()).toBeVisible();
+    await expect(
+      page.getByRole('heading', { level: 2, name: 'Résultats par sous-groupe' }),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Effectifs' })).toBeVisible();
+    await expectFrench(page, new Set([...taskStrings, ...result]));
+
+    await page.goto(`/evaluation/${slug}/compare?a=${first}&b=${second}`);
+    await expect(page.getByText('Comparaison par sous-groupe')).toBeVisible();
+    await expectFrench(
+      page,
+      new Set([
+        ...result,
+        ...(await apiStrings(page, [`/v2/evaluation/tasks/${slug}/submissions/${second}`])),
+      ]),
+    );
+
+    // The evaluation methods: the list and the first method's page. Method
+    // declarations (threat model, envelope) are the provider's own text.
+    const routes = await page.request.get(`${API}/v2/evaluation/routes`);
+    const routeList = (await routes.json()) as { slug: string }[];
+    await page.goto('/evaluation/routes');
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Méthodes d’évaluation' }),
+    ).toBeVisible();
+    await expectFrench(page, stringsIn(routeList));
+    const routeSlug = routeList[0]?.slug;
+    if (routeSlug) {
+      await page.goto(`/evaluation/routes/${routeSlug}`);
+      await expectFrench(page, await apiStrings(page, [`/v2/evaluation/routes/${routeSlug}`]));
+    }
+  });
+
+  test('access request: the form and the participant’s own list', async ({ page }) => {
+    await page.goto('/signin?callbackUrl=%2Fdashboard');
+    await page.getByLabel('Utilisateur').fill(`fr-requester-${Date.now()}`);
+    await page.getByLabel('Rôles').fill('participant');
+    await page.getByRole('button', { name: /se connecter.*développement local/i }).click();
+    await page.waitForURL(/\/dashboard/);
+
+    // The seed's gated demo dataset, reached from its page as a participant would.
+    const slug = 'oci-demo-chest-xr';
+    const dataset = await apiStrings(page, [`/v2/catalog/datasets/${slug}`]);
+    await page.goto(`/catalog/${slug}`);
+    await page.getByRole('link', { name: 'Demander l’accès' }).click();
+    await expect(page).toHaveURL(new RegExp(`/catalog/${slug}/request-access$`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Demander l’accès' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Envoyer la demande' })).toBeVisible();
+    await expectFrench(page, dataset);
+
+    await page.goto('/dashboard/access-requests');
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Mes demandes d’accès' }),
+    ).toBeVisible();
+    await expectFrench(page);
   });
 
   test('the header switch changes the language at once, on the same page', async ({ browser }) => {

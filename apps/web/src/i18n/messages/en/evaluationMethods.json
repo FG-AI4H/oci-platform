@@ -1,0 +1,175 @@
+{
+  "mode": {
+    "long": {
+      "PREDICTIONS": "Predictions file scored on the platform",
+      "CONTAINER": "Sealed container run next to the data",
+      "ENCRYPTED": "Computation on encrypted values"
+    },
+    "short": {
+      "PREDICTIONS": "Predictions file",
+      "CONTAINER": "Sealed container",
+      "ENCRYPTED": "Encrypted computation"
+    }
+  },
+  "party": {
+    "label": {
+      "DATA_HOST": "data host",
+      "MODEL_DEVELOPER": "model developer",
+      "PLATFORM_OPERATOR": "platform operator",
+      "ROUTE_PROVIDER": "method provider"
+    },
+    "description": {
+      "DATA_HOST": "the institution that holds the dataset and its reference labels",
+      "MODEL_DEVELOPER": "the participant whose model is being evaluated",
+      "PLATFORM_OPERATOR": "the team that runs the Open Code Infrastructure",
+      "ROUTE_PROVIDER": "the party that built and operates the evaluation method"
+    }
+  },
+  "trustAnchor": {
+    "CONTRACTUAL": "a contract",
+    "HARDWARE_ATTESTATION": "hardware attestation",
+    "CRYPTOGRAPHIC": "a cryptographic assumption"
+  },
+  "provider": {
+    "reference": "Reference implementation",
+    "unnamed": "Provider not named"
+  },
+  "unit": {
+    "mib": "{n} MiB",
+    "gib": "{n} GiB"
+  },
+  "list": {
+    "metaTitle": "Evaluation methods — OCI Platform",
+    "metaDescription": "The evaluation methods registered on the OCI Platform. Every result names the method and version that produced it; a method version is reviewed before its results are published.",
+    "back": "Evaluation",
+    "title": "Evaluation methods",
+    "methodWord": "{count, plural, one {method} other {methods}}",
+    "lead": "Every result on the platform names the evaluation method and version that produced it, and a method version is reviewed before its results are published. Each method declares what it defends against, who gets to observe what, and the limits a submission must run within. The conformance specification calls these methods <em>routes</em>; the two words mean the same thing here.",
+    "review": {
+      "heading": "Review queue",
+      "body": "{count, plural, =0 {No method version is waiting for review.} one {1 method version is waiting for review.} other {{n} method versions are waiting for review.}}",
+      "link": "Open the review queue"
+    },
+    "provider": "Provider",
+    "latestVersion": "Latest version",
+    "noVersion": "No version declared yet",
+    "versionCount": "{count, plural, one {{n} version} other {{n} versions}}",
+    "emptyTitle": "No evaluation methods registered yet.",
+    "emptyBody": "An evaluation method is registered with a threat model, a disclosure profile and an operational envelope, then reviewed. Once the first one is registered, it will appear here."
+  },
+  "detail": {
+    "metaTitle": "{slug} — OCI Evaluation methods",
+    "metaDescription": "Threat model, disclosure profile and operational envelope declared by the {slug} evaluation method, with the review status of each version.",
+    "back": "Evaluation methods",
+    "lead": "{mode}. Every result on the Open Code Infrastructure (OCI) names the evaluation method and version that produced it, and a method version is reviewed before its results are published. The declarations below are what that review examines.",
+    "about": {
+      "title": "About this method",
+      "description": "Who provides it, how a submission runs, and who the four parties named in the declarations are.",
+      "slug": "Slug",
+      "howItRuns": "How it runs",
+      "provider": "Provider",
+      "versions": "Versions",
+      "versionsNote": "{count, plural, =1 {— shown below.} other {— latest first below.}}",
+      "registered": "Registered",
+      "parties": "Parties"
+    },
+    "frozen": {
+      "title": "Declarations are frozen once review begins",
+      "body": "A version’s threat model, disclosure profile and operational envelope cannot change after it enters review, so the outcome applies to exactly what was reviewed. A change means a new version. Only an approved version produces published results; results from a version still under review are provisional, and results from a rejected or withdrawn version are withdrawn with it."
+    },
+    "noVersions": "This method has no version declared yet, so it has produced no results.",
+    "footerCount": "{count, plural, =1 {{n} version} other {{n} versions}} declared.",
+    "backToList": "Back to evaluation methods",
+    "version": {
+      "heading": "Version <mono>{version}</mono>",
+      "declaredReviewed": "Declared <declared>{declaredOn}</declared>; reviewed <reviewed>{reviewedOn}</reviewed>.",
+      "declaredNotReviewed": "Declared <declared>{declaredOn}</declared>; not yet reviewed."
+    },
+    "threat": {
+      "title": "Threat model",
+      "description": "Who might try to learn something they should not, what this method does about each of them, what it takes for granted, and what it makes no promise about.",
+      "adversaries": "Adversaries",
+      "adversariesRegion": "Adversaries this version considers",
+      "party": "Party",
+      "capability": "Capability",
+      "defended": "Defended",
+      "yes": "yes",
+      "no": "no",
+      "noNote": "A party marked <em>no</em> is named so nobody mistakes it for a guarantee: this method does not defend against it.",
+      "assumptions": "Assumptions",
+      "assumptionsHint": "What has to hold for the defences above to work. If an assumption fails, so does the guarantee that rests on it.",
+      "outOfScope": "Out of scope",
+      "outOfScopeBody": "A threat model with nothing out of scope is rejected on entry; naming the boundaries is the point."
+    },
+    "disclosure": {
+      "title": "Disclosure profile",
+      "description": "Who gets to see what while an evaluation runs, what that guarantee ultimately rests on, and whether a result can be reproduced.",
+      "trustAnchor": "Trust anchor",
+      "restsOn": "The guarantees rest on <strong>{anchor}</strong>",
+      "anchorNote": {
+        "CONTRACTUAL": "— an operating agreement between the parties, not a technical mechanism.",
+        "HARDWARE_ATTESTATION": "— the processor proves what code it is running before any data is released to it.",
+        "CRYPTOGRAPHIC": "— breaking the guarantee would mean solving a problem believed to be computationally infeasible."
+      },
+      "keyGovernance": "Key governance",
+      "reproducible": "Reproducible",
+      "yes": "Yes.",
+      "no": "No.",
+      "notGuaranteed": "Running the same submission again is not guaranteed to give the same result.",
+      "observes": "Who observes what",
+      "observesHint": "Everything each party can see during an evaluation, including what it already holds."
+    },
+    "envelope": {
+      "title": "Operational envelope",
+      "description": "The limits a submission must be designed to run within. The runtime and memory caps are enforced by the sandbox, not merely documented. Memory is given in mebibytes (MiB) and gibibytes (GiB).",
+      "permittedOperations": "Permitted operations",
+      "arithmeticPrecision": "Arithmetic precision",
+      "maxRuntime": "Maximum runtime",
+      "seconds": "({n} seconds)",
+      "maxMemory": "Maximum memory",
+      "mib": "({n} MiB)",
+      "modelConstraints": "Model constraints",
+      "noneDeclared": "None declared.",
+      "fidelityGap": "Fidelity gap",
+      "gapMetric": "{metric}:",
+      "measuredOn": "measured on {on}. The difference between a score produced through this method and the same model scored in the clear.",
+      "notMeasured": "Not yet measured.",
+      "notMeasuredBody": "The fidelity gap is the difference between a score produced through this method and the same model scored in the clear; it is reported once measured."
+    }
+  },
+  "declareLink": {
+    "heading": "Declare a new version",
+    "body": "You submitted this method. A change to its threat model, disclosure profile or operational envelope is declared as a new version, which is then reviewed.",
+    "bodyAdmin": "As an operator you can declare a version of this method. A change to its declarations is a new version, which is then reviewed.",
+    "link": "Declare a new version"
+  },
+  "queue": {
+    "metaTitle": "Reviews — OCI Evaluation methods",
+    "metaDescription": "Evaluation-method versions waiting for a review decision.",
+    "back": "Evaluation methods",
+    "eyebrow": "Evaluation reviewer",
+    "title": "Versions awaiting review",
+    "lead": "A result counts only once the version of the method that produced it is approved. These versions are waiting for a decision. Review is in pairs: a version you submitted is listed, but another reviewer decides it.",
+    "signedOutTitle": "Sign in to see the review queue",
+    "signedOut": "The review queue is for evaluation reviewers.",
+    "signIn": "Sign in",
+    "notReviewerTitle": "For evaluation reviewers",
+    "notReviewer": "The review queue is open to evaluation reviewers and platform operators. Every method and its review status stay public on the evaluation methods page.",
+    "unavailable": "The evaluation methods could not be read just now. Reload the page to try again.",
+    "underReviewHeading": "Under review: waiting for a decision",
+    "underReviewHint": "The declarations are frozen. Approve or reject, with a published rationale.",
+    "declaredHeading": "Declared: review not yet begun",
+    "declaredHint": "Beginning the review freezes the declarations.",
+    "empty": "Nothing is waiting here.",
+    "allEmpty": "No version is waiting for review.",
+    "declaredOn": "Declared",
+    "open": "Review version {version}",
+    "openFor": "Review version {version} of {method}",
+    "view": "View version {version}",
+    "viewFor": "View version {version} of {method}",
+    "yoursSubmitted": "You submitted this method: another reviewer decides it.",
+    "yoursDeclared": "You declared this version: another reviewer decides it.",
+    "permissionsUnknown": "Open the version to see what you can do on it.",
+    "count": "{count, plural, one {{n} version waiting} other {{n} versions waiting}}"
+  }
+}

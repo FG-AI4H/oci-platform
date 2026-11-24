@@ -1,0 +1,145 @@
+{
+  "status": {
+    "PENDING": "en attente",
+    "APPROVED": "approuvée",
+    "DENIED": "refusée",
+    "REVOKED": "révoquée"
+  },
+  "page": {
+    "metaTitle": "Demander l’accès — Catalogue OCI",
+    "unavailableTitle": "Catalogue indisponible",
+    "unavailableFallback": "Impossible de joindre l’API du catalogue",
+    "eyebrow": "Jeu de données restreint",
+    "title": "Demander l’accès",
+    "lead": "L’hôte examinera votre justification et vos attestations. Vous verrez sa décision sur <link>votre tableau de bord</link>.",
+    "auditableTitle": "Votre demande est conservée pour audit",
+    "auditableBody": "La justification et les attestations sont enregistrées avec le dossier de consentement et d’AIPD (analyse d’impact relative à la protection des données) du jeu de données. Soyez précis : l’hôte les contrôle ensuite.",
+    "detailsTitle": "Détails de la demande"
+  },
+  "form": {
+    "errorTitle": "La demande n’a pas pu être envoyée",
+    "permittedTitle": "Usages autorisés pour ce jeu de données",
+    "permittedBody": "L’hôte a associé à ce jeu de données les termes suivants de la Data Use Ontology (DUO) de GA4GH. L’usage que vous prévoyez doit être compatible avec chacun d’eux. Les intitulés des termes sont ceux de l’ontologie, en anglais.",
+    "choose": "Choisir…",
+    "submit": "Envoyer la demande",
+    "submitting": "Envoi…",
+    "project": {
+      "legend": "Projet",
+      "titleLabel": "Titre du projet",
+      "titleHint": "De 5 à 200 caractères. Il sert de titre à la demande dans la liste des demandes reçues par l’hôte.",
+      "descriptionLabel": "Description du projet",
+      "descriptionHint": "De 50 à 4 000 caractères. Présentez la question de recherche, la population et l’usage qui sera fait des données.",
+      "institutionLabel": "Établissement",
+      "institutionHint": "Votre université, votre hôpital ou votre organisation."
+    },
+    "intendedUse": {
+      "legend": "Usage prévu",
+      "hint": "La plateforme compare automatiquement cet usage aux termes DUO du jeu de données. Les incompatibilités sont signalées à l’hôte avant sa décision.",
+      "option": {
+        "NON_COMMERCIAL_RESEARCH": {
+          "label": "Recherche non commerciale",
+          "hint": "Recherche académique ou d’intérêt public. Les résultats peuvent être publiés ou diffusés sous licence libre."
+        },
+        "COMMERCIAL_RESEARCH": {
+          "label": "Recherche commerciale",
+          "hint": "Recherche à but lucratif, y compris l’entraînement de modèles destinés à des produits commerciaux."
+        },
+        "CLINICAL_CARE": {
+          "label": "Soins cliniques",
+          "hint": "Utilisation directe dans l’aide à la décision clinique ou dans les parcours de soins."
+        },
+        "EDUCATION": {
+          "label": "Enseignement",
+          "hint": "Supports pédagogiques ; pas pour des résultats de recherche primaire."
+        }
+      }
+    },
+    "duo": {
+      "legend": "Termes DUO auxquels vous vous engagez",
+      "hint": "Data Use Ontology de GA4GH : les termes dont vous acceptez les conditions. Choisissez-en au moins un qui correspond à votre projet. La comparaison automatique est prudente lorsque la correspondance n’est que partielle. Les intitulés des termes sont ceux de l’ontologie, en anglais."
+    },
+    "compliance": {
+      "legend": "Attestations de conformité",
+      "irbApproved": "Approbation éthique (IRB) obtenue.",
+      "irbApprovedBody": "Le comité d’éthique de mon établissement (IRB ou équivalent) a approuvé cette étude.",
+      "irbRefLabel": "Référence de l’approbation éthique (IRB)",
+      "irbRefHint": "Facultatif. Le document ou le numéro d’approbation de l’IRB, cité dans la piste d’audit.",
+      "dpiaLabel": "Référence de l’AIPD",
+      "dpiaHint": "Facultatif. L’analyse d’impact relative à la protection des données (AIPD) pour cet usage.",
+      "retentionLabel": "Durée de conservation des données (jours)",
+      "retentionHint": "Combien de temps vous conserverez les données après la fin de l’accès. De 1 à 3 650 jours (10 ans au maximum)."
+    },
+    "outputs": {
+      "legend": "Résultats",
+      "redistributionLabel": "Rediffusion prévue",
+      "redistributionHint": "Ce que vous ferez des données dérivées, des résultats ou des sorties du modèle.",
+      "redistribution": {
+        "NONE": "Aucune rediffusion — usage interne uniquement",
+        "DERIVATIVES_ONLY": "Données dérivées uniquement (pas de données brutes)",
+        "WITH_PERMISSION": "Avec une autorisation explicite à chaque demande"
+      },
+      "outputTypeLabel": "Type de résultat",
+      "outputTypeHint": "Le principal livrable du projet.",
+      "outputType": {
+        "PUBLICATION": "Publication évaluée par les pairs",
+        "MODEL_WEIGHTS": "Poids du modèle",
+        "DERIVATIVE_DATASET": "Jeu de données dérivé",
+        "INTERNAL_USE": "Rapport interne / aucun résultat diffusé à l’extérieur"
+      }
+    },
+    "builder": {
+      "legend": "Contexte du développeur de solutions d’IA",
+      "badge": "obligatoire pour les développeurs",
+      "intro": "Pour un usage commercial ou en soins cliniques, nous posons des questions sur le déploiement prévu, afin que l’hôte puisse juger si le produit envisagé est compatible avec les conditions de licence de son jeu de données.",
+      "legalNameLabel": "Nom de l’entité juridique",
+      "legalNamePlaceholder": "p. ex. Acme Health Inc.",
+      "jurisdictionLabel": "Juridiction (code ISO à 2 lettres)",
+      "jurisdictionHint": "p. ex. US, GB, CH, KE",
+      "deploymentLabel": "Pays de déploiement (codes ISO à 2 lettres, séparés par des virgules)",
+      "deploymentHint": "p. ex. KE, NG, ZA",
+      "pathwayLabel": "Voie réglementaire",
+      "pathway": {
+        "FDA_510K": "FDA 510(k)",
+        "FDA_DE_NOVO": "FDA De Novo",
+        "FDA_PMA": "FDA PMA",
+        "EU_MDR_CLASS_I": "Règlement (UE) 2017/745 (MDR), classe I",
+        "EU_MDR_CLASS_IIA": "Règlement (UE) 2017/745 (MDR), classe IIa",
+        "EU_MDR_CLASS_IIB": "Règlement (UE) 2017/745 (MDR), classe IIb",
+        "EU_MDR_CLASS_III": "Règlement (UE) 2017/745 (MDR), classe III",
+        "EU_IVDR": "Règlement (UE) 2017/746 (IVDR)",
+        "NATIONAL_LMIC": "Nationale (pays à revenu faible ou intermédiaire)",
+        "NONE_RESEARCH_ONLY": "Aucune (recherche uniquement)",
+        "OTHER": "Autre / pas encore décidée"
+      },
+      "whoPriorityLabel": "Lien avec les priorités de l’OMS (facultatif)",
+      "whoPriorityHint": "p. ex. tuberculose, santé maternelle, résistance aux antimicrobiens. Laissez vide si sans objet.",
+      "accreditationsLabel": "Accréditations (une par ligne, facultatif)",
+      "accreditationsHint": "p. ex. WHO Innovation Hub, ISO 13485, IEC 62304, reconnaissance par le ministère de la Santé",
+      "royaltyLabel": "Plan de redevances ou de commercialisation (facultatif)",
+      "royaltyHint": "Les conditions destinées au secteur public des pays à revenu faible ou intermédiaire sont bienvenues ; l’hôte peut négocier les clauses directement avec vous.",
+      "postMarketLabel": "Flux de données après commercialisation",
+      "postMarket": {
+        "NO_PERSISTENCE": "Inférence uniquement — rien n’est conservé",
+        "AGGREGATE_STATS": "Statistiques agrégées conservées",
+        "PSEUDONYMISED_RETAINED": "Lignes individuelles pseudonymisées conservées",
+        "IDENTIFIED_RETAINED": "Lignes identifiantes conservées"
+      }
+    }
+  },
+  "action": {
+    "signInRequired": "Connexion requise.",
+    "disposableEmail": "Les demandes envoyées depuis une adresse e-mail jetable ne sont pas acceptées ({domain}). Utilisez l’adresse de votre établissement ou de votre organisation.",
+    "apiBaseUrlMissing": "NEXT_PUBLIC_API_BASE_URL n’est pas défini dans l’environnement web."
+  },
+  "dashboard": {
+    "metaTitle": "Mes demandes d’accès — OCI Platform",
+    "eyebrow": "Tableau de bord",
+    "title": "Mes demandes d’accès",
+    "lead": "Les jeux de données restreints auxquels vous avez demandé l’accès. L’hôte de chaque jeu de données statue sur chaque demande.",
+    "loadErrorTitle": "Impossible de charger les demandes",
+    "emptyTitle": "Aucune demande pour l’instant",
+    "emptyBody": "Parcourez le <link>catalogue</link> et déposez une demande depuis la page de n’importe quel jeu de données restreint.",
+    "submitted": "Envoyée le <time>{date}</time>",
+    "hostNote": "Note de l’hôte :"
+  }
+}

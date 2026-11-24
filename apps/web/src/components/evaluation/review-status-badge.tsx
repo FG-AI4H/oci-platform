@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server';
 import { Badge } from '@oci/ui';
 import type { ScoreAttribution } from '@oci/shared-types';
 import { describeAttribution } from './attribution';
@@ -24,8 +25,11 @@ export {
  * technology hears the sentence once rather than in the badge and again in
  * the line beneath it. The badge stays a single short label either way, so
  * it can sit inline after a route name without wrapping.
+ *
+ * A server component: the label and the sentence are in the request's
+ * language (#654).
  */
-export function ReviewStatusBadge({
+export async function ReviewStatusBadge({
   attribution,
   describe = true,
   className,
@@ -35,10 +39,11 @@ export function ReviewStatusBadge({
   describe?: boolean;
   className?: string;
 }) {
-  const { label, tone, description } = describeAttribution(attribution);
+  const t = await getTranslations('Evaluation');
+  const { text, tone, description } = describeAttribution(attribution, t);
   return (
     <Badge tone={tone} title={description} className={className}>
-      <span>{label}</span>
+      <span>{text}</span>
       {describe ? <span className="sr-only">. {description}</span> : null}
     </Badge>
   );

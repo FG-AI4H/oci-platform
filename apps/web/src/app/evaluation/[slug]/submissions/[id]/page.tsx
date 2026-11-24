@@ -1,5 +1,8 @@
+import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { notFound, redirect, unstable_rethrow } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -25,18 +28,19 @@ import type {
   SubmissionStatus,
 } from '@oci/shared-types';
 import { auth } from '../../../../../auth';
-import { BINARY_DIAGNOSTIC_TEXT as BD } from '../../../../../components/evaluation/binary-diagnostic-text';
+import type { EvaluationI18n } from '../../../../../components/evaluation/i18n';
 import {
   formatRate,
   metricCells,
   positiveClassOf,
-  TASK_KIND_LABEL,
+  taskKindLabel,
   type MetricCell,
 } from '../../../../../components/evaluation/metrics';
 import {
   describeAttribution,
   ReviewStatusBadge,
 } from '../../../../../components/evaluation/review-status-badge';
+import { getEvaluationI18n } from '../../../../../components/evaluation/server-i18n';
 import { SubgroupResultsCard } from '../../../../../components/evaluation/subgroup-results';
 import { ApiError, apiFetch, reauthUrl } from '../../../../../lib/api';
 
@@ -52,15 +56,15 @@ import { ApiError, apiFetch, reauthUrl } from '../../../../../lib/api';
  * Not here yet, on purpose: the link to the submitter's model card and the
  * link to the evidence summary. Both depend on work that has not landed, and a
  * link to nothing is worse than no link.
+ *
+ * Text in the interface language (#654): `EvaluationSubmission` and the
+ * shared `Evaluation` vocabulary. The failure reason comes from the scoring
+ * service and is shown as it gave it.
  */
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('en-GB', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-  timeZone: 'UTC',
-});
+type SubmissionT = Awaited<ReturnType<typeof getTranslations<'EvaluationSubmission'>>>;
 
 const STATUS_TONE: Record<SubmissionStatus, 'success' | 'info' | 'danger'> = {
   SCORED: 'success',
@@ -75,11 +79,11 @@ export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string; id: string }>;
-}) {
-  const { slug } = await params;
+}): Promise<Metadata> {
+  const [{ slug }, t] = await Promise.all([params, getTranslations('EvaluationSubmission')]);
   return {
-    title: `Submission — ${slug} — OCI Evaluation`,
-    description: `Result of one submission to the ${slug} evaluation task.`,
+    title: t('metaTitle', { slug }),
+    description: t('metaDescription', { slug }),
     // One page per attempt, most of them of interest to their author only.
     robots: { index: false, follow: false },
   };
@@ -115,6 +119,11 @@ export default async function SubmissionPage({
   const { slug, id } = await params;
   // Anything that is not a submission id is not found, without asking the API.
   if (!UUID.test(id)) notFound();
+  const [t, i18n] = await Promise.all([
+    getTranslations('EvaluationSubmission'),
+    getEvaluationI18n(),
+  ]);
+  const { f } = i18n;
 
   let submission: EvaluationSubmissionDetail | null = null;
   let error: string | null = null;
@@ -123,7 +132,7 @@ export default async function SubmissionPage({
   } catch (err) {
     // `redirect()` works by throwing; let it through.
     unstable_rethrow(err);
-    error = err instanceof Error ? err.message : 'Unable to reach evaluation API';
+    error = err instanceof Error ? err.message : i18n.t('unavailable.fallback');
   }
 
   if (error) {
@@ -131,7 +140,7 @@ export default async function SubmissionPage({
       <Container size="md">
         <Section spacing="md">
           <Alert tone="danger">
-            <AlertTitle as="h1">Evaluation unavailable</AlertTitle>
+            <AlertTitle as="h1">{i18n.t('unavailable.title')}</AlertTitle>
             <AlertDescription>
               <pre className="mt-1 whitespace-pre-wrap break-words text-xs font-mono">{error}</pre>
             </AlertDescription>
@@ -144,9 +153,19 @@ export default async function SubmissionPage({
 
   const { task, scores, attribution, failure } = submission;
   const taskHref = `/evaluation/${encodeURIComponent(task.slug)}` as const;
-  const cells = metricCells(task, scores);
+  const cells = metricCells(i18n, task, scores);
   const perClass = scores?.kind === 'CLASSIFICATION' ? scores.metrics.perClass : null;
   const binary = scores?.kind === 'BINARY_DIAGNOSTIC' ? scores.metrics : null;
+  const num = (chunks: ReactNode) => <span className="tabular-nums">{chunks}</span>;
+  const muted = (chunks: ReactNode) => (
+    <span className="text-[var(--color-muted-foreground)]">{chunks}</span>
+  );
+  // Printed in UTC and said to be: a submitter may be reading from anywhere.
+  const submittedAt = f.dateTime(submission.createdAt, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'UTC',
+  });
 
   return (
     <>
@@ -160,23 +179,23 @@ export default async function SubmissionPage({
             <span>{task.name}</span>
           </Link>
           <p className="mt-4 text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Submission
+            {t('eyebrow')}
           </p>
           <h1 className="mt-2 break-words text-3xl sm:text-4xl font-semibold tracking-tight text-[var(--color-foreground)]">
             {submission.methodName}
           </h1>
           <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-[var(--color-muted-foreground)]">
-            <Badge tone={STATUS_TONE[submission.status]}>{submission.status.toLowerCase()}</Badge>
+            <Badge tone={STATUS_TONE[submission.status]}>
+              {i18n.t(`status.${submission.status}`)}
+            </Badge>
             <span>
-              Submitted{' '}
-              <time dateTime={submission.createdAt}>
-                {DATE_TIME_FORMATTER.format(new Date(submission.createdAt))} UTC
-              </time>
+              {t.rich('submitted', {
+                date: submittedAt,
+                time: (chunks) => <time dateTime={submission.createdAt}>{chunks}</time>,
+              })}
             </span>
             {submission.viewerIsSubmitter ? (
-              <span className="font-medium text-[var(--color-foreground)]">
-                This is your submission.
-              </span>
+              <span className="font-medium text-[var(--color-foreground)]">{t('yours')}</span>
             ) : null}
           </p>
         </Container>
@@ -186,23 +205,23 @@ export default async function SubmissionPage({
         <Section spacing="md" className="space-y-8">
           {failure ? (
             <Alert tone="danger">
-              <AlertTitle as="h2">This file was not scored</AlertTitle>
+              <AlertTitle as="h2">{t('failure.title')}</AlertTitle>
               <AlertDescription className="mt-2 space-y-3">
                 <p className="break-words font-mono text-xs text-[var(--color-foreground)]">
                   {failure.reason}
                 </p>
                 <p>
                   {failure.quotaConsumed
-                    ? 'This attempt counted as one scored submission.'
-                    : 'This attempt did not count as a scored submission.'}{' '}
+                    ? t('failure.quotaConsumed')
+                    : t('failure.quotaNotConsumed')}{' '}
                   {submission.viewerIsSubmitter
-                    ? 'Only you and the platform’s administrators can see this page.'
-                    : 'Only its submitter and the platform’s administrators can see this page.'}
+                    ? t('failure.visibleToYou')
+                    : t('failure.visibleToSubmitter')}
                 </p>
                 {submission.viewerIsSubmitter ? (
                   <p>
                     <Button asChild variant="secondary">
-                      <Link href={`${taskHref}/submit`}>Check a corrected file</Link>
+                      <Link href={`${taskHref}/submit`}>{t('failure.checkCorrected')}</Link>
                     </Button>
                   </p>
                 ) : null}
@@ -212,24 +231,24 @@ export default async function SubmissionPage({
 
           {submission.status === 'PENDING' ? (
             <Alert tone="info">
-              <AlertTitle as="h2">Waiting for the result</AlertTitle>
-              <AlertDescription>
-                This submission has been accepted and is not scored yet. Reload the page later.
-              </AlertDescription>
+              <AlertTitle as="h2">{t('pending.title')}</AlertTitle>
+              <AlertDescription>{t('pending.body')}</AlertDescription>
             </Alert>
           ) : null}
 
           {scores ? (
             <Card>
               <CardHeader>
-                <CardTitle as="h2">Metrics</CardTitle>
+                <CardTitle as="h2">{t('metrics.title')}</CardTitle>
                 <CardDescription>
-                  Computed against the reference labels of{' '}
-                  <Link href={taskHref} className={LINK}>
-                    {task.name}
-                  </Link>
-                  . They can be compared with other submissions to this task, and with no other
-                  task.
+                  {t.rich('metrics.description', {
+                    task: task.name,
+                    link: (chunks) => (
+                      <Link href={taskHref} className={LINK}>
+                        {chunks}
+                      </Link>
+                    ),
+                  })}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -243,56 +262,67 @@ export default async function SubmissionPage({
             <SubgroupResultsCard subgroups={submission.subgroups} scores={scores} />
           ) : null}
 
-          {perClass ? <PerClassCard perClass={perClass} /> : null}
+          {perClass ? <PerClassCard perClass={perClass} t={t} i18n={i18n} /> : null}
 
-          {binary ? <ConfusionCard metrics={binary} positive={positiveClassOf(task)} /> : null}
+          {binary ? (
+            <ConfusionCard metrics={binary} positive={positiveClassOf(i18n, task)} i18n={i18n} />
+          ) : null}
 
-          {attribution ? <MethodCard attribution={attribution} /> : null}
+          {attribution ? <MethodCard attribution={attribution} t={t} i18n={i18n} /> : null}
 
           <Card>
             <CardHeader>
-              <CardTitle as="h2">Task</CardTitle>
+              <CardTitle as="h2">{t('task.title')}</CardTitle>
             </CardHeader>
             <CardContent>
               <DefinitionList>
-                <DefinitionItem term="Task">
+                <DefinitionItem term={t('task.taskTerm')}>
                   <Link href={taskHref} className={LINK}>
                     {task.name}
                   </Link>
                 </DefinitionItem>
-                <DefinitionItem term="Task kind">{TASK_KIND_LABEL[task.taskKind]}</DefinitionItem>
-                <DefinitionItem term="Scored dataset">
+                <DefinitionItem term={t('task.kindTerm')}>
+                  {taskKindLabel(i18n, task.taskKind)}
+                </DefinitionItem>
+                <DefinitionItem term={t('task.datasetTerm')}>
                   <Link href={`/catalog/${task.datasetSlug}`} className={LINK}>
                     {task.datasetSlug}
                   </Link>
                 </DefinitionItem>
                 {task.taskKind === 'GRADING' ? (
                   <>
-                    <DefinitionItem term="Grades">
-                      <span className="tabular-nums">0 to {task.numClasses - 1}</span>
-                    </DefinitionItem>
-                    <DefinitionItem term="Referable threshold">
-                      <span className="tabular-nums">{task.referableThreshold}</span>{' '}
-                      <span className="text-[var(--color-muted-foreground)]">
-                        — a grade of {task.referableThreshold} or more counts as referable.
+                    <DefinitionItem term={t('task.gradesTerm')}>
+                      <span className="tabular-nums">
+                        {t('task.grades', { top: f.number(task.numClasses - 1) })}
                       </span>
+                    </DefinitionItem>
+                    <DefinitionItem term={t('task.thresholdTerm')}>
+                      {t.rich('task.threshold', {
+                        threshold: f.number(task.referableThreshold),
+                        num,
+                        muted,
+                      })}
                     </DefinitionItem>
                   </>
                 ) : task.taskKind === 'BINARY_DIAGNOSTIC' ? (
                   <>
-                    <DefinitionItem term={BD.about.positiveClassTerm}>
+                    <DefinitionItem term={i18n.t('binary.about.positiveClassTerm')}>
                       {task.positiveClassName
-                        ? BD.about.positiveClass(task.positiveClassName)
-                        : BD.about.positiveClassMissing}
+                        ? i18n.t('binary.about.positiveClass', { name: task.positiveClassName })
+                        : i18n.t('binary.about.positiveClassMissing')}
                     </DefinitionItem>
-                    <DefinitionItem term={BD.about.classesTerm}>{BD.about.classes}</DefinitionItem>
+                    <DefinitionItem term={i18n.t('binary.about.classesTerm')}>
+                      {i18n.t('binary.about.classes')}
+                    </DefinitionItem>
                   </>
                 ) : (
-                  <DefinitionItem term="Classes">
-                    <span className="tabular-nums">{task.numClasses}</span>{' '}
-                    <span className="text-[var(--color-muted-foreground)]">
-                      (label 0 to {task.numClasses - 1})
-                    </span>
+                  <DefinitionItem term={t('task.classesTerm')}>
+                    {t.rich('task.classes', {
+                      n: f.number(task.numClasses),
+                      top: f.number(task.numClasses - 1),
+                      num,
+                      muted,
+                    })}
                   </DefinitionItem>
                 )}
               </DefinitionList>
@@ -301,10 +331,10 @@ export default async function SubmissionPage({
 
           <p className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
             <Link href={taskHref} className={LINK}>
-              All results for this task
+              {t('allResults')}
             </Link>
             <Link href={`${taskHref}/submit`} className={LINK}>
-              {submission.viewerIsSubmitter ? 'Submit another file' : 'Submit predictions'}
+              {submission.viewerIsSubmitter ? t('submitAnother') : t('submit')}
             </Link>
           </p>
         </Section>
@@ -403,16 +433,18 @@ function MetricValue({ cell, size }: { cell: MetricCell; size: string }) {
 function ConfusionCard({
   metrics,
   positive,
+  i18n,
 }: {
   metrics: BinaryDiagnosticScores;
   positive: string;
+  i18n: EvaluationI18n;
 }) {
-  const c = BD.confusion;
-  const n = (value: number) => value.toLocaleString('en-GB');
+  const { t, f } = i18n;
+  const positiveHeading = t('binary.confusion.positive', { name: positive });
   const cell = (count: number, name: string) => (
     <td className="px-3 py-3 text-end sm:px-4">
       <span className="block text-xl font-semibold tabular-nums text-[var(--color-foreground)]">
-        {n(count)}
+        {f.number(count)}
       </span>
       <span className="block text-xs text-[var(--color-muted-foreground)]">{name}</span>
     </td>
@@ -420,42 +452,42 @@ function ConfusionCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h2">{c.title}</CardTitle>
-        <CardDescription>{c.description}</CardDescription>
+        <CardTitle as="h2">{t('binary.confusion.title')}</CardTitle>
+        <CardDescription>{t('binary.confusion.description')}</CardDescription>
       </CardHeader>
       <CardContent>
         <div
           tabIndex={0}
           role="region"
-          aria-label={c.tableLabel}
+          aria-label={t('binary.confusion.tableLabel')}
           className="overflow-x-auto rounded-lg border border-[var(--color-border)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
         >
           <table className="w-full border-collapse text-sm">
             <thead className="bg-[var(--color-subtle)] text-[var(--color-muted-foreground)]">
               <tr>
-                <td className="px-3 py-2.5 text-xs sm:px-4">{c.corner}</td>
+                <td className="px-3 py-2.5 text-xs sm:px-4">{t('binary.confusion.corner')}</td>
                 <th scope="col" className="px-3 py-2.5 text-end font-medium sm:px-4">
-                  {c.positive(positive)}
+                  {positiveHeading}
                 </th>
                 <th scope="col" className="px-3 py-2.5 text-end font-medium sm:px-4">
-                  {c.negative}
+                  {t('binary.confusion.negative')}
                 </th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-t border-[var(--color-border)]">
                 <th scope="row" className="px-3 py-3 text-start font-medium sm:px-4">
-                  {c.positive(positive)}
+                  {positiveHeading}
                 </th>
-                {cell(metrics.truePositives, c.truePositive)}
-                {cell(metrics.falseNegatives, c.falseNegative)}
+                {cell(metrics.truePositives, t('binary.confusion.truePositive'))}
+                {cell(metrics.falseNegatives, t('binary.confusion.falseNegative'))}
               </tr>
               <tr className="border-t border-[var(--color-border)]">
                 <th scope="row" className="px-3 py-3 text-start font-medium sm:px-4">
-                  {c.negative}
+                  {t('binary.confusion.negative')}
                 </th>
-                {cell(metrics.falsePositives, c.falsePositive)}
-                {cell(metrics.trueNegatives, c.trueNegative)}
+                {cell(metrics.falsePositives, t('binary.confusion.falsePositive'))}
+                {cell(metrics.trueNegatives, t('binary.confusion.trueNegative'))}
               </tr>
             </tbody>
           </table>
@@ -470,32 +502,43 @@ function ConfusionCard({
  * breakdown; a grading task's scores carry no per-class figures, so there is
  * no table to show for one.
  */
-function PerClassCard({ perClass }: { perClass: ClassMetrics[] }) {
+function PerClassCard({
+  perClass,
+  t,
+  i18n,
+}: {
+  perClass: ClassMetrics[];
+  t: SubmissionT;
+  i18n: EvaluationI18n;
+}) {
+  const { f } = i18n;
+  const headings = [
+    t('perClass.precision'),
+    t('perClass.recall'),
+    t('perClass.f1'),
+    t('perClass.items'),
+  ];
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h2">Per-class results</CardTitle>
-        <CardDescription>
-          How the file did on each class. Precision: of the items it gave this label, the share that
-          have it. Recall: of the items that have this label, the share it found. F1 combines the
-          two. Items is the number of scored items with this reference label.
-        </CardDescription>
+        <CardTitle as="h2">{t('perClass.title')}</CardTitle>
+        <CardDescription>{t('perClass.description')}</CardDescription>
       </CardHeader>
       <CardContent>
         {/* Fits a phone; focusable in case a very narrow screen still makes it scroll. */}
         <div
           tabIndex={0}
           role="region"
-          aria-label="Per-class results table"
+          aria-label={t('perClass.tableLabel')}
           className="overflow-x-auto rounded-lg border border-[var(--color-border)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
         >
           <table className="w-full border-collapse text-xs sm:text-sm">
             <thead className="bg-[var(--color-subtle)] text-[var(--color-muted-foreground)]">
               <tr>
                 <th scope="col" className="px-1.5 py-2.5 text-start font-medium sm:px-4">
-                  Class
+                  {t('perClass.class')}
                 </th>
-                {['Precision', 'Recall', 'F1', 'Items'].map((h) => (
+                {headings.map((h) => (
                   <th key={h} scope="col" className="px-1.5 py-2.5 text-end font-medium sm:px-4">
                     {h}
                   </th>
@@ -517,15 +560,15 @@ function PerClassCard({ perClass }: { perClass: ClassMetrics[] }) {
                       {c.support === 0 && i > 0 ? (
                         <>
                           <span aria-hidden="true">—</span>
-                          <span className="sr-only">Not applicable: no item of this class</span>
+                          <span className="sr-only">{t('perClass.notApplicable')}</span>
                         </>
                       ) : (
-                        formatRate(value)
+                        formatRate(f, value)
                       )}
                     </td>
                   ))}
                   <td className="px-1.5 py-2.5 text-end tabular-nums sm:px-4">
-                    {c.support.toLocaleString('en-GB')}
+                    {f.number(c.support)}
                   </td>
                 </tr>
               ))}
@@ -544,14 +587,20 @@ function PerClassCard({ perClass }: { perClass: ClassMetrics[] }) {
  * a version at the moment, so that is the state of every new result until
  * they are.
  */
-function MethodCard({ attribution }: { attribution: ScoreAttribution }) {
+function MethodCard({
+  attribution,
+  t,
+  i18n,
+}: {
+  attribution: ScoreAttribution;
+  t: SubmissionT;
+  i18n: EvaluationI18n;
+}) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle as="h2">Evaluation method</CardTitle>
-        <CardDescription>
-          The scoring procedure that produced these numbers, and whether it has been reviewed.
-        </CardDescription>
+        <CardTitle as="h2">{t('method.title')}</CardTitle>
+        <CardDescription>{t('method.description')}</CardDescription>
       </CardHeader>
       <CardContent>
         {attribution.kind === 'ROUTED' ? (
@@ -564,22 +613,21 @@ function MethodCard({ attribution }: { attribution: ScoreAttribution }) {
                 {attribution.routeSlug}
               </Link>
               <span className="font-mono text-xs text-[var(--color-muted-foreground)]">
-                version {attribution.routeVersion}
+                {t('method.version', { version: attribution.routeVersion })}
               </span>
               <ReviewStatusBadge attribution={attribution} describe={false} />
             </p>
             <p className="text-sm text-[var(--color-muted-foreground)]">
-              {describeAttribution(attribution).description}
+              {describeAttribution(attribution, i18n.t).description}
             </p>
           </div>
         ) : (
           <div className="space-y-2">
             <p>
-              <Badge tone="neutral">not attributed yet</Badge>
+              <Badge tone="neutral">{t('method.notAttributed')}</Badge>
             </p>
             <p className="max-w-prose text-sm text-[var(--color-muted-foreground)]">
-              This result is not linked to a version of an evaluation method, so there is no review
-              status to show and it is not part of published reporting.
+              {t('method.notAttributedBody')}
             </p>
           </div>
         )}

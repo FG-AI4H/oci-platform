@@ -1,4 +1,9 @@
-import type { EvaluationSubmissionResult, ScoreAttribution } from '@oci/shared-types';
+import {
+  LEGACY_ATTRIBUTION_NOTE,
+  type EvaluationSubmissionResult,
+  type ScoreAttribution,
+} from '@oci/shared-types';
+import type { Translator } from '../../i18n/translator';
 
 /**
  * Pure helpers for rendering a score's route attribution (#486, WP5
@@ -15,49 +20,62 @@ export type AttributionTone = 'success' | 'info' | 'danger' | 'neutral';
 
 export interface AttributionDescription {
   label: AttributionLabel;
+  /** The label in the interface language, as the badge prints it. */
+  text: string;
   tone: AttributionTone;
   /** One sentence a reader (or screen reader) needs to make sense of the label. */
   description: string;
 }
 
-export const PROVISIONAL_DESCRIPTION =
-  'Provisional: the evaluation method that produced this result has not yet passed review, so it is excluded from published reporting.';
-
-export const RETRACTED_DESCRIPTION =
-  'Results from this method version were withdrawn after review.';
-
-export const PUBLISHED_DESCRIPTION =
-  'Published: the evaluation method that produced this result has passed review.';
-
-export const WITHDRAWN_DESCRIPTION =
-  'Withdrawn: the evaluation method that produced this result was rejected or withdrawn from review, so it is excluded from published reporting.';
-
 /**
- * Map an attribution onto its label, tone and description.
+ * Map an attribution onto its label, tone and description, worded in the
+ * interface language (#654).
  *
  * Precedence: a non-null `retractedAt` wins over every review status — a
  * retracted APPROVED version must not keep reading as "published". LEGACY
  * has no review status at all, so it is its own word and carries the API's
  * note verbatim as its description.
  */
-export function describeAttribution(attribution: ScoreAttribution): AttributionDescription {
+export function describeAttribution(
+  attribution: ScoreAttribution,
+  t: Translator<'Evaluation'>,
+): AttributionDescription {
+  const words = (
+    label: Exclude<AttributionLabel, 'legacy'>,
+    tone: AttributionTone,
+  ): AttributionDescription => ({
+    label,
+    text: t(`attribution.label.${label}`),
+    tone,
+    description: t(`attribution.description.${label}`),
+  });
+
   if (attribution.kind === 'LEGACY') {
-    return { label: 'legacy', tone: 'neutral', description: attribution.note };
+    return {
+      label: 'legacy',
+      text: t('attribution.label.legacy'),
+      tone: 'neutral',
+      // The API's note is one fixed sentence (`LEGACY_ATTRIBUTION_NOTE`);
+      // that one is worded in the interface language, whose English
+      // message is the same sentence. Any other note is shown as sent.
+      description:
+        attribution.note === LEGACY_ATTRIBUTION_NOTE
+          ? t('attribution.description.legacy')
+          : attribution.note,
+    };
   }
 
-  if (attribution.retractedAt !== null) {
-    return { label: 'retracted', tone: 'danger', description: RETRACTED_DESCRIPTION };
-  }
+  if (attribution.retractedAt !== null) return words('retracted', 'danger');
 
   switch (attribution.reviewStatus) {
     case 'APPROVED':
-      return { label: 'published', tone: 'success', description: PUBLISHED_DESCRIPTION };
+      return words('published', 'success');
     case 'DECLARED':
     case 'UNDER_REVIEW':
-      return { label: 'provisional', tone: 'info', description: PROVISIONAL_DESCRIPTION };
+      return words('provisional', 'info');
     case 'REJECTED':
     case 'WITHDRAWN':
-      return { label: 'withdrawn', tone: 'danger', description: WITHDRAWN_DESCRIPTION };
+      return words('withdrawn', 'danger');
   }
 }
 

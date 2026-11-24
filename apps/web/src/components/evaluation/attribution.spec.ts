@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { LEGACY_ATTRIBUTION_NOTE } from '@oci/shared-types';
 import type { EvaluationSubmissionResult, ScoreAttribution } from '@oci/shared-types';
-import {
-  describeAttribution,
-  isPublishedResult,
-  PROVISIONAL_DESCRIPTION,
-  rankSubmissions,
-  RETRACTED_DESCRIPTION,
-} from './attribution';
+import { describeAttribution, isPublishedResult, rankSubmissions } from './attribution';
+import { evaluationI18n } from './i18n.testing';
+
+const { t } = evaluationI18n('en');
+
+// The English sentences, as they read before the messages moved to files (#654).
+const PROVISIONAL_DESCRIPTION =
+  'Provisional: the evaluation method that produced this result has not yet passed review, so it is excluded from published reporting.';
+const RETRACTED_DESCRIPTION = 'Results from this method version were withdrawn after review.';
 
 type Routed = Extract<ScoreAttribution, { kind: 'ROUTED' }>;
 
@@ -54,26 +56,33 @@ function submission(
 
 describe('describeAttribution', () => {
   it('retracted overrides every review status', () => {
-    const d = describeAttribution(routed({ retractedAt: '2026-09-02T00:00:00.000Z' }));
-    expect(d).toEqual({ label: 'retracted', tone: 'danger', description: RETRACTED_DESCRIPTION });
+    const d = describeAttribution(routed({ retractedAt: '2026-09-02T00:00:00.000Z' }), t);
+    expect(d).toEqual({
+      label: 'retracted',
+      text: 'retracted',
+      tone: 'danger',
+      description: RETRACTED_DESCRIPTION,
+    });
     // Even a still-APPROVED, still-`published` version reads as retracted.
     expect(
       describeAttribution(
         routed({ reviewStatus: 'APPROVED', published: true, retractedAt: '2026-09-02T00:00:00Z' }),
+        t,
       ).label,
     ).toBe('retracted');
   });
 
   it('LEGACY is neutral and carries the API note verbatim', () => {
-    expect(describeAttribution(legacy)).toEqual({
+    expect(describeAttribution(legacy, t)).toEqual({
       label: 'legacy',
+      text: 'legacy',
       tone: 'neutral',
       description: LEGACY_ATTRIBUTION_NOTE,
     });
   });
 
   it('APPROVED is published', () => {
-    const d = describeAttribution(routed({ reviewStatus: 'APPROVED' }));
+    const d = describeAttribution(routed({ reviewStatus: 'APPROVED' }), t);
     expect(d.label).toBe('published');
     expect(d.tone).toBe('success');
     expect(d.description).not.toHaveLength(0);
@@ -81,8 +90,9 @@ describe('describeAttribution', () => {
 
   it('DECLARED and UNDER_REVIEW are provisional', () => {
     for (const reviewStatus of ['DECLARED', 'UNDER_REVIEW'] as const) {
-      expect(describeAttribution(routed({ reviewStatus, published: false }))).toEqual({
+      expect(describeAttribution(routed({ reviewStatus, published: false }), t)).toEqual({
         label: 'provisional',
+        text: 'provisional',
         tone: 'info',
         description: PROVISIONAL_DESCRIPTION,
       });
@@ -91,11 +101,29 @@ describe('describeAttribution', () => {
 
   it('REJECTED and WITHDRAWN are withdrawn', () => {
     for (const reviewStatus of ['REJECTED', 'WITHDRAWN'] as const) {
-      const d = describeAttribution(routed({ reviewStatus, published: false }));
+      const d = describeAttribution(routed({ reviewStatus, published: false }), t);
       expect(d.label).toBe('withdrawn');
       expect(d.tone).toBe('danger');
       expect(d.description).not.toHaveLength(0);
     }
+  });
+
+  it('words the badge and its sentence in French, keeping the label key (#654)', () => {
+    const d = describeAttribution(
+      routed({ reviewStatus: 'UNDER_REVIEW', published: false }),
+      evaluationI18n('fr').t,
+    );
+    expect(d.label).toBe('provisional');
+    expect(d.text).toBe('provisoire');
+    expect(d.description).toMatch(/^Provisoire\u00a0: la méthode d’évaluation/);
+  });
+
+  it('words the API’s fixed legacy note in French, and any other note as sent (#654)', () => {
+    const fr = evaluationI18n('fr').t;
+    expect(describeAttribution(legacy, fr).description).toMatch(/^Noté avant la création/);
+    expect(describeAttribution({ kind: 'LEGACY', note: 'Imported by hand.' }, fr).description).toBe(
+      'Imported by hand.',
+    );
   });
 });
 

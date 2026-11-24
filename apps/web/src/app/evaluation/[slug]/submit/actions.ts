@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect, unstable_rethrow } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   EvaluationTaskSlugSchema,
   ScoredSubmissionQuotaStateSchema,
@@ -18,9 +19,10 @@ import {
   type FormatReportView,
 } from '../../../../components/evaluation/format-report';
 import { describeQuotaRefusal } from '../../../../components/evaluation/quota-text';
+import { getEvaluationI18n } from '../../../../components/evaluation/server-i18n';
 import { apiFetch, reauthUrl } from '../../../../lib/api';
 import { fetchAsUser } from '../../../../lib/api-action';
-import { MAX_PREDICTIONS_FILE_BYTES, MAX_PREDICTIONS_FILE_LABEL } from './limits';
+import { MAX_PREDICTIONS_FILE_BYTES, MAX_PREDICTIONS_FILE_KIB } from './limits';
 
 export interface SubmitPredictionsValues {
   methodName: string;
@@ -91,12 +93,17 @@ function messageOf(body: unknown): string | null {
  * The token never comes into this file: `fetchAsUser` reads it from the
  * encrypted session, on the server, and sends it only to the API. It is not in
  * the page, the form or the returned state.
+ *
+ * Every message is in the interface language (#654). The lines the file
+ * parser reports (`fileIssues`) and a refusal reason from the scoring
+ * service are passed on as they come.
  */
 export async function submitPredictionsAction(
   slug: string,
   _prev: SubmitPredictionsState,
   formData: FormData,
 ): Promise<SubmitPredictionsState> {
+  const [t, i18n] = await Promise.all([getTranslations('EvaluationSubmit'), getEvaluationI18n()]);
   const intent = formData.get('intent') === 'submit' ? 'submit' : 'check';
   const values: SubmitPredictionsValues = {
     methodName: String(formData.get('methodName') ?? '').trim(),
@@ -110,35 +117,36 @@ export async function submitPredictionsAction(
   // other input before it is put in a URL.
   const slugCheck = EvaluationTaskSlugSchema.safeParse(slug);
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!slugCheck.success) return fail('This evaluation task does not exist.');
-  if (!base) return fail('The scoring service is not configured on this environment.');
+  if (!slugCheck.success) return fail(t('action.taskMissing'));
+  if (!base) return fail(t('action.notConfigured'));
   const taskPath = `/v2/evaluation/tasks/${encodeURIComponent(slugCheck.data)}`;
 
   // ---- the two fields --------------------------------------------------------
 
   const session = await auth();
   if (intent === 'submit' && !session?.user) {
-    return fail('Sign in to submit for scoring. Checking the format needs no account.');
+    return fail(t('action.signInToSubmit'));
   }
 
   if (intent === 'submit' && values.methodName === '') {
-    const methodNameError = 'Give your method a name. It is shown with the result.';
-    return fail('Not submitted: the method name is missing.', { methodNameError });
+    const methodNameError = t('methodNameMissing');
+    return fail(t('action.nameMissing'), { methodNameError });
   }
   if (values.methodName !== '' && !MethodNameSchema.safeParse(values.methodName).success) {
-    const methodNameError = 'The method name can be up to 120 characters.';
-    return fail('The method name is too long.', { methodNameError });
+    const methodNameError = t('action.nameTooLongField');
+    return fail(t('action.nameTooLong'), { methodNameError });
   }
 
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) {
-    const fileError = 'Choose a predictions file (CSV or JSON).';
-    return fail('No file was chosen.', { fileError });
+    const fileError = t('action.chooseFile');
+    return fail(t('action.noFile'), { fileError });
   }
   const fileName = file.name;
   if (file.size > MAX_PREDICTIONS_FILE_BYTES) {
-    const fileError = `This file is larger than ${MAX_PREDICTIONS_FILE_LABEL}, the most this page takes.`;
-    return fail('The file is too large.', { fileError, fileName });
+    const max = t('maxSize', { n: i18n.f.number(MAX_PREDICTIONS_FILE_KIB) });
+    const fileError = t('fileTooLarge', { max });
+    return fail(t('action.tooLarge'), { fileError, fileName });
   }
 
   // The task first: whether the file may carry a score column depends on its
@@ -158,12 +166,9 @@ export async function submitPredictionsAction(
   });
   if (!parsed.ok) {
     const count = parsed.issueCount;
-    return fail('The file could not be read. Nothing was sent for scoring.', {
+    return fail(t('action.unreadable'), {
       fileName,
-      fileError:
-        count === 1
-          ? 'There is 1 problem in this file.'
-          : `There are ${count} problems in this file.`,
+      fileError: t('action.problemCount', { count, n: i18n.f.number(count) }),
       fileIssues: {
         issues: parsed.issues,
         issueCount: count,
@@ -173,9 +178,9 @@ export async function submitPredictionsAction(
   }
 
   if (unreachable) {
-    return fail('The scoring service could not be reached. Try again in a moment.', { fileName });
+    return fail(t('action.unreachable'), { fileName });
   }
-  if (!task) return fail('This evaluation task does not exist.', { fileName });
+  if (!task) return fail(t('action.taskMissing'), { fileName });
 
   // ---- the format check (no token) ------------------------------------------
 
@@ -184,17 +189,14 @@ export async function submitPredictionsAction(
     predictions: parsed.predictions,
   });
   if (!report) {
-    return fail('The format check could not be completed. Try again in a moment.', { fileName });
+    return fail(t('action.checkIncomplete'), { fileName });
   }
-  const view = buildFormatReport({ report, predictions: parsed.predictions, task });
+  const view = buildFormatReport({ report, predictions: parsed.predictions, task, i18n });
 
   if (intent === 'check') return { status: 'checked', values, fileName, report: view };
 
   if (!view.ok) {
-    return fail(
-      'Not submitted: the file has problems. Nothing was scored and none of your scored submissions was used.',
-      { fileName, report: view },
-    );
+    return fail(t('action.hasProblems'), { fileName, report: view });
   }
 
   // ---- scoring (the session's token, server-side) ----------------------------
@@ -225,10 +227,7 @@ export async function submitPredictionsAction(
     unstable_rethrow(err);
     // The request may have arrived before the connection dropped, so this does
     // not claim nothing was submitted: a blind retry could spend a second slot.
-    return fail(
-      'The scoring service did not answer. Look for the result on the task page before submitting again.',
-      { fileName },
-    );
+    return fail(t('action.noAnswer'), { fileName });
   }
 
   // The session is there but the API does not accept its token and no new
@@ -240,10 +239,7 @@ export async function submitPredictionsAction(
   if (res.ok) {
     const scored = SubmitPredictionsResponseSchema.safeParse(body);
     if (!scored.success) {
-      return fail(
-        'The file was submitted, but the answer could not be read. Look for the result on the task page before submitting again.',
-        { fileName },
-      );
+      return fail(t('action.unreadableAnswer'), { fileName });
     }
     redirect(`/evaluation/${slugCheck.data}/submissions/${scored.data.id}`);
   }
@@ -252,12 +248,9 @@ export async function submitPredictionsAction(
     const quota = ScoredSubmissionQuotaStateSchema.safeParse(
       typeof body === 'object' && body !== null && 'quota' in body ? body.quota : undefined,
     );
-    return fail(
-      quota.success
-        ? describeQuotaRefusal(quota.data)
-        : 'Not submitted: you are not allowed to submit for scoring on this task.',
-      { fileName },
-    );
+    return fail(quota.success ? describeQuotaRefusal(i18n, quota.data) : t('action.notAllowed'), {
+      fileName,
+    });
   }
 
   if (res.status === 400) {
@@ -267,19 +260,17 @@ export async function submitPredictionsAction(
       typeof body === 'object' && body !== null && 'submissionId' in body
         ? body.submissionId
         : undefined;
-    return fail(
-      `Not scored: ${messageOf(body) ?? 'the scoring service refused the file'}. None of your scored submissions was used.`,
-      { fileName, failedSubmissionId: typeof submissionId === 'string' ? submissionId : undefined },
-    );
+    return fail(t('action.refused', { reason: messageOf(body) ?? t('action.refusedFallback') }), {
+      fileName,
+      failedSubmissionId: typeof submissionId === 'string' ? submissionId : undefined,
+    });
   }
 
   if (res.status === 413) {
-    return fail('Not submitted: the file is too large for the scoring service.', { fileName });
+    return fail(t('action.tooLargeForService'), { fileName });
   }
 
-  return fail(`Not submitted: the scoring service answered with an error (${res.status}).`, {
-    fileName,
-  });
+  return fail(t('action.serviceError', { status: res.status }), { fileName });
 }
 
 /**

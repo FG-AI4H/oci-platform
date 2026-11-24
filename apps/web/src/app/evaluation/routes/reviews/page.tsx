@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { unstable_rethrow } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -12,12 +13,15 @@ import {
 } from '@oci/ui';
 import type { EvaluationRouteResponse, RoutePermissionsResponse } from '@oci/shared-types';
 import { auth } from '../../../../auth';
+import type { Formatters } from '../../../../i18n/format';
+import { getFormatters } from '../../../../i18n/server';
 import { apiFetch } from '../../../../lib/api';
 import { isEvaluationReviewer } from '../../../../lib/groups';
 import { describeProvider, shortMode } from '../../../../components/evaluation/route-labels';
 import { readRoutePermissions } from '../permissions';
 import { awaitingReview, type AwaitingVersion } from '../queue';
-import { QUEUE_TEXT } from './strings';
+
+type MethodsT = Awaited<ReturnType<typeof getTranslations<'EvaluationMethods'>>>;
 
 /**
  * Review queue (#649): evaluation-method versions waiting for a decision,
@@ -26,31 +30,35 @@ import { QUEUE_TEXT } from './strings';
  * is offered the queue. For each method with a waiting version the caller's
  * permissions are read, so a version they submitted is marked as one
  * another reviewer decides.
+ *
+ * In the interface language (#654); method names are shown as registered.
  */
 
-export const metadata = {
-  title: QUEUE_TEXT.metaTitle,
-  description: QUEUE_TEXT.metaDescription,
-  robots: { index: false },
-};
-
-const DATE_FORMATTER = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' });
+export async function generateMetadata() {
+  const t = await getTranslations('EvaluationMethods');
+  return {
+    title: t('queue.metaTitle'),
+    description: t('queue.metaDescription'),
+    robots: { index: false },
+  };
+}
 
 export default async function ReviewQueuePage() {
   const session = await auth();
+  const [t, f] = await Promise.all([getTranslations('EvaluationMethods'), getFormatters()]);
 
   let body: ReactNode;
   if (!session?.user) {
     body = (
       <Alert tone="info">
-        <AlertTitle as="h2">{QUEUE_TEXT.signedOutTitle}</AlertTitle>
+        <AlertTitle as="h2">{t('queue.signedOutTitle')}</AlertTitle>
         <AlertDescription>
-          {QUEUE_TEXT.signedOut}{' '}
+          {t('queue.signedOut')}{' '}
           <Link
             href={`/signin?callbackUrl=${encodeURIComponent('/evaluation/routes/reviews')}`}
             className="underline underline-offset-2"
           >
-            {QUEUE_TEXT.signIn}
+            {t('queue.signIn')}
           </Link>
         </AlertDescription>
       </Alert>
@@ -58,8 +66,8 @@ export default async function ReviewQueuePage() {
   } else if (!isEvaluationReviewer(session)) {
     body = (
       <Alert tone="info">
-        <AlertTitle as="h2">{QUEUE_TEXT.notReviewerTitle}</AlertTitle>
-        <AlertDescription>{QUEUE_TEXT.notReviewer}</AlertDescription>
+        <AlertTitle as="h2">{t('queue.notReviewerTitle')}</AlertTitle>
+        <AlertDescription>{t('queue.notReviewer')}</AlertDescription>
       </Alert>
     );
   } else {
@@ -74,7 +82,7 @@ export default async function ReviewQueuePage() {
     if (!routes) {
       body = (
         <Alert tone="warning">
-          <AlertDescription>{QUEUE_TEXT.unavailable}</AlertDescription>
+          <AlertDescription>{t('queue.unavailable')}</AlertDescription>
         </Alert>
       );
     } else {
@@ -89,26 +97,30 @@ export default async function ReviewQueuePage() {
       body =
         total === 0 ? (
           <p className="rounded-lg border border-dashed border-[var(--color-border-strong)] bg-[var(--color-subtle)] p-8 text-center text-sm text-[var(--color-muted-foreground)]">
-            {QUEUE_TEXT.allEmpty}
+            {t('queue.allEmpty')}
           </p>
         ) : (
           <div className="space-y-10">
             <p className="text-sm font-medium tabular-nums" role="status">
-              {QUEUE_TEXT.count(total)}
+              {t('queue.count', { count: total, n: f.number(total) })}
             </p>
             <QueueGroup
               id="under-review"
-              heading={QUEUE_TEXT.underReviewHeading}
-              hint={QUEUE_TEXT.underReviewHint}
+              heading={t('queue.underReviewHeading')}
+              hint={t('queue.underReviewHint')}
               items={underReview}
               permissions={permissions}
+              t={t}
+              f={f}
             />
             <QueueGroup
               id="declared"
-              heading={QUEUE_TEXT.declaredHeading}
-              hint={QUEUE_TEXT.declaredHint}
+              heading={t('queue.declaredHeading')}
+              hint={t('queue.declaredHint')}
               items={declared}
               permissions={permissions}
+              t={t}
+              f={f}
             />
           </div>
         );
@@ -123,14 +135,14 @@ export default async function ReviewQueuePage() {
           className="inline-flex items-center gap-1.5 rounded text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
         >
           <ArrowLeftIcon size={14} />
-          <span>{QUEUE_TEXT.back}</span>
+          <span>{t('queue.back')}</span>
         </Link>
         <header className="space-y-3">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            {QUEUE_TEXT.eyebrow}
+            {t('queue.eyebrow')}
           </p>
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{QUEUE_TEXT.title}</h1>
-          <p className="max-w-2xl text-[var(--color-muted-foreground)]">{QUEUE_TEXT.lead}</p>
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{t('queue.title')}</h1>
+          <p className="max-w-2xl text-[var(--color-muted-foreground)]">{t('queue.lead')}</p>
         </header>
         {body}
       </Section>
@@ -144,12 +156,16 @@ function QueueGroup({
   hint,
   items,
   permissions,
+  t,
+  f,
 }: {
   id: string;
   heading: string;
   hint: string;
   items: AwaitingVersion[];
   permissions: Map<string, RoutePermissionsResponse>;
+  t: MethodsT;
+  f: Formatters;
 }) {
   return (
     <section aria-labelledby={`${id}-h`} className="space-y-3">
@@ -160,22 +176,24 @@ function QueueGroup({
         <p className="text-sm text-[var(--color-muted-foreground)]">{hint}</p>
       </div>
       {items.length === 0 ? (
-        <p className="text-sm text-[var(--color-muted-foreground)]">{QUEUE_TEXT.empty}</p>
+        <p className="text-sm text-[var(--color-muted-foreground)]">{t('queue.empty')}</p>
       ) : (
         <ul className="divide-y divide-[var(--color-border)] rounded-lg border border-[var(--color-border)]">
           {items.map(({ route, version }) => {
             const mine = permissions
               .get(route.slug)
               ?.versions.find((v) => v.version === version.version);
-            const canAct = Boolean(mine && mine.allowedTransitions.some((t) => t !== 'WITHDRAWN'));
+            const canAct = Boolean(
+              mine && mine.allowedTransitions.some((to) => to !== 'WITHDRAWN'),
+            );
             const note =
               mine?.reviewBar === 'SUBMITTED_BY_YOU'
-                ? QUEUE_TEXT.yoursSubmitted
+                ? t('queue.yoursSubmitted')
                 : mine?.reviewBar === 'DECLARED_BY_YOU'
-                  ? QUEUE_TEXT.yoursDeclared
+                  ? t('queue.yoursDeclared')
                   : mine
                     ? null
-                    : QUEUE_TEXT.permissionsUnknown;
+                    : t('queue.permissionsUnknown');
             const href = canAct
               ? `/evaluation/routes/${route.slug}#review-${version.id}`
               : `/evaluation/routes/${route.slug}#version-${version.id}`;
@@ -192,14 +210,12 @@ function QueueGroup({
                     </span>
                   </p>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted-foreground)]">
-                    <Badge tone="info">{shortMode(route.mode)}</Badge>
-                    <span>{describeProvider(route)}</span>
+                    <Badge tone="info">{shortMode(route.mode, t)}</Badge>
+                    <span>{describeProvider(route, t)}</span>
                     <span aria-hidden="true">·</span>
                     <span>
-                      {QUEUE_TEXT.declaredOn}{' '}
-                      <time dateTime={version.createdAt}>
-                        {DATE_FORMATTER.format(new Date(version.createdAt))}
-                      </time>
+                      {t('queue.declaredOn')}{' '}
+                      <time dateTime={version.createdAt}>{f.date(version.createdAt)}</time>
                     </span>
                   </div>
                   {note ? <p className="text-sm">{note}</p> : null}
@@ -208,8 +224,8 @@ function QueueGroup({
                   href={href}
                   aria-label={
                     canAct
-                      ? QUEUE_TEXT.openFor(version.version, route.name)
-                      : QUEUE_TEXT.viewFor(version.version, route.name)
+                      ? t('queue.openFor', { version: version.version, method: route.name })
+                      : t('queue.viewFor', { version: version.version, method: route.name })
                   }
                   className={
                     canAct
@@ -217,7 +233,9 @@ function QueueGroup({
                       : 'inline-flex h-11 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)] px-4 text-sm font-medium hover:bg-[var(--color-subtle)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] sm:h-10'
                   }
                 >
-                  {canAct ? QUEUE_TEXT.open(version.version) : QUEUE_TEXT.view(version.version)}
+                  {canAct
+                    ? t('queue.open', { version: version.version })
+                    : t('queue.view', { version: version.version })}
                 </Link>
               </li>
             );

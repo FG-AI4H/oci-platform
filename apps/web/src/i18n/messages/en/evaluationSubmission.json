@@ -1,0 +1,56 @@
+{
+  "metaTitle": "Submission — {slug} — OCI Evaluation",
+  "metaDescription": "Result of one submission to the {slug} evaluation task.",
+  "eyebrow": "Submission",
+  "submitted": "Submitted <time>{date} UTC</time>",
+  "yours": "This is your submission.",
+  "failure": {
+    "title": "This file was not scored",
+    "quotaConsumed": "This attempt counted as one scored submission.",
+    "quotaNotConsumed": "This attempt did not count as a scored submission.",
+    "visibleToYou": "Only you and the platform’s administrators can see this page.",
+    "visibleToSubmitter": "Only its submitter and the platform’s administrators can see this page.",
+    "checkCorrected": "Check a corrected file"
+  },
+  "pending": {
+    "title": "Waiting for the result",
+    "body": "This submission has been accepted and is not scored yet. Reload the page later."
+  },
+  "metrics": {
+    "title": "Metrics",
+    "description": "Computed against the reference labels of <link>{task}</link>. They can be compared with other submissions to this task, and with no other task."
+  },
+  "task": {
+    "title": "Task",
+    "taskTerm": "Task",
+    "kindTerm": "Task kind",
+    "datasetTerm": "Scored dataset",
+    "gradesTerm": "Grades",
+    "grades": "0 to {top}",
+    "thresholdTerm": "Referable threshold",
+    "threshold": "<num>{threshold}</num> <muted>— a grade of {threshold} or more counts as referable.</muted>",
+    "classesTerm": "Classes",
+    "classes": "<num>{n}</num> <muted>(label 0 to {top})</muted>"
+  },
+  "allResults": "All results for this task",
+  "submitAnother": "Submit another file",
+  "submit": "Submit predictions",
+  "perClass": {
+    "title": "Per-class results",
+    "description": "How the file did on each class. Precision: of the items it gave this label, the share that have it. Recall: of the items that have this label, the share it found. F1 combines the two. Items is the number of scored items with this reference label.",
+    "tableLabel": "Per-class results table",
+    "class": "Class",
+    "precision": "Precision",
+    "recall": "Recall",
+    "f1": "F1",
+    "items": "Items",
+    "notApplicable": "Not applicable: no item of this class"
+  },
+  "method": {
+    "title": "Evaluation method",
+    "description": "The scoring procedure that produced these numbers, and whether it has been reviewed.",
+    "version": "version {version}",
+    "notAttributed": "not attributed yet",
+    "notAttributedBody": "This result is not linked to a version of an evaluation method, so there is no review status to show and it is not part of published reporting."
+  }
+}

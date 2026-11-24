@@ -1,0 +1,225 @@
+{
+  "taskKind": {
+    "GRADING": "Gradation",
+    "CLASSIFICATION": "Classification",
+    "BINARY_DIAGNOSTIC": "Diagnostic binaire"
+  },
+  "status": {
+    "SCORED": "noté",
+    "PENDING": "en attente",
+    "FAILED": "échoué"
+  },
+  "unavailable": {
+    "title": "Évaluation indisponible",
+    "fallback": "Impossible de joindre l’API d’évaluation"
+  },
+  "attribution": {
+    "label": {
+      "published": "publié",
+      "provisional": "provisoire",
+      "withdrawn": "retiré",
+      "retracted": "rétracté",
+      "legacy": "historique"
+    },
+    "description": {
+      "published": "Publié : la méthode d’évaluation qui a produit ce résultat a été approuvée lors de sa revue.",
+      "provisional": "Provisoire : la méthode d’évaluation qui a produit ce résultat n’a pas encore été approuvée lors de sa revue ; le résultat est donc exclu des rapports publiés.",
+      "withdrawn": "Retiré : la méthode d’évaluation qui a produit ce résultat a été rejetée ou retirée de la revue ; le résultat est donc exclu des rapports publiés.",
+      "retracted": "Les résultats de cette version de la méthode ont été retirés après la revue.",
+      "legacy": "Noté avant la création du registre des méthodes d’évaluation (ADR-0018 / WP5). Ce résultat n’est rattaché à aucune déclaration de méthode et il est exclu des rapports publiés."
+    }
+  },
+  "metric": {
+    "accuracy": "Exactitude",
+    "balancedAccuracy": "Exactitude équilibrée",
+    "coverage": {
+      "label": "Couverture",
+      "explanation": "La part des éléments de la tâche pour lesquels ce fichier donne une étiquette. Les éléments omis ne sont pas notés."
+    },
+    "classification": {
+      "macroF1": {
+        "label": "F1 macro",
+        "explanation": "La moyenne des scores F1 par classe, chaque classe ayant le même poids quel que soit son nombre d’éléments."
+      },
+      "balancedAccuracy": "La moyenne, sur l’ensemble des classes, de la part de chaque classe correctement identifiée.",
+      "accuracy": "La part des éléments auxquels le fichier attribue exactement l’étiquette de référence.",
+      "microF1": {
+        "label": "F1 micro",
+        "explanation": "Le F1 calculé sur l’ensemble des éléments regroupés. Égal à l’exactitude lorsque chaque élément porte une seule étiquette."
+      }
+    },
+    "grading": {
+      "qwk": {
+        "label": "Kappa pondéré (QWK)",
+        "explanation": "Kappa pondéré quadratique : l’accord avec les grades de référence, de −1 à 1. 1 correspond à un accord parfait, 0 à ce que donnerait le hasard, et un grade très éloigné pèse plus qu’un écart d’un seul grade."
+      },
+      "accuracy": "La part des éléments auxquels le fichier attribue exactement le grade de référence.",
+      "referableSensitivity": {
+        "label": "Sensibilité (cas à adresser)",
+        "explanation": "Parmi les éléments dont le grade de référence est supérieur ou égal à {threshold}, la part que ce fichier a aussi gradée à {threshold} ou plus."
+      },
+      "referableSpecificity": {
+        "label": "Spécificité (cas à adresser)",
+        "explanation": "Parmi les éléments dont le grade de référence est inférieur à {threshold}, la part que ce fichier a aussi gradée en dessous de {threshold}."
+      }
+    },
+    "binary": {
+      "balancedAccuracy": "La moyenne de la sensibilité et de la spécificité. Les résultats sont classés selon cette valeur.",
+      "sensitivity": {
+        "label": "Sensibilité",
+        "explanation": "Parmi les éléments positifs ({positive}), la part que ce fichier a classée positive."
+      },
+      "specificity": {
+        "label": "Spécificité",
+        "explanation": "Parmi les éléments négatifs, la part que ce fichier a classée négative."
+      },
+      "positivePredictiveValue": {
+        "label": "Valeur prédictive positive (VPP)",
+        "explanation": "Parmi les éléments que ce fichier a classés positifs, la part réellement positive ({positive}). Dépend de la fréquence de l’anomalie dans cet ensemble."
+      },
+      "negativePredictiveValue": {
+        "label": "Valeur prédictive négative (VPN)",
+        "explanation": "Parmi les éléments que ce fichier a classés négatifs, la part réellement négative. Dépend de la fréquence de l’anomalie dans cet ensemble."
+      },
+      "accuracy": "La part des éléments auxquels le fichier attribue l’étiquette de référence.",
+      "prevalence": {
+        "label": "Prévalence",
+        "explanation": "La part des éléments notés qui sont positifs ({positive}) selon les étiquettes de référence. C’est une propriété de l’ensemble d’évaluation, pas du fichier."
+      },
+      "auc": {
+        "label": "Aire sous la courbe ROC (ASC)",
+        "explanation": "La capacité des scores à placer les éléments positifs au-dessus des négatifs, de 0 à 1. 0,5 correspond au hasard et 1 à un classement parfait."
+      }
+    }
+  },
+  "binary": {
+    "positiveClassFallback": "Anomalie présente",
+    "about": {
+      "description": "Ce qui est noté, sur quel jeu de données, et quelle anomalie compte comme positive.",
+      "positiveClassTerm": "Classe positive",
+      "positiveClass": "{name}, codée par l’étiquette 1. La sensibilité et la valeur prédictive positive portent sur cette classe.",
+      "positiveClassMissing": "Non précisée pour cette tâche. L’étiquette 1 signifie que l’anomalie est présente, l’étiquette 0 qu’elle est absente.",
+      "classesTerm": "Étiquettes",
+      "classes": "1 pour positif, 0 pour négatif"
+    },
+    "results": {
+      "ordering": "Classés du meilleur au moins bon selon l’exactitude équilibrée, moyenne de la sensibilité et de la spécificité : un fichier ne peut donc pas être bien classé en signalant tous les éléments, ou aucun.",
+      "intervals": "Chaque taux est accompagné de son intervalle de confiance à 95 % (méthode de Wilson) : la plage dans laquelle se situe plausiblement le taux réel, compte tenu du nombre d’éléments sur lequel il repose. L’ASC n’apparaît que pour une soumission qui donne un score pour chaque élément."
+    },
+    "interval": "IC 95 % : {lower} à {upper}",
+    "intervalSpoken": "intervalle de confiance à 95 % : de {lower} à {upper}",
+    "basis": "{numerator} sur {denominator}",
+    "aucBasis": "Intervalle issu de {resamples} rééchantillonnages bootstrap avec une graine fixe : un même fichier obtient toujours le même intervalle.",
+    "notEstimable": "Non estimable",
+    "notEstimableReason": "Aucun élément de l’ensemble ne relève du dénominateur de ce taux.",
+    "notEstimableBalanced": "Nécessite à la fois la sensibilité et la spécificité, or les éléments notés ne comportent qu’une seule classe de référence.",
+    "aucAbsent": "Non communiquée",
+    "aucAbsentReason": "L’ASC nécessite un score pour chaque élément noté, et ce fichier n’en donne pas pour chacun.",
+    "confusion": {
+      "title": "Effectifs",
+      "description": "Chaque élément noté tombe dans une case : son étiquette de référence en ligne, l’étiquette donnée par ce fichier en colonne. Chaque taux ci-dessus est un rapport entre ces effectifs.",
+      "tableLabel": "Effectifs des éléments notés selon l’étiquette de référence et l’étiquette soumise",
+      "corner": "Référence ↓ · Fichier →",
+      "positive": "Positif : {name}",
+      "negative": "Négatif",
+      "truePositive": "Vrais positifs",
+      "falseNegative": "Faux négatifs",
+      "falsePositive": "Faux positifs",
+      "trueNegative": "Vrais négatifs"
+    },
+    "submit": {
+      "fillIn": "Dans la colonne label, saisissez 1 lorsque l’anomalie est présente ({positive}) et 0 lorsqu’elle est absente.",
+      "scoreHint": "La colonne score est facultative : c’est la confiance du modèle dans la présence de l’anomalie, un nombre de 0 à 1, par exemple 0,83. Donnez-la pour chaque élément et le résultat comprendra une ASC ; laissez-la vide et l’élément sera noté sur sa seule étiquette.",
+      "templateDescription": "Un fichier tableur avec une ligne pour chacun des {items} de cette tâche, une colonne vide pour vos étiquettes et une colonne facultative pour les scores."
+    }
+  },
+  "formatReport": {
+    "duplicates": {
+      "title": "Identifiants présents plusieurs fois",
+      "detail": "Chaque élément occupe une seule ligne. Gardez une ligne pour chacun de ces identifiants et supprimez les autres."
+    },
+    "unknown": {
+      "title": "Identifiants inconnus de cette tâche",
+      "detailNone": "Aucun identifiant du fichier n’appartient à cette tâche. Le fichier est peut-être destiné à une autre tâche, ou les identifiants ont été modifiés. Repartez du fichier à remplir.",
+      "detailSome": "Vérifiez s’il s’agit d’une faute de frappe, ou supprimez ces lignes. Le fichier à remplir donne tous les identifiants de la tâche."
+    },
+    "labels": {
+      "title": "Étiquettes hors de la plage de cette tâche",
+      "detail": "Une étiquette est un nombre entier de 0 à {top}. Ces éléments ont une autre valeur."
+    },
+    "scores": {
+      "title": "Scores non acceptés par cette tâche",
+      "detail": "Cette tâche attend une étiquette par élément, sans score. Supprimez la colonne score, ou les valeurs « score » d’un fichier JSON."
+    },
+    "checkFailed": "Échec de la vérification",
+    "allScored": "Chaque ligne reconnue a un score : le résultat peut donc inclure une ASC. Elle est calculée lorsque les éléments notés comprennent à la fois des cas positifs et des cas négatifs.",
+    "noneScored": "Aucune ligne n’a de score : le résultat n’inclura donc pas d’ASC. C’est autorisé.",
+    "someUnscored": "{count, plural, one {{n} ligne reconnue n’a pas de score} other {{n} lignes reconnues n’ont pas de score}} : le résultat n’inclura donc pas d’ASC. C’est autorisé ; ajoutez un score à chaque ligne pour en obtenir une."
+  },
+  "quota": {
+    "reset": "{date} UTC",
+    "totalUsedSummary": "Plus aucune soumission notée disponible sur cette tâche.",
+    "totalUsedDetail": "Toutes les soumissions notées autorisées sur cette tâche ({limit}) ont été utilisées. Cette limite n’est pas remise à zéro. La vérification du format reste gratuite.",
+    "weekUsedSummary": "Plus aucune soumission notée disponible cette semaine.",
+    "weekUsedDetail": "Toutes les soumissions notées de cette semaine ({limit}) ont été utilisées. La limite est remise à zéro le {reset}. La vérification du format reste gratuite.",
+    "summary": "Soumissions notées restantes cette semaine : {remaining} sur {limit}.",
+    "detail": "Restantes sur l’ensemble de la tâche : {remaining} sur {limit}.",
+    "refusedWeek": "Non soumis : toutes les soumissions notées de cette semaine ({limit}) ont été utilisées. La limite est remise à zéro le {reset}.",
+    "refusedTotal": "Non soumis : toutes les soumissions notées autorisées sur cette tâche ({limit}) ont été utilisées. Cette limite n’est pas remise à zéro."
+  },
+  "subgroup": {
+    "section": {
+      "title": "Résultats par sous-groupe",
+      "description": "Les mêmes indicateurs, calculés uniquement sur les éléments de chaque groupe. Un modèle peut avoir un bon résultat global et être moins performant pour un groupe de patients : c’est ici que cela apparaît.",
+      "byField": "Par {field}",
+      "tableLabel": "Résultats par {field}",
+      "groupColumn": "Groupe",
+      "itemsColumn": "Éléments",
+      "overallRow": "Tous les éléments notés",
+      "itemsOf": "{scored} sur {total}"
+    },
+    "suppression": {
+      "notReported": "Non communiqué",
+      "notReportedSpoken": "Non communiqué pour {group} : le groupe est trop petit pour être publié, ou il est masqué pour qu’un groupe plus petit ne puisse pas être déduit.",
+      "rateWithheld": "Masqué",
+      "rateWithheldSpoken": "Masqué : la valeur repose sur moins d’éléments que le minimum requis, ou permettrait de déduire un tel effectif.",
+      "notEstimable": "n.d.",
+      "notEstimableSpoken": "Non estimable : aucun élément de ce groupe ne relève du dénominateur de ce taux.",
+      "note": "Les groupes de moins de {min} éléments notés ne sont pas communiqués, pas plus qu’aucun indicateur reposant sur moins de {min} éléments. Lorsqu’un groupe est masqué, un autre peut l’être avec lui, afin que les valeurs masquées ne puissent pas être déduites du résultat global et des autres groupes. La même règle s’applique à tous les lecteurs, y compris l’auteur de la soumission et les administrateurs."
+    },
+    "caution": {
+      "title": "Interpréter les résultats par groupe avec prudence",
+      "body": "Les indicateurs de chaque groupe reposent sur moins d’éléments que le résultat global ; ils sont donc moins certains. Une différence entre des groupes de cette taille peut être due au hasard ; c’est une différence importante, retrouvée aussi sur un autre jeu de données, qui doit conduire à agir.",
+      "intervals": "Les plages indiquées sous chaque taux sont des intervalles de confiance à 95 %. Elles sont plus larges pour un groupe que pour l’ensemble, car un groupe compte moins d’éléments."
+    },
+    "intervalShort": "{lower}–{upper}",
+    "intervalSpoken": "intervalle de confiance à 95 % : de {lower} à {upper}",
+    "task": {
+      "fieldsTerm": "Sous-groupes",
+      "fields": "Les résultats sont aussi présentés par {list}. L’appartenance de chaque élément à un groupe est conservée par la plateforme, comme les étiquettes de référence.",
+      "rowLink": "Résultats par sous-groupe",
+      "compareTitle": "Comparer deux résultats par sous-groupe",
+      "compareDescription": "Mettez deux soumissions côte à côte, groupe par groupe. Deux modèles ayant le même résultat global peuvent différer pour un groupe de patients.",
+      "compareFirst": "Premier résultat",
+      "compareSecond": "Second résultat",
+      "compareSubmit": "Comparer par sous-groupe"
+    },
+    "compare": {
+      "eyebrow": "Comparaison par sous-groupe",
+      "title": "{a} et {b}",
+      "metaTitle": "Comparaison par sous-groupe — {slug} — Évaluation OCI",
+      "metaDescription": "Deux résultats de la tâche d’évaluation {slug}, côte à côte pour chaque sous-groupe.",
+      "metricChoice": "Indicateur affiché",
+      "metricChoiceLabel": "Indicateur affiché :",
+      "tableLabel": "Résultats par {field} : {metric}",
+      "difference": "Différence",
+      "differenceSpoken": "{b} moins {a}",
+      "points": "{value} pts",
+      "notComparable": "Ces deux résultats ne peuvent pas être comparés par sous-groupe : l’un d’eux n’a pas de résultats par sous-groupe.",
+      "differentTask": "Les deux résultats doivent appartenir à cette tâche.",
+      "pickTwo": "Choisissez deux soumissions notées différentes de cette tâche à comparer.",
+      "back": "Retour à la tâche",
+      "explain": "La différence correspond au second résultat moins le premier, en points de pourcentage. Un groupe masqué dans l’un des résultats est masqué dans la comparaison."
+    }
+  }
+}

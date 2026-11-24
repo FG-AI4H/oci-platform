@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@oci/ui';
 import type { SubgroupResults, TaskKindScores } from '@oci/shared-types';
-import { SUBGROUP_TEXT as T } from './subgroup-text';
+import type { EvaluationI18n } from './i18n';
+import { getEvaluationI18n } from './server-i18n';
 import { subgroupTables, type FigureCell, type SubgroupTable } from './subgroup-table';
 
 /**
@@ -11,58 +12,67 @@ import { subgroupTables, type FigureCell, type SubgroupTable } from './subgroup-
  * Laid out for 375 px: at most five columns, small type on a phone, and the
  * table region scrolls (and takes focus) if a long group label still makes it
  * overflow.
+ *
+ * Worded in the request's language (#654); the field and group labels are
+ * the task's own, from the API.
  */
-export function SubgroupResultsCard({
+export async function SubgroupResultsCard({
   subgroups,
   scores,
 }: {
   subgroups: SubgroupResults;
   scores: TaskKindScores;
 }) {
-  const tables = subgroupTables(subgroups, scores);
+  const i18n = await getEvaluationI18n();
+  const { t, f } = i18n;
+  const tables = subgroupTables(i18n, subgroups, scores);
   const hasIntervals = scores.kind === 'BINARY_DIAGNOSTIC';
   return (
     <Card id="subgroups" className="scroll-mt-24">
       <CardHeader>
-        <CardTitle as="h2">{T.section.title}</CardTitle>
-        <CardDescription>{T.section.description}</CardDescription>
+        <CardTitle as="h2">{t('subgroup.section.title')}</CardTitle>
+        <CardDescription>{t('subgroup.section.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-8">
         {tables.map((table) => (
-          <FieldTable key={table.key} table={table} />
+          <FieldTable key={table.key} table={table} i18n={i18n} />
         ))}
         <div className="space-y-2 rounded-lg bg-[var(--color-subtle)] p-4 text-sm text-[var(--color-muted-foreground)]">
-          <p className="font-medium text-[var(--color-foreground)]">{T.caution.title}</p>
-          <p>{T.caution.body}</p>
-          {hasIntervals ? <p>{T.caution.intervals}</p> : null}
-          <p>{T.suppression.note(subgroups.minCellSize.toLocaleString('en-GB'))}</p>
+          <p className="font-medium text-[var(--color-foreground)]">
+            {t('subgroup.caution.title')}
+          </p>
+          <p>{t('subgroup.caution.body')}</p>
+          {hasIntervals ? <p>{t('subgroup.caution.intervals')}</p> : null}
+          <p>{t('subgroup.suppression.note', { min: f.number(subgroups.minCellSize) })}</p>
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function FieldTable({ table }: { table: SubgroupTable }) {
+function FieldTable({ table, i18n }: { table: SubgroupTable; i18n: EvaluationI18n }) {
+  const { t } = i18n;
   const span = table.columns.length + 1;
+  const field = table.label.toLowerCase();
   return (
     <section aria-labelledby={`subgroup-${table.key}`} className="space-y-3">
       <h3
         id={`subgroup-${table.key}`}
         className="text-base font-semibold text-[var(--color-foreground)]"
       >
-        {T.section.byField(table.label)}
+        {t('subgroup.section.byField', { field })}
       </h3>
       <div
         tabIndex={0}
         role="region"
-        aria-label={T.section.tableLabel(table.label)}
+        aria-label={t('subgroup.section.tableLabel', { field })}
         className="overflow-x-auto rounded-lg border border-[var(--color-border)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
       >
         <table className="w-full border-collapse text-xs sm:text-sm">
           <thead className="bg-[var(--color-subtle)] text-[var(--color-muted-foreground)]">
             <tr>
               <th scope="col" className="px-1.5 py-2.5 text-start font-medium sm:px-4">
-                {T.section.groupColumn}
+                {t('subgroup.section.groupColumn')}
               </th>
               {table.columns.map((c) => (
                 <th key={c.key} scope="col" className="px-1.5 py-2.5 text-end font-medium sm:px-4">
@@ -70,7 +80,7 @@ function FieldTable({ table }: { table: SubgroupTable }) {
                 </th>
               ))}
               <th scope="col" className="px-1.5 py-2.5 text-end font-medium sm:px-4">
-                {T.section.itemsColumn}
+                {t('subgroup.section.itemsColumn')}
               </th>
             </tr>
           </thead>
@@ -97,8 +107,10 @@ function FieldTable({ table }: { table: SubgroupTable }) {
                     colSpan={span}
                     className="px-1.5 py-2.5 text-end text-[var(--color-muted-foreground)] sm:px-4"
                   >
-                    <span aria-hidden="true">{T.suppression.notReported}</span>
-                    <span className="sr-only">{T.suppression.notReportedSpoken(row.label)}</span>
+                    <span aria-hidden="true">{t('subgroup.suppression.notReported')}</span>
+                    <span className="sr-only">
+                      {t('subgroup.suppression.notReportedSpoken', { group: row.label })}
+                    </span>
                   </td>
                 ) : (
                   <>

@@ -1,0 +1,145 @@
+{
+  "status": {
+    "PENDING": "pending",
+    "APPROVED": "approved",
+    "DENIED": "denied",
+    "REVOKED": "revoked"
+  },
+  "page": {
+    "metaTitle": "Request access — OCI Catalog",
+    "unavailableTitle": "Catalog unavailable",
+    "unavailableFallback": "Unable to reach catalog API",
+    "eyebrow": "Restricted dataset",
+    "title": "Request access",
+    "lead": "The host will review your justification and attestations. You’ll see the decision on <link>your dashboard</link>.",
+    "auditableTitle": "Your request is auditable",
+    "auditableBody": "Justification + attestations are stored as part of the dataset’s consent + DPIA record. Be specific — the host audits these later.",
+    "detailsTitle": "Request details"
+  },
+  "form": {
+    "errorTitle": "Could not submit request",
+    "permittedTitle": "This dataset’s permitted uses",
+    "permittedBody": "The host has tagged this dataset with the following GA4GH Data Use Ontology terms. Your intended use must be consistent with all of them.",
+    "choose": "Choose…",
+    "submit": "Submit request",
+    "submitting": "Submitting…",
+    "project": {
+      "legend": "Project",
+      "titleLabel": "Project title",
+      "titleHint": "5–200 characters. The host inbox renders this as the row title.",
+      "descriptionLabel": "Project description",
+      "descriptionHint": "50–4000 characters. Cover the research question, the population, and how the data will be used.",
+      "institutionLabel": "Institution",
+      "institutionHint": "Your university, hospital, or organisation."
+    },
+    "intendedUse": {
+      "legend": "Intended use",
+      "hint": "The platform auto-matches this against the dataset’s DUO terms. Conflicts get flagged for the host before approval.",
+      "option": {
+        "NON_COMMERCIAL_RESEARCH": {
+          "label": "Non-commercial research",
+          "hint": "Academic / public benefit. Outputs may be published or shared open-source."
+        },
+        "COMMERCIAL_RESEARCH": {
+          "label": "Commercial research",
+          "hint": "For-profit research, including model training intended for commercial products."
+        },
+        "CLINICAL_CARE": {
+          "label": "Clinical care",
+          "hint": "Direct use in clinical decision support / care pathways."
+        },
+        "EDUCATION": {
+          "label": "Education",
+          "hint": "Teaching material; not for primary research outputs."
+        }
+      }
+    },
+    "duo": {
+      "legend": "DUO terms you attest to",
+      "hint": "GA4GH Data Use Ontology — the terms whose conditions you agree to. Pick at least one that fits your project. The matcher is conservative on partial coverage."
+    },
+    "compliance": {
+      "legend": "Compliance attestations",
+      "irbApproved": "IRB approved.",
+      "irbApprovedBody": "My institutional review board (or equivalent ethics committee) has approved this study.",
+      "irbRefLabel": "IRB approval reference",
+      "irbRefHint": "Optional. The IRB document or approval number we cite in the audit trail.",
+      "dpiaLabel": "DPIA reference",
+      "dpiaHint": "Optional. The Data-Protection Impact Assessment for this use case.",
+      "retentionLabel": "Data retention (days)",
+      "retentionHint": "How long you’ll retain the data after access ends. 1–3650 days (10 years max)."
+    },
+    "outputs": {
+      "legend": "Outputs",
+      "redistributionLabel": "Redistribution intent",
+      "redistributionHint": "What you’ll do with derived data, results, or model outputs.",
+      "redistribution": {
+        "NONE": "No redistribution — internal use only",
+        "DERIVATIVES_ONLY": "Derivatives only (no raw data)",
+        "WITH_PERMISSION": "With explicit permission per request"
+      },
+      "outputTypeLabel": "Output type",
+      "outputTypeHint": "The primary deliverable from this project.",
+      "outputType": {
+        "PUBLICATION": "Peer-reviewed publication",
+        "MODEL_WEIGHTS": "Model weights",
+        "DERIVATIVE_DATASET": "Derivative dataset",
+        "INTERNAL_USE": "Internal report / no external output"
+      }
+    },
+    "builder": {
+      "legend": "AI-builder context",
+      "badge": "required for builder audience",
+      "intro": "For commercial / clinical-care intent we ask deployment-track questions so hosts can judge whether the proposed product fits their dataset’s licensing posture.",
+      "legalNameLabel": "Legal entity name",
+      "legalNamePlaceholder": "e.g. Acme Health Inc.",
+      "jurisdictionLabel": "Jurisdiction (ISO-2)",
+      "jurisdictionHint": "e.g. US, GB, CH, KE",
+      "deploymentLabel": "Deployment countries (ISO-2, comma-separated)",
+      "deploymentHint": "e.g. KE, NG, ZA",
+      "pathwayLabel": "Regulatory pathway",
+      "pathway": {
+        "FDA_510K": "FDA 510(k)",
+        "FDA_DE_NOVO": "FDA De Novo",
+        "FDA_PMA": "FDA PMA",
+        "EU_MDR_CLASS_I": "EU MDR Class I",
+        "EU_MDR_CLASS_IIA": "EU MDR Class IIa",
+        "EU_MDR_CLASS_IIB": "EU MDR Class IIb",
+        "EU_MDR_CLASS_III": "EU MDR Class III",
+        "EU_IVDR": "EU IVDR",
+        "NATIONAL_LMIC": "National (LMIC)",
+        "NONE_RESEARCH_ONLY": "None (research only)",
+        "OTHER": "Other / not yet decided"
+      },
+      "whoPriorityLabel": "WHO priority alignment (optional)",
+      "whoPriorityHint": "e.g. tuberculosis, maternal health, AMR. Leave blank if not applicable.",
+      "accreditationsLabel": "Accreditations (one per line, optional)",
+      "accreditationsHint": "e.g. WHO Innovation Hub, ISO 13485, IEC 62304, national MoH endorsement",
+      "royaltyLabel": "Royalty / commercialisation plan (optional)",
+      "royaltyHint": "LMIC public-sector terms welcome — hosts can negotiate clauses bilaterally.",
+      "postMarketLabel": "Post-market data flow",
+      "postMarket": {
+        "NO_PERSISTENCE": "Inference-only — nothing retained",
+        "AGGREGATE_STATS": "Aggregate statistics retained",
+        "PSEUDONYMISED_RETAINED": "Pseudonymised individual rows retained",
+        "IDENTIFIED_RETAINED": "Identifiable rows retained"
+      }
+    }
+  },
+  "action": {
+    "signInRequired": "Sign in required.",
+    "disposableEmail": "Requests from disposable email providers are not accepted ({domain}). Please use an institutional or organisational address.",
+    "apiBaseUrlMissing": "NEXT_PUBLIC_API_BASE_URL not set in web env."
+  },
+  "dashboard": {
+    "metaTitle": "My access requests — OCI Platform",
+    "eyebrow": "Dashboard",
+    "title": "My access requests",
+    "lead": "Restricted datasets you’ve asked to access. Hosts decide each request.",
+    "loadErrorTitle": "Could not load requests",
+    "emptyTitle": "No requests yet",
+    "emptyBody": "Browse the <link>catalog</link> and submit a request from any RESTRICTED dataset’s detail page.",
+    "submitted": "Submitted <time>{date}</time>",
+    "hostNote": "Host’s note:"
+  }
+}
