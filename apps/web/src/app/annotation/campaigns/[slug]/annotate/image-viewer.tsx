@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState, type PointerEvent } from 'react';
+import { useTranslations } from 'next-intl';
 import { Button } from '@oci/ui';
-import { isTypingTarget } from './keyboard';
+import { isTypingTarget, zoomOf } from './keyboard';
 import { useReportSampleReady } from './sample-ready';
 
 interface ImageViewerProps {
@@ -52,10 +53,12 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
  *   arrows   pan, while the image has focus (elsewhere they move
  *            between the label choices)
  *
- * Digits are left to the label form. Zoom and filters are CSS, so the
+ * Digits are left to the label form, and zoom ignores the digit row,
+ * where a French keyboard puts - and _ (#646 review, item 4). Zoom and filters are CSS, so the
  * image is loaded once and never re-requested.
  */
 export function ImageViewer({ src, alt }: ImageViewerProps) {
+  const t = useTranslations('Annotate.viewer');
   const [view, setView] = useState<ViewState>(FIT);
   const [failed, setFailed] = useState(false);
   // Hidden until the bytes arrive, then faded in from the black frame,
@@ -99,15 +102,13 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target)) return;
+      const zoom = zoomOf(e);
+      if (zoom !== null) {
+        zoomBy(zoom === 1 ? ZOOM_STEP : 1 / ZOOM_STEP);
+        e.preventDefault();
+        return;
+      }
       switch (e.key) {
-        case '+':
-        case '=':
-          zoomBy(ZOOM_STEP);
-          break;
-        case '-':
-        case '_':
-          zoomBy(1 / ZOOM_STEP);
-          break;
         case 'f':
         case 'F':
           setView(FIT);
@@ -170,25 +171,25 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
   // The toolbar, in display order. Each label names its key; the key
   // handler above maps the same keys to the same actions.
   const controls: ReadonlyArray<ViewControl> = [
-    { label: 'Fit (F)', onClick: () => setView(FIT) },
+    { label: t('fit'), onClick: () => setView(FIT) },
     {
-      label: 'Zoom out (−)',
+      label: t('zoomOut'),
       onClick: () => zoomBy(1 / ZOOM_STEP),
       disabled: view.zoom <= ZOOM_MIN,
     },
-    { label: 'Zoom in (+)', onClick: () => zoomBy(ZOOM_STEP), disabled: view.zoom >= ZOOM_MAX },
-    { label: 'Invert (I)', onClick: toggleInvert, pressed: view.invert },
-    { label: 'Darker (Shift+B)', onClick: () => level('brightness', -LEVEL_STEP) },
-    { label: 'Brighter (B)', onClick: () => level('brightness', LEVEL_STEP) },
-    { label: 'Less contrast (Shift+C)', onClick: () => level('contrast', -LEVEL_STEP) },
-    { label: 'More contrast (C)', onClick: () => level('contrast', LEVEL_STEP) },
+    { label: t('zoomIn'), onClick: () => zoomBy(ZOOM_STEP), disabled: view.zoom >= ZOOM_MAX },
+    { label: t('invert'), onClick: toggleInvert, pressed: view.invert },
+    { label: t('darker'), onClick: () => level('brightness', -LEVEL_STEP) },
+    { label: t('brighter'), onClick: () => level('brightness', LEVEL_STEP) },
+    { label: t('lessContrast'), onClick: () => level('contrast', -LEVEL_STEP) },
+    { label: t('moreContrast'), onClick: () => level('contrast', LEVEL_STEP) },
   ];
 
   return (
     <div className="space-y-2">
       <div
         role="toolbar"
-        aria-label="Image controls"
+        aria-label={t('toolbar')}
         aria-describedby={helpId}
         className="flex flex-wrap items-center gap-1.5"
       >
@@ -209,11 +210,11 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
       {/* Fixed text: the live values sit on the image instead, so
           changing them never reflows the page. */}
       <p id={helpId} className="text-xs text-[var(--color-muted-foreground)]">
-        When zoomed, drag the image or focus it and use the arrow keys to move around.
+        {t('help')}
       </p>
       <div
         role="region"
-        aria-label="Image (focus to pan with the arrow keys)"
+        aria-label={t('region')}
         tabIndex={0}
         onKeyDown={onViewportKey}
         onPointerDown={onPointerDown}
@@ -227,8 +228,7 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
             role="alert"
             className="absolute inset-0 grid place-items-center p-4 text-sm text-white"
           >
-            The image could not be loaded. Its address may have expired: reload the page to get a
-            new one.
+            {t('failed')}
           </p>
         ) : (
           // A plain <img>: the address is a short-lived signed URL on the
@@ -252,20 +252,20 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
             role="status"
             className="pointer-events-none absolute inset-0 grid place-items-center text-sm text-white"
           >
-            Loading the next image…
+            {t('loading')}
           </p>
         ) : null}
         {/* Current settings, overlaid so they take no layout space. All
             four are always shown and the numbers have a fixed width, so
             the pills never change size as the values change. */}
         <ul
-          aria-label="Current image settings"
+          aria-label={t('settings')}
           className="pointer-events-none absolute bottom-2 left-2 flex flex-wrap gap-1.5 font-mono text-xs tabular-nums"
         >
-          <ViewPill label="Zoom" value={`${Math.round(view.zoom * 100)}%`} />
-          <ViewPill label="Brightness" value={`${view.brightness}%`} />
-          <ViewPill label="Contrast" value={`${view.contrast}%`} />
-          <ViewPill label="Invert" value={view.invert ? 'on' : 'off'} />
+          <ViewPill label={t('zoom')} value={`${Math.round(view.zoom * 100)}%`} />
+          <ViewPill label={t('brightness')} value={`${view.brightness}%`} />
+          <ViewPill label={t('contrast')} value={`${view.contrast}%`} />
+          <ViewPill label={t('invertPill')} value={view.invert ? t('on') : t('off')} />
         </ul>
       </div>
     </div>

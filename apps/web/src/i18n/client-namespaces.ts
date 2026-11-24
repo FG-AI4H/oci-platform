@@ -9,6 +9,7 @@ import type { Messages } from './messages/en';
  */
 export const CLIENT_NAMESPACES = [
   'AccessRequest',
+  'Annotate',
   'CatalogNew',
   'Common',
   'Dataset',

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   ArrowLeftIcon,
   Badge,
@@ -27,6 +28,7 @@ import {
   type PullNextResponse,
 } from '@oci/shared-types';
 import { auth } from '../../../../../auth';
+import { getFormatters } from '../../../../../i18n/server';
 import { apiFetch } from '../../../../../lib/api';
 import { annotationGateForCaller } from '../../../../../lib/groups';
 import { AnnotateForm } from './annotate-form';
@@ -39,30 +41,25 @@ import { TaskSeriesViewer } from './task-series-viewer';
 /** The answer form's id; the DICOM viewer's `view` field joins it (#674). */
 const ANSWER_FORM_ID = 'annotate-answer';
 
-const GATE_LABEL: Record<AnnotationGateState, string> = {
-  INDEPENDENT: 'Independent annotation',
-  AWAITING_ARBITRATION: 'Arbitration',
-  AWAITING_EXPERT: 'Expert review',
-  COMPLETED: 'Completed',
-  SKIPPED: 'Skipped',
-};
-
 interface PageProps {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ after?: string | string[] }>;
 }
 
+type Translator = Awaited<ReturnType<typeof getTranslations<'Annotate'>>>;
+
 /** What the annotator just did, set by the submit and skip actions. */
-function afterNoticeFor(after: string | string[] | undefined): string | null {
-  if (after === 'submitted') return 'Your annotation was saved.';
-  if (after === 'skipped') return 'Task skipped. It goes back to the queue for someone else.';
+function afterNoticeFor(t: Translator, after: string | string[] | undefined): string | null {
+  if (after === 'submitted') return t('page.afterSubmitted');
+  if (after === 'skipped') return t('page.afterSkipped');
   return null;
 }
 
 export async function generateMetadata({ params }: PageProps) {
   const { slug } = await params;
+  const t = await getTranslations('Annotate');
   return {
-    title: `Annotate · ${slug}`,
+    title: t('metaTitle', { slug }),
     robots: { index: false, follow: false },
   };
 }
@@ -70,7 +67,11 @@ export async function generateMetadata({ params }: PageProps) {
 export default async function AnnotatePage({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const { after } = await searchParams;
-  const afterNotice = afterNoticeFor(after);
+  const [t, fmt] = await Promise.all([getTranslations('Annotate'), getFormatters()]);
+  /** A step's name, and the same in running text ("at the … step"). */
+  const gateName = (g: AnnotationGateState) => t(`gate.${g}`);
+  const stepInText = (g: AnnotationGateState) => gateName(g).toLocaleLowerCase(fmt.intlLocale);
+  const afterNotice = afterNoticeFor(t, after);
   const session = await auth();
   if (!session?.user) redirect('/');
 
@@ -101,7 +102,7 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
       );
       assignment = body?.assignment ?? null;
     } catch (err) {
-      pullError = err instanceof Error ? err.message : 'Could not read the queue.';
+      pullError = err instanceof Error ? err.message : t('page.queueReadFailed');
     }
   }
 
@@ -145,15 +146,14 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
             className="inline-flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
           >
             <ArrowLeftIcon size={14} />
-            <span>Back to campaign</span>
+            <span>{t('page.back')}</span>
           </Link>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Annotator queue
+            {t('page.eyebrow')}
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">{detail.name}</h1>
-            {/* eslint-disable-next-line security/detect-object-injection -- typed enum key */}
-            <Badge tone="info">{GATE_LABEL[gate]}</Badge>
+            <Badge tone="info">{gateName(gate)}</Badge>
           </div>
           <p className="font-mono text-sm text-[var(--color-muted-foreground)]">{detail.slug}</p>
           {/* New tab, so the instructions stay open beside the task. */}
@@ -161,10 +161,10 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
             href={`/annotation/campaigns/${detail.slug}/instructions`}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Instructions (opens in new tab)"
+            aria-label={t('page.instructionsNewTab')}
             className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--color-primary)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
           >
-            <span>Instructions</span>
+            <span>{t('page.instructions')}</span>
             <ExternalLinkIcon size={14} aria-hidden="true" />
           </Link>
         </header>
@@ -172,20 +172,21 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
         {detail.status !== 'RUNNING' ? (
           <Card>
             <CardHeader>
-              <CardTitle>Queue paused</CardTitle>
+              <CardTitle>{t('page.pausedTitle')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm">
-                This campaign is <code className="text-xs">{detail.status}</code>. Annotators only
-                pick up work while the campaign is RUNNING. Ask the campaign manager when it&apos;s
-                expected to resume.
+                {t.rich('page.pausedBody', {
+                  status: detail.status,
+                  code: (chunks) => <code className="text-xs">{chunks}</code>,
+                })}
               </p>
             </CardContent>
           </Card>
         ) : pullError ? (
           <Card>
             <CardHeader>
-              <CardTitle>Couldn&apos;t reach the queue</CardTitle>
+              <CardTitle>{t('page.queueUnreachableTitle')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm">{pullError}</p>
@@ -194,12 +195,11 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
         ) : assignment && hostedSample && !sample ? (
           <Card>
             <CardHeader>
-              <CardTitle>The image for this task could not be loaded</CardTitle>
+              <CardTitle>{t('page.sampleFailedTitle')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p role="alert" className="text-sm">
-                Reload the page to try again. If it still does not load, skip the task: it goes back
-                to the queue and you get another one.
+                {t('page.sampleFailedBody')}
               </p>
               <SkipTaskForm slug={detail.slug} assignmentId={assignment.id} />
             </CardContent>
@@ -207,7 +207,7 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
         ) : assignment ? (
           <Card>
             <CardHeader>
-              <CardTitle>Your current task</CardTitle>
+              <CardTitle>{t('page.currentTask')}</CardTitle>
             </CardHeader>
             <MaybeSampleReady waitForSample={sample !== null}>
               <CardContent
@@ -219,14 +219,14 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
                     // start over with each image.
                     key={assignment.id}
                     src={sample.url}
-                    alt={`Image to read at the ${GATE_LABEL[assignment.gateAtAssignment].toLowerCase()} step`}
+                    alt={t('page.imageAlt', { step: stepInText(assignment.gateAtAssignment) })}
                   />
                 ) : sample?.kind === 'dicom-series' ? (
                   <TaskSeriesViewer
                     key={assignment.id}
                     assignmentId={assignment.id}
                     initial={sample}
-                    label={`Series to read at the ${GATE_LABEL[assignment.gateAtAssignment].toLowerCase()} step`}
+                    label={t('page.seriesLabel', { step: stepInText(assignment.gateAtAssignment) })}
                     formId={ANSWER_FORM_ID}
                   />
                 ) : null}
@@ -235,24 +235,29 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
                     {/* The file name can carry the answer (ADR-0010), so it is
                       shown only when there is no image to look at. */}
                     {sample ? null : (
-                      <DefinitionItem term="Sample" mono>
+                      <DefinitionItem term={t('page.sample')} mono>
                         {assignment.sampleRef}
                       </DefinitionItem>
                     )}
-                    <DefinitionItem term="Step">
-                      {GATE_LABEL[assignment.gateAtAssignment]}
+                    <DefinitionItem term={t('page.step')}>
+                      {gateName(assignment.gateAtAssignment)}
                     </DefinitionItem>
-                    <DefinitionItem term="Assigned">
+                    <DefinitionItem term={t('page.assigned')}>
                       <time dateTime={assignment.assignedAt}>
-                        {new Intl.DateTimeFormat('en-GB', {
-                          dateStyle: 'medium',
-                          timeStyle: 'short',
-                        }).format(new Date(assignment.assignedAt))}
+                        {fmt.dateTime(assignment.assignedAt)}
                       </time>
                     </DefinitionItem>
                   </DefinitionList>
                   {readings && labels ? (
-                    <ReadersAnswers readings={readings} labels={labels} />
+                    <ReadersAnswers
+                      readings={readings}
+                      labels={labels}
+                      text={{
+                        title: t('page.readersAnswered'),
+                        none: t('page.noReadings'),
+                        cannotAssess: t('cannotAssess'),
+                      }}
+                    />
                   ) : null}
                   <AnnotateForm
                     slug={detail.slug}
@@ -271,7 +276,7 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle>{afterNotice ? 'Next task' : 'Ready when you are'}</CardTitle>
+              <CardTitle>{afterNotice ? t('page.nextTaskTitle') : t('page.readyTitle')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {afterNotice ? (
@@ -279,15 +284,11 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
                   {afterNotice}
                 </p>
               ) : (
-                <p className="text-sm">
-                  {/* eslint-disable-next-line security/detect-object-injection -- typed enum key */}
-                  Press Start to take the next task at the {GATE_LABEL[gate].toLowerCase()} step.
-                  Nothing is reserved for you until you do.
-                </p>
+                <p className="text-sm">{t('page.startPrompt', { step: stepInText(gate) })}</p>
               )}
               <StartTaskForm
                 slug={detail.slug}
-                label={afterNotice ? 'Start the next task' : 'Start'}
+                label={afterNotice ? t('page.startNext') : t('page.start')}
                 autoFocus={afterNotice !== null}
               />
             </CardContent>
@@ -317,22 +318,24 @@ function MaybeSampleReady({
 function ReadersAnswers({
   readings,
   labels,
+  text,
 }: {
   readings: readonly AssignmentReading[];
   labels: ClassificationLabelsConfig;
+  text: { title: string; none: string; cannotAssess: string };
 }) {
   const display = new Map(labels.labels.map((l) => [l.value, l.display]));
-  display.set(CANNOT_ASSESS_LABEL, 'Cannot assess');
+  display.set(CANNOT_ASSESS_LABEL, text.cannotAssess);
   return (
     <section
       aria-labelledby="readers-answers"
       className="rounded-md border border-[var(--color-border)] p-3"
     >
       <h2 id="readers-answers" className="text-sm font-medium">
-        What the readers answered
+        {text.title}
       </h2>
       {readings.length === 0 ? (
-        <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">No readings recorded.</p>
+        <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">{text.none}</p>
       ) : (
         <ul className="mt-2 space-y-2 text-sm">
           {readings.map((r, i) => (

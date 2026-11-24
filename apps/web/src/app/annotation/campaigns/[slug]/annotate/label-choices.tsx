@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Field, Textarea } from '@oci/ui';
 import {
   CANNOT_ASSESS_LABEL,
   LABEL_COMMENT_MAX,
   type ClassificationLabelsConfig,
 } from '@oci/shared-types';
-import { isTypingTarget } from './keyboard';
+import { digitOf, isTypingTarget } from './keyboard';
 
 interface LabelChoicesProps {
   labels: ClassificationLabelsConfig;
@@ -22,12 +23,15 @@ interface LabelChoicesProps {
 
 /**
  * The campaign's labels as radio buttons (#646). Keys 1–9 pick the
- * labels in order and 0 picks "Cannot assess"; Enter submits. Both are
+ * labels in order and 0 picks "Cannot assess"; Enter submits. The
+ * digit is read from the physical key, so the top row works on a French
+ * keyboard too (#646 review, item 4). Both are
  * ignored while typing a comment. The form posts `label` and `comment`,
  * which the submit action turns into the `{ label, comment }` payload;
  * at arbitration it posts `label` and `reason`.
  */
 export function LabelChoices({ labels, reasonRequired = false, echoed }: LabelChoicesProps) {
+  const t = useTranslations('Annotate');
   const previous = parseEchoed(echoed);
   const [picked, setPicked] = useState<string | null>(previous.label);
   const legendId = useId();
@@ -35,9 +39,9 @@ export function LabelChoices({ labels, reasonRequired = false, echoed }: LabelCh
   const groupRef = useRef<HTMLFieldSetElement>(null);
 
   const options = [
-    ...labels.labels.map((l, i) => ({ value: l.value, display: l.display, key: String(i + 1) })),
+    ...labels.labels.map((l, i) => ({ value: l.value, display: l.display, digit: i + 1 })),
     ...(labels.cannotAssess
-      ? [{ value: CANNOT_ASSESS_LABEL, display: 'Cannot assess', key: '0' }]
+      ? [{ value: CANNOT_ASSESS_LABEL, display: t('cannotAssess'), digit: 0 }]
       : []),
   ];
 
@@ -53,7 +57,8 @@ export function LabelChoices({ labels, reasonRequired = false, echoed }: LabelCh
         group.form?.requestSubmit();
         return;
       }
-      const option = options.find((o) => o.key === e.key);
+      const digit = digitOf(e);
+      const option = digit === null ? undefined : options.find((o) => o.digit === digit);
       if (!option) return;
       e.preventDefault();
       setPicked(option.value);
@@ -68,9 +73,9 @@ export function LabelChoices({ labels, reasonRequired = false, echoed }: LabelCh
       <input type="hidden" name="mode" value="labels" />
       <fieldset ref={groupRef} aria-labelledby={legendId} className="space-y-2">
         <legend id={legendId} className="text-sm font-medium">
-          {reasonRequired ? 'Final label' : 'Your answer'}{' '}
+          {reasonRequired ? t('labels.finalLabel') : t('labels.yourAnswer')}{' '}
           <span className="font-normal text-[var(--color-muted-foreground)]">
-            (press the number)
+            {t('labels.pressNumber')}
           </span>
         </legend>
         {options.map((o) => (
@@ -91,18 +96,14 @@ export function LabelChoices({ labels, reasonRequired = false, echoed }: LabelCh
               aria-hidden="true"
               className="inline-grid h-6 w-6 place-items-center rounded border border-[var(--color-border)] font-mono text-xs"
             >
-              {o.key}
+              {o.digit}
             </kbd>
             <span>{o.display}</span>
           </label>
         ))}
       </fieldset>
       {reasonRequired ? (
-        <Field
-          label="Reason"
-          htmlFor={commentId}
-          hint="Required. Why this is the final label; stored and exported with it."
-        >
+        <Field label={t('labels.reason')} htmlFor={commentId} hint={t('labels.reasonHint')}>
           <Textarea
             id={commentId}
             name="reason"
@@ -113,7 +114,7 @@ export function LabelChoices({ labels, reasonRequired = false, echoed }: LabelCh
           />
         </Field>
       ) : labels.allowComment ? (
-        <Field label="Comment" htmlFor={commentId} hint="Optional.">
+        <Field label={t('labels.comment')} htmlFor={commentId} hint={t('labels.optional')}>
           <Textarea
             id={commentId}
             name="comment"

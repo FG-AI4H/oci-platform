@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import type { PullNextResponse } from '@oci/shared-types';
 import { fetchAsUser } from '../../../../../lib/api-action';
 import { isAnnotationWorker } from '../../../../../lib/groups';
@@ -31,17 +32,21 @@ export type ReleaseState = { status: 'idle' } | { status: 'error'; message: stri
  */
 export async function startTaskAction(_prev: PullState, formData: FormData): Promise<PullState> {
   const session = await sessionForAction();
+  const [t, common] = await Promise.all([
+    getTranslations('Annotate.actions'),
+    getTranslations('Common'),
+  ]);
   if (!session?.user || !isAnnotationWorker(session)) {
     return {
       status: 'error',
-      message: 'You need an annotation role (annotator / arbitration-annotator / expert-reviewer).',
+      message: t('needRole'),
     };
   }
   const slug = String(formData.get('slug') ?? '');
-  if (!slug) return { status: 'error', message: 'Missing campaign slug.' };
+  if (!slug) return { status: 'error', message: t('missingSlug') };
 
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!base) return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
+  if (!base) return { status: 'error', message: common('apiBaseUrlMissing') };
 
   const res = await fetchAsUser(
     `${base}/v2/annotation/campaigns/${encodeURIComponent(slug)}/tasks/next`,
@@ -51,7 +56,11 @@ export async function startTaskAction(_prev: PullState, formData: FormData): Pro
     const body = await res.text().catch(() => '');
     return {
       status: 'error',
-      message: `API ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
+      message: common('apiError', {
+        status: res.status,
+        statusText: res.statusText,
+        detail: body.slice(0, 300),
+      }),
     };
   }
   const out = (await res.json()) as PullNextResponse;
@@ -60,14 +69,13 @@ export async function startTaskAction(_prev: PullState, formData: FormData): Pro
     return {
       status: 'success',
       assignmentId: null,
-      message:
-        'No tasks are waiting for you right now. New ones appear when the campaign manager adds them or when an earlier step finishes.',
+      message: t('nothingWaiting'),
     };
   }
   return {
     status: 'success',
     assignmentId: out.assignment.id,
-    message: `You picked up ${out.assignment.sampleRef}.`,
+    message: t('pickedUp', { sampleRef: out.assignment.sampleRef }),
   };
 }
 
@@ -82,11 +90,15 @@ export async function submitAssignmentAction(
   formData: FormData,
 ): Promise<SubmitState> {
   const session = await sessionForAction();
+  const [t, common] = await Promise.all([
+    getTranslations('Annotate.actions'),
+    getTranslations('Common'),
+  ]);
   let submissionRaw = String(formData.get('submission') ?? '');
   if (!session?.user || !isAnnotationWorker(session)) {
     return {
       status: 'error',
-      message: 'You need an annotation role to submit.',
+      message: t('needRoleToSubmit'),
       submission: submissionRaw,
     };
   }
@@ -94,7 +106,7 @@ export async function submitAssignmentAction(
   if (!assignmentId) {
     return {
       status: 'error',
-      message: 'Missing assignment id.',
+      message: t('missingAssignment'),
       submission: submissionRaw,
     };
   }
@@ -135,12 +147,12 @@ export async function submitAssignmentAction(
     };
     submissionRaw = JSON.stringify(submission);
     if (!label) {
-      return { status: 'error', message: 'Choose an answer first.', submission: submissionRaw };
+      return { status: 'error', message: t('chooseAnswer'), submission: submissionRaw };
     }
     if (reason === '') {
       return {
         status: 'error',
-        message: 'Give the reason for the final label.',
+        message: t('giveReason'),
         submission: submissionRaw,
       };
     }
@@ -148,7 +160,7 @@ export async function submitAssignmentAction(
     try {
       const parsed: unknown = JSON.parse(submissionRaw);
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        throw new Error('Submission must be a JSON object.');
+        throw new Error(t('notJsonObject'));
       }
       submission = {
         ...(parsed as Record<string, unknown>),
@@ -157,7 +169,9 @@ export async function submitAssignmentAction(
     } catch (err) {
       return {
         status: 'error',
-        message: `Invalid JSON: ${err instanceof Error ? err.message : 'unparseable'}`,
+        message: t('invalidJson', {
+          detail: err instanceof Error ? err.message : t('unparseable'),
+        }),
         submission: submissionRaw,
       };
     }
@@ -165,8 +179,7 @@ export async function submitAssignmentAction(
   if (viewField !== null && view === undefined) {
     return {
       status: 'error',
-      message:
-        'The image is not on screen yet. Wait until it is drawn, then submit. Your answer was kept.',
+      message: t('notOnScreen'),
       submission: submissionRaw,
     };
   }
@@ -175,7 +188,7 @@ export async function submitAssignmentAction(
   if (!base) {
     return {
       status: 'error',
-      message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.',
+      message: common('apiBaseUrlMissing'),
       submission: submissionRaw,
     };
   }
@@ -203,7 +216,7 @@ export async function submitAssignmentAction(
       if (slug) revalidatePath(`/annotation/campaigns/${slug}/annotate`);
       return {
         status: 'error',
-        message: `The instructions have changed (now version ${body.requiredInstructionsVersion}). Read the current instructions and confirm them before submitting. Your annotation was kept.`,
+        message: t('instructionsChanged', { version: body.requiredInstructionsVersion }),
         submission: submissionRaw,
       };
     }
@@ -216,7 +229,9 @@ export async function submitAssignmentAction(
       : [];
     return {
       status: 'error',
-      message: `The answer was not accepted${reasons.length ? `: ${reasons.join('; ')}` : '.'}`,
+      message: reasons.length
+        ? t('notAcceptedReasons', { reasons: reasons.join('; ') })
+        : t('notAccepted'),
       submission: submissionRaw,
     };
   }
@@ -224,7 +239,11 @@ export async function submitAssignmentAction(
     const body = await res.text().catch(() => '');
     return {
       status: 'error',
-      message: `API ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
+      message: common('apiError', {
+        status: res.status,
+        statusText: res.statusText,
+        detail: body.slice(0, 300),
+      }),
       submission: submissionRaw,
     };
   }
@@ -245,16 +264,19 @@ export async function releaseAssignmentAction(
   formData: FormData,
 ): Promise<ReleaseState> {
   const session = await sessionForAction();
+  const [t, common] = await Promise.all([
+    getTranslations('Annotate.actions'),
+    getTranslations('Common'),
+  ]);
   if (!session?.user || !isAnnotationWorker(session)) {
-    return { status: 'error', message: 'You need an annotation role to skip a task.' };
+    return { status: 'error', message: t('needRoleToSkip') };
   }
   const assignmentId = String(formData.get('assignmentId') ?? '');
   const slug = String(formData.get('slug') ?? '');
-  if (!assignmentId || !slug)
-    return { status: 'error', message: 'Missing assignment or campaign.' };
+  if (!assignmentId || !slug) return { status: 'error', message: t('missingAssignmentOrCampaign') };
 
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!base) return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
+  if (!base) return { status: 'error', message: common('apiBaseUrlMissing') };
 
   const res = await fetchAsUser(
     `${base}/v2/annotation/assignments/${encodeURIComponent(assignmentId)}/release`,
@@ -266,7 +288,11 @@ export async function releaseAssignmentAction(
     const body = await res.text().catch(() => '');
     return {
       status: 'error',
-      message: `API ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
+      message: common('apiError', {
+        status: res.status,
+        statusText: res.statusText,
+        detail: body.slice(0, 300),
+      }),
     };
   }
   revalidatePath(`/annotation/campaigns/${slug}/annotate`);

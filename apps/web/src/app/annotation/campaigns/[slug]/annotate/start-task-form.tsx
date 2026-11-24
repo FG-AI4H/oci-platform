@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription, Button } from '@oci/ui';
 import { startTaskAction, type PullState } from './actions';
 
@@ -20,6 +21,7 @@ interface StartTaskFormProps {
  * revalidates the page, which then renders the task.
  */
 export function StartTaskForm({ slug, label, autoFocus = false }: StartTaskFormProps) {
+  const t = useTranslations('Annotate.start');
   const [state, action, pending] = useActionState(startTaskAction, initialStart);
   return (
     <div className="space-y-3">
@@ -37,7 +39,7 @@ export function StartTaskForm({ slug, label, autoFocus = false }: StartTaskFormP
         <input type="hidden" name="slug" value={slug} />
         {/* Focused only right after the annotator's own submit or skip, so Enter carries on. */}
         <Button type="submit" variant="primary" disabled={pending} autoFocus={autoFocus}>
-          {pending ? 'Starting…' : label}
+          {pending ? t('starting') : label}
         </Button>
       </form>
     </div>
