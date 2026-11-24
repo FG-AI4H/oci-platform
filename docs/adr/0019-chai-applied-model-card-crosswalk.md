@@ -1,6 +1,6 @@
 # ADR-0019: Model-card conformance — IMDRF-anchored core, CHAI Applied Model Card as an export
 
-- **Status:** proposed
+- **Status:** accepted (2026-11-24); amended by [ADR-0023](./0023-sandbox-model-package-is-a-signed-projection-of-the-model-card.md)
 - **Date:** 2026-08-04
 - **Deciders:** Marc Lecoultre
 - **Tags:** `area:prediction` | `area:reporting` | `phase:C` | `package:PP`
