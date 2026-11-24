@@ -31,5 +31,12 @@
     "description": "Bearer tokens are visible to the server only. The web container forwards them to <code>/v2/*</code> with TLS — they do not travel to your browser."
   },
   "apiStatus": "API responded {status}",
-  "apiUnreachable": "API unreachable"
+  "apiUnreachable": "API unreachable",
+  "myModels": {
+    "title": "My models",
+    "description": "Model cards you have declared, in every status. A draft is visible only to you and the reviewers.",
+    "empty": "You have not declared a model yet.",
+    "declare": "Declare a model",
+    "unavailable": "Your model cards could not be loaded just now."
+  }
 }

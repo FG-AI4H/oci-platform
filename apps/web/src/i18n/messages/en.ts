@@ -16,6 +16,7 @@ import footer from './en/footer.json';
 import header from './en/header.json';
 import home from './en/home.json';
 import languageSwitch from './en/languageSwitch.json';
+import modelCardForm from './en/modelCardForm.json';
 import models from './en/models.json';
 import provenance from './en/provenance.json';
 import publish from './en/publish.json';
@@ -33,6 +34,7 @@ const en = {
   Header: header,
   Home: home,
   LanguageSwitch: languageSwitch,
+  ModelCardForm: modelCardForm,
   Models: models,
   Provenance: provenance,
   Publish: publish,

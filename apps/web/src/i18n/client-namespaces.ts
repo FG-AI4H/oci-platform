@@ -12,6 +12,7 @@ export const CLIENT_NAMESPACES = [
   'Common',
   'Dataset',
   'DicomViewer',
+  'ModelCardForm',
   'Provenance',
   'Publish',
   'Settings',

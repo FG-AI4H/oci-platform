@@ -13,7 +13,8 @@
     "countPublished": "<num>{total}</num> {count, plural, one {modèle publié} other {modèles publiés}}",
     "countMatching": "<num>{total}</num> {count, plural, one {modèle publié} other {modèles publiés}} correspondant à <quoted>« {query} »</quoted>",
     "intro": "Modèles d’IA en santé publiés, avec un usage prévu déclaré. Chaque fiche porte une étiquette « Model Facts » de l’OMS qui résume à quoi sert le modèle, comment il a été validé et quand cesser de s’y fier.",
-    "noSummary": "Aucun résumé clinique fourni."
+    "noSummary": "Aucun résumé clinique fourni.",
+    "declare": "Déclarer un modèle"
   },
   "search": {
     "label": "Rechercher des modèles",
@@ -89,7 +90,7 @@
     "medicalPurpose": "Finalité médicale",
     "intendedUsers": "Utilisateurs prévus",
     "clinicalPathway": "Parcours clinique",
-    "operatingEnvironments": "Environnements d’utilisation",
+    "operatingEnvironments": "Contextes de soins",
     "targetPopulation": "Population cible",
     "warnings": "Mises en garde",
     "riskTier": "Niveau de risque",

@@ -17,7 +17,14 @@ import {
   DefinitionList,
   Section,
 } from '@oci/ui';
-import type { ModelFactsLabel, PublicModelCard } from '@oci/shared-types';
+import {
+  canEditModelCard,
+  modelCardMovesFor,
+  type ModelCardResponse,
+  type ModelFactsLabel,
+  type PublicModelCard,
+} from '@oci/shared-types';
+import { auth } from '../../../auth';
 import { apiFetch } from '../../../lib/api';
 import {
   REGULATORY_STATUS_TONE,
@@ -25,14 +32,22 @@ import {
   modelClassText,
   regulatoryStatusText,
 } from '../../../lib/model-card-labels';
+import { modelCardViewer } from '../../../lib/model-card-viewer';
 import { modelCardJsonLd } from '../../../lib/model-jsonld';
 import { siteUrl } from '../../../lib/site-url';
+import { ModelCardLifecyclePanel } from './lifecycle-panel';
 import { ModelFactsLabelCard } from './model-facts-label';
 
 /**
- * Public model card page (#591). Anonymous on purpose — no session is
- * forwarded, so the API serves PUBLISHED cards only and 404s the rest, and
- * this page never shows a draft to someone who happens to be signed in.
+ * Model card page (#591, #651).
+ *
+ * Anonymous callers get the public page: no session is forwarded, so the API
+ * serves PUBLISHED cards only and 404s the rest. A signed-in caller's token
+ * is forwarded (#651), so the card's submitter and the reviewers also reach
+ * a DRAFT or SUBMITTED card, with its status and the moves they may make.
+ * What a signed-in caller may see is still the API's decision
+ * (`findVisible`); the page renders the public fields only whatever comes
+ * back, and the JSON-LD only for a PUBLISHED card.
  */
 
 async function loadCard(slug: string): Promise<PublicModelCard | null> {
@@ -52,21 +67,35 @@ export async function generateMetadata({
   return {
     title: t('detail.metaTitle', { slug }),
     ...(card?.clinicalSummary ? { description: card.clinicalSummary } : {}),
+    // Not public (a draft, a submission): nothing for a crawler to index.
+    ...(card ? {} : { robots: { index: false, follow: false } }),
   };
 }
 
 export default async function ModelCardPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const t = await getTranslations('Models');
+  const [t, tForm, session] = await Promise.all([
+    getTranslations('Models'),
+    getTranslations('ModelCardForm'),
+    auth(),
+  ]);
+  const signedIn = Boolean(session?.user);
 
   let card: PublicModelCard | null = null;
   let label: ModelFactsLabel | null = null;
   let error: string | null = null;
   try {
-    card = await loadCard(slug);
-    if (card) {
+    card = signedIn
+      ? await apiFetch<ModelCardResponse>(
+          `/v2/prediction/model-cards/${encodeURIComponent(slug)}`,
+          { session, revalidate: 0 },
+        )
+      : await loadCard(slug);
+    // A DRAFT has no label (the API answers 409): say so instead of asking.
+    if (card && card.status !== 'DRAFT') {
       label = await apiFetch<ModelFactsLabel>(
         `/v2/prediction/model-cards/${encodeURIComponent(slug)}/model-facts`,
+        signedIn ? { session, revalidate: 0 } : {},
       );
     }
   } catch (err) {
@@ -92,14 +121,19 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
 
   const ius = card.intendedUse;
   const approval = card.regulatoryApproval;
-  const jsonLd = modelCardJsonLd(card, siteUrl());
+  const published = card.status === 'PUBLISHED';
+  const jsonLd = published ? modelCardJsonLd(card, siteUrl()) : null;
+  const viewer = signedIn ? await modelCardViewer(session, card.slug) : null;
+  const showLifecycle = viewer !== null && (viewer.isSubmitter || viewer.isReviewer || !published);
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
-      />
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+        />
+      ) : null}
 
       <Section spacing="md" surface="hero">
         <Container size="xl">
@@ -140,6 +174,19 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
           </div>
         </Container>
       </Section>
+
+      {showLifecycle && viewer ? (
+        <Container size="xl">
+          <div className="pt-8">
+            <ModelCardLifecyclePanel
+              slug={card.slug}
+              status={card.status}
+              moves={modelCardMovesFor(card.status, viewer)}
+              canEdit={canEditModelCard(card.status, viewer)}
+            />
+          </div>
+        </Container>
+      ) : null}
 
       <Container size="xl">
         <Section spacing="md" className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
@@ -205,6 +252,11 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
 
           {label ? (
             <ModelFactsLabelCard label={label} />
+          ) : card.status === 'DRAFT' ? (
+            <Alert tone="info">
+              <AlertTitle>{t('detail.factsUnavailableTitle')}</AlertTitle>
+              <AlertDescription>{tForm('lifecycle.factsDraft')}</AlertDescription>
+            </Alert>
           ) : (
             <Alert tone="info">
               <AlertTitle>{t('detail.factsUnavailableTitle')}</AlertTitle>

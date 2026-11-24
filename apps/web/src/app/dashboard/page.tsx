@@ -21,11 +21,14 @@ import {
   Section,
   Separator,
   ShieldIcon,
+  SparkIcon,
   UserIcon,
 } from '@oci/ui';
+import type { ModelCardStatus } from '@oci/shared-types';
 import { auth, sessionAccessToken } from '../../auth';
 import { getFormatters } from '../../i18n/server';
 import { isAnnotationWorker } from '../../lib/groups';
+import { myModelCards } from '../../lib/model-card-viewer';
 
 interface MeResponse {
   sub: string;
@@ -84,6 +87,13 @@ const groupTone = (group: string) => {
   }
 };
 
+const MODEL_STATUS_TONE: Record<ModelCardStatus, 'neutral' | 'info' | 'success' | 'warning'> = {
+  DRAFT: 'neutral',
+  SUBMITTED: 'info',
+  PUBLISHED: 'success',
+  WITHDRAWN: 'warning',
+};
+
 function expiryTone(minutes: number): 'success' | 'warning' | 'danger' {
   if (minutes <= 0) return 'danger';
   if (minutes < 5) return 'warning';
@@ -110,10 +120,13 @@ export default async function DashboardPage() {
     redirect('/');
   }
 
-  const [result, t, f] = await Promise.all([
+  const [result, t, f, tModels, tCard, myModels] = await Promise.all([
     fetchMe(accessToken),
     getTranslations('Dashboard'),
     getFormatters(),
+    getTranslations('Models'),
+    getTranslations('ModelCardForm'),
+    myModelCards(session),
   ]);
   const expiresInMin = result.ok
     ? Math.max(0, Math.round((new Date(result.data.expiresAt).getTime() - Date.now()) / 60_000))
@@ -238,6 +251,62 @@ export default async function DashboardPage() {
                     </Badge>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-3">
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
+                      aria-hidden="true"
+                    >
+                      <SparkIcon size={18} />
+                    </span>
+                    <CardTitle>{t('myModels.title')}</CardTitle>
+                  </div>
+                  <Button asChild variant="secondary" size="sm">
+                    <Link href="/models/new">{t('myModels.declare')}</Link>
+                  </Button>
+                </div>
+                <CardDescription>{t('myModels.description')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {myModels === null ? (
+                  <p className="text-sm text-[var(--color-muted-foreground)]">
+                    {t('myModels.unavailable')}
+                  </p>
+                ) : myModels.items.length === 0 ? (
+                  <p className="text-sm text-[var(--color-muted-foreground)]">
+                    {t('myModels.empty')}
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-[var(--color-border)]">
+                    {myModels.items.map((m) => (
+                      <li
+                        key={m.slug}
+                        className="flex flex-wrap items-center justify-between gap-2 py-3"
+                      >
+                        <Link
+                          href={`/models/${encodeURIComponent(m.slug)}`}
+                          className="min-w-0 break-words rounded font-medium text-[var(--color-primary)] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+                        >
+                          <span translate="no">{m.slug}</span>{' '}
+                          <span className="font-mono text-xs text-[var(--color-muted-foreground)]">
+                            v{m.versionMajorMinorPatch}
+                          </span>
+                        </Link>
+                        <span className="flex flex-wrap items-center gap-2">
+                          <Badge tone="info">{tModels('riskTier', { tier: m.riskTier })}</Badge>
+                          <Badge tone={MODEL_STATUS_TONE[m.status]}>
+                            {tCard(`lifecycle.status.${m.status}`)}
+                          </Badge>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </CardContent>
             </Card>
 

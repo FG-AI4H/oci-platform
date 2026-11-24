@@ -13,7 +13,8 @@
     "countPublished": "<num>{total}</num> {count, plural, one {published model} other {published models}}",
     "countMatching": "<num>{total}</num> {count, plural, one {published model} other {published models}} matching <quoted>“{query}”</quoted>",
     "intro": "Published health AI models with a declared intended use. Each card carries a WHO Model Facts label summarising what the model is for, how it was validated and when to stop relying on it.",
-    "noSummary": "No clinical summary provided."
+    "noSummary": "No clinical summary provided.",
+    "declare": "Declare a model"
   },
   "search": {
     "label": "Search models",
