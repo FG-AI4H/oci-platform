@@ -51,7 +51,7 @@ Open **Mouse and keyboard** under the viewer for the same list.
 2. **Before you submit, leave on screen the image that supports your answer**, in the window you used. The platform records with your answer which image was on screen, as its place in the series (for instance image 14 of 32), and the window. This is part of the record of your reading, and it helps if a disagreement has to be settled.
 3. Press **Submit** (or Enter).
 
-If you submit before the first image is drawn, the page says _The image is not on screen yet_. Your answer is kept; wait for the image and submit again.
+**Submit** stays unavailable until the image is on screen, with a note saying so. If an image cannot be loaded, only **Skip** is left.
 
 After you submit, **Start the next task** is ready.
 
@@ -61,7 +61,7 @@ Press **Skip**. The exam goes back to the queue for someone else, and you get a 
 
 ## If you settle disagreements
 
-If you are an arbiter, you only get exams you did not read. You see the exam in the same viewer and the readers' answers, without their names. Choose the final answer, say why in **Reason**, and submit with the image that supports it on screen.
+If you are an arbiter, you only get exams you did not read. You see the exam in the same viewer and the readers' answers, without their names. Under each answer is the image and window the reader answered on, for instance `Image 14 of 32 · W 80 · L 40`. **Show image 14** puts that image on screen in that window, so you can look where each reader looked. Choose the final answer, say why in **Reason**, and submit with the image that supports it on screen.
 
 ## When something goes wrong
 

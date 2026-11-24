@@ -53,7 +53,7 @@ Ouvrez **Souris et clavier** sous la visionneuse pour retrouver cette liste.
 2. **Avant d’envoyer, laissez à l’écran l’image qui justifie votre réponse**, dans la fenêtre utilisée. La plateforme enregistre avec votre réponse l’image affichée, par sa place dans la série (par exemple image 14 sur 32), et la fenêtre. Cela fait partie de la trace de votre lecture et aide à trancher un désaccord.
 3. Appuyez sur **Submit** (ou Entrée).
 
-Si vous envoyez avant que la première image soit affichée, la page indique _The image is not on screen yet_ (l’image n’est pas encore à l’écran). Votre réponse est conservée ; attendez l’image et envoyez de nouveau.
+**Submit** reste indisponible tant que l’image n’est pas à l’écran, avec une note qui l’indique. Si une image ne peut pas être chargée, il ne reste que **Skip**.
 
 Après l’envoi, le bouton pour commencer la tâche suivante est prêt.
 
@@ -63,7 +63,7 @@ Appuyez sur **Skip**. L’examen retourne dans la file pour quelqu’un d’autr
 
 ## Si vous tranchez les désaccords
 
-Si vous êtes arbitre, vous ne recevez que des examens que vous n’avez pas lus. Vous voyez l’examen dans la même visionneuse et les réponses des lecteurs, sans leur nom. Choisissez la réponse finale, expliquez pourquoi dans **Reason** et envoyez avec à l’écran l’image qui la justifie.
+Si vous êtes arbitre, vous ne recevez que des examens que vous n’avez pas lus. Vous voyez l’examen dans la même visionneuse et les réponses des lecteurs, sans leur nom. Sous chaque réponse figurent l’image et la fenêtre sur lesquelles le lecteur a répondu, par exemple `Image 14 sur 32 · W 80 · L 40`. **Afficher l’image 14** met cette image à l’écran dans cette fenêtre : vous regardez là où chaque lecteur a regardé. Choisissez la réponse finale, expliquez pourquoi dans **Reason** et envoyez avec à l’écran l’image qui la justifie.
 
 ## En cas de problème
 
