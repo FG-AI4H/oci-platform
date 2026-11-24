@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Inject,
   Param,
   Patch,
@@ -35,6 +36,8 @@ import {
   SubmissionBodyPipe,
   type SubmitRequestBody,
 } from './dto/submission-body.pipe.js';
+import { requestBaseUrl, type RequestLike } from '../../common/http/request-base-url.js';
+import { toEvaluationResults, toTaskProblem } from './croissant-tasks.js';
 import { ZodPipe } from './dto/zod-pipe.js';
 import { EvaluationService } from './evaluation.service.js';
 
@@ -82,6 +85,40 @@ export class EvaluationController {
   @ApiOkResponse({ description: 'Task meta + submissions, ordered best-QWK first.' })
   taskDetail(@Param('slug', new ZodPipe(EvaluationTaskSlugSchema)) slug: EvaluationTaskSlug) {
     return this.evaluation.getTaskDetail(slug);
+  }
+
+  /**
+   * The task as a Croissant Tasks `TaskProblem` (#803). Built from the same
+   * public detail as the route above, so it discloses nothing more.
+   */
+  @Get('tasks/:slug/croissant-task.jsonld')
+  @Header('Content-Type', 'application/ld+json; charset=utf-8')
+  @ApiOperation({ summary: 'Get an evaluation task as a Croissant Tasks TaskProblem (public)' })
+  @ApiOkResponse({ description: 'JSON-LD `croissant:TaskProblem`.' })
+  @ApiNotFoundResponse({ description: 'No task with this slug.' })
+  async croissantTask(
+    @Param('slug', new ZodPipe(EvaluationTaskSlugSchema)) slug: EvaluationTaskSlug,
+    @Req() req: RequestLike,
+  ) {
+    const detail = await this.evaluation.getTaskDetail(slug);
+    return toTaskProblem(detail, { baseUrl: requestBaseUrl(req) });
+  }
+
+  /**
+   * The task's published results as Croissant Tasks `EvaluationTask`s (#803):
+   * scored, routed, published and not retracted. Same public source as above.
+   */
+  @Get('tasks/:slug/croissant-results.jsonld')
+  @Header('Content-Type', 'application/ld+json; charset=utf-8')
+  @ApiOperation({ summary: 'Get published results as Croissant Tasks EvaluationTasks (public)' })
+  @ApiOkResponse({ description: 'JSON-LD `@graph` of `croissant:EvaluationTask`.' })
+  @ApiNotFoundResponse({ description: 'No task with this slug.' })
+  async croissantResults(
+    @Param('slug', new ZodPipe(EvaluationTaskSlugSchema)) slug: EvaluationTaskSlug,
+    @Req() req: RequestLike,
+  ) {
+    const detail = await this.evaluation.getTaskDetail(slug);
+    return toEvaluationResults(detail, { baseUrl: requestBaseUrl(req) });
   }
 
   @Get('tasks/:slug/quota')

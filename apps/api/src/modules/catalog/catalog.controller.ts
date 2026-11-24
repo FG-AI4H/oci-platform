@@ -13,6 +13,7 @@ import {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
 import { OptionalCognitoJwtGuard } from '../../auth/optional-cognito-jwt.guard.js';
+import { requestBaseUrl } from '../../common/http/request-base-url.js';
 import { ZodPipe } from './dto/zod-pipe.js';
 import { Roles, RolesGuard } from '../../auth/roles.guard.js';
 import { CatalogService } from './catalog.service.js';
@@ -89,18 +90,7 @@ export class CatalogController {
   })
   @ApiOkResponse({ description: 'Croissant catalog index.' })
   federationIndex(@Req() req: FastifyLikeRequest) {
-    const proto =
-      typeof req.headers['x-forwarded-proto'] === 'string'
-        ? req.headers['x-forwarded-proto']
-        : (req.protocol ?? 'https');
-    const host =
-      typeof req.headers['x-forwarded-host'] === 'string'
-        ? req.headers['x-forwarded-host']
-        : typeof req.headers.host === 'string'
-          ? req.headers.host
-          : (req.hostname ?? 'oci.ai4h.net');
-    const baseUrl = `${proto}://${host}`;
-    return this.catalog.federationIndex(baseUrl);
+    return this.catalog.federationIndex(requestBaseUrl(req));
   }
 
   @Post('datasets')
