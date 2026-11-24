@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type PointerEvent } from 'react';
 import { Button } from '@oci/ui';
 import { isTypingTarget } from './keyboard';
+import { useReportSampleReady } from './sample-ready';
 
 interface ImageViewerProps {
   /** Short-lived address of the image (#646). */
@@ -66,6 +67,8 @@ export function ImageViewer({ src, alt }: ImageViewerProps) {
   const imgRef = useCallback((el: HTMLImageElement | null) => {
     if (el?.complete && el.naturalWidth > 0) setLoaded(true);
   }, []);
+  // The answer form waits for this (#646 review, item 5).
+  useReportSampleReady(loaded && !failed);
   const drag = useRef<{ x: number; y: number } | null>(null);
   const helpId = useId();
 

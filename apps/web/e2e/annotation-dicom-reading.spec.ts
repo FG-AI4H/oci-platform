@@ -175,9 +175,12 @@ test.describe('reading a DICOM series as a task (#674)', () => {
       await expect(p.getByText(DATASET)).toHaveCount(0);
 
       if (i === 0) {
+        // Submit stays disabled until the image is drawn, as for a plain
+        // image (#646 review, item 5); the action's own check is the
+        // backstop behind it.
         await p.getByRole('radio', { name: label, exact: true }).check();
-        await p.getByRole('button', { name: /^submit/i }).click();
-        await expect(p.getByText(/the image is not on screen yet/i)).toBeVisible();
+        await expect(p.getByRole('button', { name: /^submit/i })).toBeDisabled();
+        await expect(p.getByText(/submit is available once the image is on screen/i)).toBeVisible();
         release();
       }
 

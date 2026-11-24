@@ -11,6 +11,7 @@ import {
   type SubmitState,
 } from './actions';
 import { LabelChoices } from './label-choices';
+import { useSampleReady } from './sample-ready';
 
 const initialSubmit: SubmitState = { status: 'idle' };
 const initialRelease: ReleaseState = { status: 'idle' };
@@ -61,6 +62,11 @@ export function AnnotateForm({
     initialRelease,
   );
   const busy = submitPending || releasePending;
+  // No answer before the image is on screen (#646 review, item 5).
+  // Enter in the label form calls requestSubmit(), which a disabled
+  // button does not stop, so the form refuses too.
+  const sampleReady = useSampleReady();
+  const waitingId = useId();
   // The version the annotator confirmed. It stays confirmed across
   // tasks (each task remounts this form, so it is kept for the browser
   // session), and un-confirms itself when a new version is published.
@@ -100,7 +106,14 @@ export function AnnotateForm({
         </Alert>
       ) : null}
 
-      <form id={formId} action={submitAction} className="space-y-3">
+      <form
+        id={formId}
+        action={submitAction}
+        onSubmit={(e) => {
+          if (!sampleReady) e.preventDefault();
+        }}
+        className="space-y-3"
+      >
         <input type="hidden" name="assignmentId" value={assignment.id} />
         <input type="hidden" name="slug" value={slug} />
         {labels ? (
@@ -161,7 +174,12 @@ export function AnnotateForm({
           </div>
         ) : null}
         <div className="flex flex-wrap gap-2">
-          <Button type="submit" variant="primary" disabled={busy}>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={busy || !sampleReady}
+            aria-describedby={sampleReady ? undefined : waitingId}
+          >
             {submitPending ? 'Submitting…' : labels ? 'Submit (Enter)' : 'Submit'}
           </Button>
           {/* Skip lives in its own form; `form=` ties the button to it
@@ -170,6 +188,11 @@ export function AnnotateForm({
             {releasePending ? 'Skipping…' : 'Skip'}
           </Button>
         </div>
+        {sampleReady ? null : (
+          <p id={waitingId} className="text-sm text-[var(--color-muted-foreground)]">
+            Submit is available once the image is on screen.
+          </p>
+        )}
       </form>
       <form id={skipFormId} action={releaseAction} hidden>
         <input type="hidden" name="assignmentId" value={assignment.id} />

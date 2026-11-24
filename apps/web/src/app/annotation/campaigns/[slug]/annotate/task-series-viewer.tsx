@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { DicomSeriesSample, DicomView, DicomViewerSeries } from '@oci/shared-types';
 import { DicomViewerLoader } from '../../../../../components/dicom-viewer/dicom-viewer-loader';
+import { useReportSampleReady } from './sample-ready';
 
 interface TaskSeriesViewerProps {
   assignmentId: string;
@@ -29,6 +30,9 @@ interface TaskSeriesViewerProps {
 export function TaskSeriesViewer({ assignmentId, initial, label, formId }: TaskSeriesViewerProps) {
   const first = useRef<DicomSeriesSample | null>(initial);
   const [view, setView] = useState<DicomView | null>(null);
+  // The image asked for is drawn once there is a view: until then the
+  // answer form keeps Submit disabled (#646 review, item 5).
+  useReportSampleReady(view !== null);
 
   const loadSeries = useCallback(async (): Promise<DicomViewerSeries> => {
     const fresh = first.current;

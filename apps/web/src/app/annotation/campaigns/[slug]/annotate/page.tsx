@@ -15,6 +15,8 @@ import {
 } from '@oci/ui';
 import {
   CANNOT_ASSESS_LABEL,
+  parseDicomSeriesSampleRef,
+  parseFileSampleRef,
   type AnnotationGateState,
   type AssignmentReading,
   type AssignmentReadingsResponse,
@@ -29,6 +31,8 @@ import { apiFetch } from '../../../../../lib/api';
 import { annotationGateForCaller } from '../../../../../lib/groups';
 import { AnnotateForm } from './annotate-form';
 import { ImageViewer } from './image-viewer';
+import { SampleReadyProvider } from './sample-ready';
+import { SkipTaskForm } from './skip-task-form';
 import { StartTaskForm } from './start-task-form';
 import { TaskSeriesViewer } from './task-series-viewer';
 
@@ -106,7 +110,13 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
   // The sample (#646), tagged by kind: an image or a DICOM series
   // (#674), and at arbitration / expert review what the readers
   // answered. A task whose sample is not a hosted file (free-text refs)
-  // has none; the page then falls back to showing the reference.
+  // has none; the page then falls back to showing the reference. A
+  // hosted sample that could not be fetched leaves the reader nothing
+  // to look at, so the page offers Skip only (#646 review, item 5).
+  const hostedSample =
+    assignment !== null &&
+    (parseFileSampleRef(assignment.sampleRef) !== null ||
+      parseDicomSeriesSampleRef(assignment.sampleRef) !== null);
   let sample: AssignmentSampleResponse | null = null;
   let readings: AssignmentReading[] | null = null;
   if (assignment) {
@@ -181,65 +191,82 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
               <p className="text-sm">{pullError}</p>
             </CardContent>
           </Card>
+        ) : assignment && hostedSample && !sample ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>The image for this task could not be loaded</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p role="alert" className="text-sm">
+                Reload the page to try again. If it still does not load, skip the task: it goes back
+                to the queue and you get another one.
+              </p>
+              <SkipTaskForm slug={detail.slug} assignmentId={assignment.id} />
+            </CardContent>
+          </Card>
         ) : assignment ? (
           <Card>
             <CardHeader>
               <CardTitle>Your current task</CardTitle>
             </CardHeader>
-            <CardContent
-              className={sample ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]' : 'space-y-5'}
-            >
-              {sample?.kind === 'image' ? (
-                <ImageViewer
-                  // A fresh viewer per task: zoom, filters and the fade-in
-                  // start over with each image.
-                  key={assignment.id}
-                  src={sample.url}
-                  alt={`Image to read at the ${GATE_LABEL[assignment.gateAtAssignment].toLowerCase()} step`}
-                />
-              ) : sample?.kind === 'dicom-series' ? (
-                <TaskSeriesViewer
-                  key={assignment.id}
-                  assignmentId={assignment.id}
-                  initial={sample}
-                  label={`Series to read at the ${GATE_LABEL[assignment.gateAtAssignment].toLowerCase()} step`}
-                  formId={ANSWER_FORM_ID}
-                />
-              ) : null}
-              <div className="space-y-5">
-                <DefinitionList>
-                  {/* The file name can carry the answer (ADR-0010), so it is
+            <MaybeSampleReady waitForSample={sample !== null}>
+              <CardContent
+                className={sample ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]' : 'space-y-5'}
+              >
+                {sample?.kind === 'image' ? (
+                  <ImageViewer
+                    // A fresh viewer per task: zoom, filters and the fade-in
+                    // start over with each image.
+                    key={assignment.id}
+                    src={sample.url}
+                    alt={`Image to read at the ${GATE_LABEL[assignment.gateAtAssignment].toLowerCase()} step`}
+                  />
+                ) : sample?.kind === 'dicom-series' ? (
+                  <TaskSeriesViewer
+                    key={assignment.id}
+                    assignmentId={assignment.id}
+                    initial={sample}
+                    label={`Series to read at the ${GATE_LABEL[assignment.gateAtAssignment].toLowerCase()} step`}
+                    formId={ANSWER_FORM_ID}
+                  />
+                ) : null}
+                <div className="space-y-5">
+                  <DefinitionList>
+                    {/* The file name can carry the answer (ADR-0010), so it is
                       shown only when there is no image to look at. */}
-                  {sample ? null : (
-                    <DefinitionItem term="Sample" mono>
-                      {assignment.sampleRef}
+                    {sample ? null : (
+                      <DefinitionItem term="Sample" mono>
+                        {assignment.sampleRef}
+                      </DefinitionItem>
+                    )}
+                    <DefinitionItem term="Step">
+                      {GATE_LABEL[assignment.gateAtAssignment]}
                     </DefinitionItem>
-                  )}
-                  <DefinitionItem term="Step">
-                    {GATE_LABEL[assignment.gateAtAssignment]}
-                  </DefinitionItem>
-                  <DefinitionItem term="Assigned">
-                    <time dateTime={assignment.assignedAt}>
-                      {new Intl.DateTimeFormat('en-GB', {
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      }).format(new Date(assignment.assignedAt))}
-                    </time>
-                  </DefinitionItem>
-                </DefinitionList>
-                {readings && labels ? <ReadersAnswers readings={readings} labels={labels} /> : null}
-                <AnnotateForm
-                  slug={detail.slug}
-                  assignment={assignment}
-                  instructionsVersion={detail.currentInstructionsVersion}
-                  labels={labels}
-                  reasonRequired={
-                    labels !== null && assignment.gateAtAssignment === 'AWAITING_ARBITRATION'
-                  }
-                  formId={ANSWER_FORM_ID}
-                />
-              </div>
-            </CardContent>
+                    <DefinitionItem term="Assigned">
+                      <time dateTime={assignment.assignedAt}>
+                        {new Intl.DateTimeFormat('en-GB', {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        }).format(new Date(assignment.assignedAt))}
+                      </time>
+                    </DefinitionItem>
+                  </DefinitionList>
+                  {readings && labels ? (
+                    <ReadersAnswers readings={readings} labels={labels} />
+                  ) : null}
+                  <AnnotateForm
+                    slug={detail.slug}
+                    assignment={assignment}
+                    instructionsVersion={detail.currentInstructionsVersion}
+                    labels={labels}
+                    reasonRequired={
+                      labels !== null && assignment.gateAtAssignment === 'AWAITING_ARBITRATION'
+                    }
+                    formId={ANSWER_FORM_ID}
+                  />
+                </div>
+              </CardContent>
+            </MaybeSampleReady>
           </Card>
         ) : (
           <Card>
@@ -269,6 +296,17 @@ export default async function AnnotatePage({ params, searchParams }: PageProps) 
       </Section>
     </Container>
   );
+}
+
+/** The ready-state provider, only when there is a sample to wait for. */
+function MaybeSampleReady({
+  waitForSample,
+  children,
+}: {
+  waitForSample: boolean;
+  children: React.ReactNode;
+}) {
+  return waitForSample ? <SampleReadyProvider>{children}</SampleReadyProvider> : <>{children}</>;
 }
 
 /**
