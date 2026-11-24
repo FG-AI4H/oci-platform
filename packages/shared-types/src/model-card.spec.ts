@@ -1,5 +1,84 @@
 import { describe, expect, it } from 'vitest';
-import { ListModelCardsQuerySchema, ModelCardSlugSchema } from './model-card.js';
+import {
+  CreateModelCardRequestSchema,
+  ListModelCardsQuerySchema,
+  ModelCardSlugSchema,
+  UpdateModelCardRequestSchema,
+  canEditModelCard,
+  isModelCardReviewerGroups,
+  modelCardMovesFor,
+} from './model-card.js';
+
+describe('CreateModelCardRequestSchema slug (#651)', () => {
+  it('refuses a reserved slug that a web route would shadow', () => {
+    expect(CreateModelCardRequestSchema.shape.slug.safeParse('new').success).toBe(false);
+  });
+
+  it('accepts an ordinary slug', () => {
+    expect(CreateModelCardRequestSchema.shape.slug.safeParse('new-chest-triage').success).toBe(
+      true,
+    );
+  });
+});
+
+describe('UpdateModelCardRequestSchema (#651)', () => {
+  it('accepts a partial body and adds no defaults', () => {
+    expect(UpdateModelCardRequestSchema.parse({ clinicalSummary: 'Flags pneumothorax.' })).toEqual({
+      clinicalSummary: 'Flags pneumothorax.',
+    });
+  });
+
+  it('refuses an empty body', () => {
+    expect(UpdateModelCardRequestSchema.safeParse({}).success).toBe(false);
+  });
+
+  it.each([{ slug: 'renamed' }, { parentModelCardId: null }, { status: 'PUBLISHED' }])(
+    'refuses a field that is not editable: %o',
+    (body) => {
+      expect(UpdateModelCardRequestSchema.safeParse(body).success).toBe(false);
+    },
+  );
+});
+
+describe('model-card lifecycle permissions (#651)', () => {
+  const submitter = { isSubmitter: true, isReviewer: false };
+  const reviewer = { isSubmitter: false, isReviewer: true };
+  const selfReviewer = { isSubmitter: true, isReviewer: true };
+  const stranger = { isSubmitter: false, isReviewer: false };
+
+  it('lets only the submitter submit a draft', () => {
+    expect(modelCardMovesFor('DRAFT', submitter)).toEqual(['SUBMITTED']);
+    expect(modelCardMovesFor('DRAFT', reviewer)).toEqual([]);
+    expect(modelCardMovesFor('DRAFT', stranger)).toEqual([]);
+  });
+
+  it('lets a reviewer publish someone else’s submission, never their own', () => {
+    expect(modelCardMovesFor('SUBMITTED', reviewer)).toEqual(['PUBLISHED', 'DRAFT']);
+    expect(modelCardMovesFor('SUBMITTED', selfReviewer)).toEqual(['DRAFT']);
+    expect(modelCardMovesFor('SUBMITTED', submitter)).toEqual(['DRAFT']);
+  });
+
+  it('lets the submitter or a reviewer withdraw a published card', () => {
+    expect(modelCardMovesFor('PUBLISHED', submitter)).toEqual(['WITHDRAWN']);
+    expect(modelCardMovesFor('PUBLISHED', reviewer)).toEqual(['WITHDRAWN']);
+    expect(modelCardMovesFor('PUBLISHED', stranger)).toEqual([]);
+    expect(modelCardMovesFor('WITHDRAWN', selfReviewer)).toEqual([]);
+  });
+
+  it('allows editing a DRAFT by its submitter only', () => {
+    expect(canEditModelCard('DRAFT', submitter)).toBe(true);
+    expect(canEditModelCard('DRAFT', selfReviewer)).toBe(true);
+    expect(canEditModelCard('DRAFT', reviewer)).toBe(false);
+    expect(canEditModelCard('SUBMITTED', submitter)).toBe(false);
+    expect(canEditModelCard('PUBLISHED', submitter)).toBe(false);
+  });
+
+  it('treats evaluation-reviewer and admin as reviewers', () => {
+    expect(isModelCardReviewerGroups(['evaluation-reviewer'])).toBe(true);
+    expect(isModelCardReviewerGroups(['admin'])).toBe(true);
+    expect(isModelCardReviewerGroups(['host', 'participant'])).toBe(false);
+  });
+});
 
 describe('ListModelCardsQuerySchema (#591)', () => {
   it('applies the defaults', () => {

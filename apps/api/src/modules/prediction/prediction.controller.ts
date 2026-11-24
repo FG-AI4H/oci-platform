@@ -5,6 +5,7 @@ import {
   Header,
   Inject,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -16,10 +17,12 @@ import {
   CreateModelCardRequestSchema,
   ListModelCardsQuerySchema,
   ModelCardSlugSchema,
+  UpdateModelCardRequestSchema,
   type ChangeModelCardStatusRequest,
   type CreateModelCardRequest,
   type ListModelCardsQuery,
   type ModelCardSlug,
+  type UpdateModelCardRequest,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CognitoJwtGuard, CurrentUser } from '../../auth/cognito-jwt.guard.js';
@@ -66,6 +69,31 @@ export class PredictionController {
     @CurrentUser() user: CognitoAccessTokenPayload,
   ) {
     return this.prediction.submit(body, user);
+  }
+
+  @Get('mine')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "The caller's own model cards, every status (#651)" })
+  @ApiOkResponse({ description: 'The caller’s cards, most recently changed first.' })
+  @UseGuards(CognitoJwtGuard)
+  mine(@CurrentUser() user: CognitoAccessTokenPayload) {
+    return this.prediction.listMine(user);
+  }
+
+  @Patch(':slug')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Edit a DRAFT model card (submitter only, #651)' })
+  @ApiOkResponse({
+    description:
+      'The updated card. 403 for anyone but the submitter, 409 once the card is no longer DRAFT.',
+  })
+  @UseGuards(CognitoJwtGuard)
+  update(
+    @Param('slug', new ZodPipe(ModelCardSlugSchema)) slug: ModelCardSlug,
+    @Body(new ZodPipe(UpdateModelCardRequestSchema)) body: UpdateModelCardRequest,
+    @CurrentUser() user: CognitoAccessTokenPayload,
+  ) {
+    return this.prediction.update(slug, body, user);
   }
 
   @Post(':slug/status')

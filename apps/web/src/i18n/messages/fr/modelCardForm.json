@@ -1,0 +1,255 @@
+{
+  "metaTitleNew": "Déclarer un modèle — Modèles OCI",
+  "metaTitleEdit": "Modifier {slug} — Modèles OCI",
+  "back": "Modèles",
+  "backToCard": "Retour à la fiche",
+  "eyebrow": "Fiche du modèle",
+  "headingNew": "Déclarer un modèle",
+  "headingEdit": "Modifier {slug}",
+  "introNew": "Décrivez votre modèle et son usage prévu. Le niveau de risque découle de l’usage prévu que vous déclarez ; vous ne le choisissez pas. La fiche est enregistrée comme brouillon, visible uniquement par vous et par les relecteurs jusqu’à sa publication.",
+  "introEdit": "Cette fiche est un brouillon : vous pouvez encore la modifier. Une fois soumise pour relecture, elle ne peut plus être modifiée.",
+  "notEditable": {
+    "title": "Cette fiche ne peut plus être modifiée",
+    "body": "Seul un brouillon peut être modifié, et uniquement par la personne qui l’a déclaré. Une fiche soumise peut être remise en brouillon depuis sa page."
+  },
+  "steps": {
+    "model": {
+      "label": "Le modèle",
+      "subtitle": "Nom, version, classe et développeur"
+    },
+    "intendedUse": {
+      "label": "Usage prévu",
+      "subtitle": "Tâche clinique, population cible, utilisateurs, contextes de soins et mésusage"
+    },
+    "riskTier": {
+      "label": "Niveau de risque",
+      "subtitle": "Déduit de l’usage prévu"
+    },
+    "evidence": {
+      "label": "Preuves et limites",
+      "subtitle": "Données d’entraînement, statut réglementaire, limites connues"
+    },
+    "review": {
+      "label": "Vérifier et enregistrer",
+      "subtitle": "Relisez la fiche, puis enregistrez-la comme brouillon"
+    }
+  },
+  "wizard": {
+    "stepsLabel": "Étapes de la fiche du modèle",
+    "stepOf": "Étape {current} sur {total}",
+    "back": "Retour",
+    "next": "Étape suivante : {step}",
+    "save": "Enregistrer le brouillon",
+    "saveChanges": "Enregistrer les modifications",
+    "saving": "Enregistrement…",
+    "errorTitle": "La fiche n’a pas été enregistrée"
+  },
+  "fields": {
+    "choose": "Choisir…",
+    "notSpecified": "Non précisé",
+    "slug": {
+      "label": "Identifiant du modèle",
+      "hint": "Lettres minuscules, chiffres et tirets, par exemple radio-thorax-triage. Il devient l’adresse de la fiche et ne pourra plus être modifié.",
+      "hintEdit": "L’adresse de la fiche. Elle ne peut pas être modifiée."
+    },
+    "version": {
+      "label": "Version",
+      "hint": "MAJEURE.MINEURE.CORRECTIF, par exemple 1.0.0."
+    },
+    "modelClass": {
+      "label": "Classe de modèle"
+    },
+    "modelDeveloper": {
+      "label": "Développeur",
+      "hint": "L’organisation responsable du modèle, qui n’est pas forcément vous."
+    },
+    "developerContact": {
+      "label": "Contact du développeur",
+      "hint": "Une adresse électronique ou une page web pour les questions sur le modèle. Il est publié avec la fiche."
+    },
+    "clinicalSummary": {
+      "label": "Résumé clinique",
+      "hint": "Deux ou trois phrases pour les cliniciens : ce que fait le modèle et pour quels patients."
+    },
+    "architectureSummary": {
+      "label": "Fonctionnement du modèle",
+      "hint": "Un résumé technique : architecture, entrées et sorties."
+    },
+    "generativeAi": {
+      "label": "Le modèle génère du texte, des images ou d’autres contenus (IA générative)"
+    },
+    "medicalPurpose": {
+      "label": "Tâche clinique",
+      "hint": "La tâche clinique que réalise le modèle. C’est le principal critère du niveau de risque."
+    },
+    "medicalPurposeOther": {
+      "label": "Décrivez la tâche clinique"
+    },
+    "bodySystemOrSite": {
+      "label": "Système ou site anatomique",
+      "hint": "Par exemple thorax, rétine ou sein."
+    },
+    "targetPopulation": {
+      "legend": "Population cible",
+      "hint": "Les patients auxquels le modèle est destiné. Laissez vide ce qui ne s’applique pas."
+    },
+    "ageMin": {
+      "label": "Âge minimum (ans)"
+    },
+    "ageMax": {
+      "label": "Âge maximum (ans)"
+    },
+    "sexEligibility": {
+      "label": "Sexe"
+    },
+    "populationDescription": {
+      "label": "Description de la population",
+      "hint": "Par exemple : adultes adressés pour une radiographie thoracique en consultation externe."
+    },
+    "intendedUserRole": {
+      "label": "Utilisateurs prévus",
+      "hint": "Qui lit le résultat du modèle. Cochez toutes les réponses applicables."
+    },
+    "operatingEnvironment": {
+      "label": "Contextes de soins",
+      "hint": "Où le modèle est utilisé. Un contexte d’urgence élève le niveau de risque d’un outil de triage ou de dépistage."
+    },
+    "intendedClinicalPathway": {
+      "label": "Parcours clinique",
+      "hint": "Si un clinicien confirme le résultat avant toute décision. Un modèle qui agit seul a un niveau de risque plus élevé."
+    },
+    "operatingPrinciple": {
+      "label": "Principe de fonctionnement",
+      "hint": "En une phrase, par exemple : un réseau convolutif appliqué à la radiographie thoracique."
+    },
+    "foreseeableMisuse": {
+      "label": "Mésusage prévisible",
+      "hint": "Comment le modèle pourrait être mal utilisé, par exemple sur une population pour laquelle il n’a pas été validé."
+    },
+    "contraindications": {
+      "label": "Contre-indications",
+      "hint": "Quand le modèle ne doit pas être utilisé. Laissez vide s’il n’y en a pas de connue."
+    },
+    "trainingDataSummary": {
+      "label": "Données d’entraînement",
+      "hint": "D’où viennent les données d’entraînement et comment elles ont été annotées. Visible par les relecteurs ; non affiché sur la page publique."
+    },
+    "trainingDataJurisdictions": {
+      "label": "Juridictions des données d’entraînement",
+      "hint": "Codes de pays ou de région, séparés par des virgules, par exemple EU, CH."
+    },
+    "regulatory": {
+      "legend": "Statut réglementaire"
+    },
+    "regulatoryPathway": {
+      "label": "Voie réglementaire",
+      "none": "Aucune déclarée"
+    },
+    "regulatoryStatus": {
+      "label": "Statut de l’autorisation"
+    },
+    "regulatoryJurisdictions": {
+      "label": "Juridictions de l’autorisation",
+      "hint": "Codes, séparés par des virgules."
+    },
+    "regulatoryIdentifier": {
+      "label": "Numéro de certificat ou d’autorisation"
+    },
+    "knownBiases": {
+      "label": "Limites et biais connus",
+      "hint": "Les groupes ou situations pour lesquels le modèle est moins performant."
+    },
+    "biasMitigation": {
+      "label": "Atténuation des biais"
+    },
+    "ongoingMaintenance": {
+      "label": "Surveillance après déploiement",
+      "hint": "Comment les performances sont suivies une fois le modèle en service."
+    }
+  },
+  "sex": {
+    "any": "Tous",
+    "female-only": "Femmes uniquement",
+    "male-only": "Hommes uniquement",
+    "other-specified": "Autre, décrit ci-dessous"
+  },
+  "regulatoryPathway": {
+    "FDA_510K": "FDA 510(k)",
+    "FDA_DE_NOVO": "FDA De Novo",
+    "FDA_PMA": "FDA PMA",
+    "EU_MDR_CLASS_I": "MDR (UE) classe I",
+    "EU_MDR_CLASS_IIA": "MDR (UE) classe IIa",
+    "EU_MDR_CLASS_IIB": "MDR (UE) classe IIb",
+    "EU_MDR_CLASS_III": "MDR (UE) classe III",
+    "EU_IVDR": "IVDR (UE)",
+    "NATIONAL_LMIC": "Autorité nationale",
+    "NONE_RESEARCH_ONLY": "Aucune : recherche uniquement",
+    "OTHER": "Autre"
+  },
+  "tier": {
+    "liveLabel": "Niveau de risque d’après vos réponses",
+    "pending": "Choisissez une tâche clinique pour voir le niveau de risque.",
+    "value": "Niveau {tier}",
+    "reasonLabel": "Motif :",
+    "derivedFrom": "Le niveau est déduit de trois de vos réponses, selon la matrice de l’IMDRF qui croise l’importance de l’information fournie et la gravité de la situation clinique. Vous ne pouvez pas le fixer directement : pour le changer, modifiez ces réponses.",
+    "changeAnswers": "Modifier l’usage prévu",
+    "meaning": {
+      "I": "Informe ; faible impact sur les soins",
+      "II": "Oriente la prise en charge dans une situation non critique",
+      "III": "Oriente la prise en charge dans une situation grave ou critique",
+      "IV": "Décide seul dans une situation grave ou critique"
+    },
+    "reason": {
+      "informational-purpose": "les outils de recherche, administratifs ou d’éducation du patient informent sans orienter les soins.",
+      "critical-standalone": "un diagnostic ou un plan de traitement appliqué sans confirmation par un clinicien.",
+      "critical-with-clinician": "un diagnostic ou un plan de traitement dans un contexte grave, confirmé par un clinicien.",
+      "triage-screening-emergency": "un triage ou un dépistage utilisé en contexte d’urgence.",
+      "triage-screening": "un triage ou un dépistage hors urgence, avant l’examen par un clinicien.",
+      "prognosis-monitoring-standalone": "un pronostic ou une surveillance appliqués sans confirmation par un clinicien.",
+      "prognosis-monitoring": "un pronostic ou une surveillance avec un clinicien dans la boucle.",
+      "decision-support": "une aide à la décision clinique : c’est le clinicien qui décide.",
+      "other-purpose": "une tâche hors de la liste reçoit le niveau prudent par défaut ; les relecteurs peuvent demander des précisions."
+    }
+  },
+  "review": {
+    "edit": "Modifier : {step}",
+    "noteCreate": "L’enregistrement crée un brouillon, visible uniquement par vous et par les relecteurs. Vous le soumettez pour relecture depuis sa page.",
+    "noteEdit": "L’enregistrement conserve la fiche comme brouillon."
+  },
+  "lifecycle": {
+    "heading": "Statut de cette fiche",
+    "status": {
+      "DRAFT": "Brouillon",
+      "SUBMITTED": "Soumise pour relecture",
+      "PUBLISHED": "Publiée",
+      "WITHDRAWN": "Retirée"
+    },
+    "help": {
+      "DRAFT": "Seuls vous et les relecteurs voyez cette fiche. Soumettez-la pour relecture quand elle est complète ; elle ne pourra plus être modifiée ensuite.",
+      "SUBMITTED": "Un relecteur vérifie la fiche avant sa publication. La remettre en brouillon vous permet de la modifier à nouveau.",
+      "PUBLISHED": "La fiche figure dans le catalogue public des modèles.",
+      "WITHDRAWN": "La fiche n’est plus proposée. Elle reste consultable, marquée comme retirée."
+    },
+    "edit": "Modifier la fiche",
+    "move": {
+      "SUBMITTED": "Soumettre pour relecture",
+      "PUBLISHED": "Publier",
+      "DRAFT": "Remettre en brouillon",
+      "WITHDRAWN": "Retirer"
+    },
+    "moving": "Enregistrement…",
+    "errorTitle": "Le statut n’a pas été modifié",
+    "invalid": "Cette demande n’est pas valide.",
+    "forbidden": "Vous n’êtes pas autorisé à effectuer ce changement.",
+    "stale": "La fiche a changé entre-temps. Rechargez la page et réessayez.",
+    "factsDraftTitle": "Pas encore d’étiquette « Model Facts »",
+    "factsDraft": "L’étiquette « Model Facts » est générée une fois la fiche soumise pour relecture."
+  },
+  "errors": {
+    "signInRequired": "Connectez-vous pour déclarer un modèle.",
+    "slugTaken": "Une fiche de modèle avec l’identifiant « {slug} » existe déjà.",
+    "slugTakenField": "Déjà utilisé ; choisissez un autre identifiant.",
+    "notFound": "Cette fiche de modèle n’existe pas, ou vous ne pouvez pas la voir.",
+    "notEditable": "Cette fiche ne peut plus être modifiée : seul un brouillon peut l’être, par la personne qui l’a déclaré."
+  }
+}

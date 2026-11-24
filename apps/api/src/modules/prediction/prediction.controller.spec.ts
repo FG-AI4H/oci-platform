@@ -83,8 +83,14 @@ function cardRow(status: string) {
   };
 }
 
-const repo = { findBySlug: vi.fn(), updateStatus: vi.fn() };
+const repo = {
+  findBySlug: vi.fn(),
+  updateStatus: vi.fn(),
+  update: vi.fn(),
+  listBySubmitter: vi.fn(),
+};
 const audit = { emitSync: vi.fn() };
+const intendedUse = { validate: vi.fn((ius: unknown) => ius) };
 
 describe('/v2/prediction/model-cards authorization', () => {
   let app: NestFastifyApplication;
@@ -95,7 +101,7 @@ describe('/v2/prediction/model-cards authorization', () => {
       providers: [
         PredictionService,
         { provide: PredictionRepository, useValue: repo },
-        { provide: IntendedUseService, useValue: { validate: vi.fn() } },
+        { provide: IntendedUseService, useValue: intendedUse },
         { provide: AUDIT_EMITTER, useValue: audit },
       ],
     })
@@ -117,6 +123,8 @@ describe('/v2/prediction/model-cards authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     repo.updateStatus.mockImplementation(async (_id: string, status: string) => cardRow(status));
+    repo.update.mockImplementation(async () => cardRow('DRAFT'));
+    intendedUse.validate.mockImplementation((ius: unknown) => ius);
     audit.emitSync.mockResolvedValue({});
   });
 
@@ -252,6 +260,112 @@ describe('/v2/prediction/model-cards authorization', () => {
         expect(repo.updateStatus).not.toHaveBeenCalled();
         expect(audit.emitSync).not.toHaveBeenCalled();
       }
+    });
+  });
+  describe('edit (#651)', () => {
+    const patch = (headers: Record<string, string>, payload: unknown) =>
+      app.inject({
+        method: 'PATCH',
+        url: '/v2/prediction/model-cards/acme-triage-v1',
+        headers,
+        payload: payload as Record<string, unknown>,
+      });
+
+    it.each([
+      // status, caller, expected
+      ['DRAFT', SUBMITTER, 200],
+      ['DRAFT', SUBMITTER_ADMIN, 200],
+      ['DRAFT', REVIEWER, 403],
+      ['DRAFT', ADMIN, 403],
+      ['DRAFT', STRANGER, 404],
+      ['SUBMITTED', SUBMITTER, 409],
+      ['PUBLISHED', SUBMITTER, 409],
+      ['WITHDRAWN', SUBMITTER, 409],
+      ['PUBLISHED', STRANGER, 403],
+    ] as const)('PATCH on a %s card by %o: %i', async (status, headers, expected) => {
+      repo.findBySlug.mockResolvedValue(cardRow(status));
+
+      const res = await patch(headers, { clinicalSummary: 'Flags pneumothorax.' });
+
+      expect(res.statusCode).toBe(expected);
+      if (expected === 200) {
+        expect(repo.update).toHaveBeenCalledWith(
+          '11111111-1111-4111-8111-111111111111',
+          expect.objectContaining({ clinicalSummary: 'Flags pneumothorax.' }),
+        );
+        expect(audit.emitSync).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'modelcard.updated',
+            payload: expect.objectContaining({ fields: ['clinicalSummary'] }),
+          }),
+        );
+      } else {
+        expect(repo.update).not.toHaveBeenCalled();
+        expect(audit.emitSync).not.toHaveBeenCalled();
+      }
+    });
+
+    it('re-validates a new intended-use statement', async () => {
+      repo.findBySlug.mockResolvedValue(cardRow('DRAFT'));
+      const ius = {
+        v: 1,
+        medicalPurpose: 'diagnosis',
+        intendedClinicalPathway: 'standalone',
+        foreseeableMisuse: 'Not for paediatric films.',
+        contraindications: '',
+        riskTier: 'IV',
+      };
+
+      const res = await patch(SUBMITTER, { intendedUse: ius });
+
+      expect(res.statusCode).toBe(200);
+      expect(intendedUse.validate).toHaveBeenCalledWith(ius);
+      expect(repo.update).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ intendedUse: ius }),
+      );
+    });
+
+    it.each([{}, { slug: 'renamed' }, { status: 'PUBLISHED' }])(
+      'refuses a body that edits nothing editable: %o',
+      async (payload) => {
+        repo.findBySlug.mockResolvedValue(cardRow('DRAFT'));
+
+        expect((await patch(SUBMITTER, payload)).statusCode).toBe(400);
+        expect(repo.update).not.toHaveBeenCalled();
+      },
+    );
+
+    it('401s without a token', async () => {
+      expect((await patch({}, { clinicalSummary: 'x' })).statusCode).toBe(401);
+    });
+  });
+
+  describe('mine (#651)', () => {
+    it("lists the caller's own cards in every status", async () => {
+      repo.listBySubmitter.mockResolvedValue([cardRow('DRAFT'), cardRow('PUBLISHED')]);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/v2/prediction/model-cards/mine',
+        headers: SUBMITTER,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(repo.listBySubmitter).toHaveBeenCalledWith(cognitoSubAsUuid('submitter'));
+      expect(res.json()).toEqual({
+        items: [
+          expect.objectContaining({ slug: 'acme-triage-v1', status: 'DRAFT', riskTier: 'III' }),
+          expect.objectContaining({ status: 'PUBLISHED', medicalPurpose: 'triage' }),
+        ],
+      });
+      expect(res.body).not.toContain('submitterUserId');
+    });
+
+    it('401s without a token, rather than being read as a slug', async () => {
+      const res = await app.inject({ method: 'GET', url: '/v2/prediction/model-cards/mine' });
+      expect(res.statusCode).toBe(401);
+      expect(repo.findBySlug).not.toHaveBeenCalled();
     });
   });
 });

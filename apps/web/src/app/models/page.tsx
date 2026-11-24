@@ -27,6 +27,7 @@ import type {
 } from '@oci/shared-types';
 import type { Formatters } from '../../i18n/format';
 import { getFormatters } from '../../i18n/server';
+import { auth } from '../../auth';
 import { apiFetch } from '../../lib/api';
 import {
   JURISDICTION_OPTIONS,
@@ -109,7 +110,7 @@ export default async function ModelsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const filters = parseFilters(await searchParams);
-  const [t, f] = await Promise.all([getTranslations('Models'), getFormatters()]);
+  const [t, f, session] = await Promise.all([getTranslations('Models'), getFormatters(), auth()]);
 
   const apiQs = new URLSearchParams();
   if (filters.q) apiQs.set('q', filters.q);
@@ -161,7 +162,15 @@ export default async function ModelsPage({
               </p>
             ) : null}
           </div>
-          <p className="max-w-2xl text-[var(--color-muted-foreground)]">{t('list.intro')}</p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <p className="max-w-2xl text-[var(--color-muted-foreground)]">{t('list.intro')}</p>
+            {session?.user ? (
+              // Any signed-in user may declare a model (#651), as on the API.
+              <Button asChild variant="primary" className="shrink-0 self-start">
+                <Link href="/models/new">{t('list.declare')}</Link>
+              </Button>
+            ) : null}
+          </div>
         </header>
 
         <form action="/models" method="get" role="search" className="mb-4 flex flex-wrap gap-2">

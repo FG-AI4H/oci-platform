@@ -1,0 +1,255 @@
+{
+  "metaTitleNew": "Declare a model — OCI Models",
+  "metaTitleEdit": "Edit {slug} — OCI Models",
+  "back": "Models",
+  "backToCard": "Back to the card",
+  "eyebrow": "Model card",
+  "headingNew": "Declare a model",
+  "headingEdit": "Edit {slug}",
+  "introNew": "Describe your model and what it is for. The risk tier follows from the intended use you declare; you do not choose it. The card is saved as a draft that only you and the reviewers can see until it is published.",
+  "introEdit": "This card is a draft, so you can still change it. Once you submit it for review it can no longer be edited.",
+  "notEditable": {
+    "title": "This card can no longer be edited",
+    "body": "Only a draft can be edited, and only by the person who declared it. A submitted card can be returned to draft from its page."
+  },
+  "steps": {
+    "model": {
+      "label": "The model",
+      "subtitle": "Name, version, class and developer"
+    },
+    "intendedUse": {
+      "label": "Intended use",
+      "subtitle": "Clinical task, population, users, care settings and misuse"
+    },
+    "riskTier": {
+      "label": "Risk tier",
+      "subtitle": "Derived from the intended use"
+    },
+    "evidence": {
+      "label": "Evidence and limits",
+      "subtitle": "Training data, regulatory status, known limits"
+    },
+    "review": {
+      "label": "Review and save",
+      "subtitle": "Check the card, then save it as a draft"
+    }
+  },
+  "wizard": {
+    "stepsLabel": "Steps of the model card",
+    "stepOf": "Step {current} of {total}",
+    "back": "Back",
+    "next": "Next: {step}",
+    "save": "Save as draft",
+    "saveChanges": "Save changes",
+    "saving": "Saving…",
+    "errorTitle": "The card was not saved"
+  },
+  "fields": {
+    "choose": "Choose…",
+    "notSpecified": "Not specified",
+    "slug": {
+      "label": "Model identifier",
+      "hint": "Lowercase letters, digits and hyphens, for example chest-xr-triage. It becomes the card’s address and cannot be changed later.",
+      "hintEdit": "The card’s address. It cannot be changed."
+    },
+    "version": {
+      "label": "Version",
+      "hint": "MAJOR.MINOR.PATCH, for example 1.0.0."
+    },
+    "modelClass": {
+      "label": "Model class"
+    },
+    "modelDeveloper": {
+      "label": "Developer",
+      "hint": "The organisation accountable for the model, which may not be you."
+    },
+    "developerContact": {
+      "label": "Developer contact",
+      "hint": "An e-mail address or web page for questions about the model. It is published with the card."
+    },
+    "clinicalSummary": {
+      "label": "Clinical summary",
+      "hint": "Two or three sentences for clinicians: what the model does and for whom."
+    },
+    "architectureSummary": {
+      "label": "How the model works",
+      "hint": "A technical summary: architecture, inputs and outputs."
+    },
+    "generativeAi": {
+      "label": "The model generates text, images or other content (generative AI)"
+    },
+    "medicalPurpose": {
+      "label": "Clinical task",
+      "hint": "The clinical job the model does. It is the main input to the risk tier."
+    },
+    "medicalPurposeOther": {
+      "label": "Describe the clinical task"
+    },
+    "bodySystemOrSite": {
+      "label": "Body system or site",
+      "hint": "For example chest, retina or breast."
+    },
+    "targetPopulation": {
+      "legend": "Target population",
+      "hint": "The patients the model is meant for. Leave blank what does not apply."
+    },
+    "ageMin": {
+      "label": "Minimum age (years)"
+    },
+    "ageMax": {
+      "label": "Maximum age (years)"
+    },
+    "sexEligibility": {
+      "label": "Sex"
+    },
+    "populationDescription": {
+      "label": "Population description",
+      "hint": "For example: adults referred for a chest radiograph in an outpatient clinic."
+    },
+    "intendedUserRole": {
+      "label": "Intended users",
+      "hint": "Who reads the model’s output. Choose all that apply."
+    },
+    "operatingEnvironment": {
+      "label": "Care settings",
+      "hint": "Where the model is used. An emergency setting raises the tier of a triage or screening tool."
+    },
+    "intendedClinicalPathway": {
+      "label": "Clinical pathway",
+      "hint": "Whether a clinician confirms the output before anyone acts on it. A model that acts alone gets a higher tier."
+    },
+    "operatingPrinciple": {
+      "label": "Operating principle",
+      "hint": "In a sentence, for example: a convolutional network over the chest radiograph."
+    },
+    "foreseeableMisuse": {
+      "label": "Foreseeable misuse",
+      "hint": "How the model could be used wrongly, for example on a population it was not validated on."
+    },
+    "contraindications": {
+      "label": "Contraindications",
+      "hint": "When the model must not be used. Leave blank if there are none known."
+    },
+    "trainingDataSummary": {
+      "label": "Training data",
+      "hint": "Where the training data came from and how it was labelled. Seen by reviewers; not shown on the public page."
+    },
+    "trainingDataJurisdictions": {
+      "label": "Training data jurisdictions",
+      "hint": "Country or region codes, separated by commas, for example EU, CH."
+    },
+    "regulatory": {
+      "legend": "Regulatory status"
+    },
+    "regulatoryPathway": {
+      "label": "Regulatory pathway",
+      "none": "None declared"
+    },
+    "regulatoryStatus": {
+      "label": "Approval status"
+    },
+    "regulatoryJurisdictions": {
+      "label": "Approval jurisdictions",
+      "hint": "Codes, separated by commas."
+    },
+    "regulatoryIdentifier": {
+      "label": "Certificate or clearance number"
+    },
+    "knownBiases": {
+      "label": "Known limits and biases",
+      "hint": "Groups or situations where the model is known to perform worse."
+    },
+    "biasMitigation": {
+      "label": "Bias mitigation"
+    },
+    "ongoingMaintenance": {
+      "label": "Monitoring after deployment",
+      "hint": "How performance is followed once the model is in use."
+    }
+  },
+  "sex": {
+    "any": "Any",
+    "female-only": "Female only",
+    "male-only": "Male only",
+    "other-specified": "Other, described below"
+  },
+  "regulatoryPathway": {
+    "FDA_510K": "FDA 510(k)",
+    "FDA_DE_NOVO": "FDA De Novo",
+    "FDA_PMA": "FDA PMA",
+    "EU_MDR_CLASS_I": "EU MDR class I",
+    "EU_MDR_CLASS_IIA": "EU MDR class IIa",
+    "EU_MDR_CLASS_IIB": "EU MDR class IIb",
+    "EU_MDR_CLASS_III": "EU MDR class III",
+    "EU_IVDR": "EU IVDR",
+    "NATIONAL_LMIC": "National regulator",
+    "NONE_RESEARCH_ONLY": "None: research only",
+    "OTHER": "Other"
+  },
+  "tier": {
+    "liveLabel": "Risk tier from your answers so far",
+    "pending": "Choose a clinical task to see the risk tier.",
+    "value": "Tier {tier}",
+    "reasonLabel": "Why:",
+    "derivedFrom": "The tier is derived from three of your answers, following the IMDRF matrix of how significant the information is and how serious the healthcare situation is. You cannot set it directly: to change it, change these answers.",
+    "changeAnswers": "Change the intended use",
+    "meaning": {
+      "I": "Informs; low impact on care",
+      "II": "Drives clinical action in a non-critical situation",
+      "III": "Drives clinical action in a serious or critical situation",
+      "IV": "Decides alone in a serious or critical situation"
+    },
+    "reason": {
+      "informational-purpose": "research, administrative and patient-education tools only inform; they do not drive care.",
+      "critical-standalone": "a diagnosis or treatment plan acted on without a clinician’s confirmation.",
+      "critical-with-clinician": "a diagnosis or treatment plan in a serious context, confirmed by a clinician.",
+      "triage-screening-emergency": "triage or screening used in an emergency setting.",
+      "triage-screening": "triage or screening outside an emergency setting, before a clinician sees the patient.",
+      "prognosis-monitoring-standalone": "prognosis or monitoring acted on without a clinician’s confirmation.",
+      "prognosis-monitoring": "prognosis or monitoring with a clinician in the loop.",
+      "decision-support": "clinical decision support: a clinician makes the decision.",
+      "other-purpose": "a task outside the list gets the cautious default; reviewers may ask for more detail."
+    }
+  },
+  "review": {
+    "edit": "Edit: {step}",
+    "noteCreate": "Saving creates a draft. Only you and the reviewers can see it; you submit it for review from its page.",
+    "noteEdit": "Saving keeps the card as a draft."
+  },
+  "lifecycle": {
+    "heading": "Status of this card",
+    "status": {
+      "DRAFT": "Draft",
+      "SUBMITTED": "Submitted for review",
+      "PUBLISHED": "Published",
+      "WITHDRAWN": "Withdrawn"
+    },
+    "help": {
+      "DRAFT": "Only you and the reviewers can see this card. Submit it for review when it is complete; it can no longer be edited after that.",
+      "SUBMITTED": "A reviewer checks the card before it is published. Returning it to draft lets you edit it again.",
+      "PUBLISHED": "The card is in the public model catalogue.",
+      "WITHDRAWN": "The card is no longer offered. It stays on the record, marked as withdrawn."
+    },
+    "edit": "Edit the card",
+    "move": {
+      "SUBMITTED": "Submit for review",
+      "PUBLISHED": "Publish",
+      "DRAFT": "Return to draft",
+      "WITHDRAWN": "Withdraw"
+    },
+    "moving": "Saving…",
+    "errorTitle": "The status was not changed",
+    "invalid": "This request is not valid.",
+    "forbidden": "You are not allowed to make this change.",
+    "stale": "The card changed in the meantime. Reload the page and try again.",
+    "factsDraftTitle": "No Model Facts label yet",
+    "factsDraft": "The Model Facts label is generated once the card is submitted for review."
+  },
+  "errors": {
+    "signInRequired": "Sign in to declare a model.",
+    "slugTaken": "A model card with the identifier “{slug}” already exists.",
+    "slugTakenField": "Already in use; choose another identifier.",
+    "notFound": "This model card does not exist, or you cannot see it.",
+    "notEditable": "This card can no longer be edited: only a draft can be, by the person who declared it."
+  }
+}

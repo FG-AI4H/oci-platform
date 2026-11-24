@@ -157,50 +157,95 @@ export type IntendedUseStatement = z.infer<typeof IntendedUseStatementSchema>;
  *
  * Pure: no I/O, no DB, no clock. Runs on both API and web form.
  */
-export function deriveRiskTier(
-  partial: Pick<
-    IntendedUseStatement,
-    'medicalPurpose' | 'intendedClinicalPathway' | 'operatingEnvironment'
-  >,
-): RiskTier {
+export function deriveRiskTier(partial: RiskTierInput): RiskTier {
+  return explainRiskTier(partial).tier;
+}
+
+/** The IUS answers the risk tier is derived from. */
+export type RiskTierInput = Pick<
+  IntendedUseStatement,
+  'medicalPurpose' | 'intendedClinicalPathway' | 'operatingEnvironment'
+>;
+
+/**
+ * Which row of the derivation matrix decided the tier (#651). A code, not a
+ * sentence, so each interface can word it in its own language; the web form
+ * shows it next to the tier as the reason, the API's derive endpoint keeps
+ * its own English rationale.
+ */
+export const RiskTierReasonSchema = z.enum([
+  /** Research-only, administrative or patient-education purpose. */
+  'informational-purpose',
+  /** Diagnosis or treatment planning, acting without a clinician's confirmation. */
+  'critical-standalone',
+  /** Diagnosis or treatment planning, confirmed by a clinician. */
+  'critical-with-clinician',
+  /** Triage or screening used in an emergency setting. */
+  'triage-screening-emergency',
+  /** Triage or screening outside an emergency setting. */
+  'triage-screening',
+  /** Prognosis or monitoring, acting without a clinician's confirmation. */
+  'prognosis-monitoring-standalone',
+  /** Prognosis or monitoring, with a clinician in the loop. */
+  'prognosis-monitoring',
+  /** Clinical decision support. */
+  'decision-support',
+  /** A purpose outside the vocabulary: the conservative default. */
+  'other-purpose',
+]);
+export type RiskTierReason = z.infer<typeof RiskTierReasonSchema>;
+
+/**
+ * The derivation itself, with the matrix row that decided it. Pure: no I/O,
+ * no DB, no clock. `deriveRiskTier` is this function's `tier`, so the tier a
+ * form shows while the user answers and the tier the API checks are the same
+ * computation.
+ */
+export function explainRiskTier(partial: RiskTierInput): {
+  tier: RiskTier;
+  reason: RiskTierReason;
+} {
   const { medicalPurpose, intendedClinicalPathway, operatingEnvironment } = partial;
 
   // Research-only and administrative work — lowest tier regardless of pathway.
-  if (medicalPurpose === 'research-only') return 'I';
-  if (medicalPurpose === 'administrative') return 'I';
-  if (medicalPurpose === 'patient-education') return 'I';
+  if (
+    medicalPurpose === 'research-only' ||
+    medicalPurpose === 'administrative' ||
+    medicalPurpose === 'patient-education'
+  ) {
+    return { tier: 'I', reason: 'informational-purpose' };
+  }
 
   // Critical-pathway clinical decisions
   if (medicalPurpose === 'diagnosis' || medicalPurpose === 'treatment-planning') {
-    if (intendedClinicalPathway === 'standalone') return 'IV';
-    if (intendedClinicalPathway === 'adjunct-with-confirmation') return 'III';
-    return 'III';
+    if (intendedClinicalPathway === 'standalone') {
+      return { tier: 'IV', reason: 'critical-standalone' };
+    }
+    return { tier: 'III', reason: 'critical-with-clinician' };
   }
 
   // Triage and screening — bump up in emergency settings
   if (medicalPurpose === 'triage' || medicalPurpose === 'screening') {
     const inEmergency = operatingEnvironment?.includes('emergency') ?? false;
-    if (inEmergency) return 'III';
-    if (
-      intendedClinicalPathway === 'triage-before-clinician' ||
-      intendedClinicalPathway === 'screening-before-specialist'
-    ) {
-      return 'II';
-    }
-    return 'II';
+    if (inEmergency) return { tier: 'III', reason: 'triage-screening-emergency' };
+    return { tier: 'II', reason: 'triage-screening' };
   }
 
-  // Prognosis / monitoring — typically II, IV only when standalone
+  // Prognosis / monitoring — typically II, III only when standalone
   if (medicalPurpose === 'prognosis' || medicalPurpose === 'monitoring') {
-    if (intendedClinicalPathway === 'standalone') return 'III';
-    return 'II';
+    if (intendedClinicalPathway === 'standalone') {
+      return { tier: 'III', reason: 'prognosis-monitoring-standalone' };
+    }
+    return { tier: 'II', reason: 'prognosis-monitoring' };
   }
 
   // CDS — adjunct-with-confirmation is the typical case
-  if (medicalPurpose === 'clinical-decision-support') return 'II';
+  if (medicalPurpose === 'clinical-decision-support') {
+    return { tier: 'II', reason: 'decision-support' };
+  }
 
   // `other` — conservative default. Submitter is expected to override + justify.
-  return 'II';
+  return { tier: 'II', reason: 'other-purpose' };
 }
 
 /**

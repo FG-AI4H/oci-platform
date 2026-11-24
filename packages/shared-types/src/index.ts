@@ -176,7 +176,9 @@ export {
   IntendedUserRoleSchema,
   TargetPopulationSchema,
   IntendedUseStatementSchema,
+  RiskTierReasonSchema,
   deriveRiskTier,
+  explainRiskTier,
   overrideRequiresJustification,
 } from './intended-use.js';
 
@@ -191,8 +193,15 @@ export {
   ListModelCardsQuerySchema,
   ListModelCardsSortSchema,
   RegulatoryApprovalSchema,
+  UpdateModelCardRequestSchema,
+  MODEL_CARD_REVIEWER_GROUPS,
+  RESERVED_MODEL_CARD_SLUGS,
   allowedTransitionsFrom,
   canTransition,
+  canEditModelCard,
+  isModelCardReviewerGroups,
+  mayMoveModelCard,
+  modelCardMovesFor,
 } from './model-card.js';
 export type {
   CreateModelCardRequest,
@@ -206,6 +215,10 @@ export type {
   ListModelCardsSort,
   ModelCardSummary,
   ListModelCardsResponse,
+  UpdateModelCardRequest,
+  ModelCardActor,
+  MyModelCardSummary,
+  ListMyModelCardsResponse,
 } from './model-card.js';
 
 // EvaluationRoute — privacy-preserving evaluation solutions (WP5, #412, ADR-0018).
@@ -312,6 +325,8 @@ export type {
   IntendedUserRole,
   TargetPopulation,
   IntendedUseStatement,
+  RiskTierInput,
+  RiskTierReason,
 } from './intended-use.js';
 
 // ==== Identity ============================================================

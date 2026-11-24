@@ -39,6 +39,7 @@
     "evaluation.route.version.reviewed",
     "prediction.modelcard.created",
     "prediction.modelcard.status.changed",
+    "prediction.modelcard.updated",
     "prediction.modelcard.facts-label.generated",
     "prediction.modelcard.version.promoted",
     "prediction.modelcard.version.demoted",

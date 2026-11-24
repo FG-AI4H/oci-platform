@@ -31,5 +31,12 @@
     "description": "Les jetons ne sont visibles que du serveur. Le conteneur web les transmet à <code>/v2/*</code> par TLS ; ils ne parviennent jamais à votre navigateur."
   },
   "apiStatus": "L’API a répondu {status}",
-  "apiUnreachable": "API injoignable"
+  "apiUnreachable": "API injoignable",
+  "myModels": {
+    "title": "Mes modèles",
+    "description": "Les fiches de modèle que vous avez déclarées, quel que soit leur statut. Un brouillon n’est visible que par vous et par les relecteurs.",
+    "empty": "Vous n’avez encore déclaré aucun modèle.",
+    "declare": "Déclarer un modèle",
+    "unavailable": "Vos fiches de modèle n’ont pas pu être chargées pour le moment."
+  }
 }

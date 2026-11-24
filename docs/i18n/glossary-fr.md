@@ -132,7 +132,20 @@ that they are used the same way when they are.
 | Clinical pathway                                                                      | Parcours clinique                                                                                   | new    |          |
 | Target population                                                                     | Population cible                                                                                    | new    |          |
 | Intended users                                                                        | Utilisateurs prévus                                                                                 | new    |          |
-| Operating environments                                                                | Environnements d’utilisation                                                                        | new    |          |
+| Operating environments / care settings                                                | Contextes de soins (draft, #651; was « environnements d’utilisation »)                              | new    |          |
+| Clinical task (medical purpose, on the form)                                          | Tâche clinique (draft, #651)                                                                        | new    |          |
+| Intended user                                                                         | Utilisateur prévu (draft, #651)                                                                     | new    |          |
+| Contraindications                                                                     | Contre-indications (draft, #651)                                                                    | new    |          |
+| Operating principle                                                                   | Principe de fonctionnement (draft, #651)                                                            | new    |          |
+| Declare a model                                                                       | Déclarer un modèle (draft, #651)                                                                    | new    |          |
+| Model identifier                                                                      | Identifiant du modèle (draft, #651)                                                                 | new    |          |
+| Developer / developer contact                                                         | Développeur / contact du développeur (draft, #651)                                                  | new    |          |
+| Training data                                                                         | Données d’entraînement (draft, #651)                                                                | new    |          |
+| Regulatory pathway                                                                    | Voie réglementaire (draft, #651)                                                                    | new    |          |
+| Derived (risk tier derived from the answers)                                          | Déduit (niveau de risque déduit des réponses) (draft, #651)                                         | new    |          |
+| Submit for review / return to draft / withdraw                                        | Soumettre pour relecture / remettre en brouillon / retirer (draft, #651)                            | new    |          |
+| Reviewer (of a model card)                                                            | Relecteur (draft, #651)                                                                             | new    |          |
+| Monitoring after deployment                                                           | Surveillance après déploiement (draft, #651)                                                        | new    |          |
 | Risk tier                                                                             | Niveau de risque                                                                                    | new    |          |
 | Regulatory status / approval / jurisdiction                                           | Statut réglementaire / autorisation réglementaire / juridiction                                     | new    |          |
 | Foreseeable misuse                                                                    | Mésusage prévisible                                                                                 | new    |          |
@@ -164,6 +177,9 @@ that they are used the same way when they are.
 - **Annotator / reader.** The campaign instructions say « lecteur »; the interface uses
   « annotateur » for the role in general. One term may be better throughout.
 - **Intended use.** « Usage prévu » was chosen; the EU MDR French text says « destination ».
+- **Care settings.** The model-card form (#651) says « contextes de soins » for the operating
+  environments, and the Model Facts label now uses the same words; the earlier draft was
+  « environnements d’utilisation ».
 - **Inbox.** « Demandes reçues » rather than « Boîte de réception », which is longer and suggests
   e-mail.
 - **Window / level readout.** « L 80 · N 40 » (largeur, niveau) mirrors « W 80 · L 40 »; a
