@@ -268,6 +268,75 @@ test.describe('reading images in the browser (#646)', () => {
     await manager.close();
   });
 
+  test('no answer before the image is on screen, by button or by keyboard (#646 review, item 5)', async ({
+    page,
+    browser,
+  }) => {
+    const manager = await browser.newPage();
+    const slug = await labelledCampaignWithTasks(manager, 1);
+    await manager.close();
+
+    // Hold the image until the test lets it through.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(
+      (url) =>
+        url.searchParams.has('X-Amz-Signature') && url.pathname.includes(`/${DATASET_SLUG}/`),
+      async (route) => {
+        await held;
+        const name = path.basename(new URL(route.request().url()).pathname);
+        await route.fulfill({
+          status: 200,
+          contentType: 'image/jpeg',
+          body: readFileSync(path.join(FIXTURES, name)),
+        });
+      },
+    );
+    await signInAs(page, `slow-reader-${Date.now()}`, 'annotator');
+    await page.goto(`/annotation/campaigns/${slug}/annotate`);
+    await page.getByRole('button', { name: /^start$/i }).click();
+
+    const submit = page.getByRole('button', { name: /^submit/i });
+    await expect(page.getByText('Loading the next image…')).toBeVisible();
+    await expect(submit).toBeDisabled();
+    await expect(page.getByText(/submit is available once the image is on screen/i)).toBeVisible();
+    // Number + Enter picks the label but sends nothing.
+    await page.keyboard.press('1');
+    await expect(page.getByRole('radio', { name: 'No DR' })).toBeChecked();
+    await page.keyboard.press('Enter');
+    await expect(page.getByText(SAVED)).toHaveCount(0);
+    await expect(submit).toBeVisible();
+
+    release();
+    await expectImageShown(page);
+    await expect(submit).toBeEnabled();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('status')).toHaveText(SAVED);
+  });
+
+  test('an image that fails to load cannot be answered, only skipped (#646 review, item 5)', async ({
+    page,
+    browser,
+  }) => {
+    const manager = await browser.newPage();
+    const slug = await labelledCampaignWithTasks(manager, 1);
+    await manager.close();
+
+    await page.route(
+      (url) =>
+        url.searchParams.has('X-Amz-Signature') && url.pathname.includes(`/${DATASET_SLUG}/`),
+      (route) => route.fulfill({ status: 403, body: 'expired' }),
+    );
+    await signInAs(page, `failed-image-${Date.now()}`, 'annotator');
+    await page.goto(`/annotation/campaigns/${slug}/annotate`);
+    await page.getByRole('button', { name: /^start$/i }).click();
+
+    await expect(page.getByText(/the image could not be loaded/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /^submit/i })).toBeDisabled();
+    await page.getByRole('button', { name: /^skip$/i }).click();
+    await expect(page.getByRole('status')).toHaveText(/task skipped/i);
+  });
+
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`the annotate page with an image has no axe violations (${colorScheme})`, async ({
       page,
