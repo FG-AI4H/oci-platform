@@ -4,8 +4,6 @@ _[English version](./reading-a-ct-series.md)_
 
 Certaines campagnes vous demandent de lire un examen entier, par exemple un scanner cérébral, plutôt qu’une seule image. L’examen s’ouvre dans la visionneuse de la plateforme, sur la même page que le formulaire de réponse. Vous donnez une réponse par examen.
 
-La visionneuse est en français. Les boutons de la page de réponse sont encore en anglais : **Start** (commencer), **Skip** (passer), **Submit** (envoyer), **Reason** (motif).
-
 ## Avant de commencer
 
 - Utilisez **Chrome, Edge ou Safari**, sur un ordinateur ou une tablette. Firefox n’a pas été testé.
@@ -14,7 +12,7 @@ La visionneuse est en français. Les boutons de la page de réponse sont encore 
 
 ## Ouvrir un examen
 
-1. Sur la page de réponse de la campagne, appuyez sur **Start**. La plateforme vous donne le prochain examen qui vous attend.
+1. Sur la page de réponse de la campagne, appuyez sur **Commencer**. La plateforme vous donne le prochain examen qui vous attend.
 2. La première image s’affiche dès qu’elle arrive. Le compteur sous l’image indique où vous êtes, par exemple `1 / 32`, et la ligne en dessous combien d’images sont chargées.
 
 Rien sur la page ne nomme le patient, le fichier ni le jeu de données. C’est voulu ([ADR-0010](../adr/0010-annotation-metadata-exposure-and-blinding.md)).
@@ -51,19 +49,19 @@ Ouvrez **Souris et clavier** sous la visionneuse pour retrouver cette liste.
 
 1. Choisissez votre réponse : cliquez dessus ou appuyez sur son numéro. Si la campagne le permet, vous pouvez ajouter un commentaire.
 2. **Avant d’envoyer, laissez à l’écran l’image qui justifie votre réponse**, dans la fenêtre utilisée. La plateforme enregistre avec votre réponse l’image affichée, par sa place dans la série (par exemple image 14 sur 32), et la fenêtre. Cela fait partie de la trace de votre lecture et aide à trancher un désaccord.
-3. Appuyez sur **Submit** (ou Entrée).
+3. Appuyez sur **Valider** (ou Entrée).
 
-**Submit** reste indisponible tant que l’image n’est pas à l’écran, avec une note qui l’indique. Si une image ne peut pas être chargée, il ne reste que **Skip**.
+**Valider** reste indisponible tant que l’image n’est pas à l’écran, avec une note qui l’indique. Si une image ne peut pas être chargée, il ne reste que **Passer**.
 
-Après l’envoi, le bouton pour commencer la tâche suivante est prêt.
+Après l’envoi, **Commencer la tâche suivante** est prêt.
 
 ## Impossible de lire l’examen ?
 
-Appuyez sur **Skip**. L’examen retourne dans la file pour quelqu’un d’autre, et on vous en propose d’abord un autre. Si l’examen lui-même semble anormal (images manquantes, mauvaise région, quelque chose qui ne devrait pas y être), passez-le et prévenez le responsable de la campagne.
+Appuyez sur **Passer**. L’examen retourne dans la file pour quelqu’un d’autre, et on vous en propose d’abord un autre. Si l’examen lui-même semble anormal (images manquantes, mauvaise région, quelque chose qui ne devrait pas y être), passez-le et prévenez le responsable de la campagne.
 
 ## Si vous tranchez les désaccords
 
-Si vous êtes arbitre, vous ne recevez que des examens que vous n’avez pas lus. Vous voyez l’examen dans la même visionneuse et les réponses des lecteurs, sans leur nom. Sous chaque réponse figurent l’image et la fenêtre sur lesquelles le lecteur a répondu, par exemple `Image 14 sur 32 · W 80 · L 40`. **Afficher l’image 14** met cette image à l’écran dans cette fenêtre : vous regardez là où chaque lecteur a regardé. Choisissez la réponse finale, expliquez pourquoi dans **Reason** et envoyez avec à l’écran l’image qui la justifie.
+Si vous êtes arbitre, vous ne recevez que des examens que vous n’avez pas lus. Vous voyez l’examen dans la même visionneuse et, sous **Réponses des lecteurs**, leurs réponses sans leur nom. Sous chaque réponse figurent l’image et la fenêtre sur lesquelles le lecteur a répondu, par exemple `Image 14 sur 32 · W 80 · L 40`. **Afficher l’image 14** met cette image à l’écran dans cette fenêtre : vous regardez là où chaque lecteur a regardé. Choisissez la réponse finale, expliquez pourquoi dans **Justification** et envoyez avec à l’écran l’image qui la justifie.
 
 ## En cas de problème
 
