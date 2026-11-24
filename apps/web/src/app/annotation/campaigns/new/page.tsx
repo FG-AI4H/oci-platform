@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import {
   Alert,
   AlertDescription,
@@ -17,30 +18,29 @@ import type {
   UserPreferences,
 } from '@oci/shared-types';
 import { auth } from '../../../../auth';
+import { getFormatters } from '../../../../i18n/server';
 import { apiFetch } from '../../../../lib/api';
 import { requireCampaignManager } from '../../../../lib/groups';
 import { NewCampaignForm, type PreselectedDataset } from './new-campaign-form';
 
-export const metadata = {
-  title: 'New campaign — OCI Annotation',
-  robots: { index: false, follow: false },
-};
-
-/** Matches the rest of the app when the user has no locale preference. */
-const DEFAULT_NUMBER_LOCALE = 'en-GB';
+export async function generateMetadata() {
+  const t = await getTranslations('Campaign.newCampaign');
+  return { title: t('metaTitle'), robots: { index: false, follow: false } };
+}
 
 /**
  * Locale for the cost-estimate numbers (#582): the user's preference
- * (#144) when `Intl` knows it, otherwise the app default. Resolved here
- * rather than from the browser so the server and client renders agree.
+ * (#144) when `Intl` knows it, otherwise the interface language's
+ * (`en-GB` in English, as before). Resolved here rather than from the
+ * browser so the server and client renders agree.
  */
-function numberLocaleFor(preferred: string | null | undefined): string {
-  if (!preferred) return DEFAULT_NUMBER_LOCALE;
+function numberLocaleFor(preferred: string | null | undefined, fallback: string): string {
+  if (!preferred) return fallback;
   try {
-    return Intl.NumberFormat.supportedLocalesOf([preferred])[0] ?? DEFAULT_NUMBER_LOCALE;
+    return Intl.NumberFormat.supportedLocalesOf([preferred])[0] ?? fallback;
   } catch {
     // Matches LocaleSchema's loose shape but isn't a valid BCP-47 tag.
-    return DEFAULT_NUMBER_LOCALE;
+    return fallback;
   }
 }
 
@@ -56,6 +56,7 @@ interface NewCampaignPageProps {
 export default async function NewCampaignPage({ searchParams }: NewCampaignPageProps) {
   const session = await auth();
   requireCampaignManager(session);
+  const [t, fmt] = await Promise.all([getTranslations('Campaign.newCampaign'), getFormatters()]);
 
   const { datasetSlug, datasetId } = await searchParams;
 
@@ -107,35 +108,29 @@ export default async function NewCampaignPage({ searchParams }: NewCampaignPageP
             className="inline-flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
           >
             <ArrowLeftIcon size={14} />
-            <span>Campaigns</span>
+            <span>{t('back')}</span>
           </Link>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Campaign manager workflow
+            {t('eyebrow')}
           </p>
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">New campaign</h1>
-          <p className="max-w-prose text-[var(--color-muted-foreground)]">
-            Define a draft campaign. After this step you&apos;ll attach the dataset, recruit
-            annotators, and move the campaign into READY. State transitions land with #215.
-          </p>
+          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">{t('title')}</h1>
+          <p className="max-w-prose text-[var(--color-muted-foreground)]">{t('intro')}</p>
         </header>
 
         <Alert tone="info" className="mb-6">
-          <AlertTitle>Slug is permanent</AlertTitle>
-          <AlertDescription>
-            The slug becomes part of the campaign URL and the persistence record. Choose
-            deliberately — slugs cannot be renamed once published.
-          </AlertDescription>
+          <AlertTitle>{t('slugPermanentTitle')}</AlertTitle>
+          <AlertDescription>{t('slugPermanentBody')}</AlertDescription>
         </Alert>
 
         <Card>
           <CardHeader>
-            <CardTitle>Draft details</CardTitle>
+            <CardTitle>{t('draftDetails')}</CardTitle>
           </CardHeader>
           <CardContent>
             <NewCampaignForm
               toolIntegrations={tools}
               preselectedDataset={preselected}
-              numberLocale={numberLocaleFor(preferences?.locale)}
+              numberLocale={numberLocaleFor(preferences?.locale, fmt.intlLocale)}
             />
           </CardContent>
         </Card>

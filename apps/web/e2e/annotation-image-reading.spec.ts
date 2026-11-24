@@ -392,6 +392,41 @@ test.describe('reading images in the browser (#646)', () => {
     await expect(page.getByRole('status')).toHaveText(/votre réponse a été enregistrée/i);
   });
 
+  test('a campaign manager in French: the campaign page, its tasks and the new-campaign form (#646 review)', async ({
+    page,
+  }) => {
+    const slug = await labelledCampaignWithTasks(page, 1);
+    await page.context().addCookies([
+      {
+        name: 'oci-locale',
+        value: 'fr',
+        url: process.env.PW_BASE_URL ?? 'http://localhost:3001',
+      },
+    ]);
+
+    await page.goto(`/annotation/campaigns/${slug}`);
+    await expect(page.getByRole('main').getByText('en cours', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Cycle de vie' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Terminer' })).toBeVisible();
+    await expect(
+      page.getByRole('heading', {
+        name: 'Créer des tâches à partir des fichiers du jeu de données',
+      }),
+    ).toBeVisible();
+    await page.getByLabel('Au plus').fill('1');
+    await page.getByRole('button', { name: 'Compter les fichiers et les séries' }).click();
+    await expect(page.getByRole('status')).toHaveText(
+      // French puts 0 in the singular.
+      '1 échantillon correspond : 0 nouvelle tâche, 1 en a déjà une.',
+    );
+
+    await page.goto('/annotation/campaigns/new');
+    await expect(page.getByRole('heading', { name: 'Nouvelle campagne' })).toBeVisible();
+    await page.getByRole('radio', { name: 'Classification' }).check();
+    await expect(page.getByRole('textbox', { name: 'Étiquettes' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Créer le brouillon' })).toBeVisible();
+  });
+
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`the annotate page with an image has no axe violations (${colorScheme})`, async ({
       page,

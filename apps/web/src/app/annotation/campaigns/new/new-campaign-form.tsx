@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Input, Textarea } from '@oci/ui';
 import type {
   AnnotationToolIntegrationSummary,
@@ -11,8 +12,8 @@ import {
   N_ANNOTATORS_MAX,
   N_ANNOTATORS_MIN,
   allowedTaskKindsForModalities,
+  canonicalizeModality,
   estimateCampaignEvents,
-  rationaleForDisabledTaskKind,
   shouldShowCostEstimate,
 } from '@oci/shared-types';
 import { createCampaignAction, type CreateCampaignState } from './actions';
@@ -20,20 +21,24 @@ import { DatasetPicker, type PickedDataset } from './dataset-picker';
 
 const initial: CreateCampaignState = { status: 'idle' };
 
-const TASK_KIND_OPTIONS: ReadonlyArray<{ value: CampaignTaskKind; label: string; hint: string }> = [
-  { value: 'CLASSIFICATION', label: 'Classification', hint: 'Image-level labels.' },
-  { value: 'DETECTION', label: 'Detection', hint: 'Bounding boxes around findings.' },
-  { value: 'SEGMENTATION', label: 'Segmentation', hint: 'Pixel-level masks per region.' },
-  { value: 'LOCALIZATION', label: 'Localisation', hint: 'Single points / landmarks.' },
-  { value: 'MULTI_MODAL', label: 'Multi-modal', hint: 'Mixed outputs across modalities.' },
+const TASK_KINDS: ReadonlyArray<CampaignTaskKind> = [
+  'CLASSIFICATION',
+  'DETECTION',
+  'SEGMENTATION',
+  'LOCALIZATION',
+  'MULTI_MODAL',
 ];
 
-const LICENSE_OPTIONS: ReadonlyArray<{ value: CampaignOutputLicense; label: string }> = [
-  { value: 'CC-BY-4.0', label: 'CC-BY-4.0 — attribution' },
-  { value: 'CC-BY-NC-4.0', label: 'CC-BY-NC-4.0 — non-commercial' },
-  { value: 'CC-BY-SA-4.0', label: 'CC-BY-SA-4.0 — share-alike' },
-  { value: 'CC0-1.0', label: 'CC0 — public domain' },
-  { value: 'custom-restricted', label: 'custom-restricted' },
+/** Each licence and its message key (message keys cannot hold the dots of a version). */
+const LICENSE_OPTIONS: ReadonlyArray<{
+  value: CampaignOutputLicense;
+  key: 'CC-BY-4' | 'CC-BY-NC-4' | 'CC-BY-SA-4' | 'CC0-1' | 'custom-restricted';
+}> = [
+  { value: 'CC-BY-4.0', key: 'CC-BY-4' },
+  { value: 'CC-BY-NC-4.0', key: 'CC-BY-NC-4' },
+  { value: 'CC-BY-SA-4.0', key: 'CC-BY-SA-4' },
+  { value: 'CC0-1.0', key: 'CC0-1' },
+  { value: 'custom-restricted', key: 'custom-restricted' },
 ];
 
 /** Dataset already resolved server-side from `?datasetSlug=`. */
@@ -93,8 +98,25 @@ export function NewCampaignForm({
   preselectedDataset,
   numberLocale,
 }: NewCampaignFormProps) {
+  const t = useTranslations('Campaign.form');
+  const tc = useTranslations('Campaign');
+  const locale = useLocale();
   const [state, action, pending] = useActionState(createCampaignAction, initial);
   const echoed = state.status === 'error' ? state.values : undefined;
+
+  /**
+   * Why a task kind is off for the picked dataset (#247), in the
+   * interface language: the shared rationale, worded here.
+   */
+  function unsupportedReason(kind: CampaignTaskKind, modalities: readonly string[]): string {
+    const names = [...new Set(modalities.map(canonicalizeModality).filter((m) => m !== null))];
+    const list = new Intl.ListFormat(locale, { type: 'conjunction' }).format(names);
+    return t('unsupported', {
+      kind: tc(`taskKind.${kind}`),
+      modalities:
+        names.length === 0 ? t('selectedDataset') : t('modalityData', { modalities: list }),
+    });
+  }
 
   const slugError = fieldError(state, 'slug');
   const nameError = fieldError(state, 'name');
@@ -134,7 +156,7 @@ export function NewCampaignForm({
   const nOutOfRange =
     Number.isFinite(nValue) && (nValue < N_ANNOTATORS_MIN || nValue > N_ANNOTATORS_MAX);
   const nShownError = nOutOfRange
-    ? `Annotators per data point must be between ${N_ANNOTATORS_MIN} and ${N_ANNOTATORS_MAX}.`
+    ? t('nAnnotatorsRange', { min: N_ANNOTATORS_MIN, max: N_ANNOTATORS_MAX })
     : nError;
   const showCostEstimate = shouldShowCostEstimate(nValue);
 
@@ -146,18 +168,12 @@ export function NewCampaignForm({
     <form action={action} className="space-y-5" aria-busy={pending || undefined}>
       {state.status === 'error' ? (
         <Alert tone="danger">
-          <AlertTitle>Could not create campaign</AlertTitle>
+          <AlertTitle>{t('couldNotCreate')}</AlertTitle>
           <AlertDescription>{state.message}</AlertDescription>
         </Alert>
       ) : null}
 
-      <Field
-        label="Slug"
-        htmlFor="field-slug"
-        required
-        hint="lower-case, hyphenated, 3–80 chars (e.g. chest-xr-pilot)"
-        error={slugError}
-      >
+      <Field label={t('slug')} htmlFor="field-slug" required hint={t('slugHint')} error={slugError}>
         <Input
           id="field-slug"
           name="slug"
@@ -173,13 +189,7 @@ export function NewCampaignForm({
         />
       </Field>
 
-      <Field
-        label="Name"
-        htmlFor="field-name"
-        required
-        hint="Human-readable title shown on the campaign card."
-        error={nameError}
-      >
+      <Field label={t('name')} htmlFor="field-name" required hint={t('nameHint')} error={nameError}>
         <Input
           id="field-name"
           name="name"
@@ -192,9 +202,9 @@ export function NewCampaignForm({
       </Field>
 
       <Field
-        label="Description"
+        label={t('description')}
         htmlFor="field-description"
-        hint="Optional. Goal of the campaign, target population, exclusion criteria."
+        hint={t('descriptionHint')}
         error={descError}
       >
         <Textarea
@@ -211,25 +221,31 @@ export function NewCampaignForm({
       {/* Task kind first — the tool dropdown is filtered by this selection. */}
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">
-          Task kind <span className="text-[var(--color-danger)]">*</span>
+          {t('taskKind')} <span className="text-[var(--color-danger)]">*</span>
         </legend>
         <p className="text-xs text-[var(--color-muted-foreground)]">
-          What annotators produce per data point. Drives the tool picker below and the persistence
-          schemaProfile (ADR-0008).
+          {t('taskKindHint')}
           {pickedDataset && pickedDataset.modalities.length > 0 ? (
             <>
               {' '}
-              Filtered against the dataset modality (
-              <span className="font-medium">{pickedDataset.modalities.join(', ')}</span>).
+              {t.rich('filteredBy', {
+                modalities: pickedDataset.modalities.join(', '),
+                b: (chunks) => <span className="font-medium">{chunks}</span>,
+              })}
             </>
           ) : null}
         </p>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {TASK_KIND_OPTIONS.map((opt) => {
+          {TASK_KINDS.map((kind) => {
+            const opt = {
+              value: kind,
+              label: tc(`taskKind.${kind}`),
+              hint: t(`taskKindHints.${kind}`),
+            };
             const disabledByModality =
               allowedTaskKinds !== null && !allowedTaskKinds.includes(opt.value);
             const rationale = disabledByModality
-              ? rationaleForDisabledTaskKind(opt.value, pickedDataset?.modalities ?? [])
+              ? unsupportedReason(opt.value, pickedDataset?.modalities ?? [])
               : undefined;
             return (
               <label
@@ -304,14 +320,10 @@ export function NewCampaignForm({
 
       {/* Tool dropdown — gated on task-kind selection. */}
       <Field
-        label="Annotation tool"
+        label={t('tool')}
         htmlFor="field-tool"
         required
-        hint={
-          taskKind
-            ? 'Tool the workflow hands annotators off to. Filtered to tools that support the selected task kind.'
-            : 'Pick a task kind first; compatible tools appear here.'
-        }
+        hint={taskKind ? t('toolHint') : t('toolHintNoKind')}
         error={toolError}
       >
         <select
@@ -323,15 +335,15 @@ export function NewCampaignForm({
           className="h-9 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-card)] px-3 text-sm text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {!taskKind ? (
-            <option value="">— Select a task kind first —</option>
+            <option value="">{t('selectKindFirst')}</option>
           ) : compatibleTools.length === 0 ? (
-            <option value="">— No registered tool supports this task kind —</option>
+            <option value="">{t('noTool')}</option>
           ) : (
             <>
-              <option value="">— Choose a tool —</option>
-              {compatibleTools.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} — {t.vendor} (v{t.version})
+              <option value="">{t('chooseTool')}</option>
+              {compatibleTools.map((tool) => (
+                <option key={tool.id} value={tool.id}>
+                  {t('toolOption', { name: tool.name, vendor: tool.vendor, version: tool.version })}
                 </option>
               ))}
             </>
@@ -342,12 +354,12 @@ export function NewCampaignForm({
       {/* A CLASSIFICATION campaign declares its answers here (#646). */}
       {taskKind === 'CLASSIFICATION' ? (
         <fieldset className="space-y-3 rounded-md border border-[var(--color-border)] p-4">
-          <legend className="px-1 text-sm font-medium">Labels readers choose from</legend>
+          <legend className="px-1 text-sm font-medium">{t('labelsLegend')}</legend>
           <Field
-            label="Labels"
+            label={t('labels')}
             htmlFor="field-labels"
             required
-            hint="One per line, in the order readers see them (2–9; the number keys 1–9 pick them). Write the text readers see, or value | text to set the stored value yourself, e.g. 0 | No DR."
+            hint={t('labelsHint')}
             error={labelsError}
           >
             <Textarea
@@ -368,7 +380,7 @@ export function NewCampaignForm({
               defaultChecked={echoed?.cannotAssess ?? false}
               className="mt-0.5 accent-[var(--color-primary)]"
             />
-            <span>Offer &ldquo;Cannot assess&rdquo; (key 0) after the labels</span>
+            <span>{t('offerCannotAssess')}</span>
           </label>
           <label className="flex items-start gap-2 text-sm">
             <input
@@ -377,7 +389,7 @@ export function NewCampaignForm({
               defaultChecked={echoed?.allowComment ?? false}
               className="mt-0.5 accent-[var(--color-primary)]"
             />
-            <span>Let readers add a comment</span>
+            <span>{t('allowComment')}</span>
           </label>
         </fieldset>
       ) : null}
@@ -385,10 +397,10 @@ export function NewCampaignForm({
       <div className="space-y-3">
         <div className="grid gap-5 sm:grid-cols-2">
           <Field
-            label="Annotators per data point"
+            label={t('nAnnotators')}
             htmlFor="field-n-annotators"
             required
-            hint="Range 1–12 (ADR-0009). Default 3 (clinical-validation baseline for IRR). Five+ is recommended for safety-critical or contested findings."
+            hint={t('nAnnotatorsHint')}
             error={nShownError}
           >
             <Input
@@ -416,9 +428,9 @@ export function NewCampaignForm({
           </Field>
 
           <Field
-            label="Expected number of samples"
+            label={t('expectedSamples')}
             htmlFor="field-expected-samples"
-            hint="Optional. Used only for the cost estimate; not saved with the campaign."
+            hint={t('expectedSamplesHint')}
           >
             <Input
               id="field-expected-samples"
@@ -450,18 +462,12 @@ export function NewCampaignForm({
         </div>
         {showCostEstimate ? (
           <p id="cost-estimate-note" className="text-xs text-[var(--color-muted-foreground)]">
-            Annotation events, not money. Gates 2–3 run only for samples where gate-1 annotators
-            disagree, so their count is an upper bound. This doesn&apos;t block creating the
-            campaign.
+            {t('costNote')}
           </p>
         ) : null}
       </div>
 
-      <Field
-        label="Output license"
-        htmlFor="field-license"
-        hint="License declared on the annotation outputs. SENSITIVE-tier datasets default to custom-restricted (#235 phase 2)."
-      >
+      <Field label={t('license')} htmlFor="field-license" hint={t('licenseHint')}>
         <select
           id="field-license"
           name="outputLicense"
@@ -470,7 +476,7 @@ export function NewCampaignForm({
         >
           {LICENSE_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
-              {opt.label}
+              {t(`licenses.${opt.key}`)}
             </option>
           ))}
         </select>
@@ -478,7 +484,7 @@ export function NewCampaignForm({
 
       <div className="flex items-center justify-end gap-2 pt-2">
         <Button type="submit" disabled={pending}>
-          {pending ? 'Creating…' : 'Create draft'}
+          {pending ? t('creating') : t('createDraft')}
         </Button>
       </div>
     </form>
@@ -499,6 +505,7 @@ function CostEstimateNote({
   expectedSamples: string;
   locale: string;
 }) {
+  const t = useTranslations('Campaign.form');
   const sampleCount = Number.parseInt(expectedSamples, 10);
   const estimate = estimateCampaignEvents({ nAnnotators, sampleCount });
   const fmt = (n: number) => n.toLocaleString(locale);
@@ -509,26 +516,25 @@ function CostEstimateNote({
       data-testid="cost-estimate"
       className="rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] p-3 text-sm"
     >
-      <p className="font-medium">Cost estimate for {nAnnotators} annotators per data point</p>
+      <p className="font-medium">{t('costTitle', { n: nAnnotators })}</p>
       {Number.isFinite(sampleCount) && sampleCount > 0 ? (
         <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1">
-          <dt>Gate 1 — independent annotations</dt>
+          <dt>{t('costGate1')}</dt>
           <dd className="text-end font-medium tabular-nums" data-testid="cost-estimate-gate1">
             {fmt(estimate.gate1Events)}
           </dd>
-          <dt>Gates 2–3 — arbitration + expert review, at most</dt>
+          <dt>{t('costLaterGates')}</dt>
           <dd className="text-end tabular-nums" data-testid="cost-estimate-later-gates">
             {fmt(estimate.maxArbitrationEvents + estimate.maxExpertEvents)}
           </dd>
-          <dt className="font-medium">Total, worst case</dt>
+          <dt className="font-medium">{t('costTotal')}</dt>
           <dd className="text-end font-medium tabular-nums" data-testid="cost-estimate-total">
             {fmt(estimate.totalProjectedEvents)}
           </dd>
         </dl>
       ) : (
         <p className="mt-1 text-[var(--color-muted-foreground)]">
-          Gate 1 alone needs {nAnnotators} annotation events per sample. Enter the expected number
-          of samples to see the projected total.
+          {t('costPerSample', { n: nAnnotators })}
         </p>
       )}
     </div>

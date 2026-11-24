@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Field, Input, SearchIcon } from '@oci/ui';
 import type { ListDatasetsResponse } from '@oci/shared-types';
 
@@ -62,6 +63,7 @@ export interface DatasetPickerProps {
  * compatibility — that's #247.
  */
 export function DatasetPicker({ preselected, echoedValue, error, onChange }: DatasetPickerProps) {
+  const t = useTranslations('Campaign.picker');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PickedDataset[]>([]);
   const [picked, setPicked] = useState<PickedDataset | null>(preselected ?? null);
@@ -128,10 +130,10 @@ export function DatasetPicker({ preselected, echoedValue, error, onChange }: Dat
 
   return (
     <Field
-      label="Dataset"
+      label={t('label')}
       htmlFor="field-dataset-search"
       required
-      hint="Search the catalog by name or slug. Selecting fills in the dataset id."
+      hint={t('hint')}
       error={error}
     >
       <div ref={boxRef} className="relative">
@@ -149,9 +151,9 @@ export function DatasetPicker({ preselected, echoedValue, error, onChange }: Dat
               type="button"
               onClick={clear}
               className="text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] underline underline-offset-2"
-              aria-label="Change dataset"
+              aria-label={t('changeAria')}
             >
-              Change
+              {t('change')}
             </button>
           </div>
         ) : (
@@ -165,7 +167,7 @@ export function DatasetPicker({ preselected, echoedValue, error, onChange }: Dat
                 setOpen(true);
               }}
               onFocus={() => setOpen(true)}
-              placeholder="Start typing a dataset name or slug…"
+              placeholder={t('placeholder')}
               leadingIcon={<SearchIcon size={16} />}
               autoComplete="off"
               aria-autocomplete="list"
@@ -180,11 +182,11 @@ export function DatasetPicker({ preselected, echoedValue, error, onChange }: Dat
               >
                 {loading ? (
                   <li className="px-3 py-2 text-sm text-[var(--color-muted-foreground)]">
-                    Searching…
+                    {t('searching')}
                   </li>
                 ) : results.length === 0 ? (
                   <li className="px-3 py-2 text-sm text-[var(--color-muted-foreground)]">
-                    No datasets match.
+                    {t('noMatch')}
                   </li>
                 ) : (
                   results.map((d) => (

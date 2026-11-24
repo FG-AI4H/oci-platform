@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import {
   ArrowLeftIcon,
   Badge,
@@ -16,10 +17,10 @@ import {
   availableCampaignActions,
   type CampaignDetail,
   type CampaignStatus,
-  type CampaignTaskKind,
   type TaskSummary,
 } from '@oci/shared-types';
 import { auth } from '../../../../auth';
+import { getFormatters } from '../../../../i18n/server';
 import { apiFetch } from '../../../../lib/api';
 import { canOverseeCampaign, isAnnotationWorker, isCampaignManager } from '../../../../lib/groups';
 import { ProgressCard } from './progress-card';
@@ -35,22 +36,15 @@ const STATUS_TONE: Record<CampaignStatus, 'info' | 'primary' | 'success' | 'warn
     ARCHIVED: 'neutral',
   };
 
-const TASK_KIND_LABEL: Record<CampaignTaskKind, string> = {
-  CLASSIFICATION: 'Classification',
-  DETECTION: 'Detection',
-  SEGMENTATION: 'Segmentation',
-  LOCALIZATION: 'Localisation',
-  MULTI_MODAL: 'Multi-modal',
-};
-
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps) {
   const { slug } = await params;
+  const t = await getTranslations('Campaign.detail');
   return {
-    title: `${slug} — Annotation campaigns`,
+    title: t('metaTitle', { slug }),
     robots: { index: false, follow: false },
   };
 }
@@ -65,7 +59,12 @@ export default async function CampaignDetailPage({ params }: PageProps) {
   );
   if (!detail) notFound();
 
-  const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+  const [t, tc, fmt] = await Promise.all([
+    getTranslations('Campaign.detail'),
+    getTranslations('Campaign'),
+    getFormatters(),
+  ]);
+  const when = (value: string) => fmt.dateTime(value);
   const canManage = isCampaignManager(session);
   const canAnnotate = isAnnotationWorker(session) && detail.status === 'RUNNING';
   const actions = availableCampaignActions(detail.status);
@@ -93,14 +92,14 @@ export default async function CampaignDetailPage({ params }: PageProps) {
             className="inline-flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
           >
             <ArrowLeftIcon size={14} />
-            <span>Campaigns</span>
+            <span>{t('back')}</span>
           </Link>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
-            Annotation campaign
+            {t('eyebrow')}
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight">{detail.name}</h1>
-            <Badge tone={STATUS_TONE[detail.status]}>{detail.status.toLowerCase()}</Badge>
+            <Badge tone={STATUS_TONE[detail.status]}>{tc(`status.${detail.status}`)}</Badge>
           </div>
           <p className="font-mono text-sm text-[var(--color-muted-foreground)]">{detail.slug}</p>
           {detail.description ? (
@@ -111,18 +110,20 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>Configuration</CardTitle>
+              <CardTitle>{t('configuration')}</CardTitle>
             </CardHeader>
             <CardContent>
               <DefinitionList>
-                <DefinitionItem term="Task kind">{TASK_KIND_LABEL[detail.taskKind]}</DefinitionItem>
-                <DefinitionItem term="Annotators per data point">
+                <DefinitionItem term={t('taskKind')}>
+                  {tc(`taskKind.${detail.taskKind}`)}
+                </DefinitionItem>
+                <DefinitionItem term={t('nAnnotators')}>
                   <span className="tabular-nums">{detail.workflowConfig.nAnnotators}</span>
                 </DefinitionItem>
-                <DefinitionItem term="Output license" mono>
+                <DefinitionItem term={t('outputLicense')} mono>
                   {detail.outputLicense}
                 </DefinitionItem>
-                <DefinitionItem term="Dataset" mono>
+                <DefinitionItem term={t('dataset')} mono>
                   {detail.datasetId}
                 </DefinitionItem>
               </DefinitionList>
@@ -131,16 +132,16 @@ export default async function CampaignDetailPage({ params }: PageProps) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Annotation tool</CardTitle>
+              <CardTitle>{t('tool')}</CardTitle>
             </CardHeader>
             <CardContent>
               <DefinitionList>
-                <DefinitionItem term="Name">{detail.toolIntegration.name}</DefinitionItem>
-                <DefinitionItem term="Vendor">{detail.toolIntegration.vendor}</DefinitionItem>
-                <DefinitionItem term="Version" mono>
+                <DefinitionItem term={t('toolName')}>{detail.toolIntegration.name}</DefinitionItem>
+                <DefinitionItem term={t('vendor')}>{detail.toolIntegration.vendor}</DefinitionItem>
+                <DefinitionItem term={t('version')} mono>
                   {detail.toolIntegration.version}
                 </DefinitionItem>
-                <DefinitionItem term="Identifier" mono>
+                <DefinitionItem term={t('identifier')} mono>
                   {detail.toolIntegration.slug}
                 </DefinitionItem>
               </DefinitionList>
@@ -150,24 +151,22 @@ export default async function CampaignDetailPage({ params }: PageProps) {
 
         <Card className="mt-4">
           <CardHeader>
-            <CardTitle>Instructions</CardTitle>
+            <CardTitle>{t('instructions')}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-sm text-[var(--color-muted-foreground)]">
-              {detail.currentInstructionsVersion ? (
-                <>
-                  Current version{' '}
-                  <span className="font-mono">{detail.currentInstructionsVersion}</span>.
-                </>
-              ) : (
-                'No instructions have been published yet.'
-              )}
+              {detail.currentInstructionsVersion
+                ? t.rich('currentVersion', {
+                    version: detail.currentInstructionsVersion,
+                    mono: (chunks) => <span className="font-mono">{chunks}</span>,
+                  })
+                : t('noInstructions')}
             </p>
             <Link
               href={`/annotation/campaigns/${detail.slug}/instructions`}
               className="inline-flex items-center justify-center rounded-md border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
             >
-              {canManage ? 'View and edit instructions' : 'Read instructions'}
+              {canManage ? t('editInstructions') : t('readInstructions')}
             </Link>
           </CardContent>
         </Card>
@@ -175,7 +174,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         {canManage ? (
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle>Lifecycle</CardTitle>
+              <CardTitle>{t('lifecycle')}</CardTitle>
             </CardHeader>
             <CardContent>
               <TransitionActions slug={detail.slug} current={detail.status} actions={actions} />
@@ -186,17 +185,17 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         {canOversee ? (
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle>Calibration</CardTitle>
+              <CardTitle>{t('calibration')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="mb-3 text-sm text-[var(--color-muted-foreground)]">
-                Annotators whose agreement has dropped below this campaign&apos;s threshold.
+                {t('calibrationBody')}
               </p>
               <Link
                 href={`/annotation/campaigns/${detail.slug}/calibration`}
                 className="inline-flex items-center justify-center rounded-md border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
               >
-                Calibration flags
+                {t('calibrationLink')}
               </Link>
             </CardContent>
           </Card>
@@ -205,17 +204,17 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         {canAnnotate ? (
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle>Annotate</CardTitle>
+              <CardTitle>{t('annotate')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="mb-3 text-sm text-[var(--color-muted-foreground)]">
-                You&apos;re eligible to pick up annotation work on this campaign.
+                {t('annotateBody')}
               </p>
               <Link
                 href={`/annotation/campaigns/${detail.slug}/annotate`}
                 className="inline-flex items-center justify-center rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-primary-foreground)] hover:opacity-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
               >
-                Open annotator queue
+                {t('openQueue')}
               </Link>
             </CardContent>
           </Card>
@@ -224,7 +223,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         {canOversee && hasTasks ? (
           <Card className="mt-4" id="campaign-progress">
             <CardHeader>
-              <CardTitle>Progress</CardTitle>
+              <CardTitle>{t('progress')}</CardTitle>
             </CardHeader>
             <CardContent>
               <ProgressCard tasks={tasks} today={new Date()} />
@@ -235,7 +234,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         {canManage && hasTasks ? (
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle>Tasks</CardTitle>
+              <CardTitle>{t('tasks')}</CardTitle>
             </CardHeader>
             <CardContent>
               <TasksCard slug={detail.slug} tasks={tasks} canSeed={detail.status === 'RUNNING'} />
@@ -245,35 +244,27 @@ export default async function CampaignDetailPage({ params }: PageProps) {
 
         <Card className="mt-4">
           <CardHeader>
-            <CardTitle>Audit</CardTitle>
+            <CardTitle>{t('audit')}</CardTitle>
           </CardHeader>
           <CardContent>
             <DefinitionList>
-              <DefinitionItem term="Created">
-                <time dateTime={detail.createdAt}>
-                  {dateFmt.format(new Date(detail.createdAt))}
-                </time>
+              <DefinitionItem term={t('created')}>
+                <time dateTime={detail.createdAt}>{when(detail.createdAt)}</time>
               </DefinitionItem>
-              <DefinitionItem term="Updated">
-                <time dateTime={detail.updatedAt}>
-                  {dateFmt.format(new Date(detail.updatedAt))}
-                </time>
+              <DefinitionItem term={t('updated')}>
+                <time dateTime={detail.updatedAt}>{when(detail.updatedAt)}</time>
               </DefinitionItem>
               {detail.startedAt ? (
-                <DefinitionItem term="Started">
-                  <time dateTime={detail.startedAt}>
-                    {dateFmt.format(new Date(detail.startedAt))}
-                  </time>
+                <DefinitionItem term={t('started')}>
+                  <time dateTime={detail.startedAt}>{when(detail.startedAt)}</time>
                 </DefinitionItem>
               ) : null}
               {detail.completedAt ? (
-                <DefinitionItem term="Completed">
-                  <time dateTime={detail.completedAt}>
-                    {dateFmt.format(new Date(detail.completedAt))}
-                  </time>
+                <DefinitionItem term={t('completed')}>
+                  <time dateTime={detail.completedAt}>{when(detail.completedAt)}</time>
                 </DefinitionItem>
               ) : null}
-              <DefinitionItem term="Created by" mono>
+              <DefinitionItem term={t('createdBy')} mono>
                 {detail.createdById}
               </DefinitionItem>
             </DefinitionList>

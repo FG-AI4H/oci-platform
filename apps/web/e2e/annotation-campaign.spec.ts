@@ -243,7 +243,7 @@ test.describe('annotation campaign — header + form', () => {
     await expect(page.getByRole('radio', { name: 'Segmentation' })).toBeDisabled();
     await expect(page.getByRole('radio', { name: 'Detection' })).toBeDisabled();
     await expect(page.getByRole('radio', { name: 'Localisation' })).toBeDisabled();
-    await expect(page.getByText(/isn'?t supported for Text data/i).first()).toBeVisible();
+    await expect(page.getByText(/isn[’']?t supported for Text data/i).first()).toBeVisible();
 
     // Classification + Multi-modal remain enabled.
     await expect(page.getByRole('radio', { name: 'Classification' })).toBeEnabled();

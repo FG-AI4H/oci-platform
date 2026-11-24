@@ -1,8 +1,8 @@
 'use client';
 
 import { useActionState, useId } from 'react';
+import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Input } from '@oci/ui';
-import { heldSeriesNotice } from './seed-messages';
 import { seedFromDatasetAction, type SeedFromDatasetState } from './tasks-actions';
 
 const initial: SeedFromDatasetState = { status: 'idle' };
@@ -14,6 +14,7 @@ const initial: SeedFromDatasetState = { status: 'idle' };
  * the manager to confirm.
  */
 export function SeedFromDatasetForm({ slug }: { slug: string }) {
+  const t = useTranslations('Campaign.fromDataset');
   const [state, action, pending] = useActionState(seedFromDatasetAction, initial);
   const prefixId = useId();
   const limitId = useId();
@@ -22,25 +23,13 @@ export function SeedFromDatasetForm({ slug }: { slug: string }) {
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="slug" value={slug} />
-      <h3 className="text-sm font-semibold">Create tasks from the dataset&apos;s files</h3>
-      <p className="text-sm text-[var(--color-muted-foreground)]">
-        One task per PNG or JPEG file, and one per DICOM series, hosted on the platform for the
-        campaign&apos;s dataset version. Those that already have a task are left alone, so this is
-        safe to run again.
-      </p>
+      <h3 className="text-sm font-semibold">{t('title')}</h3>
+      <p className="text-sm text-[var(--color-muted-foreground)]">{t('body')}</p>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label="File names starting with"
-          htmlFor={prefixId}
-          hint="Optional. Leave empty for every image file and series. A series has no file name, so a prefix leaves series out."
-        >
+        <Field label={t('prefix')} htmlFor={prefixId} hint={t('prefixHint')}>
           <Input id={prefixId} name="prefix" maxLength={200} defaultValue={echoed?.prefix ?? ''} />
         </Field>
-        <Field
-          label="At most"
-          htmlFor={limitId}
-          hint="Optional. Image files are taken in name order, then series."
-        >
+        <Field label={t('limit')} htmlFor={limitId} hint={t('limitHint')}>
           <Input
             id={limitId}
             name="limit"
@@ -56,7 +45,7 @@ export function SeedFromDatasetForm({ slug }: { slug: string }) {
 
       {state.status === 'error' ? (
         <Alert tone="danger">
-          <AlertTitle>Nothing was created</AlertTitle>
+          <AlertTitle>{t('nothingCreated')}</AlertTitle>
           <AlertDescription>{state.message}</AlertDescription>
         </Alert>
       ) : null}
@@ -70,16 +59,18 @@ export function SeedFromDatasetForm({ slug }: { slug: string }) {
         <div className="space-y-3 rounded-md border border-[var(--color-border)] p-3">
           <p role="status" className="text-sm">
             {state.matched === 0
-              ? 'No hosted PNG or JPEG files or DICOM series match.'
-              : `${state.matched} ${state.matched === 1 ? 'sample matches' : 'samples match'}: ${state.toCreate} new ${state.toCreate === 1 ? 'task' : 'tasks'}${state.alreadyThere > 0 ? `, ${state.alreadyThere} already ${state.alreadyThere === 1 ? 'has' : 'have'} one` : ''}.`}
-            {state.held > 0 ? ` ${heldSeriesNotice(state.held)}` : null}
+              ? t('noMatch')
+              : t('preview', {
+                  matched: state.matched,
+                  toCreate: state.toCreate,
+                  already: state.alreadyThere,
+                })}
+            {state.held > 0 ? ` ${t('held', { held: state.held })}` : null}
           </p>
           <div className="flex flex-wrap gap-2">
             {state.toCreate > 0 ? (
               <Button type="submit" name="intent" value="create" disabled={pending}>
-                {pending
-                  ? 'Creating…'
-                  : `Create ${state.toCreate} ${state.toCreate === 1 ? 'task' : 'tasks'}`}
+                {pending ? t('creating') : t('create', { count: state.toCreate })}
               </Button>
             ) : null}
             <Button
@@ -89,13 +80,13 @@ export function SeedFromDatasetForm({ slug }: { slug: string }) {
               variant="outline"
               disabled={pending}
             >
-              Count again
+              {t('countAgain')}
             </Button>
           </div>
         </div>
       ) : (
         <Button type="submit" name="intent" value="preview" variant="primary" disabled={pending}>
-          {pending ? 'Counting…' : 'Count files and series'}
+          {pending ? t('counting') : t('count')}
         </Button>
       )}
     </form>

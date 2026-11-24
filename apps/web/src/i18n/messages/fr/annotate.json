@@ -89,7 +89,7 @@
     "needRole": "Il vous faut un rôle de lecture (annotator / arbitration-annotator / expert-reviewer).",
     "needRoleToSubmit": "Il vous faut un rôle de lecture pour valider une réponse.",
     "needRoleToSkip": "Il vous faut un rôle de lecture pour passer une tâche.",
-    "missingSlug": "Identifiant de campagne manquant.",
+    "missingSlug": "Slug de campagne manquant.",
     "missingAssignment": "Identifiant d’attribution manquant.",
     "missingAssignmentOrCampaign": "Attribution ou campagne manquante.",
     "nothingWaiting": "Aucune tâche ne vous attend pour le moment. De nouvelles tâches apparaissent quand le responsable de la campagne en ajoute ou qu’une étape précédente se termine.",
