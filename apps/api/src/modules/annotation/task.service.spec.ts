@@ -16,6 +16,7 @@ import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import type { DicomSeriesService } from '../storage/dicom-series.service.js';
+import type { StorageService } from '../storage/storage.service.js';
 import { CampaignRepository } from './campaign.repository.js';
 import { TaskAbandonmentService } from './task-abandonment.service.js';
 import { TaskRepository } from './task.repository.js';
@@ -24,6 +25,7 @@ import { TaskService } from './task.service.js';
 // --- Fixtures ---------------------------------------------------------------
 
 const ANNOTATOR_SUB = 'annie';
+const MANAGER_SUB = 'manny';
 const ARBITER_SUB = 'arbie';
 const EXPERT_SUB = 'eddy';
 const ANNOTATOR_UUID = cognitoSubAsUuid(ANNOTATOR_SUB);
@@ -142,6 +144,7 @@ let dicomSeries: {
   listTaskSamples: ReturnType<typeof vi.fn>;
   taskSampleImageIds: ReturnType<typeof vi.fn>;
 };
+let storage: { authoriseDatasetBytes: ReturnType<typeof vi.fn> };
 let abandonment: {
   expireStaleForCampaign: ReturnType<typeof vi.fn>;
   release: ReturnType<typeof vi.fn>;
@@ -202,6 +205,8 @@ beforeEach(() => {
     listTaskSamples: vi.fn().mockResolvedValue([]),
     taskSampleImageIds: vi.fn(),
   };
+  // Default: the caller may download the dataset's files.
+  storage = { authoriseDatasetBytes: vi.fn().mockResolvedValue({}) };
   abandonment = {
     expireStaleForCampaign: vi.fn().mockResolvedValue(0),
     release: vi.fn().mockResolvedValue(true),
@@ -211,6 +216,7 @@ beforeEach(() => {
     tasks as unknown as TaskRepository,
     abandonment as unknown as TaskAbandonmentService,
     dicomSeries as unknown as DicomSeriesService,
+    storage as unknown as StorageService,
   );
 });
 
@@ -289,9 +295,9 @@ describe('TaskService.seedFromDataset (#646)', () => {
   const S1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
   const S2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   const IMAGES = [
-    { id: D1, s3Key: 'ds/u1/IDRiD_001.jpg', contentType: 'image/jpeg' },
-    { id: D2, s3Key: 'ds/u2/IDRiD_002.jpg', contentType: 'image/jpeg' },
-    { id: D3, s3Key: 'ds/u3/other_003.png', contentType: 'image/png' },
+    { id: D1, s3Key: 'ds/u1/IDRiD_001.jpg', contentType: 'image/jpeg', requiresAccess: false },
+    { id: D2, s3Key: 'ds/u2/IDRiD_002.jpg', contentType: 'image/jpeg', requiresAccess: false },
+    { id: D3, s3Key: 'ds/u3/other_003.png', contentType: 'image/png', requiresAccess: false },
   ];
   function series(id: string, heldImageCount = 0) {
     return {
@@ -316,7 +322,11 @@ describe('TaskService.seedFromDataset (#646)', () => {
   it('creates one task per hosted image of the pinned version, keyed by distribution id, not storage key', async () => {
     tasks.seedTasks.mockResolvedValue({ created: 3, skipped: 0 });
 
-    const out = await service.seedFromDataset({ slug: 'pilot', dryRun: false });
+    const out = await service.seedFromDataset({
+      slug: 'pilot',
+      dryRun: false,
+      user: userPayload(MANAGER_SUB),
+    });
 
     expect(campaigns.findHostedImages).toHaveBeenCalledWith('dv-1');
     expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [
@@ -331,7 +341,11 @@ describe('TaskService.seedFromDataset (#646)', () => {
     dicomSeries.listTaskSamples.mockResolvedValue([series(S1), series(S2, 2)]);
     tasks.seedTasks.mockResolvedValue({ created: 4, skipped: 0 });
 
-    const out = await service.seedFromDataset({ slug: 'pilot', dryRun: false });
+    const out = await service.seedFromDataset({
+      slug: 'pilot',
+      dryRun: false,
+      user: userPayload(MANAGER_SUB),
+    });
 
     expect(dicomSeries.listTaskSamples).toHaveBeenCalledWith('dv-1');
     expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [
@@ -346,7 +360,11 @@ describe('TaskService.seedFromDataset (#646)', () => {
   it('is idempotent: a second run skips the files that already have tasks', async () => {
     tasks.seedTasks.mockResolvedValue({ created: 0, skipped: 3 });
 
-    const out = await service.seedFromDataset({ slug: 'pilot', dryRun: false });
+    const out = await service.seedFromDataset({
+      slug: 'pilot',
+      dryRun: false,
+      user: userPayload(MANAGER_SUB),
+    });
 
     expect(out).toEqual({ matched: 3, created: 0, skipped: 3, held: 0, dryRun: false });
   });
@@ -354,7 +372,11 @@ describe('TaskService.seedFromDataset (#646)', () => {
   it('a dry run counts what it would create and creates nothing', async () => {
     tasks.countExistingSampleRefs.mockResolvedValue(1);
 
-    const out = await service.seedFromDataset({ slug: 'pilot', dryRun: true });
+    const out = await service.seedFromDataset({
+      slug: 'pilot',
+      dryRun: true,
+      user: userPayload(MANAGER_SUB),
+    });
 
     expect(tasks.seedTasks).not.toHaveBeenCalled();
     expect(out).toEqual({ matched: 3, created: 2, skipped: 1, held: 0, dryRun: true });
@@ -364,7 +386,13 @@ describe('TaskService.seedFromDataset (#646)', () => {
     dicomSeries.listTaskSamples.mockResolvedValue([series(S1)]);
     tasks.seedTasks.mockResolvedValue({ created: 1, skipped: 0 });
 
-    await service.seedFromDataset({ slug: 'pilot', prefix: 'IDRiD_', limit: 1, dryRun: false });
+    await service.seedFromDataset({
+      slug: 'pilot',
+      prefix: 'IDRiD_',
+      limit: 1,
+      dryRun: false,
+      user: userPayload(MANAGER_SUB),
+    });
 
     expect(dicomSeries.listTaskSamples).not.toHaveBeenCalled();
     expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [{ sampleRef: `file:${D1}` }]);
@@ -373,13 +401,18 @@ describe('TaskService.seedFromDataset (#646)', () => {
   it('takes the images in file-name order, not storage-key order, before the limit (#646 review)', async () => {
     // Keys start with a random id per file, so key order is not name order.
     campaigns.findHostedImages.mockResolvedValue([
-      { id: D3, s3Key: 'ds/0000/c.png', contentType: 'image/png' },
-      { id: D2, s3Key: 'ds/ffff/a.png', contentType: 'image/png' },
-      { id: D1, s3Key: 'ds/8888/b.png', contentType: 'image/png' },
+      { id: D3, s3Key: 'ds/0000/c.png', contentType: 'image/png', requiresAccess: false },
+      { id: D2, s3Key: 'ds/ffff/a.png', contentType: 'image/png', requiresAccess: false },
+      { id: D1, s3Key: 'ds/8888/b.png', contentType: 'image/png', requiresAccess: false },
     ]);
     tasks.seedTasks.mockResolvedValue({ created: 2, skipped: 0 });
 
-    await service.seedFromDataset({ slug: 'pilot', limit: 2, dryRun: false });
+    await service.seedFromDataset({
+      slug: 'pilot',
+      limit: 2,
+      dryRun: false,
+      user: userPayload(MANAGER_SUB),
+    });
 
     expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [
       { sampleRef: `file:${D2}` },
@@ -390,17 +423,67 @@ describe('TaskService.seedFromDataset (#646)', () => {
   it('409s when the campaign pins no dataset version', async () => {
     campaigns.findBySlug.mockResolvedValue(campaignWithVersion(null));
 
-    await expect(service.seedFromDataset({ slug: 'pilot', dryRun: false })).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.seedFromDataset({ slug: 'pilot', dryRun: false, user: userPayload(MANAGER_SUB) }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("checks the manager may download the dataset's files before reading them (#646, question 1)", async () => {
+    storage.authoriseDatasetBytes.mockRejectedValue(new ForbiddenException('access not approved'));
+
+    await expect(
+      service.seedFromDataset({ slug: 'pilot', dryRun: true, user: userPayload(MANAGER_SUB) }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(storage.authoriseDatasetBytes).toHaveBeenCalledWith({
+      datasetId: campaignWithVersion().datasetId,
+      requiresAccess: false,
+      user: userPayload(MANAGER_SUB),
+    });
+    // Nothing about the contents was read, not even the counts.
+    expect(campaigns.findHostedImages).not.toHaveBeenCalled();
+    expect(tasks.seedTasks).not.toHaveBeenCalled();
+  });
+
+  it('a gated file among those selected needs the rule for gated files', async () => {
+    campaigns.findHostedImages.mockResolvedValue([
+      IMAGES[0],
+      { ...IMAGES[1]!, requiresAccess: true },
+    ]);
+    storage.authoriseDatasetBytes.mockImplementation(async (a: { requiresAccess: boolean }) => {
+      if (a.requiresAccess) throw new ForbiddenException('access not approved');
+      return {};
+    });
+
+    await expect(
+      service.seedFromDataset({ slug: 'pilot', dryRun: false, user: userPayload(MANAGER_SUB) }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(tasks.seedTasks).not.toHaveBeenCalled();
+  });
+
+  it('a gated file left out by the limit asks for no more than the dataset rule', async () => {
+    campaigns.findHostedImages.mockResolvedValue([
+      IMAGES[0],
+      { ...IMAGES[1]!, requiresAccess: true },
+    ]);
+    tasks.seedTasks.mockResolvedValue({ created: 1, skipped: 0 });
+
+    await service.seedFromDataset({
+      slug: 'pilot',
+      limit: 1,
+      dryRun: false,
+      user: userPayload(MANAGER_SUB),
+    });
+
+    expect(storage.authoriseDatasetBytes).toHaveBeenCalledTimes(1);
+    expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [{ sampleRef: `file:${D1}` }]);
   });
 
   it('refuses to seed a DRAFT campaign', async () => {
     campaigns.findBySlug.mockResolvedValue({ ...campaignWithVersion(), status: 'DRAFT' });
 
-    await expect(service.seedFromDataset({ slug: 'pilot', dryRun: true })).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(
+      service.seedFromDataset({ slug: 'pilot', dryRun: true, user: userPayload(MANAGER_SUB) }),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });
 

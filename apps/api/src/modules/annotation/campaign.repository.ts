@@ -140,7 +140,7 @@ export class CampaignRepository {
    */
   async findHostedImages(
     datasetVersionId: string,
-  ): Promise<Array<{ id: string; s3Key: string; contentType: string }>> {
+  ): Promise<Array<{ id: string; s3Key: string; contentType: string; requiresAccess: boolean }>> {
     const rows = await this.prisma.client.distribution.findMany({
       where: {
         datasetVersionId,
@@ -150,12 +150,21 @@ export class CampaignRepository {
         s3Key: { not: null },
         s3Bucket: { not: null },
       },
-      select: { id: true, s3Key: true, contentType: true },
+      select: { id: true, s3Key: true, contentType: true, requiresAccess: true },
       // Stable order only; the caller sorts by file name.
       orderBy: { s3Key: 'asc' },
     });
     return rows.flatMap((r) =>
-      r.s3Key ? [{ id: r.id, s3Key: r.s3Key, contentType: r.contentType }] : [],
+      r.s3Key
+        ? [
+            {
+              id: r.id,
+              s3Key: r.s3Key,
+              contentType: r.contentType,
+              requiresAccess: r.requiresAccess,
+            },
+          ]
+        : [],
     );
   }
 

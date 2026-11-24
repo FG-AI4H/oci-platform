@@ -16,6 +16,7 @@ import { TaskAbandonmentService } from './task-abandonment.service.js';
 import { TaskRepository } from './task.repository.js';
 import { TaskService } from './task.service.js';
 import type { DicomSeriesService } from '../storage/dicom-series.service.js';
+import type { StorageService } from '../storage/storage.service.js';
 
 /**
  * #647 — the annotation router against a real Postgres with every
@@ -60,6 +61,8 @@ describe.skipIf(!dockerAvailable)('Annotation router against Postgres (#647)', (
       new TaskAbandonmentService(tasks, audit),
       // No DICOM series in these runs.
       { listTaskSamples: async () => [] } as unknown as DicomSeriesService,
+      // The download rule has its own tests; here the manager may.
+      { authoriseDatasetBytes: async () => ({}) } as unknown as StorageService,
     );
 
     datasetId = (
@@ -604,13 +607,13 @@ describe.skipIf(!dockerAvailable)('Annotation router against Postgres (#647)', (
       },
     });
 
-    const preview = await service.seedFromDataset({ slug, dryRun: true });
+    const preview = await service.seedFromDataset({ slug, dryRun: true, user: user(randomUUID()) });
     expect(preview).toEqual({ matched: 2, created: 2, skipped: 0, held: 0, dryRun: true });
     expect(await prisma.annotationTask.count({ where: { campaignId: campaign.id } })).toBe(0);
 
-    const first = await service.seedFromDataset({ slug, dryRun: false });
+    const first = await service.seedFromDataset({ slug, dryRun: false, user: user(randomUUID()) });
     expect(first).toEqual({ matched: 2, created: 2, skipped: 0, held: 0, dryRun: false });
-    const second = await service.seedFromDataset({ slug, dryRun: false });
+    const second = await service.seedFromDataset({ slug, dryRun: false, user: user(randomUUID()) });
     expect(second).toEqual({ matched: 2, created: 0, skipped: 2, held: 0, dryRun: false });
 
     const tasks = await prisma.annotationTask.findMany({ where: { campaignId: campaign.id } });
