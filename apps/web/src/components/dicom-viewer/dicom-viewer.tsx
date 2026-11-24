@@ -78,7 +78,16 @@ export interface DicomViewerProps {
    * last one as the answer's `view`.
    */
   onViewChange?: (view: DicomView | null) => void;
+  /**
+   * Where the viewer is shown, for what a message tells the reader to do
+   * next. On the dataset page they can close the viewer and download the
+   * files; on a task screen they can do neither, and skip the task
+   * instead. Defaults to the dataset page.
+   */
+  context?: DicomViewerContext;
 }
+
+export type DicomViewerContext = 'dataset' | 'task';
 
 type Phase = 'starting' | 'ready' | 'failed';
 
@@ -98,7 +107,11 @@ type Failure =
 
 type Translate = ReturnType<typeof useTranslations<'DicomViewer'>>;
 
-function failureText(t: Translate, failure: Failure): { title: string; detail: string } {
+function failureText(
+  t: Translate,
+  failure: Failure,
+  context: DicomViewerContext,
+): { title: string; detail: string } {
   switch (failure.kind) {
     case 'empty':
       return { title: t('failure.emptyTitle'), detail: t('failure.emptyDetail') };
@@ -106,6 +119,7 @@ function failureText(t: Translate, failure: Failure): { title: string; detail: s
       return {
         title: t('failure.decoderTitle'),
         detail: t('failure.decoderDetail', {
+          context,
           position: failure.position + 1,
           syntax:
             failure.transferSyntaxUid === null
@@ -117,6 +131,7 @@ function failureText(t: Translate, failure: Failure): { title: string; detail: s
       return {
         title: t('failure.refusedTitle'),
         detail: t('failure.refusedDetail', {
+          context,
           position: failure.position + 1,
           syntax:
             failure.transferSyntaxUid === null
@@ -130,9 +145,9 @@ function failureText(t: Translate, failure: Failure): { title: string; detail: s
         detail: failure.reason === 'address' ? t('failure.openAddress') : t('failure.openNetwork'),
       };
     case 'changed':
-      return { title: t('failure.changedTitle'), detail: t('failure.changedDetail') };
+      return { title: t('failure.changedTitle'), detail: t('failure.changedDetail', { context }) };
     case 'start':
-      return { title: t('failure.startTitle'), detail: t('failure.startDetail') };
+      return { title: t('failure.startTitle'), detail: t('failure.startDetail', { context }) };
   }
 }
 
@@ -194,7 +209,12 @@ function releaseImages(): void {
   }
 }
 
-export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProps) {
+export function DicomViewer({
+  loadSeries,
+  label,
+  onViewChange,
+  context = 'dataset',
+}: DicomViewerProps) {
   const t = useTranslations('DicomViewer');
   const reactId = useId();
   const helpId = `${reactId}-help`;
@@ -576,7 +596,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
       : drawnIndex !== index
         ? t('standInLoading', { index: index + 1 })
         : null;
-  const failureMessage = failure ? failureText(t, failure) : null;
+  const failureMessage = failure ? failureText(t, failure, context) : null;
 
   const view =
     ready && !failure
@@ -695,7 +715,9 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
       </p>
       {ready && allLoaded && missingCount > 0 ? (
         <Alert tone="warning">
-          <AlertDescription>{t('missingAlert', { missing: missingCount, count })}</AlertDescription>
+          <AlertDescription>
+            {t('missingAlert', { context, missing: missingCount, count })}
+          </AlertDescription>
         </Alert>
       ) : null}
 

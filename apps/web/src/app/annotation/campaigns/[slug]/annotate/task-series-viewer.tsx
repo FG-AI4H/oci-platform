@@ -45,7 +45,12 @@ export function TaskSeriesViewer({ assignmentId, initial, label, formId }: TaskS
 
   return (
     <div>
-      <DicomViewerLoader loadSeries={loadSeries} label={label} onViewChange={setView} />
+      <DicomViewerLoader
+        loadSeries={loadSeries}
+        label={label}
+        onViewChange={setView}
+        context="task"
+      />
       <input type="hidden" name="view" form={formId} value={view ? JSON.stringify(view) : ''} />
     </div>
   );
