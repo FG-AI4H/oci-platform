@@ -1962,6 +1962,18 @@ model Submission {
   /// Last write-back failure, for the operator. Cleared on success.
   resultPublishError    String?   @map("result_publish_error")
 
+  // ---- Validation evidence (#587) ------------------------------------------
+
+  /// FK → prediction.model_cards.id: the registered model this submission
+  /// scored. Set by the submitter, who must also be the card's submitter, at
+  /// submission time or afterwards; never on a WITHDRAWN card. Feeds the Model
+  /// Facts `performance` rows. RESTRICT on delete: a card is withdrawn by a
+  /// status change, never deleted, and evidence that a model was validated must
+  /// not lose the model it was validated for. Null for every submission made
+  /// without one, including all rows that predate the column.
+  modelCardId String?    @map("model_card_id") @db.Uuid
+  modelCard   ModelCard? @relation(fields: [modelCardId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
   createdAt DateTime @default(now()) @map("created_at")
 
   task EvaluationTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
@@ -1972,6 +1984,8 @@ model Submission {
   /// directly-submitted rows (both columns null) are unconstrained.
   @@unique([externalChallengeId, externalSubmissionId], map: "submissions_external_ref_key")
   @@index([taskId])
+  /// Model Facts reads every submission linked to one card (#587).
+  @@index([modelCardId])
   @@map("submissions")
   @@schema("evaluation")
 }
@@ -2029,6 +2043,9 @@ model ModelCard {
   /// Post-market surveillance / monitoring commitments.
   ongoingMaintenance                 String? @map("ongoing_maintenance")
   securityPosture                    String? @map("security_posture")
+
+  /// Evaluation submissions linked to this card as validation evidence (#587).
+  submissions Submission[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
