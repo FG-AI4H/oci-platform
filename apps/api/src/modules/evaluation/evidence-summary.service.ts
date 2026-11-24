@@ -1,6 +1,8 @@
 import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   EVIDENCE_MAX_TRACE_EVENTS,
+  isModelCardReviewerGroups,
+  modelCardVisibleTo,
   type DatasetDetail,
   type DatasetSlug,
   type EvidenceSummary,
@@ -8,6 +10,7 @@ import {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { CatalogService } from '../catalog/catalog.service.js';
+import { EvaluationRepository } from './evaluation.repository.js';
 import { assembleEvidence } from './evidence-summary.js';
 import { EvidenceSummaryRepository } from './evidence-summary.repository.js';
 
@@ -35,15 +38,18 @@ export const EVIDENCE_READER_GROUPS: readonly string[] = [
  * submission's audit events without actor or payload. Never the reference
  * labels or the predictions.
  *
- * Model card: there is no link from a submission to a model card yet
- * (#587 adds `Submission.modelCardId`), so section 1 always reports the card
- * as missing until it lands. The assembly already reads a linked card.
+ * Model card: the card linked to the submission (#587), shown only to a
+ * reader the card page would show it to (`modelCardVisibleTo`). Only the
+ * card's own submitter can link it, so the submission's submitter is the
+ * card's. A draft card linked to a submission stays hidden from a
+ * regulator or an evaluation reviewer, and section 1 then reports no card.
  */
 @Injectable()
 export class EvidenceSummaryService {
   constructor(
     @Inject(EvidenceSummaryRepository) private readonly repo: EvidenceSummaryRepository,
     @Inject(CatalogService) private readonly catalog: CatalogService,
+    @Inject(EvaluationRepository) private readonly evaluation: EvaluationRepository,
   ) {}
 
   async getEvidence(
@@ -68,17 +74,27 @@ export class EvidenceSummaryService {
       );
     }
 
-    const [dataset, trace] = await Promise.all([
+    const [dataset, trace, linkedCard] = await Promise.all([
       this.readDataset(row.task.datasetSlug, user),
       this.repo.findTrace(submissionId, EVIDENCE_MAX_TRACE_EVENTS),
+      this.evaluation.findLinkedModelCard(submissionId),
     ]);
+    const modelCard =
+      linkedCard &&
+      modelCardVisibleTo(linkedCard.status, {
+        isSignedIn: true,
+        isSubmitter: viewerIsSubmitter,
+        isReviewer: isModelCardReviewerGroups(groups),
+      })
+        ? linkedCard
+        : null;
 
     return assembleEvidence({
       now,
       viewerIsSubmitter,
       submission: row,
       dataset,
-      modelCard: null,
+      modelCard,
       trace: { rows: trace, limit: EVIDENCE_MAX_TRACE_EVENTS },
     });
   }

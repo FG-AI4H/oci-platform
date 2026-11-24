@@ -13,6 +13,7 @@ import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { describe, expect, it, vi } from 'vitest';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import type { CatalogService } from '../catalog/catalog.service.js';
+import type { EvaluationRepository, LinkedModelCardEvidenceRow } from './evaluation.repository.js';
 import {
   assembleEvidence,
   deriveTwoClassDiagnostic,
@@ -580,21 +581,59 @@ function user(sub: string, groups: string[] = []): CognitoAccessTokenPayload {
   return { sub, 'cognito:groups': groups } as unknown as CognitoAccessTokenPayload;
 }
 
-function service(row: EvidenceSubmissionRow | null, catalog?: Partial<CatalogService>) {
+function service(
+  row: EvidenceSubmissionRow | null,
+  catalog?: Partial<CatalogService>,
+  linkedCard: LinkedModelCardEvidenceRow | null = null,
+) {
   const repo = {
     findSubmission: vi.fn().mockResolvedValue(row),
     findTrace: vi.fn().mockResolvedValue(trace('evaluation.submitted', 'evaluation.scored')),
   };
   const cat = { detail: vi.fn().mockResolvedValue(dataset()), ...catalog };
+  const evaluation = { findLinkedModelCard: vi.fn().mockResolvedValue(linkedCard) };
   return {
     repo,
     cat,
     svc: new EvidenceSummaryService(
       repo as unknown as EvidenceSummaryRepository,
       cat as unknown as CatalogService,
+      evaluation as unknown as EvaluationRepository,
     ),
   };
 }
+
+describe('EvidenceSummaryService linked model card (#587)', () => {
+  const card = (status: LinkedModelCardEvidenceRow['status']): LinkedModelCardEvidenceRow => ({
+    slug: 'model-a',
+    versionMajorMinorPatch: '1.0.0',
+    status,
+    modelDeveloper: 'Example developer',
+    clinicalSummary: 'Flags airspace opacity on frontal chest radiographs.',
+    intendedUse: null,
+    knownBiasesOrEthicalConsiderations: null,
+  });
+
+  it('shows a published linked card to a regulator', async () => {
+    const { svc } = service(submission(), undefined, card('PUBLISHED'));
+    const s = await svc.getEvidence(SUBMISSION_ID, user('other', ['regulator']), NOW);
+    expect(s.modelCard).not.toBeNull();
+    expect(s.gaps.map((g) => g.code)).not.toContain('NO_MODEL_CARD');
+  });
+
+  it('hides a draft linked card from a regulator, and reports no card', async () => {
+    const { svc } = service(submission(), undefined, card('DRAFT'));
+    const s = await svc.getEvidence(SUBMISSION_ID, user('other', ['regulator']), NOW);
+    expect(s.modelCard).toBeNull();
+    expect(s.gaps.map((g) => g.code)).toContain('NO_MODEL_CARD');
+  });
+
+  it('shows a draft linked card to its submitter', async () => {
+    const { svc } = service(submission(), undefined, card('DRAFT'));
+    const s = await svc.getEvidence(SUBMISSION_ID, user(SUBMITTER_SUB), NOW);
+    expect(s.modelCard).not.toBeNull();
+  });
+});
 
 describe('EvidenceSummaryService access', () => {
   it.each([
