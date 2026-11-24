@@ -217,6 +217,30 @@ export class DicomSeriesService {
    * file is held after the task was made.
    */
   async taskSample(args: { sampleRef: string; versionId: string }): Promise<DicomSeriesSample> {
+    const ordered = await this.taskSampleRows(args);
+    const expiresAt = (await this.storage.signedUrlValidUntil()).toISOString();
+    const instances = await Promise.all(ordered.map((row) => this.toInstance(row)));
+    return {
+      kind: 'dicom-series',
+      modality: ordered[0]?.modality ?? null,
+      expiresAt,
+      instances,
+    };
+  }
+
+  /**
+   * The images of a task's series, as distribution ids in display
+   * order: what a reader's `view` is checked against when they answer.
+   * The same 404 and 409 as `taskSample`, and no address is signed.
+   */
+  async taskSampleImageIds(args: { sampleRef: string; versionId: string }): Promise<string[]> {
+    return (await this.taskSampleRows(args)).map((row) => row.distribution_id);
+  }
+
+  private async taskSampleRows(args: {
+    sampleRef: string;
+    versionId: string;
+  }): Promise<SeriesInstanceRow[]> {
     const seriesId = parseDicomSeriesSampleRef(args.sampleRef);
     if (seriesId === null) throw new NotFoundException(SAMPLE_NOT_FOUND);
     const [series, version] = await Promise.all([
@@ -239,16 +263,7 @@ export class DicomSeriesService {
         'a file of this sample is held for de-identification findings; an operator has to decide on it first',
       );
     }
-
-    const ordered = this.inStackOrder(rows);
-    const expiresAt = (await this.storage.signedUrlValidUntil()).toISOString();
-    const instances = await Promise.all(ordered.map((row) => this.toInstance(row)));
-    return {
-      kind: 'dicom-series',
-      modality: ordered[0]?.modality ?? null,
-      expiresAt,
-      instances,
-    };
+    return this.inStackOrder(rows);
   }
 
   /** Along the stack, in the scanner's own direction (ADR-0026). */

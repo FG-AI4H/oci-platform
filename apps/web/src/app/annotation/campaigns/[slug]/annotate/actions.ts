@@ -105,6 +105,20 @@ export async function submitAssignmentAction(
     formData.get('acknowledgedInstructionsVersion') ?? '',
   );
 
+  // What the DICOM viewer had on screen (#674). The field is there only
+  // when the task is a series, and empty while the image asked for is
+  // not drawn: the answer would not say what it is about. The API
+  // checks the view against the series; an image answer has none.
+  const viewField = formData.get('view');
+  let view: unknown;
+  if (viewField !== null) {
+    try {
+      view = JSON.parse(String(viewField));
+    } catch {
+      view = undefined;
+    }
+  }
+
   let submission: Record<string, unknown>;
   if (formData.get('mode') === 'labels') {
     // The label form (#646): one radio choice and an optional comment;
@@ -113,17 +127,6 @@ export async function submitAssignmentAction(
     const comment = String(formData.get('comment') ?? '').trim();
     const reasonField = formData.get('reason');
     const reason = reasonField === null ? null : String(reasonField).trim();
-    // What the DICOM viewer had on screen (#674), for the record; an
-    // image answer has none. The API checks its shape.
-    const viewRaw = String(formData.get('view') ?? '');
-    let view: unknown;
-    if (viewRaw) {
-      try {
-        view = JSON.parse(viewRaw);
-      } catch {
-        view = undefined;
-      }
-    }
     submission = {
       label,
       ...(comment ? { comment } : {}),
@@ -147,7 +150,10 @@ export async function submitAssignmentAction(
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
         throw new Error('Submission must be a JSON object.');
       }
-      submission = parsed as Record<string, unknown>;
+      submission = {
+        ...(parsed as Record<string, unknown>),
+        ...(view !== undefined ? { view } : {}),
+      };
     } catch (err) {
       return {
         status: 'error',
@@ -155,6 +161,14 @@ export async function submitAssignmentAction(
         submission: submissionRaw,
       };
     }
+  }
+  if (viewField !== null && view === undefined) {
+    return {
+      status: 'error',
+      message:
+        'The image is not on screen yet. Wait until it is drawn, then submit. Your answer was kept.',
+      submission: submissionRaw,
+    };
   }
 
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;

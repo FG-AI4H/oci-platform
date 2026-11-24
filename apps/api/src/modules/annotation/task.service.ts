@@ -25,7 +25,13 @@ import type {
   SubmitAssignmentResponse,
   TaskSummary,
 } from '@oci/shared-types';
-import { evaluateCompleteness, fileSampleRef, labelSubmissionProblems } from '@oci/shared-types';
+import {
+  answerViewProblems,
+  evaluateCompleteness,
+  fileSampleRef,
+  labelSubmissionProblems,
+  parseDicomSeriesSampleRef,
+} from '@oci/shared-types';
 // ANNOTATION_GATE_ROLES is the canonical gate → group mapping shared
 // with the web; `roleForGate` is the local typed accessor.
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
@@ -68,7 +74,10 @@ export class TaskService {
     @Inject(TaskRepository) private readonly tasks: TaskRepository,
     @Inject(TaskAbandonmentService) private readonly abandonment: TaskAbandonmentService,
     @Inject(DicomSeriesService)
-    private readonly dicomSeries: Pick<DicomSeriesService, 'listTaskSamples'>,
+    private readonly dicomSeries: Pick<
+      DicomSeriesService,
+      'listTaskSamples' | 'taskSampleImageIds'
+    >,
   ) {}
 
   // --- Seed --------------------------------------------------------------
@@ -495,6 +504,25 @@ export class TaskService {
           campaignSlug: campaignForSubmit?.slug ?? null,
         });
       }
+    }
+    // An answer about a DICOM series records what was on screen (#674):
+    // the image, by its place in the series, and the window. Checked
+    // against the series itself, so the record names an image the
+    // reader was given. An answer about anything else carries no view.
+    const sampleRef = assignment.task.sampleRef;
+    let seriesImageIds: string[] | null = null;
+    if (parseDicomSeriesSampleRef(sampleRef) !== null) {
+      const versionId = campaignForSubmit?.manifestVersionId;
+      if (!versionId) throw new ConflictException('The campaign has no pinned dataset version');
+      seriesImageIds = await this.dicomSeries.taskSampleImageIds({ sampleRef, versionId });
+    }
+    const viewProblems = answerViewProblems(args.submission.view, seriesImageIds);
+    if (viewProblems.length > 0) {
+      throw new UnprocessableEntityException({
+        message: 'Submission does not record what was on screen',
+        reasons: viewProblems,
+        campaignSlug: campaignForSubmit?.slug ?? null,
+      });
     }
     const completenessMode = readCompletenessMode(campaignForSubmit?.workflowConfig);
     const completeness = evaluateCompleteness(

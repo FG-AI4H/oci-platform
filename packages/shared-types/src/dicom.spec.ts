@@ -5,6 +5,7 @@ import {
   DicomSeriesVersionQuerySchema,
   DicomSeriesSampleSchema,
   DicomViewSchema,
+  answerViewProblems,
   dicomSeriesSampleRef,
   parseDicomSeriesSampleRef,
   type DicomSeriesDetail,
@@ -179,5 +180,44 @@ describe('what the viewer takes', () => {
   it('fits a task sample as well as a series from the dataset page', () => {
     expectTypeOf<DicomSeriesSample>().toExtend<DicomViewerSeries>();
     expectTypeOf<DicomSeriesDetail>().toExtend<DicomViewerSeries>();
+  });
+});
+
+describe('answerViewProblems (#674)', () => {
+  const images = ['aaaaaaaa-0000-4000-8000-000000000001', 'aaaaaaaa-0000-4000-8000-000000000002'];
+  const view = {
+    distributionId: images[1],
+    position: 2,
+    imageCount: 2,
+    window: { width: 80, center: 40 },
+    inverted: false,
+  };
+
+  it('accepts the image on screen, named by its place in the series', () => {
+    expect(answerViewProblems(view, images)).toEqual([]);
+    expect(answerViewProblems({ ...view, window: null, inverted: true }, images)).toEqual([]);
+  });
+
+  it('requires a view on a series', () => {
+    expect(answerViewProblems(undefined, images)).toEqual([
+      'an answer on a series says which image was on screen (view)',
+    ]);
+  });
+
+  it('refuses a view that is not of this series', () => {
+    expect(answerViewProblems({ ...view, position: 1 }, images)).toEqual([
+      'view names an image that is not image 1 of this series',
+    ]);
+    expect(answerViewProblems({ ...view, imageCount: 3 }, images)).toEqual([
+      'view counts 3 images; the series has 2',
+    ]);
+    expect(answerViewProblems('slice 2', images)).toEqual([
+      'view is not a valid record of the screen',
+    ]);
+  });
+
+  it('takes no view on an image', () => {
+    expect(answerViewProblems(undefined, null)).toEqual([]);
+    expect(answerViewProblems(view, null)).toEqual(['an answer on an image carries no view']);
   });
 });

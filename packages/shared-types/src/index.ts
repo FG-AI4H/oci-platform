@@ -121,6 +121,7 @@ export {
   DicomSeriesSampleSchema,
   DicomViewSchema,
   RecordDicomFindingDecisionRequestSchema,
+  answerViewProblems,
   dicomSeriesSampleRef,
   parseDicomSeriesSampleRef,
 } from './dicom.js';
