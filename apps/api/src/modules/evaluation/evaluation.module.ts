@@ -1,6 +1,7 @@
 import { Logger, Module } from '@nestjs/common';
 import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import { AuthModule } from '../../auth/auth.module.js';
+import { CatalogModule } from '../catalog/catalog.module.js';
 import { PrismaService } from '../../prisma.service.js';
 import { RouteRegistryController } from './route-registry.controller.js';
 import { RouteRegistryRepository } from './route-registry.repository.js';
@@ -15,6 +16,9 @@ import { EvalAiSeamService } from './evalai-seam.service.js';
 import { EvaluationController } from './evaluation.controller.js';
 import { EvaluationService } from './evaluation.service.js';
 import { EvaluationRepository } from './evaluation.repository.js';
+import { EvidenceSummaryController } from './evidence-summary.controller.js';
+import { EvidenceSummaryRepository } from './evidence-summary.repository.js';
+import { EvidenceSummaryService } from './evidence-summary.service.js';
 import { ModelCardEvidenceService } from './model-card-evidence.service.js';
 import { SubmissionResultController } from './submission-result.controller.js';
 import { SubmissionResultService } from './submission-result.service.js';
@@ -36,12 +40,15 @@ const DEFAULT_EVAL_WORKER_SCOPE = 'oci-eval/submit-result';
 const DEFAULT_EVAL_SEAM_SCOPE = 'oci-eval/seam-intake';
 
 @Module({
-  imports: [AuthModule],
+  // CatalogModule: the evidence summary reads the task's dataset through
+  // CatalogService, with the reader's own access rules (#652).
+  imports: [AuthModule, CatalogModule],
   controllers: [
     EvalAiSeamController,
     RouteRegistryController,
     EvaluationController,
     SubmissionResultController,
+    EvidenceSummaryController,
   ],
   providers: [
     RouteRegistryService,
@@ -57,6 +64,8 @@ const DEFAULT_EVAL_SEAM_SCOPE = 'oci-eval/seam-intake';
     EvalSeamGuard,
     EvalAiSeamService,
     ModelCardEvidenceService,
+    EvidenceSummaryService,
+    EvidenceSummaryRepository,
     {
       // Verifier for the sealed-run worker's machine-to-machine token. Separate
       // from `COGNITO_VERIFIER` in AuthModule because it pins a DIFFERENT
