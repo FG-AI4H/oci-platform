@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription, Button } from '@oci/ui';
 import { releaseAssignmentAction, type ReleaseState } from './actions';
 
@@ -12,6 +13,7 @@ const initialRelease: ReleaseState = { status: 'idle' };
  * so the reader can only give the task back.
  */
 export function SkipTaskForm({ slug, assignmentId }: { slug: string; assignmentId: string }) {
+  const t = useTranslations('Annotate.form');
   const [state, action, pending] = useActionState(releaseAssignmentAction, initialRelease);
   return (
     <div className="space-y-3">
@@ -24,7 +26,7 @@ export function SkipTaskForm({ slug, assignmentId }: { slug: string; assignmentI
         <input type="hidden" name="assignmentId" value={assignmentId} />
         <input type="hidden" name="slug" value={slug} />
         <Button type="submit" variant="outline" disabled={pending}>
-          {pending ? 'Skipping…' : 'Skip'}
+          {pending ? t('skipping') : t('skip')}
         </Button>
       </form>
     </div>

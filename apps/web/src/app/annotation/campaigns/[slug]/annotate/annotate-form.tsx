@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useId, useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Textarea } from '@oci/ui';
 import type { AssignmentSummary, ClassificationLabelsConfig } from '@oci/shared-types';
 import {
@@ -53,6 +54,7 @@ export function AnnotateForm({
   reasonRequired = false,
   formId,
 }: AnnotateFormProps) {
+  const t = useTranslations('Annotate.form');
   const [submitState, submitAction, submitPending] = useActionState(
     submitAssignmentAction,
     initialSubmit,
@@ -95,13 +97,13 @@ export function AnnotateForm({
     <div className="space-y-5">
       {submitState.status === 'error' ? (
         <Alert tone="danger">
-          <AlertTitle>Could not submit</AlertTitle>
+          <AlertTitle>{t('couldNotSubmit')}</AlertTitle>
           <AlertDescription>{submitState.message}</AlertDescription>
         </Alert>
       ) : null}
       {releaseState.status === 'error' ? (
         <Alert tone="danger">
-          <AlertTitle>Could not skip</AlertTitle>
+          <AlertTitle>{t('couldNotSkip')}</AlertTitle>
           <AlertDescription>{releaseState.message}</AlertDescription>
         </Alert>
       ) : null}
@@ -124,9 +126,9 @@ export function AnnotateForm({
           />
         ) : (
           <Field
-            label="Annotation"
+            label={t('annotation')}
             htmlFor="field-submission"
-            hint='Free-form JSON today (e.g. {"label": "pneumonia"} for classification, or a mask URL for segmentation). The tool-integration-aware schema lands with #214.'
+            hint={t('annotationHint', { example: '{"label": "pneumonia"}' })}
           >
             <Textarea
               id="field-submission"
@@ -159,8 +161,10 @@ export function AnnotateForm({
                 className="mt-0.5 accent-[var(--color-primary)]"
               />
               <span>
-                I have read the current instructions, version{' '}
-                <span className="font-mono">{instructionsVersion}</span>.
+                {t.rich('acknowledge', {
+                  version: instructionsVersion,
+                  mono: (chunks) => <span className="font-mono">{chunks}</span>,
+                })}
               </span>
             </label>
             <Link
@@ -169,7 +173,7 @@ export function AnnotateForm({
               rel="noopener noreferrer"
               className="ms-6 mt-1 inline-block text-[var(--color-primary)] underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] rounded"
             >
-              Read version {instructionsVersion} (opens in new tab)
+              {t('readVersion', { version: instructionsVersion })}
             </Link>
           </div>
         ) : null}
@@ -180,17 +184,17 @@ export function AnnotateForm({
             disabled={busy || !sampleReady}
             aria-describedby={sampleReady ? undefined : waitingId}
           >
-            {submitPending ? 'Submitting…' : labels ? 'Submit (Enter)' : 'Submit'}
+            {submitPending ? t('submitting') : labels ? t('submitEnter') : t('submit')}
           </Button>
           {/* Skip lives in its own form; `form=` ties the button to it
               so it sits beside Submit without nesting forms. */}
           <Button type="submit" variant="outline" form={skipFormId} disabled={busy}>
-            {releasePending ? 'Skipping…' : 'Skip'}
+            {releasePending ? t('skipping') : t('skip')}
           </Button>
         </div>
         {sampleReady ? null : (
           <p id={waitingId} className="text-sm text-[var(--color-muted-foreground)]">
-            Submit is available once the image is on screen.
+            {t('waitingForSample')}
           </p>
         )}
       </form>
@@ -198,9 +202,7 @@ export function AnnotateForm({
         <input type="hidden" name="assignmentId" value={assignment.id} />
         <input type="hidden" name="slug" value={slug} />
       </form>
-      <p className="text-sm text-[var(--color-muted-foreground)]">
-        Skip gives this task back unread, so another annotator can take it.
-      </p>
+      <p className="text-sm text-[var(--color-muted-foreground)]">{t('skipHint')}</p>
     </div>
   );
 }

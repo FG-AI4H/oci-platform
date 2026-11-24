@@ -337,6 +337,61 @@ test.describe('reading images in the browser (#646)', () => {
     await expect(page.getByRole('status')).toHaveText(/task skipped/i);
   });
 
+  test('a reader in French on a French keyboard: the page, the viewer and the number keys (#646 review, items 3 and 4)', async ({
+    page,
+    browser,
+  }) => {
+    const manager = await browser.newPage();
+    const slug = await labelledCampaignWithTasks(manager, 1);
+    await manager.close();
+
+    await serveSignedImages(page);
+    await signInAs(page, `lecteur-${Date.now()}`, 'annotator');
+    // A new user has no stored language, so the cookie decides. Set after
+    // signing in, which the English sign-in labels need.
+    await page.context().addCookies([
+      {
+        name: 'oci-locale',
+        value: 'fr',
+        url: process.env.PW_BASE_URL ?? 'http://localhost:3001',
+      },
+    ]);
+    await page.goto(`/annotation/campaigns/${slug}/annotate`);
+    await expect(page.getByText(/rien ne vous est réservé/i)).toBeVisible();
+    await page.getByRole('button', { name: /^commencer$/i }).click();
+
+    const img = page.getByRole('img', { name: /image à lire à l’étape annotation indépendante/i });
+    await expect(img).toBeVisible();
+    await expect
+      .poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0))
+      .toBe(true);
+    await expect(page.getByRole('toolbar', { name: 'Réglages de l’image' })).toBeVisible();
+    await expect(page.getByText('(appuyez sur le chiffre)')).toBeVisible();
+
+    // What an AZERTY top row sends without Shift: the character on the
+    // key, and the physical key as `code`.
+    const press = (key: string, code: string) =>
+      page.evaluate(
+        ([k, c]) =>
+          document.dispatchEvent(
+            new KeyboardEvent('keydown', { key: k, code: c, bubbles: true, cancelable: true }),
+          ),
+        [key, code] as const,
+      );
+    const zoom = page.getByRole('listitem').filter({ hasText: /^Zoom/ });
+    // The 6 key gives "-": it is not a zoom key there.
+    await press('-', 'Digit6');
+    await expect(zoom).toHaveText(/Zoom\s+100%/);
+    // The 2 key gives "é" and picks the second label.
+    await press('é', 'Digit2');
+    await expect(page.getByRole('radio', { name: 'Mild NPDR' })).toBeChecked();
+    await press('&', 'Digit1');
+    await expect(page.getByRole('radio', { name: 'No DR' })).toBeChecked();
+
+    await page.getByRole('button', { name: /^envoyer/i }).click();
+    await expect(page.getByRole('status')).toHaveText(/votre annotation a été enregistrée/i);
+  });
+
   for (const colorScheme of ['light', 'dark'] as const) {
     test(`the annotate page with an image has no axe violations (${colorScheme})`, async ({
       page,
