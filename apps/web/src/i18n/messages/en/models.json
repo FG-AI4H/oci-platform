@@ -99,7 +99,18 @@
     "knownBiases": "Known biases",
     "generalisability": "Generalisability",
     "discontinue": "When to discontinue use",
-    "gaps": "Known gaps in this label"
+    "gaps": "Known gaps in this label",
+    "publishedResults": "Published results",
+    "noPublished": "None. No linked result comes from an approved evaluation method version.",
+    "provisionalResults": "Provisional results (not published evidence)",
+    "provisionalNote": "These results are real but are not validated evidence: the evaluation method version that produced them is not approved, or none was recorded.",
+    "resultDetails": "Dataset {dataset} · method version {method} · evaluated {date}",
+    "noMethodVersion": "none recorded",
+    "standing": {
+      "published": "Published",
+      "provisional": "Provisional (method version under review)",
+      "notAttributed": "Provisional (no method version recorded)"
+    }
   },
   "modelClass": {
     "classical": "Classical ML",

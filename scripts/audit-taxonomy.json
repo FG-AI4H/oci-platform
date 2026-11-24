@@ -31,6 +31,8 @@
     "evaluation.submitted",
     "evaluation.scored",
     "evaluation.failed",
+    "evaluation.submission.modelcard.linked",
+    "evaluation.submission.modelcard.unlinked",
     "evaluation.delta-report.generated",
     "evaluation.fairness-report.generated",
     "evaluation.re-evaluated",

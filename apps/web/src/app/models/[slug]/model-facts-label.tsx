@@ -8,8 +8,9 @@ import {
   InfoIcon,
 } from '@oci/ui';
 import { useLocale, useTranslations } from 'next-intl';
-import type { ModelFactsLabel } from '@oci/shared-types';
+import type { ModelFactsLabel, ModelFactsPerformanceEntry } from '@oci/shared-types';
 import { formattersFor } from '../../../i18n/format';
+import { performanceLayout, standingKey } from '../../../lib/model-facts-performance';
 import {
   clinicalPathwayText,
   intendedUserText,
@@ -33,6 +34,9 @@ export function ModelFactsLabelCard({ label }: { label: ModelFactsLabel }) {
   const f = formattersFor(useLocale());
   const uses = label.usesAndDirections;
   const perf = label.validationAndPerformance;
+  // Published results apart from the rest (#587): a provisional result is
+  // never shown as if it were validation evidence.
+  const layout = performanceLayout(perf);
   return (
     <Card role="region" aria-labelledby="model-facts-heading">
       <CardHeader>
@@ -57,22 +61,28 @@ export function ModelFactsLabelCard({ label }: { label: ModelFactsLabel }) {
         </FactsSection>
 
         <FactsSection title={t('facts.validation')}>
-          {perf.entries.length === 0 ? (
+          {layout.kind === 'empty' ? (
             <p className="text-[var(--color-muted-foreground)]">{t('facts.noPerformance')}</p>
           ) : (
-            <ul className="space-y-1">
-              {perf.entries.map((e) => (
-                <li key={e.taskSlug}>
-                  <span className="font-mono">{e.taskSlug}</span>: {e.primaryMetricLabel}{' '}
-                  <span className="tabular-nums">
-                    {f.number(e.primaryMetricValue, {
-                      minimumFractionDigits: 3,
-                      maximumFractionDigits: 3,
-                    })}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <div className="space-y-4">
+              <div>
+                <h4 className="mb-1 font-medium">{t('facts.publishedResults')}</h4>
+                {layout.published.length === 0 ? (
+                  <p className="text-[var(--color-muted-foreground)]">{t('facts.noPublished')}</p>
+                ) : (
+                  <PerformanceList entries={layout.published} />
+                )}
+              </div>
+              {layout.provisional.length > 0 ? (
+                <div>
+                  <h4 className="mb-1 font-medium">{t('facts.provisionalResults')}</h4>
+                  <p className="mb-2 text-[var(--color-muted-foreground)]">
+                    {t('facts.provisionalNote')}
+                  </p>
+                  <PerformanceList entries={layout.provisional} showStanding />
+                </div>
+              ) : null}
+            </div>
           )}
           {!perf.subgroupAvailable ? (
             <p className="mt-2 text-[var(--color-muted-foreground)]">{perf.subgroupNote}</p>
@@ -139,6 +149,56 @@ export function ModelFactsLabelCard({ label }: { label: ModelFactsLabel }) {
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * One list of linked results (#587). Each row names the task, the primary
+ * metric and its value, then the dataset version, the evaluation method
+ * version and the date. `showStanding` adds why a result is not published.
+ */
+function PerformanceList({
+  entries,
+  showStanding = false,
+}: {
+  entries: ModelFactsPerformanceEntry[];
+  showStanding?: boolean;
+}) {
+  const t = useTranslations('Models');
+  const f = formattersFor(useLocale());
+  return (
+    <ul className="space-y-2">
+      {entries.map((e) => (
+        <li key={e.submissionId}>
+          <p>
+            <span className="font-medium">{e.taskName}</span>{' '}
+            <span className="font-mono text-xs">({e.taskSlug})</span>: {e.primaryMetricLabel}{' '}
+            <span className="tabular-nums">
+              {f.number(e.primaryMetricValue, {
+                minimumFractionDigits: 3,
+                maximumFractionDigits: 3,
+              })}
+            </span>
+            {showStanding ? (
+              <>
+                {' '}
+                <Badge tone="warning">{t(`facts.standing.${standingKey(e.standing)}`)}</Badge>
+              </>
+            ) : null}
+          </p>
+          <p className="text-xs text-[var(--color-muted-foreground)]">
+            {t('facts.resultDetails', {
+              dataset: e.datasetVersion ? `${e.datasetSlug} ${e.datasetVersion}` : e.datasetSlug,
+              method:
+                e.routeSlug && e.routeVersion
+                  ? `${e.routeSlug} ${e.routeVersion}`
+                  : t('facts.noMethodVersion'),
+              date: e.evaluatedAt ? f.date(e.evaluatedAt, { dateStyle: 'medium' }) : '—',
+            })}
+          </p>
+        </li>
+      ))}
+    </ul>
   );
 }
 

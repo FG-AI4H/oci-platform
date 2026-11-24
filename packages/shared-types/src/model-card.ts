@@ -113,6 +113,77 @@ export function canEditModelCard(status: ModelCardStatus, actor: ModelCardActor)
 }
 
 /**
+ * Who may read a card (#591). PUBLISHED: anyone, signed in or not. WITHDRAWN:
+ * anyone signed in, since a card that was public stays on the record with its
+ * status saying it was withdrawn. DRAFT and SUBMITTED: the submitter and
+ * reviewers only. Everyone else is answered as if the card did not exist.
+ */
+export function modelCardVisibleTo(
+  status: ModelCardStatus,
+  viewer: ModelCardActor & { isSignedIn: boolean },
+): boolean {
+  if (status === 'PUBLISHED') return true;
+  if (!viewer.isSignedIn) return false;
+  return status === 'WITHDRAWN' || viewer.isSubmitter || viewer.isReviewer;
+}
+
+/**
+ * Why a submission may not be linked to a model card (#587), or `null` when it
+ * may. Only the card's own submitter links evidence to it: anyone else doing so
+ * would be claiming a result for someone else's model. A WITHDRAWN card takes no
+ * new evidence: it has been taken off the record as a current claim. Every
+ * other status is open, a DRAFT included, so a developer can score a model
+ * before putting its card forward.
+ *
+ * The API answers `NOT_CARD_SUBMITTER` with 403 and `CARD_WITHDRAWN` with 409.
+ * The submit page's card picker lists the caller's own cards minus the
+ * withdrawn ones, which is the same rule.
+ */
+export type ModelCardLinkRefusal = 'NOT_CARD_SUBMITTER' | 'CARD_WITHDRAWN';
+
+export function modelCardLinkRefusal(
+  status: ModelCardStatus,
+  actor: Pick<ModelCardActor, 'isSubmitter'>,
+): ModelCardLinkRefusal | null {
+  if (!actor.isSubmitter) return 'NOT_CARD_SUBMITTER';
+  if (status === 'WITHDRAWN') return 'CARD_WITHDRAWN';
+  return null;
+}
+
+/**
+ * The model card a submission is linked to (#587), as the submission detail and
+ * the link endpoint return it. `null` in those responses when there is no link,
+ * or when the reader may not see the card (`modelCardVisibleTo`).
+ */
+export const SubmissionModelCardSchema = z
+  .object({
+    id: z.string().uuid(),
+    slug: ModelCardSlugSchema,
+    version: z.string(),
+    status: ModelCardStatusSchema,
+  })
+  .strict();
+export type SubmissionModelCard = z.infer<typeof SubmissionModelCardSchema>;
+
+/**
+ * `PATCH /v2/evaluation/submissions/:id/model-card` (#587). A card id links the
+ * submission to that card (or moves the link to it); `null` removes the link.
+ */
+export const LinkSubmissionModelCardRequestSchema = z
+  .object({ modelCardId: z.string().uuid().nullable() })
+  .strict();
+export type LinkSubmissionModelCardRequest = z.infer<typeof LinkSubmissionModelCardRequestSchema>;
+
+/** Response of the link endpoint: where the link stands now. */
+export const LinkSubmissionModelCardResponseSchema = z
+  .object({
+    submissionId: z.string().uuid(),
+    modelCard: SubmissionModelCardSchema.nullable(),
+  })
+  .strict();
+export type LinkSubmissionModelCardResponse = z.infer<typeof LinkSubmissionModelCardResponseSchema>;
+
+/**
  * Slugs a card may not take, because a web route of the same name sits
  * beside `/models/[slug]` (#651): a card called `new` could never be opened.
  */
@@ -204,6 +275,8 @@ export type UpdateModelCardRequest = z.infer<typeof UpdateModelCardRequestSchema
  * workspace, not the public catalogue.
  */
 export interface MyModelCardSummary {
+  /** What a submission sends as `modelCardId` to link itself to this card (#587). */
+  id: string;
   slug: string;
   versionMajorMinorPatch: string;
   modelClass: ModelClass;

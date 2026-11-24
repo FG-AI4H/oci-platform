@@ -15,6 +15,7 @@ import { EvalAiSeamService } from './evalai-seam.service.js';
 import { EvaluationController } from './evaluation.controller.js';
 import { EvaluationService } from './evaluation.service.js';
 import { EvaluationRepository } from './evaluation.repository.js';
+import { ModelCardEvidenceService } from './model-card-evidence.service.js';
 import { SubmissionResultController } from './submission-result.controller.js';
 import { SubmissionResultService } from './submission-result.service.js';
 
@@ -55,6 +56,7 @@ const DEFAULT_EVAL_SEAM_SCOPE = 'oci-eval/seam-intake';
     EvalWorkerGuard,
     EvalSeamGuard,
     EvalAiSeamService,
+    ModelCardEvidenceService,
     {
       // Verifier for the sealed-run worker's machine-to-machine token. Separate
       // from `COGNITO_VERIFIER` in AuthModule because it pins a DIFFERENT
@@ -111,6 +113,9 @@ const DEFAULT_EVAL_SEAM_SCOPE = 'oci-eval/seam-intake';
       },
     },
   ],
-  exports: [EvaluationService],
+  // `ModelCardEvidenceService` is the prediction module's read of the results
+  // linked to a model card (#587). The dependency runs one way: this module
+  // does not import the prediction module.
+  exports: [EvaluationService, ModelCardEvidenceService],
 })
 export class EvaluationModule {}

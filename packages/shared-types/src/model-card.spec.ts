@@ -4,9 +4,13 @@ import {
   ListModelCardsQuerySchema,
   ModelCardSlugSchema,
   UpdateModelCardRequestSchema,
+  LinkSubmissionModelCardRequestSchema,
   canEditModelCard,
   isModelCardReviewerGroups,
+  modelCardLinkRefusal,
   modelCardMovesFor,
+  modelCardVisibleTo,
+  type ModelCardStatus,
 } from './model-card.js';
 
 describe('CreateModelCardRequestSchema slug (#651)', () => {
@@ -111,4 +115,63 @@ describe('ModelCardSlugSchema (#591)', () => {
   it.each(['../../admin', 'demo\0x', 'Upper-Case', 'ab', 'a'.repeat(121)])('rejects %j', (s) => {
     expect(ModelCardSlugSchema.safeParse(s).success).toBe(false);
   });
+});
+
+describe('modelCardLinkRefusal (#587)', () => {
+  it.each<ModelCardStatus>(['DRAFT', 'SUBMITTED', 'PUBLISHED'])(
+    'lets the submitter link results to their %s card',
+    (status) => {
+      expect(modelCardLinkRefusal(status, { isSubmitter: true })).toBeNull();
+    },
+  );
+
+  it('refuses a WITHDRAWN card, even to its submitter', () => {
+    expect(modelCardLinkRefusal('WITHDRAWN', { isSubmitter: true })).toBe('CARD_WITHDRAWN');
+  });
+
+  it.each<ModelCardStatus>(['DRAFT', 'SUBMITTED', 'PUBLISHED', 'WITHDRAWN'])(
+    'refuses anyone else on a %s card, reviewers included, before looking at the status',
+    (status) => {
+      expect(modelCardLinkRefusal(status, { isSubmitter: false })).toBe('NOT_CARD_SUBMITTER');
+    },
+  );
+});
+
+describe('modelCardVisibleTo (#591, #587)', () => {
+  const anonymous = { isSignedIn: false, isSubmitter: false, isReviewer: false };
+  const stranger = { isSignedIn: true, isSubmitter: false, isReviewer: false };
+  const submitter = { isSignedIn: true, isSubmitter: true, isReviewer: false };
+  const reviewer = { isSignedIn: true, isSubmitter: false, isReviewer: true };
+
+  it.each<[ModelCardStatus, boolean, boolean, boolean, boolean]>([
+    // status, anonymous, stranger, submitter, reviewer
+    ['PUBLISHED', true, true, true, true],
+    ['WITHDRAWN', false, true, true, true],
+    ['SUBMITTED', false, false, true, true],
+    ['DRAFT', false, false, true, true],
+  ])('%s: anonymous %s, stranger %s, submitter %s, reviewer %s', (status, a, st, su, r) => {
+    expect(modelCardVisibleTo(status, anonymous)).toBe(a);
+    expect(modelCardVisibleTo(status, stranger)).toBe(st);
+    expect(modelCardVisibleTo(status, submitter)).toBe(su);
+    expect(modelCardVisibleTo(status, reviewer)).toBe(r);
+  });
+});
+
+describe('LinkSubmissionModelCardRequestSchema (#587)', () => {
+  it('takes a card id, or null to unlink', () => {
+    const id = '33333333-3333-4333-8333-333333333333';
+    expect(LinkSubmissionModelCardRequestSchema.parse({ modelCardId: id })).toEqual({
+      modelCardId: id,
+    });
+    expect(LinkSubmissionModelCardRequestSchema.parse({ modelCardId: null })).toEqual({
+      modelCardId: null,
+    });
+  });
+
+  it.each([{}, { modelCardId: 'acme-grader' }, { modelCardId: null, extra: 1 }])(
+    'refuses %o: the field is required, a uuid, and alone',
+    (body) => {
+      expect(LinkSubmissionModelCardRequestSchema.safeParse(body).success).toBe(false);
+    },
+  );
 });

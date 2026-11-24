@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { EmailDomainCategory } from './email-domain.js';
 import { ScoreAttributionSchema } from './evaluation-route.js';
+import { SubmissionModelCardSchema } from './model-card.js';
 import { RegulatoryPathwaySchema } from './regulatory-pathway.js';
 import { DatasetSlugSchema } from './slug.js';
 import type { DatasetSlug } from './slug.js';
@@ -202,6 +203,11 @@ export {
   isModelCardReviewerGroups,
   mayMoveModelCard,
   modelCardMovesFor,
+  modelCardVisibleTo,
+  modelCardLinkRefusal,
+  SubmissionModelCardSchema,
+  LinkSubmissionModelCardRequestSchema,
+  LinkSubmissionModelCardResponseSchema,
 } from './model-card.js';
 export type {
   CreateModelCardRequest,
@@ -219,6 +225,10 @@ export type {
   ModelCardActor,
   MyModelCardSummary,
   ListMyModelCardsResponse,
+  ModelCardLinkRefusal,
+  SubmissionModelCard,
+  LinkSubmissionModelCardRequest,
+  LinkSubmissionModelCardResponse,
 } from './model-card.js';
 
 // EvaluationRoute — privacy-preserving evaluation solutions (WP5, #412, ADR-0018).
@@ -291,8 +301,16 @@ export {
 export type { SeamIntakeRequest, SeamIntakeResponse } from './evalai-seam.js';
 
 // Model Facts Label (#261) — a WHO Fig. 7 rendering of the canonical ModelCard.
-export { ModelFactsLabelSchema, ModelFactsPerformanceEntrySchema } from './model-facts-label.js';
-export type { ModelFactsLabel, ModelFactsPerformanceEntry } from './model-facts-label.js';
+export {
+  ModelFactsLabelSchema,
+  ModelFactsPerformanceEntrySchema,
+  ModelFactsStandingSchema,
+} from './model-facts-label.js';
+export type {
+  ModelFactsLabel,
+  ModelFactsPerformanceEntry,
+  ModelFactsStanding,
+} from './model-facts-label.js';
 
 // Audit trail reader (#653, ADR-0014).
 export {
@@ -4187,6 +4205,13 @@ export const SubmitPredictionsRequestSchema = z.object({
   // same rows out of an uploaded file. One definition, so a file the reader
   // accepts is a body this schema accepts.
   predictions: z.array(PredictionRowSchema).min(1).max(MAX_PREDICTION_ROWS),
+  /**
+   * The model card this submission scores (#587), from
+   * `GET /v2/prediction/model-cards/mine`. The caller must be that card's
+   * submitter and the card must not be WITHDRAWN. Ignored with
+   * `intent: 'VALIDATION'`, which records nothing.
+   */
+  modelCardId: z.string().uuid().optional(),
 });
 export type SubmitPredictionsRequest = z.infer<typeof SubmitPredictionsRequestSchema>;
 
@@ -4434,6 +4459,8 @@ export const SubmitContainerRequestSchema = z.object({
   intent: SubmissionIntentSchema.default('SCORED'),
   imageRef: ImageRefSchema,
   imageDigest: ImageDigestSchema,
+  /** Same as on the predictions request (#587). */
+  modelCardId: z.string().uuid().optional(),
 });
 export type SubmitContainerRequest = z.infer<typeof SubmitContainerRequestSchema>;
 
@@ -4568,6 +4595,12 @@ export const EvaluationSubmissionDetailSchema = z
     attribution: ScoreAttributionSchema.nullable(),
     /** Non-null exactly when `status` is FAILED. */
     failure: EvaluationSubmissionFailureSchema.nullable(),
+    /**
+     * The model card the submitter linked this submission to (#587). `null`
+     * when there is none, or when the reader may not see that card (a DRAFT or
+     * SUBMITTED card is visible to its submitter and reviewers only).
+     */
+    modelCard: SubmissionModelCardSchema.nullable(),
     viewerIsSubmitter: z.boolean(),
     createdAt: z.string(),
   })

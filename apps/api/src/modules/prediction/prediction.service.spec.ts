@@ -8,6 +8,8 @@ import {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
+import type { ModelCardEvidenceService } from '../evaluation/model-card-evidence.service.js';
+import type { ModelCardPerformance } from '../evaluation/model-card-evidence.js';
 import { IntendedUseService } from '../intended-use/intended-use.service.js';
 import { PredictionRepository } from './prediction.repository.js';
 import { PredictionService } from './prediction.service.js';
@@ -92,7 +94,10 @@ interface RepoMock {
 let repo: RepoMock;
 let intendedUse: { validate: ReturnType<typeof vi.fn> };
 let audit: { emit: ReturnType<typeof vi.fn>; emitSync: ReturnType<typeof vi.fn> };
+let evidence: { performanceFor: ReturnType<typeof vi.fn> };
 let service: PredictionService;
+
+const NO_EVIDENCE: ModelCardPerformance = { entries: [], retracted: 0, notEstimable: 0 };
 
 beforeEach(() => {
   repo = {
@@ -104,10 +109,12 @@ beforeEach(() => {
   };
   intendedUse = { validate: vi.fn().mockReturnValue(IUS) };
   audit = { emit: vi.fn().mockResolvedValue(undefined), emitSync: vi.fn().mockResolvedValue({}) };
+  evidence = { performanceFor: vi.fn().mockResolvedValue(NO_EVIDENCE) };
   service = new PredictionService(
     repo as unknown as PredictionRepository,
     intendedUse as unknown as IntendedUseService,
     audit as unknown as AuditEmitter,
+    evidence as unknown as ModelCardEvidenceService,
   );
 });
 
@@ -239,6 +246,23 @@ describe('PredictionService.modelFactsLabel (#261)', () => {
     expect(label.gaps.join(' ')).toContain('Per-subgroup performance');
     // A missing discontinue-use policy must not read as "safe to keep using".
     expect(label.discontinueUse.statement).toContain('not evidence of continued validity');
+  });
+
+  it('reads the performance rows for this card through the evaluation module (#587)', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
+
+    await service.modelFactsLabel('acme-triage-v1', actor());
+
+    expect(evidence.performanceFor).toHaveBeenCalledWith(dbRow().id);
+  });
+
+  it('never reads evidence for a card the caller may not see', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'SUBMITTED' }));
+
+    await expect(service.modelFactsLabel('acme-triage-v1')).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(evidence.performanceFor).not.toHaveBeenCalled();
   });
 
   it('refuses to render a label for a DRAFT card', async () => {

@@ -6,7 +6,12 @@ import type {
   SubmissionMode,
   SubmissionStatus,
 } from '@oci/shared-types';
-import type { RouteReviewStatus, SubgroupField, SubgroupResults } from '@oci/shared-types';
+import type {
+  ModelCardStatus,
+  RouteReviewStatus,
+  SubgroupField,
+  SubgroupResults,
+} from '@oci/shared-types';
 import { parseSubgroupConfig, parseSubgroupFields } from './subgroup-config.js';
 import type { SubgroupConfig } from './subgroup-scoring.js';
 import { PrismaService } from '../../prisma.service.js';
@@ -56,6 +61,8 @@ export interface SubmissionRow {
  * service's visibility rule is decided on, and never leave it unconditionally.
  */
 export interface SubmissionDetailRow extends SubmissionRow {
+  /** The linked model card (#587), with what decides who may see it. */
+  modelCard: LinkedModelCardRef | null;
   mode: SubmissionMode;
   /** Raw JSON as stored, already suppressed; the service parses it (#410). */
   subgroupScores: unknown;
@@ -161,6 +168,100 @@ export interface SubmissionResultContextRow {
   /** Raw JSON as stored; the service parses it into `TaskKindScores`. */
   scores: unknown;
 }
+
+/**
+ * A model card as the linking rule and the submission detail read it (#587):
+ * who filed it and where it stands. `submitterUserId` decides who may link to
+ * it and who may see a DRAFT or SUBMITTED one; it never leaves the service.
+ */
+export interface LinkedModelCardRef {
+  id: string;
+  slug: string;
+  versionMajorMinorPatch: string;
+  status: ModelCardStatus;
+  submitterUserId: string | null;
+}
+
+/** One submission as the link endpoint needs it (#587). No scores, no labels. */
+export interface SubmissionLinkRow {
+  id: string;
+  status: SubmissionStatus;
+  submittedBy: string | null;
+  modelCard: LinkedModelCardRef | null;
+}
+
+/**
+ * A linked model card with what the evidence summary's section 1 prints
+ * (#652). Structurally the `EvidenceModelCardRow` that summary reads.
+ */
+export interface LinkedModelCardEvidenceRow {
+  slug: string;
+  versionMajorMinorPatch: string;
+  status: ModelCardStatus;
+  modelDeveloper: string | null;
+  clinicalSummary: string | null;
+  /** Raw JSON as stored. */
+  intendedUse: unknown;
+  knownBiasesOrEthicalConsiderations: string | null;
+}
+
+/**
+ * One SCORED submission linked to a model card, with what a Model Facts
+ * performance row needs (#587). Carries `retractedAt` and the route version so
+ * `attributionFor` decides where the result stands.
+ */
+export interface LinkedSubmissionRow {
+  id: string;
+  /** Raw JSON as stored; parsed with the shared coercion. */
+  scores: unknown;
+  createdAt: Date;
+  /** When the outbox applied a sealed-run result. Null for Mode 1. */
+  resultReceivedAt: Date | null;
+  retractedAt: Date | null;
+  routeVersionRef: {
+    version: string;
+    reviewStatus: RouteReviewStatus;
+    route: { slug: string };
+  } | null;
+  task: {
+    slug: string;
+    name: string;
+    datasetSlug: string;
+    taskKind: EvaluationTaskKindDb;
+  };
+}
+
+/** One published version of a catalogue dataset, for the version a result was measured on. */
+export interface DatasetVersionRow {
+  datasetSlug: string;
+  version: string;
+  publishedAt: Date;
+}
+
+/** Most linked results a Model Facts label reads (#587). Newest first. */
+export const MAX_LINKED_SUBMISSIONS = 200;
+
+/**
+ * The columns of `LinkedModelCardEvidenceRow`, for a select through
+ * `Submission.modelCard` (`modelCard: { select: LINKED_MODEL_CARD_EVIDENCE_SELECT }`).
+ */
+export const LINKED_MODEL_CARD_EVIDENCE_SELECT = {
+  slug: true,
+  versionMajorMinorPatch: true,
+  status: true,
+  modelDeveloper: true,
+  clinicalSummary: true,
+  intendedUse: true,
+  knownBiasesOrEthicalConsiderations: true,
+} as const;
+
+const LINKED_MODEL_CARD_REF_SELECT = {
+  id: true,
+  slug: true,
+  versionMajorMinorPatch: true,
+  status: true,
+  submitterUserId: true,
+} as const;
 
 /** Values the outbox writes when it applies a result. */
 export interface SubmissionResultUpdate {
@@ -425,6 +526,7 @@ export class EvaluationRepository {
         routeVersionRef: {
           select: { version: true, reviewStatus: true, route: { select: { slug: true } } },
         },
+        modelCard: { select: LINKED_MODEL_CARD_REF_SELECT },
         task: {
           select: {
             slug: true,
@@ -441,6 +543,7 @@ export class EvaluationRepository {
     if (!s) return null;
     return {
       id: s.id,
+      modelCard: s.modelCard,
       methodName: s.methodName,
       mode: s.mode,
       status: s.status,
@@ -662,12 +765,15 @@ export class EvaluationRepository {
     /** EvalAI seam provenance (WP4 §4). Null for direct OCI submissions. */
     externalSubmissionId?: string | null;
     externalChallengeId?: string | null;
+    /** The model card the submitter linked (#587), already checked by the service. */
+    modelCardId?: string | null;
   }): Promise<{ id: string }> {
     return this.prisma.client.submission.create({
       data: {
         taskId: data.taskId,
         methodName: data.methodName,
         submittedBy: data.submittedBy,
+        modelCardId: data.modelCardId ?? null,
         mode: 'PREDICTIONS',
         status: data.status,
         error: data.error,
@@ -703,12 +809,15 @@ export class EvaluationRepository {
     imageDigest: string;
     routeId: string | null;
     routeVersion: string | null;
+    /** The model card the submitter linked (#587), already checked by the service. */
+    modelCardId?: string | null;
   }): Promise<{ id: string }> {
     return this.prisma.client.submission.create({
       data: {
         taskId: data.taskId,
         methodName: data.methodName,
         submittedBy: data.submittedBy,
+        modelCardId: data.modelCardId ?? null,
         mode: 'CONTAINER',
         status: 'PENDING',
         imageRef: data.imageRef,
@@ -718,6 +827,99 @@ export class EvaluationRepository {
       },
       select: { id: true },
     });
+  }
+
+  // ---- Model card links (#587) --------------------------------------------
+  //
+  // The link column and its foreign key belong to this schema; the card rows
+  // they point at belong to the prediction module. These reads follow the
+  // foreign key and select only what the linking rule, the submission page and
+  // the Model Facts label need, the same way other repositories read a dataset
+  // through their own key into the catalogue.
+
+  /** A model card by id, with what the linking rule decides on. */
+  async findModelCardForLink(modelCardId: string): Promise<LinkedModelCardRef | null> {
+    return this.prisma.client.modelCard.findUnique({
+      where: { id: modelCardId },
+      select: LINKED_MODEL_CARD_REF_SELECT,
+    });
+  }
+
+  /** One submission, its submitter and its current link. Nothing scored. */
+  async findSubmissionForLink(submissionId: string): Promise<SubmissionLinkRow | null> {
+    return this.prisma.client.submission.findUnique({
+      where: { id: submissionId },
+      select: {
+        id: true,
+        status: true,
+        submittedBy: true,
+        modelCard: { select: LINKED_MODEL_CARD_REF_SELECT },
+      },
+    });
+  }
+
+  /** Set or clear a submission's model card. The service has applied the rule. */
+  async setSubmissionModelCard(submissionId: string, modelCardId: string | null): Promise<void> {
+    await this.prisma.client.submission.update({
+      where: { id: submissionId },
+      data: { modelCardId },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * The model card a submission is linked to, with what the evidence summary
+   * prints in its section 1 (#652). Null when there is no link.
+   */
+  async findLinkedModelCard(submissionId: string): Promise<LinkedModelCardEvidenceRow | null> {
+    const s = await this.prisma.client.submission.findUnique({
+      where: { id: submissionId },
+      select: { modelCard: { select: LINKED_MODEL_CARD_EVIDENCE_SELECT } },
+    });
+    return s?.modelCard ?? null;
+  }
+
+  /**
+   * The SCORED submissions linked to one card, newest first, capped at
+   * `MAX_LINKED_SUBMISSIONS`. Scores, attribution and task context only: no
+   * ground truth, no predictions, no submitter.
+   */
+  async findScoredSubmissionsForModelCard(modelCardId: string): Promise<LinkedSubmissionRow[]> {
+    return this.prisma.client.submission.findMany({
+      where: { modelCardId, status: 'SCORED' },
+      orderBy: { createdAt: 'desc' },
+      take: MAX_LINKED_SUBMISSIONS,
+      select: {
+        id: true,
+        scores: true,
+        createdAt: true,
+        resultReceivedAt: true,
+        retractedAt: true,
+        routeVersionRef: {
+          select: { version: true, reviewStatus: true, route: { select: { slug: true } } },
+        },
+        task: { select: { slug: true, name: true, datasetSlug: true, taskKind: true } },
+      },
+    });
+  }
+
+  /**
+   * Published versions of the named catalogue datasets, newest first. An
+   * evaluation task names its dataset by slug, with no pinned version, so the
+   * version a result was measured on is read from these dates (#587).
+   */
+  async findDatasetVersions(datasetSlugs: ReadonlyArray<string>): Promise<DatasetVersionRow[]> {
+    if (datasetSlugs.length === 0) return [];
+    const rows = await this.prisma.client.datasetVersion.findMany({
+      where: { dataset: { slug: { in: [...datasetSlugs] } } },
+      orderBy: { publishedAt: 'desc' },
+      select: { version: true, publishedAt: true, dataset: { select: { slug: true } } },
+    });
+    return rows.map((r) => ({
+      datasetSlug: r.dataset.slug,
+      version: r.version,
+      publishedAt: r.publishedAt,
+    }));
   }
 
   /**
