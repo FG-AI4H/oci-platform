@@ -104,6 +104,8 @@ export default async function EvaluationTaskDetailPage({
   const { slug } = await params;
   const [t, i18n] = await Promise.all([getTranslations('EvaluationTasks'), getEvaluationI18n()]);
   const { f } = i18n;
+  // Public origin of the API, for links a reader opens directly (#803).
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, '') ?? null;
 
   let detail: EvaluationTaskDetail | null = null;
   let error: string | null = null;
@@ -280,6 +282,26 @@ export default async function EvaluationTaskDetailPage({
                 <DefinitionItem term={t('detail.createdTerm')}>
                   <time dateTime={detail.createdAt}>{f.date(detail.createdAt)}</time>
                 </DefinitionItem>
+                {apiBase ? (
+                  // #803 — the task and its published results in MLCommons
+                  // Croissant Tasks. Public API documents, linked directly.
+                  <DefinitionItem term={t('detail.machineReadableTerm')}>
+                    <span className="flex flex-col gap-1">
+                      <a
+                        href={`${apiBase}/v2/evaluation/tasks/${detail.slug}/croissant-task.jsonld`}
+                        className={LINK}
+                      >
+                        {t('detail.machineReadableTask')}
+                      </a>
+                      <a
+                        href={`${apiBase}/v2/evaluation/tasks/${detail.slug}/croissant-results.jsonld`}
+                        className={LINK}
+                      >
+                        {t('detail.machineReadableResults')}
+                      </a>
+                    </span>
+                  </DefinitionItem>
+                ) : null}
               </DefinitionList>
             </CardContent>
           </Card>

@@ -96,3 +96,47 @@ describe('EvaluationController reads (#645)', () => {
     expect(svc.getScoredQuota).toHaveBeenCalledWith('idrid-dr-grading', user);
   });
 });
+
+describe('EvaluationController Croissant Tasks routes (#803)', () => {
+  const detail = {
+    id: '11111111-1111-4111-8111-111111111111',
+    slug: 'idrid-dr-grading',
+    name: 'IDRiD grading',
+    datasetSlug: 'idrid-grading-demo',
+    taskKind: 'GRADING',
+    numClasses: 5,
+    referableThreshold: 2,
+    positiveClassName: null,
+    createdAt: '2026-09-09T15:44:31.003Z',
+    updatedAt: '2026-11-19T14:00:00.000Z',
+    itemIds: ['a'],
+    itemCount: 1,
+    subgroupFields: [],
+    submissions: [],
+  };
+  const fwdReq = {
+    headers: { 'x-forwarded-proto': 'https', 'x-forwarded-host': 'dev.oci.ai4h.net' },
+  };
+
+  function withDetail() {
+    const getTaskDetail = vi.fn(async () => detail);
+    const c = new EvaluationController({ getTaskDetail } as unknown as EvaluationService);
+    return { c, getTaskDetail };
+  }
+
+  it('serves the task as a TaskProblem on the public origin of the request', async () => {
+    const { c, getTaskDetail } = withDetail();
+    const doc = await c.croissantTask('idrid-dr-grading' as never, fwdReq);
+    expect(getTaskDetail).toHaveBeenCalledWith('idrid-dr-grading');
+    expect(doc['@type']).toBe('croissant:TaskProblem');
+    expect(doc['@id']).toBe(
+      'https://dev.oci.ai4h.net/v2/evaluation/tasks/idrid-dr-grading/croissant-task.jsonld',
+    );
+  });
+
+  it('serves the results as a JSON-LD graph, empty when nothing is published', async () => {
+    const { c } = withDetail();
+    const doc = await c.croissantResults('idrid-dr-grading' as never, fwdReq);
+    expect(doc['@graph']).toEqual([]);
+  });
+});
