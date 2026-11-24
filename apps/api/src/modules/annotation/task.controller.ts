@@ -65,17 +65,19 @@ export class TaskController {
   @ApiOperation({
     summary: "Seed one task per hosted PNG / JPEG file of the campaign's dataset version",
     description:
-      'Idempotent: files that already have a task are skipped. `prefix` matches the file name, `limit` takes the first files in storage-key order, `dryRun` counts without creating (#646).',
+      "Idempotent: files that already have a task are skipped. `prefix` matches the file name, `limit` takes the first files in file-name order, then series, `dryRun` counts without creating (#646). The caller must be allowed to download the files, by the same rule as a download: a RESTRICTED dataset or an access-gated file needs the host, an admin or an approved access request (403 otherwise). The campaign then stands as its readers' access.",
   })
   @UseGuards(CognitoJwtGuard, AnnotationRolesGuard)
   @AnnotationRoles('campaign-manager')
   seedFromDataset(
     @Param('slug', new ZodPipe(CampaignSlugSchema)) slug: CampaignSlug,
     @Body(new ZodPipe(SeedTasksFromDatasetRequestSchema)) body: SeedTasksFromDatasetRequest,
+    @CurrentUser() user: CognitoAccessTokenPayload,
   ) {
     return this.tasks.seedFromDataset({
       slug,
       dryRun: body.dryRun,
+      user,
       ...(body.prefix !== undefined ? { prefix: body.prefix } : {}),
       ...(body.limit !== undefined ? { limit: body.limit } : {}),
     });

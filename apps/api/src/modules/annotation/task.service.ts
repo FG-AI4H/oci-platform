@@ -37,6 +37,7 @@ import {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { DicomSeriesService } from '../storage/dicom-series.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import { CampaignRepository } from './campaign.repository.js';
 import { readClassificationLabels } from './campaign.service.js';
 import { evaluateGate1Predicate } from './gate-irr-predicate.js';
@@ -78,6 +79,8 @@ export class TaskService {
       DicomSeriesService,
       'listTaskSamples' | 'taskSampleImageIds'
     >,
+    @Inject(StorageService)
+    private readonly storage: Pick<StorageService, 'authoriseDatasetBytes'>,
   ) {}
 
   // --- Seed --------------------------------------------------------------
@@ -128,15 +131,25 @@ export class TaskService {
    *
    * Idempotent: a sample that already has a task is `skipped`. `prefix`
    * matches image file names and leaves series out; `limit` takes the
-   * first samples, image files in key order, then series. A dry run
-   * reports the counts and creates nothing, for the manager's
+   * first samples, image files in file-name order, then series. A dry
+   * run reports the counts and creates nothing, for the manager's
    * confirmation step.
+   *
+   * ACCESS (#646, question 1). The manager who creates the tasks must be
+   * allowed to download the files, by the same rule as a download
+   * (`authoriseDatasetBytes`): a RESTRICTED dataset or an individually
+   * gated file needs the host, an admin or an approved access request.
+   * The campaign then stands as its readers' access, so readers need no
+   * request of their own. The dataset is checked before anything about
+   * its contents is read, a dry run included; the gated files among
+   * those selected are checked once the selection is known.
    */
   async seedFromDataset(args: {
     slug: string;
     prefix?: string;
     limit?: number;
     dryRun: boolean;
+    user: CognitoAccessTokenPayload;
   }): Promise<SeedTasksFromDatasetResponse> {
     const campaign = await this.campaigns.findBySlug(args.slug);
     if (!campaign) throw new NotFoundException(`Campaign '${args.slug}' not found`);
@@ -147,6 +160,12 @@ export class TaskService {
       );
     }
 
+    await this.storage.authoriseDatasetBytes({
+      datasetId: campaign.datasetId,
+      requiresAccess: false,
+      user: args.user,
+    });
+
     const prefix = args.prefix?.trim() ?? '';
     const [images, series] = await Promise.all([
       this.campaigns.findHostedImages(campaign.manifestVersionId),
@@ -156,15 +175,32 @@ export class TaskService {
     // key starts with a random id per file, so its order is arbitrary
     // and "at most N" would take an arbitrary N. The key breaks ties
     // between two files of the same name.
-    const imageRefs = images
-      .map((f) => ({ id: f.id, key: f.s3Key, name: fileNameOf(f.s3Key) }))
+    const matchingImages = images
+      .map((f) => ({
+        id: f.id,
+        key: f.s3Key,
+        name: fileNameOf(f.s3Key),
+        requiresAccess: f.requiresAccess,
+      }))
       .filter((f) => f.name.startsWith(prefix))
-      .sort((x, y) => compareCodeUnits(x.name, y.name) || compareCodeUnits(x.key, y.key))
-      .map((f) => fileSampleRef(f.id));
+      .sort((x, y) => compareCodeUnits(x.name, y.name) || compareCodeUnits(x.key, y.key));
+    const imageRefs = matchingImages.map((f) => fileSampleRef(f.id));
     const seriesRefs = series.filter((c) => c.heldImageCount === 0).map((c) => c.sampleRef);
     const held = series.length - seriesRefs.length;
     const all = [...imageRefs, ...seriesRefs];
     const refs = args.limit !== undefined ? all.slice(0, args.limit) : all;
+
+    // An individually gated file among those selected needs the
+    // download rule for gated files. Series never hold one: the series
+    // index leaves gated files out.
+    const selected = new Set(refs);
+    if (matchingImages.some((f) => f.requiresAccess && selected.has(fileSampleRef(f.id)))) {
+      await this.storage.authoriseDatasetBytes({
+        datasetId: campaign.datasetId,
+        requiresAccess: true,
+        user: args.user,
+      });
+    }
 
     if (args.dryRun) {
       const existing = await this.tasks.countExistingSampleRefs(campaign.id, refs);
