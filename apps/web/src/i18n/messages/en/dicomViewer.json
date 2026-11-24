@@ -56,5 +56,10 @@
     "startTitle": "The viewer could not start",
     "startDetail": "The series could not be loaded. Reload the page and try again; if it keeps failing, {context, select, task {skip this task and tell the campaign manager.} other {download the files instead.}}",
     "transferSyntaxUnknown": "not stated in the file"
+  },
+  "readerView": {
+    "summary": "Image {position} of {count}",
+    "inverted": "inverted",
+    "show": "Show image {position}"
   }
 }

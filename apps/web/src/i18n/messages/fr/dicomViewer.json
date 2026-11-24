@@ -56,5 +56,10 @@
     "startTitle": "La visionneuse n’a pas pu démarrer",
     "startDetail": "La série n’a pas pu être chargée. Rechargez la page et réessayez ; si l’échec persiste, {context, select, task {passez cette tâche et prévenez le responsable de la campagne.} other {téléchargez plutôt les fichiers.}}",
     "transferSyntaxUnknown": "non indiquée dans le fichier"
+  },
+  "readerView": {
+    "summary": "Image {position} sur {count}",
+    "inverted": "inversée",
+    "show": "Afficher l’image {position}"
   }
 }

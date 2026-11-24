@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { test, expect, type Page, type Request } from '@playwright/test';
 import { createDicomDataset, ctPhantomSlice, uploadDicom } from './support/synthetic-dicom';
 
@@ -11,8 +12,9 @@ import { createDicomDataset, ctPhantomSlice, uploadDicom } from './support/synth
  *      to a slice, set a window and answer. The answer carries what
  *      was on screen; while the image is not drawn it is not sent.
  *   3. An arbiter who read none of it sees the series and the three
- *      answers, and settles it with a reason; that answer carries the
- *      view too.
+ *      answers, each with the image and window it was given on, shows
+ *      two of them in the viewer, and settles it with a reason; that
+ *      answer carries the view too.
  *
  * The API refuses an answer on a series without a matching view (its
  * unit tests); this spec checks the browser sends the view the viewer
@@ -216,13 +218,33 @@ test.describe('reading a DICOM series as a task (#674)', () => {
     await expect(answered.getByText('Bleed', { exact: true })).toHaveCount(1);
     for (const { reader } of readings) await expect(page.getByText(reader)).toHaveCount(0);
 
-    await page.getByTestId('dicom-slider').fill('5');
+    // Where each reader was when they answered (#674), and a way to look there.
+    await expect(answered.getByText(`Image 5 of ${IMAGES} · W 200 · L 75`)).toBeVisible();
+    await expect(answered.getByText(`Image 8 of ${IMAGES} · W 2000 · L 500`)).toBeVisible();
+    await expect(answered.getByText(`Image 1 of ${IMAGES} · W 80 · L 40`)).toBeVisible();
+    const windowReadout = page.getByTestId('dicom-window');
+    await answered.getByRole('button', { name: 'Show image 8' }).click();
+    await expect(counter(page)).toHaveText(`8 / ${IMAGES}`);
+    await expect(windowReadout).toHaveText('W 2000 · L 500');
+    await answered.getByRole('button', { name: 'Show image 5' }).click();
     await expect(counter(page)).toHaveText(`5 / ${IMAGES}`);
+    await expect(windowReadout).toHaveText('W 200 · L 75');
+    // The presets fade to their new colours: check contrast once they have.
+    await page.waitForFunction(() =>
+      document.getAnimations().every((animation) => animation.playState !== 'running'),
+    );
+    const axe = await new AxeBuilder({ page })
+      .include('main')
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+      .analyze();
+    expect(
+      axe.violations.map((v) => `${v.impact}: ${v.id} (${v.nodes.length})`),
+      'axe violations on the arbitration page of a series',
+    ).toEqual([]);
+    // The arbiter answers on what they were shown.
     await expect
       .poll(async () => JSON.parse(await shownView(page)) as unknown)
-      .toMatchObject({
-        position: 5,
-      });
+      .toMatchObject({ position: 5, window: { width: 200, center: 75 } });
     const shown = await shownView(page);
     await page.getByRole('radio', { name: 'Bleed', exact: true }).check();
     await page
