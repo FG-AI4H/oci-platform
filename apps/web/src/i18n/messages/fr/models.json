@@ -99,7 +99,18 @@
     "knownBiases": "Biais connus",
     "generalisability": "Généralisabilité",
     "discontinue": "Quand cesser l’utilisation",
-    "gaps": "Lacunes connues de cette étiquette"
+    "gaps": "Lacunes connues de cette étiquette",
+    "publishedResults": "Résultats publiés",
+    "noPublished": "Aucun. Aucun résultat lié ne provient d’une version de méthode d’évaluation approuvée.",
+    "provisionalResults": "Résultats provisoires (pas encore des preuves publiées)",
+    "provisionalNote": "Ces résultats sont réels mais ne constituent pas des preuves validées : la version de méthode d’évaluation qui les a produits n’est pas approuvée, ou aucune n’a été enregistrée.",
+    "resultDetails": "Jeu de données {dataset} · version de méthode {method} · évalué le {date}",
+    "noMethodVersion": "aucune enregistrée",
+    "standing": {
+      "published": "Publié",
+      "provisional": "Provisoire (version de méthode en cours d’examen)",
+      "notAttributed": "Provisoire (aucune version de méthode enregistrée)"
+    }
   },
   "modelClass": {
     "classical": "Apprentissage automatique classique",
