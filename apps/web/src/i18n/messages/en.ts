@@ -6,6 +6,7 @@
  * Its shape is the `Messages` type next-intl checks keys against
  * (`next-intl.d.ts`), and the shape the French catalogue must match.
  */
+import annotate from './en/annotate.json';
 import catalog from './en/catalog.json';
 import catalogNew from './en/catalogNew.json';
 import common from './en/common.json';
@@ -23,6 +24,7 @@ import settings from './en/settings.json';
 import signIn from './en/signIn.json';
 
 const en = {
+  Annotate: annotate,
   Catalog: catalog,
   CatalogNew: catalogNew,
   Common: common,

@@ -8,6 +8,7 @@ import type { Messages } from './messages/en';
  * uses a namespace missing from this list.
  */
 export const CLIENT_NAMESPACES = [
+  'Annotate',
   'CatalogNew',
   'Common',
   'Dataset',

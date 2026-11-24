@@ -8,6 +8,7 @@
  * the ICU arguments match.
  */
 import type { Messages } from './en';
+import annotate from './fr/annotate.json';
 import catalog from './fr/catalog.json';
 import catalogNew from './fr/catalogNew.json';
 import common from './fr/common.json';
@@ -25,6 +26,7 @@ import settings from './fr/settings.json';
 import signIn from './fr/signIn.json';
 
 const fr = {
+  Annotate: annotate,
   Catalog: catalog,
   CatalogNew: catalogNew,
   Common: common,
