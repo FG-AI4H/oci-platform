@@ -648,7 +648,7 @@ export function DicomViewer({
           data-testid="dicom-viewport"
           data-view={view ? JSON.stringify(view) : undefined}
           onKeyDown={(event) => {
-            const action = actionForKey(event.key, event.shiftKey);
+            const action = actionForKey(event.key, event.shiftKey, event.code);
             if (!action || event.altKey || event.ctrlKey || event.metaKey) return;
             event.preventDefault();
             perform(action);
