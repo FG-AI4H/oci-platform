@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import type { EmailDomainCategory } from './email-domain.js';
-import { ScoreAttributionSchema } from './evaluation-route.js';
-import { SubmissionModelCardSchema } from './model-card.js';
+import { RouteReviewStatusSchema, ScoreAttributionSchema } from './evaluation-route.js';
+import { IntendedUseStatementSchema as EvidenceIntendedUseSchema } from './intended-use.js';
+import {
+  ModelCardStatusSchema as EvidenceModelCardStatusSchema,
+  SubmissionModelCardSchema,
+} from './model-card.js';
 import { RegulatoryPathwaySchema } from './regulatory-pathway.js';
 import { DatasetSlugSchema } from './slug.js';
 import type { DatasetSlug } from './slug.js';
@@ -4622,6 +4626,266 @@ export const EvaluationSubmissionDetailSchema = z
     }
   });
 export type EvaluationSubmissionDetail = z.infer<typeof EvaluationSubmissionDetailSchema>;
+
+// ---- Evidence summary of one evaluated submission (#652) -------------------
+//
+// `GET /v2/evaluation/submissions/:id/evidence`: what a decision-maker needs
+// about one evaluated model, assembled from what the platform already holds,
+// in the seven sections of the printable page. Every section can be empty,
+// and says why through `gaps` rather than failing. It carries no prediction,
+// no reference label and no person: the trace is hashes and event types.
+
+/**
+ * Below this many positive reference cases, sensitivity rests on too few
+ * patients to be read without its interval, and the summary says so (#652).
+ * Stated on the page, so a reader knows the threshold applied.
+ */
+export const EVIDENCE_MIN_POSITIVE_CASES = 50;
+
+/** At most this many audit events are listed in the trace (#652). */
+export const EVIDENCE_MAX_TRACE_EVENTS = 50;
+
+/**
+ * What the evidence does not show, one code per gap. The page words each
+ * one; a JSON consumer reads the code, its section and its parameters.
+ */
+export const EvidenceGapCodeSchema = z.enum([
+  // 1 · Intended use and risk tier
+  'NO_MODEL_CARD',
+  'MODEL_CARD_NOT_PUBLISHED',
+  'NO_INTENDED_USE',
+  // 2 · Data
+  'DATASET_NOT_AVAILABLE',
+  'SYNTHETIC_DATA',
+  'REFERENCE_LABELS_UNDOCUMENTED',
+  'SINGLE_READER_LABELS',
+  'READER_AGREEMENT_NOT_REPORTED',
+  // 3 · Method
+  'METHOD_NOT_ATTRIBUTED',
+  'METHOD_NOT_APPROVED',
+  'METHOD_RETRACTED',
+  // 4 · Performance
+  'NOT_SCORED',
+  'NO_INTERVALS',
+  'FEW_POSITIVE_CASES',
+  'INCOMPLETE_COVERAGE',
+  // 5 · Subgroups
+  'NO_SUBGROUP_DATA',
+  'SUBGROUPS_WITHHELD',
+  // 7 · Trace
+  'NO_AUDIT_EVENTS',
+  'AUDIT_RESULT_EVENT_MISSING',
+]);
+export type EvidenceGapCode = z.infer<typeof EvidenceGapCodeSchema>;
+
+export const EvidenceGapSchema = z
+  .object({
+    code: EvidenceGapCodeSchema,
+    /** The page section the gap belongs to, 1 to 7. */
+    section: z.number().int().min(1).max(7),
+    /** Values the sentence quotes (a status, a count, a share). */
+    params: z.record(z.string(), z.union([z.string(), z.number()])),
+  })
+  .strict();
+export type EvidenceGap = z.infer<typeof EvidenceGapSchema>;
+
+/** Section 1, from the model card linked to the submission. */
+export const EvidenceModelCardSchema = z
+  .object({
+    slug: z.string(),
+    version: z.string(),
+    status: EvidenceModelCardStatusSchema,
+    modelDeveloper: z.string().nullable(),
+    clinicalSummary: z.string().nullable(),
+    /** Null when the stored statement does not read as a valid one. */
+    intendedUse: EvidenceIntendedUseSchema.nullable(),
+    knownBiases: z.string().nullable(),
+  })
+  .strict();
+export type EvidenceModelCard = z.infer<typeof EvidenceModelCardSchema>;
+
+/** Section 2, the dataset, as its published manifest describes it. */
+export const EvidenceDatasetSchema = z
+  .object({
+    slug: z.string(),
+    name: z.string(),
+    /** Latest published version: the evaluation task names the dataset, not a version. */
+    version: z.string().nullable(),
+    publishedAt: z.string().nullable(),
+    /** sha256 of the published manifest of that version. */
+    manifestSha256: z.string().nullable(),
+    /** The manifest's `license`, as written (an IRI or an SPDX id). */
+    licence: z.string().nullable(),
+    /** `bio:synthetic`: the files are generated, not patient data. */
+    synthetic: z.boolean(),
+    sourceOrganizations: z.array(z.string()),
+    derivedFrom: z.array(z.string()),
+    /** `rai:dataCollection`, as written. */
+    collection: z.string().nullable(),
+    collectionTimeframe: z.string().nullable(),
+  })
+  .strict();
+export type EvidenceDataset = z.infer<typeof EvidenceDatasetSchema>;
+
+/** How the reference labels were made, from the manifest's label protocol. */
+export const EvidenceReferenceLabelsSchema = z
+  .object({
+    protocolVersion: z.string().nullable(),
+    labelScale: z.string().nullable(),
+    readersPerItem: z.number().int().positive().nullable(),
+    readerQualification: z.string().nullable(),
+    adjudication: z.string().nullable(),
+    agreement: z.object({ metric: z.string(), value: z.number() }).strict().nullable(),
+    /** `rai:dataAnnotationProtocol`, as written. */
+    annotationProtocol: z.string().nullable(),
+  })
+  .strict();
+export type EvidenceReferenceLabels = z.infer<typeof EvidenceReferenceLabelsSchema>;
+
+/** Section 3, the evaluation method version that produced the result. */
+export const EvidenceMethodSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      kind: z.literal('ROUTED'),
+      routeSlug: z.string(),
+      routeName: z.string(),
+      /** Null for the OCI reference implementation. */
+      providerName: z.string().nullable(),
+      isReference: z.boolean(),
+      version: z.string(),
+      reviewStatus: RouteReviewStatusSchema,
+      reviewedAt: z.string().nullable(),
+      /** The reviewer's rationale, published with the decision (ADR-0021). */
+      reviewNotes: z.string().nullable(),
+    })
+    .strict(),
+  z.object({ kind: z.literal('NOT_ATTRIBUTED') }).strict(),
+]);
+export type EvidenceMethod = z.infer<typeof EvidenceMethodSchema>;
+
+/**
+ * Where the result stands, by the one rule that decides publication
+ * (`attributionFor`, WP5): APPROVED method versions publish, DECLARED and
+ * UNDER_REVIEW ones are provisional, REJECTED and WITHDRAWN retract.
+ */
+export const EvidenceStandingSchema = z.enum([
+  'PUBLISHED',
+  'PROVISIONAL',
+  'RETRACTED',
+  'NOT_ATTRIBUTED',
+  'NOT_SCORED',
+]);
+export type EvidenceStanding = z.infer<typeof EvidenceStandingSchema>;
+
+/**
+ * Sensitivity, specificity and predictive values of a two-class
+ * classification result, with class 1 as the positive class (#652). The four
+ * counts are recovered exactly from the stored per-class support and recall,
+ * and checked against the stored precision and accuracy; the rates and their
+ * Wilson intervals come from the same function as `BINARY_DIAGNOSTIC`
+ * scoring. `NOT_RECOVERABLE` when the stored figures do not determine the
+ * counts uniquely: nothing is approximated.
+ */
+export const EvidenceDerivedDiagnosticSchema = z.discriminatedUnion('status', [
+  z
+    .object({
+      status: z.literal('DERIVED'),
+      positiveLabel: z.literal(1),
+      truePositives: z.number().int().nonnegative(),
+      falsePositives: z.number().int().nonnegative(),
+      trueNegatives: z.number().int().nonnegative(),
+      falseNegatives: z.number().int().nonnegative(),
+      sensitivity: ProportionEstimateSchema.nullable(),
+      specificity: ProportionEstimateSchema.nullable(),
+      positivePredictiveValue: ProportionEstimateSchema.nullable(),
+      negativePredictiveValue: ProportionEstimateSchema.nullable(),
+    })
+    .strict(),
+  z.object({ status: z.literal('NOT_RECOVERABLE') }).strict(),
+]);
+export type EvidenceDerivedDiagnostic = z.infer<typeof EvidenceDerivedDiagnosticSchema>;
+
+/** One event of the submission's audit trail: what happened, when, and its hashes. */
+export const EvidenceTraceEventSchema = z
+  .object({
+    sequenceNumber: z.string(),
+    occurredAt: z.string(),
+    eventType: z.string(),
+    payloadHash: z.string(),
+    previousHash: z.string().nullable(),
+    recordHash: z.string(),
+  })
+  .strict();
+export type EvidenceTraceEvent = z.infer<typeof EvidenceTraceEventSchema>;
+
+export const EvidenceSummarySchema = z
+  .object({
+    format: z.literal('oci-evidence-summary/v1'),
+    generatedAt: z.string(),
+    submission: z
+      .object({
+        id: z.string().uuid(),
+        methodName: z.string(),
+        mode: SubmissionModeSchema,
+        status: SubmissionStatusSchema,
+        createdAt: z.string(),
+        viewerIsSubmitter: z.boolean(),
+      })
+      .strict(),
+    task: z
+      .object({
+        slug: EvaluationTaskSlugSchema,
+        name: z.string(),
+        taskKind: EvaluationTaskKindDbSchema,
+        numClasses: z.number().int(),
+        referableThreshold: z.number().int(),
+        positiveClassName: z.string().nullable(),
+        /** The dataset the task names, whether or not the reader may see it. */
+        datasetSlug: z.string(),
+        /** Items in the task's reference set. The labels themselves are never sent. */
+        itemCount: z.number().int().nonnegative(),
+      })
+      .strict(),
+    modelCard: EvidenceModelCardSchema.nullable(),
+    data: z
+      .object({
+        dataset: EvidenceDatasetSchema.nullable(),
+        referenceLabels: EvidenceReferenceLabelsSchema.nullable(),
+      })
+      .strict(),
+    method: EvidenceMethodSchema,
+    performance: z
+      .object({
+        standing: EvidenceStandingSchema,
+        scores: TaskKindScoresSchema.nullable(),
+        /**
+         * Positive reference cases among the scored items: TP + FN for a
+         * binary finding, the support of label 1 for a two-class
+         * classification. Null where the task has no single positive class.
+         */
+        positiveCases: z.number().int().nonnegative().nullable(),
+        minPositiveCases: z.number().int().positive(),
+        /**
+         * Two-class classification only: the diagnostic measures derived
+         * from the stored per-class result, class 1 positive. Null for any
+         * other task kind or class count.
+         */
+        derivedDiagnostic: EvidenceDerivedDiagnosticSchema.nullable(),
+      })
+      .strict(),
+    /** Stored already suppressed, read as the submission page reads it (ADR-0030). */
+    subgroups: SubgroupResultsSchema.nullable(),
+    trace: z
+      .object({
+        events: z.array(EvidenceTraceEventSchema),
+        /** True when the submission has more events than are listed. */
+        truncated: z.boolean(),
+      })
+      .strict(),
+    gaps: z.array(EvidenceGapSchema),
+  })
+  .strict();
+export type EvidenceSummary = z.infer<typeof EvidenceSummarySchema>;
 
 export const tokens = {
   /** Phase B.A.1 added: Campaign, AnnotationToolIntegration (stub registry). */

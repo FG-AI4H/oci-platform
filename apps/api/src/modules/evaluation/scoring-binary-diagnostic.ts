@@ -180,7 +180,12 @@ export function wilsonInterval(
   };
 }
 
-function proportion(numerator: number, denominator: number): ProportionEstimate | null {
+/**
+ * A proportion with its Wilson 95% interval, rounded as stored; null when the
+ * denominator is 0. Exported so the evidence summary (#652) derives the
+ * diagnostic measures of a two-class result with this same function.
+ */
+export function proportion(numerator: number, denominator: number): ProportionEstimate | null {
   if (denominator === 0) return null;
   const { lower, upper } = wilsonInterval(numerator, denominator);
   return {
