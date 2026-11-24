@@ -370,6 +370,23 @@ describe('TaskService.seedFromDataset (#646)', () => {
     expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [{ sampleRef: `file:${D1}` }]);
   });
 
+  it('takes the images in file-name order, not storage-key order, before the limit (#646 review)', async () => {
+    // Keys start with a random id per file, so key order is not name order.
+    campaigns.findHostedImages.mockResolvedValue([
+      { id: D3, s3Key: 'ds/0000/c.png', contentType: 'image/png' },
+      { id: D2, s3Key: 'ds/ffff/a.png', contentType: 'image/png' },
+      { id: D1, s3Key: 'ds/8888/b.png', contentType: 'image/png' },
+    ]);
+    tasks.seedTasks.mockResolvedValue({ created: 2, skipped: 0 });
+
+    await service.seedFromDataset({ slug: 'pilot', limit: 2, dryRun: false });
+
+    expect(tasks.seedTasks).toHaveBeenCalledWith('cmp-1', 3, [
+      { sampleRef: `file:${D2}` },
+      { sampleRef: `file:${D1}` },
+    ]);
+  });
+
   it('409s when the campaign pins no dataset version', async () => {
     campaigns.findBySlug.mockResolvedValue(campaignWithVersion(null));
 

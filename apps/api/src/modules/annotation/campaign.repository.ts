@@ -151,6 +151,7 @@ export class CampaignRepository {
         s3Bucket: { not: null },
       },
       select: { id: true, s3Key: true, contentType: true },
+      // Stable order only; the caller sorts by file name.
       orderBy: { s3Key: 'asc' },
     });
     return rows.flatMap((r) =>
