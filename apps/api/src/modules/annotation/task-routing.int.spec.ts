@@ -453,6 +453,117 @@ describe.skipIf(!dockerAvailable)('Annotation router against Postgres (#647)', (
     expect(await arbitrate()).toBeNull();
   }, 60_000);
 
+  it('readers who press Start together never over-fill a task (#646 review, item 1)', async () => {
+    // One task needing 3 readers, 8 readers pulling at once. Without
+    // the campaign's pull lock every pull saw 3 free slots: 8 assignments.
+    const slug = 'router-646-parallel-start';
+    const campaignId = await runningCampaign({ slug, nAnnotators: 3, sampleCount: 1 });
+    const readers = Array.from({ length: 8 }, () => randomUUID());
+
+    const pulled = await Promise.all(readers.map((sub) => pull(slug, sub)));
+
+    expect(pulled.filter((a) => a !== null)).toHaveLength(3);
+    expect(
+      await prisma.annotationTaskAssignment.count({
+        where: { task: { campaignId }, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+      }),
+    ).toBe(3);
+  }, 60_000);
+
+  /** A task at arbitration, read by three readers who disagreed. */
+  async function taskAwaitingArbitration(slug: string): Promise<string> {
+    const campaignId = await runningCampaign({ slug, nAnnotators: 3, sampleCount: 1 });
+    const task = await prisma.annotationTask.findFirstOrThrow({ where: { campaignId } });
+    await prisma.annotationTask.update({
+      where: { id: task.id },
+      data: { gateState: 'AWAITING_ARBITRATION' },
+    });
+    await prisma.annotationTaskAssignment.createMany({
+      data: ['normal', 'abnormal', 'normal'].map((label) => ({
+        taskId: task.id,
+        assigneeUserId: randomUUID(),
+        assigneeRole: 'annotator',
+        gateAtAssignment: 'INDEPENDENT' as const,
+        status: 'SUBMITTED' as const,
+        submission: { label },
+        submittedAt: new Date(),
+      })),
+    });
+    return task.id;
+  }
+
+  it('arbitration has one slot, even when arbiters pull together (#646 review, item 2)', async () => {
+    const slug = 'router-646-one-arbiter';
+    const taskId = await taskAwaitingArbitration(slug);
+    const arbiters = [randomUUID(), randomUUID(), randomUUID()];
+
+    const pulled = await Promise.all(
+      arbiters.map(
+        async (sub) =>
+          (
+            await service.pullNext({
+              slug,
+              user: user(sub),
+              userGroups: ['arbitration-annotator'],
+            })
+          ).assignment,
+      ),
+    );
+
+    const held = pulled.filter((a) => a !== null);
+    expect(held).toHaveLength(1);
+    expect(held[0]?.taskId).toBe(taskId);
+  }, 60_000);
+
+  it('two arbiters settling one task at once: one answer is kept, the other gets 409 (#646 review, item 2)', async () => {
+    // Two arbitration assignments on one task, as the old router made
+    // them (one slot per reader).
+    const slug = 'router-646-two-arbiters';
+    const taskId = await taskAwaitingArbitration(slug);
+    const [first, second] = [randomUUID(), randomUUID()];
+    const held = await Promise.all(
+      [first, second].map((sub) =>
+        prisma.annotationTaskAssignment.create({
+          data: {
+            taskId,
+            assigneeUserId: cognitoSubAsUuid(sub),
+            assigneeRole: 'arbitration-annotator',
+            gateAtAssignment: 'AWAITING_ARBITRATION',
+            status: 'PENDING',
+          },
+        }),
+      ),
+    );
+
+    const results = await Promise.allSettled(
+      (
+        [
+          [held[0]!.id, first, 'normal'],
+          [held[1]!.id, second, 'abnormal'],
+        ] as const
+      ).map(([assignmentId, sub, label]) =>
+        service.submit({
+          assignmentId,
+          submission: { label, reason: 'settles the disagreement' },
+          user: user(sub),
+        }),
+      ),
+    );
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictException);
+
+    // One final label on the task, and the losing answer was not stored.
+    const answers = await prisma.annotationTaskAssignment.findMany({
+      where: { taskId, gateAtAssignment: 'AWAITING_ARBITRATION', status: 'SUBMITTED' },
+    });
+    expect(answers).toHaveLength(1);
+    const task = await prisma.annotationTask.findUniqueOrThrow({ where: { id: taskId } });
+    expect(task.gateState).toBe('COMPLETED');
+  }, 60_000);
+
   it("tasks from the dataset's hosted images: one per image, and a second run adds none (#646)", async () => {
     const version = await prisma.datasetVersion.create({
       data: { datasetId, version: '646.0', croissant: {}, publishedById: randomUUID() },

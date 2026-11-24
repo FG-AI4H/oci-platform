@@ -305,8 +305,12 @@ export class TaskService {
     await this.abandonment.expireStaleForCampaign({ campaign, nowMs });
 
     // The cap check, the pick and the new assignment share one
-    // transaction, so the slot count the pick sees is the one it fills.
+    // transaction, behind the campaign's pull lock: readers who press
+    // Start together are served one after another, so each counts the
+    // slots the previous one left and a task never gets more readers
+    // than it needs (#646 review, item 1).
     return this.tasks.inTransaction(async (tasks) => {
+      await tasks.lockCampaignPulls(campaign.id);
       // A concurrent pull by the same caller may have assigned since
       // the check above.
       const existing = await tasks.findActiveAssignmentForUser(activeArgs);
@@ -430,9 +434,9 @@ export class TaskService {
     if (assignment.gateAtAssignment !== assignment.task.gateState) {
       // Task moved on while the caller was working. Slice 2 surfaces
       // a 409; slice 3 may auto-rollover with a notification.
-      throw new ConflictException(
-        `Task gate has advanced (assignment for ${assignment.gateAtAssignment}, task at ${assignment.task.gateState})`,
-      );
+      // The text names no step: telling a reader where the task went
+      // would say whether the others agreed (#646 review).
+      throw new ConflictException('This task no longer needs your answer; pull a new task');
     }
     if (assignment.task.gateState === 'COMPLETED' || assignment.task.gateState === 'SKIPPED') {
       throw new ConflictException(`Task is ${assignment.task.gateState}; submissions closed`);
@@ -511,113 +515,134 @@ export class TaskService {
       );
     }
 
-    const submitted = await this.tasks.markAssignmentSubmitted({
-      assignmentId: assignment.id,
-      submission: args.submission,
-      acknowledgedInstructionsVersion: args.acknowledgedInstructionsVersion ?? null,
-    });
-    if (!submitted) {
-      // Another pull expired the assignment, or a parallel submit
-      // landed, after the status checks above (#669 review).
-      throw new ConflictException(
-        'Assignment is no longer open (it expired or was already submitted); pull a new task',
-      );
-    }
-
-    const submittedCount = await this.tasks.countSubmittedAssignmentsAtGate(
-      assignment.task.id,
-      assignment.task.gateState,
-    );
-
-    const action = gateActionForSubmittedRole(assignment.assigneeRole);
-    if (!action) {
-      // Submission persisted, but the role doesn't correspond to a
-      // gate-advancing action. This shouldn't happen in slice 2 (the
-      // three known roles all map to actions); log and exit
-      // gracefully so the assignment row is still saved.
-      this.logger.warn(
-        `submit: assignee role '${assignment.assigneeRole}' has no gate action mapping`,
-      );
-      return {
+    const record = async (
+      tasks: TaskRepository,
+      singleAnswer: boolean,
+    ): Promise<SubmitAssignmentResponse> => {
+      const submitted = await tasks.markAssignmentSubmitted({
         assignmentId: assignment.id,
-        taskId: assignment.task.id,
-        newGateState: null,
-      };
-    }
+        submission: args.submission,
+        acknowledgedInstructionsVersion: args.acknowledgedInstructionsVersion ?? null,
+      });
+      if (!submitted) {
+        // Another pull expired the assignment, or a parallel submit
+        // landed, after the status checks above (#669 review).
+        throw new ConflictException(
+          'Assignment is no longer open (it expired or was already submitted); pull a new task',
+        );
+      }
 
-    // INDEPENDENT gate needs N submissions before advancing; the
-    // other gates advance on the single submission (per ADR-0008
-    // §gate-1/2/3 semantics and the state machine table).
-    if (
-      assignment.task.gateState === 'INDEPENDENT' &&
-      submittedCount < assignment.task.nAnnotatorsRequired
-    ) {
-      return {
-        assignmentId: assignment.id,
-        taskId: assignment.task.id,
-        newGateState: null,
-      };
-    }
-
-    // Slice-3 decision-box predicate (#215, ADR-0008): when the
-    // N-th independent submission lands AND N ≥ 2, compute IRR
-    // across all N submissions. If raters agreed above the
-    // campaign's threshold, route INDEPENDENT → COMPLETED instead
-    // of AWAITING_ARBITRATION.
-    let irrPassed = false;
-    if (
-      assignment.task.gateState === 'INDEPENDENT' &&
-      assignment.task.nAnnotatorsRequired >= 2 &&
-      action === 'independent-submitted'
-    ) {
-      // Re-use the campaign row read above for completeness; both
-      // paths need the same parent campaign + workflowConfig.
-      const campaign = campaignForSubmit;
-      const quality = readQualityConfig(campaign?.workflowConfig);
-      const taskKind = (campaign?.taskKind ?? 'CLASSIFICATION') as CampaignTaskKind;
-      const submissions = await this.tasks.submissionPayloadsAtGate(
+      const submittedCount = await tasks.countSubmittedAssignmentsAtGate(
         assignment.task.id,
-        'INDEPENDENT',
+        assignment.task.gateState,
       );
-      const result = evaluateGate1Predicate({ taskKind, quality, submissions });
-      irrPassed = result.passed;
-      this.logger.log(
-        `gate-1 decision: task=${assignment.task.id} ${result.reason} ` +
-          `(irr=${result.irr ?? 'n/a'}, metric=${result.metricApplied ?? 'n/a'}, threshold=${result.threshold})`,
-      );
-    }
 
-    const rule = lookupGateTransition(
-      assignment.task.gateState,
-      action,
-      assignment.task.nAnnotatorsRequired,
-      { irrPassed },
-    );
-    if (!rule) {
-      this.logger.warn(
-        `submit: no transition rule for gate=${assignment.task.gateState} action=${action}`,
+      const action = gateActionForSubmittedRole(assignment.assigneeRole);
+      if (!action) {
+        // Submission persisted, but the role doesn't correspond to a
+        // gate-advancing action. This shouldn't happen in slice 2 (the
+        // three known roles all map to actions); log and exit
+        // gracefully so the assignment row is still saved.
+        this.logger.warn(
+          `submit: assignee role '${assignment.assigneeRole}' has no gate action mapping`,
+        );
+        return {
+          assignmentId: assignment.id,
+          taskId: assignment.task.id,
+          newGateState: null,
+        };
+      }
+
+      // INDEPENDENT gate needs N submissions before advancing; the
+      // other gates advance on the single submission (per ADR-0008
+      // §gate-1/2/3 semantics and the state machine table).
+      if (
+        assignment.task.gateState === 'INDEPENDENT' &&
+        submittedCount < assignment.task.nAnnotatorsRequired
+      ) {
+        return {
+          assignmentId: assignment.id,
+          taskId: assignment.task.id,
+          newGateState: null,
+        };
+      }
+
+      // Slice-3 decision-box predicate (#215, ADR-0008): when the
+      // N-th independent submission lands AND N ≥ 2, compute IRR
+      // across all N submissions. If raters agreed above the
+      // campaign's threshold, route INDEPENDENT → COMPLETED instead
+      // of AWAITING_ARBITRATION.
+      let irrPassed = false;
+      if (
+        assignment.task.gateState === 'INDEPENDENT' &&
+        assignment.task.nAnnotatorsRequired >= 2 &&
+        action === 'independent-submitted'
+      ) {
+        // Re-use the campaign row read above for completeness; both
+        // paths need the same parent campaign + workflowConfig.
+        const campaign = campaignForSubmit;
+        const quality = readQualityConfig(campaign?.workflowConfig);
+        const taskKind = (campaign?.taskKind ?? 'CLASSIFICATION') as CampaignTaskKind;
+        const submissions = await tasks.submissionPayloadsAtGate(assignment.task.id, 'INDEPENDENT');
+        const result = evaluateGate1Predicate({ taskKind, quality, submissions });
+        irrPassed = result.passed;
+        this.logger.log(
+          `gate-1 decision: task=${assignment.task.id} ${result.reason} ` +
+            `(irr=${result.irr ?? 'n/a'}, metric=${result.metricApplied ?? 'n/a'}, threshold=${result.threshold})`,
+        );
+      }
+
+      const rule = lookupGateTransition(
+        assignment.task.gateState,
+        action,
+        assignment.task.nAnnotatorsRequired,
+        { irrPassed },
+      );
+      if (!rule) {
+        this.logger.warn(
+          `submit: no transition rule for gate=${assignment.task.gateState} action=${action}`,
+        );
+        return {
+          assignmentId: assignment.id,
+          taskId: assignment.task.id,
+          newGateState: null,
+        };
+      }
+
+      const moved = await tasks.updateGateState({
+        taskId: assignment.task.id,
+        expectedFrom: assignment.task.gateState,
+        to: rule.to,
+        ...(rule.stampCompletedAt ? { stampCompletedAt: true } : {}),
+      });
+      if (!moved && singleAnswer) {
+        // Another arbiter (or expert) settled the task first. Throwing
+        // rolls this answer back, so the task keeps one final label.
+        throw new ConflictException(
+          'This task was settled by someone else while you worked on it; pull a new task',
+        );
+      }
+      this.logger.log(
+        `submit: campaign-scoped task=${assignment.task.id} ${assignment.task.gateState}→${rule.to}`,
       );
       return {
         assignmentId: assignment.id,
         taskId: assignment.task.id,
-        newGateState: null,
+        newGateState: rule.to,
       };
-    }
-
-    await this.tasks.updateGateState({
-      taskId: assignment.task.id,
-      expectedFrom: assignment.task.gateState,
-      to: rule.to,
-      ...(rule.stampCompletedAt ? { stampCompletedAt: true } : {}),
-    });
-    this.logger.log(
-      `submit: campaign-scoped task=${assignment.task.id} ${assignment.task.gateState}→${rule.to}`,
-    );
-    return {
-      assignmentId: assignment.id,
-      taskId: assignment.task.id,
-      newGateState: rule.to,
     };
+
+    // Arbitration and expert review take one answer. Recording it and
+    // moving the task share a transaction: if another arbiter settled
+    // the task first, the gate update finds nothing to move and this
+    // answer is rolled back with a 409, so a task never carries two
+    // final labels (#646 review, item 2). Independent readings stay
+    // outside a transaction: each is committed before it counts the
+    // others, so of two last readers at least one sees both.
+    if (assignment.task.gateState !== 'INDEPENDENT') {
+      return this.tasks.inTransaction((tasks) => record(tasks, true));
+    }
+    return record(this.tasks, false);
   }
 
   // --- Helpers -----------------------------------------------------------

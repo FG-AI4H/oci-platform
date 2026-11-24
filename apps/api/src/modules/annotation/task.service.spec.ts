@@ -113,6 +113,7 @@ interface CampaignsMock {
 
 interface TasksMock {
   inTransaction: ReturnType<typeof vi.fn>;
+  lockCampaignPulls: ReturnType<typeof vi.fn>;
   seedTasks: ReturnType<typeof vi.fn>;
   listTasksForCampaign: ReturnType<typeof vi.fn>;
   submittedCountsForCampaign: ReturnType<typeof vi.fn>;
@@ -161,6 +162,7 @@ beforeEach(() => {
   tasks = {
     // Pass-through: the transaction-bound repository is this mock.
     inTransaction: vi.fn((fn: (t: unknown, tx: unknown) => unknown) => fn(tasks, TX)),
+    lockCampaignPulls: vi.fn().mockResolvedValue(undefined),
     seedTasks: vi.fn(),
     listTasksForCampaign: vi.fn(),
     submittedCountsForCampaign: vi.fn().mockResolvedValue(new Map<string, number>()),
@@ -185,7 +187,8 @@ beforeEach(() => {
       .fn()
       .mockResolvedValue([{ label: 'a' }, { label: 'b' }, { label: 'c' }]),
     hasReadTask: vi.fn().mockResolvedValue(false),
-    updateGateState: vi.fn(),
+    // True: the conditional update moved the task.
+    updateGateState: vi.fn().mockResolvedValue(true),
     setAssignmentStatus: vi.fn(),
     findTaskById: vi.fn(),
     annotatorGoldPairs: vi.fn().mockResolvedValue([]),
@@ -532,6 +535,11 @@ describe('TaskService.pullNext', () => {
       }),
     );
     expect(result.assignment?.taskId).toBe('task-1');
+    // The campaign's pull lock comes before anything is read (#646 review).
+    expect(tasks.lockCampaignPulls).toHaveBeenCalledWith('cmp-1');
+    expect(tasks.lockCampaignPulls.mock.invocationCallOrder[0]).toBeLessThan(
+      tasks.findNextEligibleTask.mock.invocationCallOrder[0]!,
+    );
   });
 
   it('routes arbitration-annotator to AWAITING_ARBITRATION-gate tasks', async () => {
@@ -858,7 +866,7 @@ describe('TaskService.submit — campaign labels (#646)', () => {
     campaigns.findById.mockResolvedValue(LABELLED);
     tasks.findAssignmentById.mockResolvedValue({ ...assignmentRow(), task: taskRow() });
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
-    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+    tasks.updateGateState.mockResolvedValue(true);
   });
 
   it('refuses a label the campaign did not declare', async () => {
@@ -968,7 +976,7 @@ describe('TaskService.submit', () => {
       assignmentRow({ status: 'SUBMITTED', submittedAt: new Date() }),
     );
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
-    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+    tasks.updateGateState.mockResolvedValue(true);
 
     const result = await service.submit({
       assignmentId: 'asn-1',
@@ -1008,7 +1016,7 @@ describe('TaskService.submit', () => {
     tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(3);
     // Default mock seeds three disagreeing labels — IRR < 0.6 → escalate.
-    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'AWAITING_ARBITRATION' }));
+    tasks.updateGateState.mockResolvedValue(true);
 
     const result = await service.submit({
       assignmentId: 'asn-1',
@@ -1035,7 +1043,7 @@ describe('TaskService.submit', () => {
       { label: 'pneumonia' },
       { label: 'pneumonia' },
     ]);
-    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+    tasks.updateGateState.mockResolvedValue(true);
 
     const result = await service.submit({
       assignmentId: 'asn-1',
@@ -1069,7 +1077,7 @@ describe('TaskService.submit', () => {
       { label: 'lesion' },
       { label: 'lesion' },
     ]);
-    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'AWAITING_ARBITRATION' }));
+    tasks.updateGateState.mockResolvedValue(true);
 
     const result = await service.submit({
       assignmentId: 'asn-1',
@@ -1094,7 +1102,7 @@ describe('TaskService.submit', () => {
     });
     tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
-    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+    tasks.updateGateState.mockResolvedValue(true);
 
     const result = await service.submit({
       assignmentId: 'asn-1',
@@ -1110,6 +1118,44 @@ describe('TaskService.submit', () => {
       }),
     );
     expect(result.newGateState).toBe('COMPLETED');
+    // Recorded and moved in one transaction (#646 review, item 2).
+    expect(tasks.inTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('409s a second arbiter whose gate update finds the task already settled (#646 review)', async () => {
+    tasks.findAssignmentById.mockResolvedValue({
+      ...assignmentRow({
+        gateAtAssignment: 'AWAITING_ARBITRATION',
+        assigneeRole: 'arbitration-annotator',
+      }),
+      task: taskRow({ nAnnotatorsRequired: 3, gateState: 'AWAITING_ARBITRATION' }),
+    });
+    tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
+    tasks.updateGateState.mockResolvedValue(false);
+
+    await expect(
+      service.submit({ assignmentId: 'asn-1', submission: {}, user: userPayload(ANNOTATOR_SUB) }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(tasks.inTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('a last independent reading whose gate update lost the race is still saved', async () => {
+    // Two last readers both count N and both try the same move; the
+    // one that finds it done must not fail.
+    tasks.findAssignmentById.mockResolvedValue({
+      ...assignmentRow(),
+      task: taskRow({ nAnnotatorsRequired: 1 }),
+    });
+    tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
+    tasks.updateGateState.mockResolvedValue(false);
+
+    const result = await service.submit({
+      assignmentId: 'asn-1',
+      submission: {},
+      user: userPayload(ANNOTATOR_SUB),
+    });
+    expect(result.newGateState).toBe('COMPLETED');
+    expect(tasks.inTransaction).not.toHaveBeenCalled();
   });
 
   it('403s when the assignment belongs to a different user', async () => {
@@ -1221,7 +1267,7 @@ describe('TaskService.submit', () => {
     });
     tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
-    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+    tasks.updateGateState.mockResolvedValue(true);
 
     const result = await service.submit({
       assignmentId: 'asn-1',
@@ -1243,7 +1289,7 @@ describe('TaskService.submit', () => {
     });
     tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
-    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+    tasks.updateGateState.mockResolvedValue(true);
 
     await service.submit({
       assignmentId: 'asn-1',
@@ -1259,7 +1305,7 @@ describe('TaskService.submit', () => {
     // Default campaign mock has no completenessMode → soft-warn.
     tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
-    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+    tasks.updateGateState.mockResolvedValue(true);
 
     await service.submit({
       assignmentId: 'asn-1',
@@ -1326,7 +1372,7 @@ describe('TaskService.submit', () => {
     });
     tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
-    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+    tasks.updateGateState.mockResolvedValue(true);
 
     await service.submit({
       assignmentId: 'asn-1',
@@ -1349,7 +1395,7 @@ describe('TaskService.submit', () => {
     // Default campaign mock has currentInstructionsVersion = undefined ≡ null.
     tasks.markAssignmentSubmitted.mockResolvedValue(true);
     tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
-    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+    tasks.updateGateState.mockResolvedValue(true);
 
     await service.submit({
       assignmentId: 'asn-1',

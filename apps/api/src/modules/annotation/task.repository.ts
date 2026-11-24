@@ -7,6 +7,7 @@ import type {
   Prisma,
 } from '@oci/database';
 import { PrismaService } from '../../prisma.service.js';
+import { lockCampaignPulls } from './repositories/task-pull-lock.raw.js';
 
 /**
  * Slice-2 repository for AnnotationTask + AnnotationTaskAssignment
@@ -30,6 +31,15 @@ export class TaskRepository {
     return this.prisma.client.$transaction(async (tx: Prisma.TransactionClient) =>
       fn(new TaskRepository({ client: tx } as unknown as PrismaService), tx),
     );
+  }
+
+  /**
+   * Take the campaign's pull lock for the rest of the transaction
+   * (#646 review). Only meaningful on a repository bound by
+   * `inTransaction`, as its first call.
+   */
+  async lockCampaignPulls(campaignId: string): Promise<void> {
+    await lockCampaignPulls(this.prisma.client, campaignId);
   }
 
   // --- AnnotationTask ----------------------------------------------------
@@ -219,7 +229,7 @@ export class TaskRepository {
     to: AnnotationGateState;
     stampCompletedAt?: boolean;
     skipReason?: string | null;
-  }): Promise<AnnotationTask> {
+  }): Promise<boolean> {
     const data: {
       gateState: AnnotationGateState;
       completedAt?: Date;
@@ -229,20 +239,15 @@ export class TaskRepository {
     if (args.skipReason !== undefined) data.skipReason = args.skipReason;
 
     // Conditional update — guards against a parallel writer having
-    // already moved the row. updateMany returns the affected count;
-    // 0 means the precondition failed and the service surfaces 409.
+    // already moved the row. False means the task had left
+    // `expectedFrom` first; the service decides whether that is a
+    // conflict (a second arbiter, #646 review) or harmless (two last
+    // readers computing the same move).
     const result = await this.prisma.client.annotationTask.updateMany({
       where: { id: args.taskId, gateState: args.expectedFrom },
       data,
     });
-    if (result.count === 0) {
-      const fresh = await this.findTaskById(args.taskId);
-      if (!fresh) throw new Error(`Task ${args.taskId} disappeared during gate update`);
-      return fresh;
-    }
-    const fresh = await this.findTaskById(args.taskId);
-    if (!fresh) throw new Error(`Task ${args.taskId} disappeared after gate update`);
-    return fresh;
+    return result.count > 0;
   }
 
   // --- AnnotationTaskAssignment ------------------------------------------
@@ -278,8 +283,13 @@ export class TaskRepository {
    * FIFO eligible-task lookup for the router. Returns the
    * earliest-created task whose `gateState === gate`, where the
    * caller (`assigneeUserId`) has not already read or reserved it, AND
-   * the task has fewer than the gate's required number of readings
-   * submitted or in flight (slots-still-open check).
+   * the task has fewer than the gate's slots taken by readings
+   * submitted or in flight (slots-still-open check). The independent
+   * step has `nAnnotatorsRequired` slots; arbitration and expert
+   * review have one.
+   *
+   * Call it inside the pull transaction, after `lockCampaignPulls`:
+   * without the lock, parallel pulls all see the same free slots.
    *
    * A task the caller skipped (RELEASED, #646) is offered again only
    * when nothing else is open for them, so "Skip" moves them on to
@@ -297,6 +307,11 @@ export class TaskRepository {
     gate: AnnotationGateState;
     assigneeUserId: string;
   }): Promise<AnnotationTask | null> {
+    // Arbitration and expert review settle the task with one answer,
+    // so they have one slot; only the independent step has one per
+    // reader (#646 review, item 2).
+    const slots = (task: AnnotationTask) =>
+      args.gate === 'INDEPENDENT' ? task.nAnnotatorsRequired : 1;
     let skippedFallback: AnnotationTask | null = null;
     let cursor: string | undefined;
     for (;;) {
@@ -349,7 +364,7 @@ export class TaskRepository {
         const taken = task.assignments.filter(
           (a) => a.status === 'SUBMITTED' || a.status === 'PENDING' || a.status === 'IN_PROGRESS',
         ).length;
-        if (task.nAnnotatorsRequired - taken <= 0) continue;
+        if (slots(task) - taken <= 0) continue;
         // Strip the included assignments — the caller wants a plain
         // AnnotationTask shape.
         const { assignments, ...plain } = task;
