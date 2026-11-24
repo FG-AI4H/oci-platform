@@ -174,6 +174,62 @@ export default async function DashboardPage() {
         ) : null}
 
         {result.ok ? (
+          <Card className="mb-6">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <span
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
+                  aria-hidden="true"
+                >
+                  <SparkIcon size={18} />
+                </span>
+                <CardTitle>{t('myModels.title')}</CardTitle>
+              </div>
+              <CardDescription>{t('myModels.description')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {myModels === null ? (
+                <p className="text-sm text-[var(--color-muted-foreground)]">
+                  {t('myModels.unavailable')}
+                </p>
+              ) : myModels.items.length === 0 ? (
+                <p className="text-sm text-[var(--color-muted-foreground)]">
+                  {t('myModels.empty')}
+                </p>
+              ) : (
+                <ul className="divide-y divide-[var(--color-border)]">
+                  {myModels.items.map((m) => (
+                    <li
+                      key={m.slug}
+                      className="flex flex-wrap items-center justify-between gap-2 py-3"
+                    >
+                      <Link
+                        href={`/models/${encodeURIComponent(m.slug)}`}
+                        className="min-w-0 break-words rounded font-medium text-[var(--color-primary)] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
+                      >
+                        <span translate="no">{m.slug}</span>{' '}
+                        <span className="font-mono text-xs text-[var(--color-muted-foreground)]">
+                          v{m.versionMajorMinorPatch}
+                        </span>
+                      </Link>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <Badge tone="info">{tModels('riskTier', { tier: m.riskTier })}</Badge>
+                        <Badge tone={MODEL_STATUS_TONE[m.status]}>
+                          {tCard(`lifecycle.status.${m.status}`)}
+                        </Badge>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Button asChild variant="secondary" size="sm" className="mt-4">
+                <Link href="/models/new">{t('myModels.declare')}</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {result.ok ? (
           <div className="grid gap-6 lg:grid-cols-3">
             <Card className="lg:col-span-2">
               <CardHeader>
@@ -251,62 +307,6 @@ export default async function DashboardPage() {
                     </Badge>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="lg:col-span-3">
-              <CardHeader>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-[var(--color-primary-soft)] text-[var(--color-primary)]"
-                      aria-hidden="true"
-                    >
-                      <SparkIcon size={18} />
-                    </span>
-                    <CardTitle>{t('myModels.title')}</CardTitle>
-                  </div>
-                  <Button asChild variant="secondary" size="sm">
-                    <Link href="/models/new">{t('myModels.declare')}</Link>
-                  </Button>
-                </div>
-                <CardDescription>{t('myModels.description')}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {myModels === null ? (
-                  <p className="text-sm text-[var(--color-muted-foreground)]">
-                    {t('myModels.unavailable')}
-                  </p>
-                ) : myModels.items.length === 0 ? (
-                  <p className="text-sm text-[var(--color-muted-foreground)]">
-                    {t('myModels.empty')}
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-[var(--color-border)]">
-                    {myModels.items.map((m) => (
-                      <li
-                        key={m.slug}
-                        className="flex flex-wrap items-center justify-between gap-2 py-3"
-                      >
-                        <Link
-                          href={`/models/${encodeURIComponent(m.slug)}`}
-                          className="min-w-0 break-words rounded font-medium text-[var(--color-primary)] underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]"
-                        >
-                          <span translate="no">{m.slug}</span>{' '}
-                          <span className="font-mono text-xs text-[var(--color-muted-foreground)]">
-                            v{m.versionMajorMinorPatch}
-                          </span>
-                        </Link>
-                        <span className="flex flex-wrap items-center gap-2">
-                          <Badge tone="info">{tModels('riskTier', { tier: m.riskTier })}</Badge>
-                          <Badge tone={MODEL_STATUS_TONE[m.status]}>
-                            {tCard(`lifecycle.status.${m.status}`)}
-                          </Badge>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </CardContent>
             </Card>
 

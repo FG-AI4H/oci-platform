@@ -253,12 +253,12 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
           {label ? (
             <ModelFactsLabelCard label={label} />
           ) : card.status === 'DRAFT' ? (
-            <Alert tone="info">
-              <AlertTitle>{t('detail.factsUnavailableTitle')}</AlertTitle>
+            <Alert tone="info" className="h-fit">
+              <AlertTitle>{tForm('lifecycle.factsDraftTitle')}</AlertTitle>
               <AlertDescription>{tForm('lifecycle.factsDraft')}</AlertDescription>
             </Alert>
           ) : (
-            <Alert tone="info">
+            <Alert tone="info" className="h-fit">
               <AlertTitle>{t('detail.factsUnavailableTitle')}</AlertTitle>
               <AlertDescription>{t('detail.factsUnavailableBody')}</AlertDescription>
             </Alert>

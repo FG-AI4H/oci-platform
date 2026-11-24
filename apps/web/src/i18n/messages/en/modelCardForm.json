@@ -13,17 +13,26 @@
     "body": "Only a draft can be edited, and only by the person who declared it. A submitted card can be returned to draft from its page."
   },
   "steps": {
-    "model": { "label": "The model", "subtitle": "Name, version, class and developer" },
+    "model": {
+      "label": "The model",
+      "subtitle": "Name, version, class and developer"
+    },
     "intendedUse": {
       "label": "Intended use",
       "subtitle": "Clinical task, population, users, care settings and misuse"
     },
-    "riskTier": { "label": "Risk tier", "subtitle": "Derived from the intended use" },
+    "riskTier": {
+      "label": "Risk tier",
+      "subtitle": "Derived from the intended use"
+    },
     "evidence": {
       "label": "Evidence and limits",
       "subtitle": "Training data, regulatory status, known limits"
     },
-    "review": { "label": "Review and save", "subtitle": "Check the card, then save it as a draft" }
+    "review": {
+      "label": "Review and save",
+      "subtitle": "Check the card, then save it as a draft"
+    }
   },
   "wizard": {
     "stepsLabel": "Steps of the model card",
@@ -43,8 +52,13 @@
       "hint": "Lowercase letters, digits and hyphens, for example chest-xr-triage. It becomes the card’s address and cannot be changed later.",
       "hintEdit": "The card’s address. It cannot be changed."
     },
-    "version": { "label": "Version", "hint": "MAJOR.MINOR.PATCH, for example 1.0.0." },
-    "modelClass": { "label": "Model class" },
+    "version": {
+      "label": "Version",
+      "hint": "MAJOR.MINOR.PATCH, for example 1.0.0."
+    },
+    "modelClass": {
+      "label": "Model class"
+    },
     "modelDeveloper": {
       "label": "Developer",
       "hint": "The organisation accountable for the model, which may not be you."
@@ -68,7 +82,9 @@
       "label": "Clinical task",
       "hint": "The clinical job the model does. It is the main input to the risk tier."
     },
-    "medicalPurposeOther": { "label": "Describe the clinical task" },
+    "medicalPurposeOther": {
+      "label": "Describe the clinical task"
+    },
     "bodySystemOrSite": {
       "label": "Body system or site",
       "hint": "For example chest, retina or breast."
@@ -77,9 +93,15 @@
       "legend": "Target population",
       "hint": "The patients the model is meant for. Leave blank what does not apply."
     },
-    "ageMin": { "label": "Minimum age (years)" },
-    "ageMax": { "label": "Maximum age (years)" },
-    "sexEligibility": { "label": "Sex" },
+    "ageMin": {
+      "label": "Minimum age (years)"
+    },
+    "ageMax": {
+      "label": "Maximum age (years)"
+    },
+    "sexEligibility": {
+      "label": "Sex"
+    },
     "populationDescription": {
       "label": "Population description",
       "hint": "For example: adults referred for a chest radiograph in an outpatient clinic."
@@ -116,19 +138,30 @@
       "label": "Training data jurisdictions",
       "hint": "Country or region codes, separated by commas, for example EU, CH."
     },
-    "regulatory": { "legend": "Regulatory status" },
-    "regulatoryPathway": { "label": "Regulatory pathway", "none": "None declared" },
-    "regulatoryStatus": { "label": "Approval status" },
+    "regulatory": {
+      "legend": "Regulatory status"
+    },
+    "regulatoryPathway": {
+      "label": "Regulatory pathway",
+      "none": "None declared"
+    },
+    "regulatoryStatus": {
+      "label": "Approval status"
+    },
     "regulatoryJurisdictions": {
       "label": "Approval jurisdictions",
       "hint": "Codes, separated by commas."
     },
-    "regulatoryIdentifier": { "label": "Certificate or clearance number" },
+    "regulatoryIdentifier": {
+      "label": "Certificate or clearance number"
+    },
     "knownBiases": {
       "label": "Known limits and biases",
       "hint": "Groups or situations where the model is known to perform worse."
     },
-    "biasMitigation": { "label": "Bias mitigation" },
+    "biasMitigation": {
+      "label": "Bias mitigation"
+    },
     "ongoingMaintenance": {
       "label": "Monitoring after deployment",
       "hint": "How performance is followed once the model is in use."
@@ -209,6 +242,7 @@
     "invalid": "This request is not valid.",
     "forbidden": "You are not allowed to make this change.",
     "stale": "The card changed in the meantime. Reload the page and try again.",
+    "factsDraftTitle": "No Model Facts label yet",
     "factsDraft": "The Model Facts label is generated once the card is submitted for review."
   },
   "errors": {

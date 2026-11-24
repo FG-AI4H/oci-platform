@@ -197,63 +197,76 @@ export function ModelCardForm({ mode, action, initialValues, options }: Props) {
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-10">
-      <nav
-        aria-label={t('wizard.stepsLabel')}
-        className="min-w-0 lg:sticky lg:top-24 lg:self-start"
-      >
-        <ol className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0 lg:pb-0">
-          {MODEL_CARD_FORM_STEPS.map((s, i) => {
-            const status = s === step ? 'current' : i <= reached ? 'done' : 'todo';
-            const content = (
-              <>
-                <span
-                  aria-hidden="true"
-                  className={
-                    'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-xs ' +
-                    (status === 'current'
-                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
-                      : status === 'done'
-                        ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
-                        : 'border-[var(--color-border-strong)] text-[var(--color-muted-foreground)]')
-                  }
-                >
-                  {i + 1}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">{stepLabel(s)}</span>
-                  <span className="hidden text-xs text-[var(--color-muted-foreground)] lg:block">
-                    {t(`steps.${s}.subtitle`)}
-                  </span>
-                </span>
-              </>
-            );
-            const base =
-              'flex w-full items-start gap-3 whitespace-nowrap rounded-md px-3 py-2 text-start lg:whitespace-normal ';
-            return (
-              <li key={s} className="shrink-0 lg:shrink">
-                {status === 'todo' ? (
-                  <span className={base + 'text-[var(--color-muted-foreground)]'}>{content}</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => go(s)}
-                    aria-current={status === 'current' ? 'step' : undefined}
+      <div className="min-w-0 space-y-6 lg:sticky lg:top-24 lg:self-start">
+        <nav aria-label={t('wizard.stepsLabel')} className="min-w-0">
+          <ol className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0 lg:pb-0">
+            {MODEL_CARD_FORM_STEPS.map((s, i) => {
+              const status = s === step ? 'current' : i <= reached ? 'done' : 'todo';
+              const content = (
+                <>
+                  <span
+                    aria-hidden="true"
                     className={
-                      base +
-                      'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
+                      'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-xs ' +
                       (status === 'current'
-                        ? 'bg-[var(--color-primary-soft)] text-[var(--color-foreground)]'
-                        : 'text-[var(--color-foreground)] hover:bg-[var(--color-subtle)]')
+                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
+                        : status === 'done'
+                          ? 'border-[var(--color-primary)] text-[var(--color-primary)]'
+                          : 'border-[var(--color-border-strong)] text-[var(--color-muted-foreground)]')
                     }
                   >
-                    {content}
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{stepLabel(s)}</span>
+                    <span className="hidden text-xs text-[var(--color-muted-foreground)] lg:block">
+                      {t(`steps.${s}.subtitle`)}
+                    </span>
+                  </span>
+                </>
+              );
+              const base =
+                'flex w-full items-start gap-3 whitespace-nowrap rounded-md px-3 py-2 text-start lg:whitespace-normal ';
+              return (
+                <li key={s} className="shrink-0 lg:shrink">
+                  {status === 'todo' ? (
+                    <span className={base + 'text-[var(--color-muted-foreground)]'}>{content}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => go(s)}
+                      aria-current={status === 'current' ? 'step' : undefined}
+                      className={
+                        base +
+                        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)] ' +
+                        (status === 'current'
+                          ? 'bg-[var(--color-primary-soft)] text-[var(--color-foreground)]'
+                          : 'text-[var(--color-foreground)] hover:bg-[var(--color-subtle)]')
+                      }
+                    >
+                      {content}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
+        {/* Wide screens: the tier stays in view beside the long intended-use
+          step, next to the answers that move it. The announced copy is the
+          one at the end of the step. */}
+        {step === 'intendedUse' ? (
+          <div
+            aria-hidden="true"
+            className="hidden rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-3 lg:block"
+          >
+            <p className="text-xs font-medium uppercase tracking-[0.12em] text-[var(--color-muted-foreground)]">
+              {t('steps.riskTier.label')}
+            </p>
+            <TierSummary tier={tier} compact />
+          </div>
+        ) : null}
+      </div>
 
       <form
         key={attempt}
@@ -697,8 +710,11 @@ export function ModelCardForm({ mode, action, initialValues, options }: Props) {
           >
             {t('wizard.back')}
           </Button>
+          {/* Distinct keys: React must not turn the "Next" button into the
+              submit button in place while its click is still being handled,
+              or the click that opens the review step would also save. */}
           {step === 'review' ? (
-            <Button type="submit" size="lg" disabled={pending}>
+            <Button key="save" type="submit" size="lg" disabled={pending}>
               {pending
                 ? t('wizard.saving')
                 : mode === 'edit'
@@ -706,7 +722,14 @@ export function ModelCardForm({ mode, action, initialValues, options }: Props) {
                   : t('wizard.save')}
             </Button>
           ) : (
-            <Button type="button" size="lg" onClick={next}>
+            <Button
+              key="next"
+              type="button"
+              size="lg"
+              onClick={next}
+              // Long step names (French) wrap on a phone rather than push the page sideways.
+              className="h-auto min-h-11 min-w-0 whitespace-normal py-2 text-center"
+            >
               {t('wizard.next', { step: nextStep ? stepLabel(nextStep) : '' })}
             </Button>
           )}
@@ -909,26 +932,60 @@ function ChoiceGroup({
   );
 }
 
+/**
+ * The derived tier. `large`: the risk-tier step, where the tier is the
+ * subject of the page. `compact`: the side copy on wide screens, tier and
+ * meaning only, without the test id (the in-step copy carries it).
+ */
 function TierSummary({
   tier,
   large,
+  compact,
 }: {
   tier: ReturnType<typeof riskTierFromValues>;
   large?: boolean;
+  compact?: boolean;
 }) {
   const t = useTranslations('ModelCardForm');
   if (!tier) {
     return <p className="mt-1 text-sm text-[var(--color-muted-foreground)]">{t('tier.pending')}</p>;
   }
+  if (compact) {
+    return (
+      <div className="mt-1 space-y-1">
+        <p className="text-2xl font-semibold tracking-tight">
+          {t('tier.value', { tier: tier.tier })}
+        </p>
+        <p className="text-xs text-[var(--color-muted-foreground)]">
+          {t(`tier.meaning.${tier.tier}`)}
+        </p>
+      </div>
+    );
+  }
+  if (large) {
+    return (
+      <div className="space-y-2">
+        <p
+          data-testid="derived-risk-tier"
+          className="text-4xl font-semibold tracking-tight text-[var(--color-foreground)]"
+        >
+          {t('tier.value', { tier: tier.tier })}
+        </p>
+        <p className="text-lg font-medium">{t(`tier.meaning.${tier.tier}`)}</p>
+        <p className="max-w-prose text-sm">
+          <span className="font-medium">{t('tier.reasonLabel')} </span>
+          {t(`tier.reason.${tier.reason}`)}
+        </p>
+      </div>
+    );
+  }
   return (
-    <div className={large ? 'space-y-3' : 'mt-2 space-y-1'}>
+    <div className="mt-2 space-y-1">
       <p className="flex flex-wrap items-center gap-2">
         <Badge tone={tier.tier === 'IV' || tier.tier === 'III' ? 'warning' : 'info'}>
           <span data-testid="derived-risk-tier">{t('tier.value', { tier: tier.tier })}</span>
         </Badge>
-        <span className={large ? 'text-base font-medium' : 'text-sm font-medium'}>
-          {t(`tier.meaning.${tier.tier}`)}
-        </span>
+        <span className="text-sm font-medium">{t(`tier.meaning.${tier.tier}`)}</span>
       </p>
       <p className="text-sm">
         <span className="font-medium">{t('tier.reasonLabel')} </span>

@@ -13,12 +13,18 @@
     "body": "Seul un brouillon peut être modifié, et uniquement par la personne qui l’a déclaré. Une fiche soumise peut être remise en brouillon depuis sa page."
   },
   "steps": {
-    "model": { "label": "Le modèle", "subtitle": "Nom, version, classe et développeur" },
+    "model": {
+      "label": "Le modèle",
+      "subtitle": "Nom, version, classe et développeur"
+    },
     "intendedUse": {
       "label": "Usage prévu",
       "subtitle": "Tâche clinique, population cible, utilisateurs, contextes de soins et mésusage"
     },
-    "riskTier": { "label": "Niveau de risque", "subtitle": "Déduit de l’usage prévu" },
+    "riskTier": {
+      "label": "Niveau de risque",
+      "subtitle": "Déduit de l’usage prévu"
+    },
     "evidence": {
       "label": "Preuves et limites",
       "subtitle": "Données d’entraînement, statut réglementaire, limites connues"
@@ -46,8 +52,13 @@
       "hint": "Lettres minuscules, chiffres et tirets, par exemple radio-thorax-triage. Il devient l’adresse de la fiche et ne pourra plus être modifié.",
       "hintEdit": "L’adresse de la fiche. Elle ne peut pas être modifiée."
     },
-    "version": { "label": "Version", "hint": "MAJEURE.MINEURE.CORRECTIF, par exemple 1.0.0." },
-    "modelClass": { "label": "Classe de modèle" },
+    "version": {
+      "label": "Version",
+      "hint": "MAJEURE.MINEURE.CORRECTIF, par exemple 1.0.0."
+    },
+    "modelClass": {
+      "label": "Classe de modèle"
+    },
     "modelDeveloper": {
       "label": "Développeur",
       "hint": "L’organisation responsable du modèle, qui n’est pas forcément vous."
@@ -71,7 +82,9 @@
       "label": "Tâche clinique",
       "hint": "La tâche clinique que réalise le modèle. C’est le principal critère du niveau de risque."
     },
-    "medicalPurposeOther": { "label": "Décrivez la tâche clinique" },
+    "medicalPurposeOther": {
+      "label": "Décrivez la tâche clinique"
+    },
     "bodySystemOrSite": {
       "label": "Système ou site anatomique",
       "hint": "Par exemple thorax, rétine ou sein."
@@ -80,9 +93,15 @@
       "legend": "Population cible",
       "hint": "Les patients auxquels le modèle est destiné. Laissez vide ce qui ne s’applique pas."
     },
-    "ageMin": { "label": "Âge minimum (ans)" },
-    "ageMax": { "label": "Âge maximum (ans)" },
-    "sexEligibility": { "label": "Sexe" },
+    "ageMin": {
+      "label": "Âge minimum (ans)"
+    },
+    "ageMax": {
+      "label": "Âge maximum (ans)"
+    },
+    "sexEligibility": {
+      "label": "Sexe"
+    },
     "populationDescription": {
       "label": "Description de la population",
       "hint": "Par exemple : adultes adressés pour une radiographie thoracique en consultation externe."
@@ -119,19 +138,30 @@
       "label": "Juridictions des données d’entraînement",
       "hint": "Codes de pays ou de région, séparés par des virgules, par exemple EU, CH."
     },
-    "regulatory": { "legend": "Statut réglementaire" },
-    "regulatoryPathway": { "label": "Voie réglementaire", "none": "Aucune déclarée" },
-    "regulatoryStatus": { "label": "Statut de l’autorisation" },
+    "regulatory": {
+      "legend": "Statut réglementaire"
+    },
+    "regulatoryPathway": {
+      "label": "Voie réglementaire",
+      "none": "Aucune déclarée"
+    },
+    "regulatoryStatus": {
+      "label": "Statut de l’autorisation"
+    },
     "regulatoryJurisdictions": {
       "label": "Juridictions de l’autorisation",
       "hint": "Codes, séparés par des virgules."
     },
-    "regulatoryIdentifier": { "label": "Numéro de certificat ou d’autorisation" },
+    "regulatoryIdentifier": {
+      "label": "Numéro de certificat ou d’autorisation"
+    },
     "knownBiases": {
       "label": "Limites et biais connus",
       "hint": "Les groupes ou situations pour lesquels le modèle est moins performant."
     },
-    "biasMitigation": { "label": "Atténuation des biais" },
+    "biasMitigation": {
+      "label": "Atténuation des biais"
+    },
     "ongoingMaintenance": {
       "label": "Surveillance après déploiement",
       "hint": "Comment les performances sont suivies une fois le modèle en service."
@@ -212,6 +242,7 @@
     "invalid": "Cette demande n’est pas valide.",
     "forbidden": "Vous n’êtes pas autorisé à effectuer ce changement.",
     "stale": "La fiche a changé entre-temps. Rechargez la page et réessayez.",
+    "factsDraftTitle": "Pas encore d’étiquette « Model Facts »",
     "factsDraft": "L’étiquette « Model Facts » est générée une fois la fiche soumise pour relecture."
   },
   "errors": {
