@@ -20,6 +20,7 @@ import evaluationReview from './en/evaluationReview.json';
 import evaluationSubmission from './en/evaluationSubmission.json';
 import evaluationSubmit from './en/evaluationSubmit.json';
 import evaluationTasks from './en/evaluationTasks.json';
+import evidenceSummary from './en/evidenceSummary.json';
 import footer from './en/footer.json';
 import header from './en/header.json';
 import home from './en/home.json';
@@ -46,6 +47,7 @@ const en = {
   EvaluationSubmission: evaluationSubmission,
   EvaluationSubmit: evaluationSubmit,
   EvaluationTasks: evaluationTasks,
+  EvidenceSummary: evidenceSummary,
   Footer: footer,
   Header: header,
   Home: home,
