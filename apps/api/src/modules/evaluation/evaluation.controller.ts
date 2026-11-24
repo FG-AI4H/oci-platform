@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiNotFoundResponse,
@@ -9,8 +20,10 @@ import {
 import {
   CreateEvaluationTaskRequestSchema,
   EvaluationTaskSlugSchema,
+  LinkSubmissionModelCardRequestSchema,
   type CreateEvaluationTaskRequest,
   type EvaluationTaskSlug,
+  type LinkSubmissionModelCardRequest,
 } from '@oci/shared-types';
 import { z } from 'zod';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
@@ -44,6 +57,8 @@ const SubmissionIdSchema = z.string().uuid();
  *   - POST submissions: public (Mode 1). The optional JWT guard captures
  *     the submitter's identity when a token is present; anonymous
  *     submissions are allowed and recorded with a null submitter.
+ *   - PATCH a submission's model card (#587): required JWT; the service
+ *     checks the caller made the submission and filed the card.
  *   - POST tasks: required JWT + `host` (or `admin`) group — this is the
  *     only non-SQL path that creates a task together with its HIDDEN
  *     ground-truth labels.
@@ -131,6 +146,27 @@ export class EvaluationController {
     return body.intent === 'VALIDATION'
       ? this.evaluation.validatePredictions(slug, body)
       : this.evaluation.submitPredictions(slug, body, req.user);
+  }
+
+  @Patch('submissions/:id/model-card')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Link a submission to the model card it scored, or remove the link',
+    description:
+      'Body `{ "modelCardId": "<uuid>" }` links the submission to that model card, or moves the link to it; `{ "modelCardId": null }` removes the link. Only the participant who made the submission may change its link, and only to a model card they submitted themselves. A WITHDRAWN card takes no new results. Restating the current link changes nothing. The linked results feed the card’s Model Facts label: published when produced by an approved evaluation method version, provisional otherwise.',
+  })
+  @ApiOkResponse({ description: 'The submission id and the card it is now linked to (or null).' })
+  @ApiNotFoundResponse({ description: 'No such submission, or no such model card.' })
+  @UseGuards(CognitoJwtGuard)
+  linkModelCard(
+    @Param('id', new ZodPipe(SubmissionIdSchema)) id: string,
+    @Body(new ZodPipe(LinkSubmissionModelCardRequestSchema)) body: LinkSubmissionModelCardRequest,
+    @Req() req: FastifyLikeRequest,
+  ) {
+    // The required guard sets `user`; a missing one is still refused here
+    // rather than passed on as an anonymous caller.
+    if (!req.user) throw new UnauthorizedException();
+    return this.evaluation.linkModelCard(id, body, req.user);
   }
 
   @Post('tasks')

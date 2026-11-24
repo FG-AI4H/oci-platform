@@ -318,6 +318,8 @@ describe('EvaluationSubmissionDetailSchema (#645)', () => {
     mode: 'PREDICTIONS',
     // No breakdown (#410): the task declares no subgroup field.
     subgroups: null,
+    // Not linked to a model card (#587).
+    modelCard: null,
     viewerIsSubmitter: false,
     createdAt: '2026-11-20T00:00:00.000Z',
   };
@@ -344,5 +346,31 @@ describe('EvaluationSubmissionDetailSchema (#645)', () => {
     const failedWithout = { ...pendingWithFailure, status: 'FAILED', failure: null };
     expect(EvaluationSubmissionDetailSchema.safeParse(pendingWithFailure).success).toBe(false);
     expect(EvaluationSubmissionDetailSchema.safeParse(failedWithout).success).toBe(false);
+  });
+
+  it('names a linked model card by id, slug, version and status only (#587)', () => {
+    const pending = {
+      ...base,
+      status: 'PENDING',
+      scores: null,
+      attribution: null,
+      failure: null,
+    };
+    const modelCard = {
+      id: '33333333-3333-4333-8333-333333333333',
+      slug: 'acme-grader',
+      version: '1.0.0',
+      status: 'PUBLISHED',
+    };
+    expect(EvaluationSubmissionDetailSchema.safeParse({ ...pending, modelCard }).success).toBe(
+      true,
+    );
+    // Strict: the card's submitter never rides along.
+    expect(
+      EvaluationSubmissionDetailSchema.safeParse({
+        ...pending,
+        modelCard: { ...modelCard, submitterUserId: '44444444-4444-4444-8444-444444444444' },
+      }).success,
+    ).toBe(false);
   });
 });

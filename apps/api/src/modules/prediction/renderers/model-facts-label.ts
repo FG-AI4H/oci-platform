@@ -1,9 +1,5 @@
-import type {
-  ModelCardResponse,
-  ModelFactsLabel,
-  ModelFactsPerformanceEntry,
-  TargetPopulation,
-} from '@oci/shared-types';
+import type { ModelCardResponse, ModelFactsLabel, TargetPopulation } from '@oci/shared-types';
+import type { ModelCardPerformance } from '../../evaluation/model-card-evidence.js';
 
 /**
  * WHO Fig. 7 "Model Facts Label" builder (#261).
@@ -14,10 +10,16 @@ import type {
  * supplies, so it is trivially testable and safe to render on demand.
  *
  * Performance entries are passed IN rather than fetched: the prediction module
- * must not reach into the evaluation module's repository (module-boundary rule).
- * Until a typed cross-module read exists, callers pass `[]` and the label says
- * so in `gaps` — which is the point of `gaps`.
+ * does not reach into the evaluation module's repository (module-boundary rule).
+ * The caller reads them through `ModelCardEvidenceService` (#587), which has
+ * already decided where each result stands. This builder puts the published
+ * ones in `entries` and every other one in `provisional`, and says in `gaps`
+ * what it could not show, which is the point of `gaps`.
  */
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
 
 function describePopulation(p: TargetPopulation | undefined): string | null {
   if (!p) return null;
@@ -37,16 +39,53 @@ function describePopulation(p: TargetPopulation | undefined): string | null {
 
 export function buildModelFactsLabel(args: {
   card: ModelCardResponse;
-  performance: ReadonlyArray<ModelFactsPerformanceEntry>;
+  performance: ModelCardPerformance;
   generatedAt: Date;
 }): ModelFactsLabel {
   const { card, performance, generatedAt } = args;
   const ius = card.intendedUse;
   const gaps: string[] = [];
 
-  if (performance.length === 0) {
+  // Published evidence and the rest, never mixed: a provisional or unattributed
+  // result printed beside a published one reads as the same kind of claim.
+  const published = performance.entries.filter((e) => e.standing === 'PUBLISHED');
+  const provisional = performance.entries.filter((e) => e.standing !== 'PUBLISHED');
+  const notAttributed = provisional.filter((e) => e.standing === 'NOT_ATTRIBUTED').length;
+  const underReview = provisional.length - notAttributed;
+  const linked = performance.entries.length + performance.retracted + performance.notEstimable;
+
+  if (linked === 0) {
     gaps.push(
       'Validation & performance: no evaluation results are linked to this model card yet, so no measured performance is shown.',
+    );
+  } else if (published.length === 0) {
+    gaps.push(
+      'Validation & performance: none of the linked results comes from an approved evaluation method version, so no published performance is shown. Any other linked results are listed separately as provisional.',
+    );
+  }
+  if (notAttributed > 0) {
+    gaps.push(
+      `Not attributed: ${plural(notAttributed, 'linked result carries', 'linked results carry')} no evaluation method version, because ${notAttributed === 1 ? 'it was' : 'they were'} scored before method versions were recorded on submissions. Listed as provisional, never as published evidence.`,
+    );
+  }
+  if (underReview > 0) {
+    gaps.push(
+      `Provisional: ${plural(underReview, 'linked result comes', 'linked results come')} from an evaluation method version that has not been approved yet.`,
+    );
+  }
+  if (performance.retracted > 0) {
+    gaps.push(
+      `Retracted: ${plural(performance.retracted, 'linked result is', 'linked results are')} not shown, because the evaluation method version that produced ${performance.retracted === 1 ? 'it' : 'them'} was rejected or withdrawn.`,
+    );
+  }
+  if (performance.notEstimable > 0) {
+    gaps.push(
+      `Not estimable: ${plural(performance.notEstimable, 'linked result has', 'linked results have')} no estimable primary metric and ${performance.notEstimable === 1 ? 'is' : 'are'} not shown.`,
+    );
+  }
+  if (performance.entries.length > 0) {
+    gaps.push(
+      'Dataset version: an evaluation task names a dataset, not a pinned version, so the version shown is the one most recently published when each result was produced.',
     );
   }
   // Per-subgroup rows need the fairness / subgroup report (#263).
@@ -90,7 +129,8 @@ export function buildModelFactsLabel(args: {
       text: card.architectureSummary,
     },
     validationAndPerformance: {
-      entries: [...performance],
+      entries: published,
+      provisional,
       subgroupAvailable: false,
       subgroupNote:
         'Subgroup-stratified results are required for risk-tier III/IV evidence but are not yet produced by the platform (#263).',

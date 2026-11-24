@@ -112,6 +112,7 @@ export type UpdateModelCardArgs = Partial<
 export function toMyModelCardSummary(row: ModelCard): MyModelCardSummary {
   const ius = row.intendedUse as IntendedUseStatement;
   return {
+    id: row.id,
     slug: row.slug,
     versionMajorMinorPatch: row.versionMajorMinorPatch,
     modelClass: row.modelClass as ModelClass,

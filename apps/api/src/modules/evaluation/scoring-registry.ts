@@ -99,6 +99,8 @@ interface ScorerEntry {
    * not, which is exactly why the challenge reports per task (ADR-0020).
    */
   readonly primaryMetric: (scores: KindScores) => number;
+  /** What `primaryMetric` is, in words, for a reader of a reported result (#587). */
+  readonly primaryMetricLabel: string;
   /** Pure scorer. Receives an already shape-validated payload. */
   readonly score: (args: {
     groundTruth: Record<string, number>;
@@ -115,6 +117,7 @@ const REGISTRY: Readonly<Record<ScorableTaskKind, ScorerEntry>> = {
     // Quadratic-weighted kappa: the ordinal agreement metric IDRiD grading is
     // conventionally reported on.
     primaryMetric: (s) => (s.kind === 'GRADING' ? s.metrics.qwk : Number.NEGATIVE_INFINITY),
+    primaryMetricLabel: 'Quadratic-weighted kappa',
     score: ({ groundTruth, predictions, config }) => ({
       kind: 'GRADING',
       // Delegates verbatim to the ADR-0017 implementation — same numbers.
@@ -134,6 +137,7 @@ const REGISTRY: Readonly<Record<ScorableTaskKind, ScorerEntry>> = {
     // hide behind a dominant one.
     primaryMetric: (s) =>
       s.kind === 'CLASSIFICATION' ? s.metrics.macroF1 : Number.NEGATIVE_INFINITY,
+    primaryMetricLabel: 'Macro F1',
     score: ({ groundTruth, predictions, config }) => ({
       kind: 'CLASSIFICATION',
       metrics: scoreClassification({
@@ -156,6 +160,7 @@ const REGISTRY: Readonly<Record<ScorableTaskKind, ScorerEntry>> = {
       s.kind === 'BINARY_DIAGNOSTIC'
         ? (s.metrics.balancedAccuracy ?? Number.NEGATIVE_INFINITY)
         : Number.NEGATIVE_INFINITY,
+    primaryMetricLabel: 'Balanced accuracy',
     score: ({ groundTruth, predictions, itemScores }) => ({
       kind: 'BINARY_DIAGNOSTIC',
       metrics: scoreBinaryDiagnostic({ groundTruth, predictions, itemScores }),
@@ -271,4 +276,11 @@ export function primaryMetricOf(scores: KindScores | null): number {
   if (scores === null) return Number.NEGATIVE_INFINITY;
   if (!isScorableTaskKind(scores.kind)) return Number.NEGATIVE_INFINITY;
   return REGISTRY[scores.kind].primaryMetric(scores);
+}
+
+/** The name of the metric `primaryMetricOf` returns for scores of this kind (#587). */
+export function primaryMetricLabelOf(kind: ScorableTaskKind): string {
+  /* eslint-disable-next-line security/detect-object-injection --
+   * `kind` is typed as the closed literal union; REGISTRY is a closed record. */
+  return REGISTRY[kind].primaryMetricLabel;
 }

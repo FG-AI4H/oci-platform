@@ -16,6 +16,7 @@ import {
   canTransition,
   isModelCardReviewerGroups,
   mayMoveModelCard,
+  modelCardVisibleTo,
   type ChangeModelCardStatusRequest,
   type CreateModelCardRequest,
   type ListModelCardsQuery,
@@ -28,6 +29,7 @@ import {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
+import { ModelCardEvidenceService } from '../evaluation/model-card-evidence.service.js';
 import { IntendedUseService } from '../intended-use/intended-use.service.js';
 import {
   PredictionRepository,
@@ -56,6 +58,7 @@ export class PredictionService {
     @Inject(PredictionRepository) private readonly repo: PredictionRepository,
     @Inject(IntendedUseService) private readonly intendedUse: IntendedUseService,
     @Inject(AUDIT_EMITTER) private readonly audit: AuditEmitter,
+    @Inject(ModelCardEvidenceService) private readonly evidence: ModelCardEvidenceService,
   ) {}
 
   async submit(
@@ -245,11 +248,12 @@ export class PredictionService {
    * anything, and publishing a clinician-facing label for it would misrepresent
    * it. That gate is exactly what the `status` field added in #432 exists for.
    *
-   * Performance rows are empty for now — reading them requires a typed
-   * cross-module surface onto the evaluation module, which the module-boundary
-   * rule says must not be a direct repository reach. The label declares the
-   * absence in `gaps` rather than rendering a blank table as if it were a
-   * finding of no effect.
+   * Performance rows come from the evaluation submissions linked to the card
+   * (#587), read through `ModelCardEvidenceService`, the evaluation module's
+   * typed read, never its repository. That module decides where each result
+   * stands (published, provisional, not attributed, retracted) by its own
+   * publication rule; the label only lays the answer out, published results
+   * apart from the rest, and says in `gaps` what it could not show.
    */
   async modelFactsLabel(slug: string, user?: CognitoAccessTokenPayload): Promise<ModelFactsLabel> {
     const row = await this.findVisible(slug, user);
@@ -260,7 +264,7 @@ export class PredictionService {
     }
     return buildModelFactsLabel({
       card: toModelCardResponse(row),
-      performance: [],
+      performance: await this.evidence.performanceFor(row.id),
       generatedAt: new Date(),
     });
   }
@@ -319,13 +323,15 @@ export class PredictionService {
    */
   private async findVisible(slug: string, user?: CognitoAccessTokenPayload): Promise<ModelCard> {
     const row = await this.repo.findBySlug(slug);
+    // The rule is `modelCardVisibleTo` in @oci/shared-types, which the
+    // evaluation module also applies before naming a linked card (#587).
     const visible =
       row !== null &&
-      (row.status === 'PUBLISHED' ||
-        (user !== undefined &&
-          (row.status === 'WITHDRAWN' ||
-            row.submitterUserId === cognitoSubAsUuid(user.sub) ||
-            isModelCardReviewer(user))));
+      modelCardVisibleTo(row.status, {
+        isSignedIn: user !== undefined,
+        isSubmitter: user !== undefined && row.submitterUserId === cognitoSubAsUuid(user.sub),
+        isReviewer: user !== undefined && isModelCardReviewer(user),
+      });
     if (!row || !visible) throw new NotFoundException(`Model card '${slug}' not found`);
     return row;
   }

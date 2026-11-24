@@ -10,6 +10,7 @@ import { IntendedUseService } from '../intended-use/intended-use.service.js';
 import { PredictionController } from './prediction.controller.js';
 import { PredictionRepository } from './prediction.repository.js';
 import { PredictionService } from './prediction.service.js';
+import { ModelCardEvidenceService } from '../evaluation/model-card-evidence.service.js';
 
 /**
  * Who may read a model card and move it through its lifecycle. Real controller
@@ -90,6 +91,10 @@ const repo = {
   listBySubmitter: vi.fn(),
 };
 const audit = { emitSync: vi.fn() };
+// No linked results (#587): this spec is about who may read what.
+const evidence = {
+  performanceFor: vi.fn(async () => ({ entries: [], retracted: 0, notEstimable: 0 })),
+};
 const intendedUse = { validate: vi.fn((ius: unknown) => ius) };
 
 describe('/v2/prediction/model-cards authorization', () => {
@@ -103,6 +108,7 @@ describe('/v2/prediction/model-cards authorization', () => {
         { provide: PredictionRepository, useValue: repo },
         { provide: IntendedUseService, useValue: intendedUse },
         { provide: AUDIT_EMITTER, useValue: audit },
+        { provide: ModelCardEvidenceService, useValue: evidence },
       ],
     })
       .overrideGuard(CognitoJwtGuard)

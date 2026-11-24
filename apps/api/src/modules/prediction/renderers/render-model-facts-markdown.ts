@@ -1,4 +1,8 @@
-import type { ModelFactsLabel } from '@oci/shared-types';
+import type {
+  ModelFactsLabel,
+  ModelFactsPerformanceEntry,
+  ModelFactsStanding,
+} from '@oci/shared-types';
 
 /**
  * Render a Model Facts Label as Markdown (#261) — the one-page clinician-facing
@@ -44,18 +48,29 @@ export function renderModelFactsMarkdown(label: ModelFactsLabel): string {
 
   L.push('## Validation & performance');
   L.push('');
-  if (label.validationAndPerformance.entries.length === 0) {
-    L.push('_No evaluation results are linked to this model card._');
+  const { entries: published, provisional } = label.validationAndPerformance;
+  L.push('### Published results');
+  L.push('');
+  if (published.length === 0) {
+    L.push(
+      provisional.length === 0
+        ? '_No evaluation results are linked to this model card._'
+        : '_None. No linked result comes from an approved evaluation method version._',
+    );
   } else {
-    L.push('| Task | Kind | Primary metric | Value | Coverage | Evaluated |');
-    L.push('| --- | --- | --- | --- | --- | --- |');
-    for (const e of label.validationAndPerformance.entries) {
-      L.push(
-        `| ${e.taskSlug} | ${e.taskKind} | ${e.primaryMetricLabel} | ${e.primaryMetricValue} | ${e.coverage ?? '—'} | ${dash(e.evaluatedAt)} |`,
-      );
-    }
+    pushPerformanceTable(L, published);
   }
   L.push('');
+  if (provisional.length > 0) {
+    L.push('### Provisional results (not published evidence)');
+    L.push('');
+    L.push(
+      '_These results are real but not validated evidence: the evaluation method version that produced them is not approved, or none was recorded._',
+    );
+    L.push('');
+    pushPerformanceTable(L, provisional);
+    L.push('');
+  }
   L.push(`**Per-subgroup:** ${label.validationAndPerformance.subgroupNote}`);
   L.push('');
 
@@ -105,4 +120,36 @@ export function renderModelFactsMarkdown(label: ModelFactsLabel): string {
   L.push('');
 
   return L.join('\n');
+}
+
+/** What a standing means, in words, for the table's Standing column (#587). */
+function standingText(standing: ModelFactsStanding): string {
+  switch (standing) {
+    case 'PUBLISHED':
+      return 'Published';
+    case 'PROVISIONAL':
+      return 'Provisional (method version under review)';
+    case 'NOT_ATTRIBUTED':
+      return 'Provisional (no method version recorded)';
+  }
+}
+
+/** A table cell: pipes escaped and line breaks folded, so a name cannot break the row. */
+function cell(v: string): string {
+  return v.replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+}
+
+function pushPerformanceTable(L: string[], entries: ReadonlyArray<ModelFactsPerformanceEntry>) {
+  L.push(
+    '| Task | Primary metric | Value | Coverage | Dataset | Method version | Standing | Evaluated |',
+  );
+  L.push('| --- | --- | --- | --- | --- | --- | --- | --- |');
+  for (const e of entries) {
+    const dataset = e.datasetVersion ? `${e.datasetSlug} ${e.datasetVersion}` : e.datasetSlug;
+    const route = e.routeSlug && e.routeVersion ? `${e.routeSlug} ${e.routeVersion}` : '—';
+    const coverage = e.coverage === null ? '—' : `${(e.coverage * 100).toFixed(1)}%`;
+    L.push(
+      `| ${cell(e.taskName)} (\`${e.taskSlug}\`) | ${cell(e.primaryMetricLabel)} | ${e.primaryMetricValue.toFixed(3)} | ${coverage} | ${cell(dataset)} | ${cell(route)} | ${standingText(e.standing)} | ${e.evaluatedAt ?? '—'} |`,
+    );
+  }
 }

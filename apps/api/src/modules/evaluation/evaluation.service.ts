@@ -15,6 +15,9 @@ import {
   GradingScoresSchema,
   MIN_SUBGROUP_CELL_SIZE,
   TaskKindScoresSchema,
+  isModelCardReviewerGroups,
+  modelCardLinkRefusal,
+  modelCardVisibleTo,
 } from '@oci/shared-types';
 import type {
   CreateEvaluationTaskRequest,
@@ -22,6 +25,9 @@ import type {
   EvaluationSubmissionResult,
   EvaluationTaskDetail,
   EvaluationTaskSummary,
+  LinkSubmissionModelCardRequest,
+  LinkSubmissionModelCardResponse,
+  SubmissionModelCard,
   ScoredSubmissionQuotaSummary,
   SealedRunFailureCode,
   SealedRunMessage,
@@ -39,7 +45,7 @@ import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { attributionFor } from './route-registry.js';
 import { EvalQueueProvider } from './eval-queue.js';
-import { EvaluationRepository } from './evaluation.repository.js';
+import { EvaluationRepository, type LinkedModelCardRef } from './evaluation.repository.js';
 import {
   imageRefMatchesDigest,
   participantFacingFailureMessage,
@@ -114,7 +120,10 @@ export const SCORED_SUBMISSION_REQUIRES_IDENTITY_MESSAGE =
  *   - the audit events of all of the above (#653): `evaluation.task.created`,
  *     `.submitted`, `.scored` and `.failed`. They carry ids, the method
  *     version and sha256 hashes (`canonicalSha256` from `@oci/audit`), never a
- *     prediction, a label or a refusal text that could quote one.
+ *     prediction, a label or a refusal text that could quote one;
+ *   - the link from a submission to the model card it scored (#587), checked
+ *     on submit and changed through `linkModelCard`, with the events
+ *     `evaluation.submission.modelcard.linked` and `.unlinked`.
  *
  * The controller enforces role gating; this layer trusts that gate. It does NOT
  * trust the controller for participant identity on a scored path — `requireParticipant`
@@ -257,6 +266,7 @@ export class EvaluationService {
             quotaConsumed: consumesScoredQuota(row),
           }
         : null,
+      modelCard: linkedCardFor(row.modelCard, user),
       viewerIsSubmitter,
       createdAt: row.createdAt.toISOString(),
     };
@@ -319,10 +329,17 @@ export class EvaluationService {
     const ctx = await this.repo.findScoringContext(slug);
     if (!ctx) throw new NotFoundException(`evaluation task "${slug}" not found`);
 
+    // The model card this result is evidence for (#587), checked before the
+    // quota and before anything is written, so a refused link costs no slot
+    // and leaves no row. Never taken from a seam submission: its participant is
+    // an EvalAI team, which files no model card here.
+    const card = seam ? null : await this.modelCardToLink(body.modelCardId, submittedBy);
+
     // The hidden ground truth is loaded (by the call above) before the quota is
     // checked, and is discarded unread if the quota refuses. That is safe — it
     // never reaches a response, a log or the exception — and it keeps this path
-    // to one task read rather than two on the happy path.
+    // to one task read rather than two on the happy path. The same holds if the
+    // model card check above refuses.
     await this.assertWithinScoredQuota(ctx.id, slug, submittedBy);
 
     // What the audit trail records of the file: its hash, never its content.
@@ -413,6 +430,9 @@ export class EvaluationService {
       routeVersionId: ref?.versionId ?? null,
       externalSubmissionId: seam?.externalSubmissionId ?? null,
       externalChallengeId: seam?.externalChallengeId ?? null,
+      // Linked on the scored row only. A file refused on its format above is
+      // recorded without the link: it holds no result to be evidence of.
+      ...(card ? { modelCardId: card.id } : {}),
     });
 
     // `emit`, not `emitSync`: the row is SCORED and the quota slot is spent, so
@@ -434,6 +454,7 @@ export class EvaluationService {
       externalChallengeId: seam?.externalChallengeId ?? null,
       predictionCount: body.predictions.length,
       predictionsSha256,
+      modelCardId: card?.id ?? null,
     };
     await this.audit.emit({
       module: 'evaluation',
@@ -451,6 +472,7 @@ export class EvaluationService {
       actorUserId: submittedBy,
       payload: { ...submitted, scoresSha256: canonicalSha256(scores) },
     });
+    if (card) await this.emitLinkedOnSubmit(created.id, submittedBy, card);
     return { id: created.id, scores };
   }
 
@@ -482,6 +504,10 @@ export class EvaluationService {
     const task = await this.repo.findTaskRefBySlug(slug);
     if (!task) throw new NotFoundException(`evaluation task "${slug}" not found`);
 
+    // Same rule and same place as in Mode 1 (#587): before the quota, before
+    // any row.
+    const card = await this.modelCardToLink(body.modelCardId, submittedBy);
+
     await this.assertWithinScoredQuota(task.id, task.slug, submittedBy);
 
     const missing = this.queue.missingConfig();
@@ -511,6 +537,7 @@ export class EvaluationService {
       // only enforces a routeVersion match when one WAS dispatched.
       routeId: null,
       routeVersion: null,
+      ...(card ? { modelCardId: card.id } : {}),
     });
 
     // The image digest identifies what was submitted, as the predictions hash
@@ -523,6 +550,7 @@ export class EvaluationService {
       routeId: null,
       routeVersion: null,
       imageDigest: body.imageDigest,
+      modelCardId: card?.id ?? null,
     };
     await this.audit.emit({
       module: 'evaluation',
@@ -532,6 +560,7 @@ export class EvaluationService {
       actorUserId: submittedBy,
       payload: audited,
     });
+    if (card) await this.emitLinkedOnSubmit(created.id, submittedBy, card);
 
     const message: SealedRunMessage = {
       submissionId: created.id,
@@ -702,6 +731,139 @@ export class EvaluationService {
   }
 
   /**
+   * Link a submission to a model card, move the link, or remove it (#587):
+   * `PATCH /v2/evaluation/submissions/:id/model-card`.
+   *
+   * Who: the submission's own submitter, who must also be the submitter of the
+   * card being linked (and of the card being unlinked: by construction the same
+   * person). Refusals:
+   *
+   *   - no such submission: 404. A FAILED submission of someone else is also a
+   *     404, as on the submission page, so the answer does not say whether a
+   *     failed attempt exists;
+   *   - not the submission's submitter: 403;
+   *   - no such card: 404;
+   *   - not the card's submitter: 403;
+   *   - the card is WITHDRAWN: 409.
+   *
+   * Restating the current link (or unlinking an unlinked submission) changes
+   * nothing, writes nothing and answers 200 with the current state, so a page
+   * may save the same choice twice. Every change is in the audit trail
+   * (`evaluation.submission.modelcard.linked` / `.unlinked`), written with
+   * `emitSync` after the update, as for a model card status change.
+   */
+  async linkModelCard(
+    submissionId: string,
+    body: LinkSubmissionModelCardRequest,
+    user: CognitoAccessTokenPayload,
+  ): Promise<LinkSubmissionModelCardResponse> {
+    const actorUserId = cognitoSubAsUuid(user.sub);
+    const row = await this.repo.findSubmissionForLink(submissionId);
+    const isSubmitter = row !== null && row.submittedBy === actorUserId;
+    if (!row || (row.status === 'FAILED' && !isSubmitter && !isAdministrator(user))) {
+      throw new NotFoundException(`submission "${submissionId}" not found`);
+    }
+    if (!isSubmitter) {
+      throw new ForbiddenException(
+        `only the participant who made submission "${submissionId}" may link it to a model card`,
+      );
+    }
+
+    const current = row.modelCard;
+    if (body.modelCardId === null) {
+      if (!current) return { submissionId, modelCard: null };
+      if (current.submitterUserId !== actorUserId) {
+        throw new ForbiddenException(
+          `only the submitter of the linked model card may remove the link from submission "${submissionId}"`,
+        );
+      }
+      await this.repo.setSubmissionModelCard(submissionId, null);
+      await this.audit.emitSync({
+        module: 'evaluation',
+        action: 'submission.modelcard.unlinked',
+        subjectType: 'evaluation-submission',
+        subjectId: submissionId,
+        actorUserId,
+        payload: {
+          modelCardId: current.id,
+          modelCardSlug: current.slug,
+          modelCardVersion: current.versionMajorMinorPatch,
+        },
+      });
+      this.logger.log(`evaluation.submission.modelcard.unlinked submission=${submissionId}`);
+      return { submissionId, modelCard: null };
+    }
+
+    const card = await this.modelCardToLink(body.modelCardId, actorUserId);
+    if (!card) throw new NotFoundException(`model card "${body.modelCardId}" not found`);
+    if (current?.id === card.id) return { submissionId, modelCard: toSubmissionModelCard(card) };
+
+    await this.repo.setSubmissionModelCard(submissionId, card.id);
+    await this.audit.emitSync({
+      module: 'evaluation',
+      action: 'submission.modelcard.linked',
+      subjectType: 'evaluation-submission',
+      subjectId: submissionId,
+      actorUserId,
+      payload: linkedPayload(card, current?.id ?? null, 'LINK_ENDPOINT'),
+    });
+    this.logger.log(
+      `evaluation.submission.modelcard.linked submission=${submissionId} card=${card.slug}`,
+    );
+    return { submissionId, modelCard: toSubmissionModelCard(card) };
+  }
+
+  /**
+   * The card a new submission links to, after the linking rule (#587), or null
+   * when none was asked for. Throws the refusal: 404 unknown card, 403 not the
+   * card's submitter, 409 withdrawn card.
+   */
+  private async modelCardToLink(
+    modelCardId: string | undefined,
+    submittedBy: string,
+  ): Promise<LinkedModelCardRef | null> {
+    if (modelCardId === undefined) return null;
+    const card = await this.repo.findModelCardForLink(modelCardId);
+    if (!card) throw new NotFoundException(`model card "${modelCardId}" not found`);
+    const refusal = modelCardLinkRefusal(card.status, {
+      isSubmitter: card.submitterUserId !== null && card.submitterUserId === submittedBy,
+    });
+    if (refusal === 'NOT_CARD_SUBMITTER') {
+      // The id, not the slug: the caller may not be entitled to see this card.
+      throw new ForbiddenException(
+        `only the submitter of model card "${modelCardId}" may link evaluation results to it`,
+      );
+    }
+    if (refusal === 'CARD_WITHDRAWN') {
+      throw new ConflictException(
+        `model card "${card.slug}" is WITHDRAWN and takes no new evaluation results`,
+      );
+    }
+    return card;
+  }
+
+  /**
+   * `evaluation.submission.modelcard.linked` for a link made with the
+   * submission itself. `emit`, like the `submitted` event it follows: the row
+   * exists and the slot is spent, so a failed audit write must not turn the
+   * answer into a 500.
+   */
+  private async emitLinkedOnSubmit(
+    submissionId: string,
+    actorUserId: string,
+    card: LinkedModelCardRef,
+  ): Promise<void> {
+    await this.audit.emit({
+      module: 'evaluation',
+      action: 'submission.modelcard.linked',
+      subjectType: 'evaluation-submission',
+      subjectId: submissionId,
+      actorUserId,
+      payload: linkedPayload(card, null, 'SUBMISSION'),
+    });
+  }
+
+  /**
    * Persist a FAILED submission and throw a 400 carrying the same reason.
    * Never returns normally — the `Promise<never>`-flavoured return type lets
    * callers write `return await this.failSubmission(...)`.
@@ -855,6 +1017,57 @@ export class EvaluationService {
 function isAdministrator(user?: CognitoAccessTokenPayload): boolean {
   const groups: unknown = user?.['cognito:groups'];
   return Array.isArray(groups) && groups.includes('admin');
+}
+
+/** The public shape of a linked card (#587). Never carries its submitter. */
+function toSubmissionModelCard(card: LinkedModelCardRef): SubmissionModelCard {
+  return {
+    id: card.id,
+    slug: card.slug,
+    version: card.versionMajorMinorPatch,
+    status: card.status,
+  };
+}
+
+/**
+ * The linked card as this reader may see it (#587): the card-visibility rule of
+ * the prediction module (`modelCardVisibleTo`), so a submission page never
+ * names a DRAFT or SUBMITTED card to someone the card's own page would answer
+ * with a 404.
+ */
+function linkedCardFor(
+  card: LinkedModelCardRef | null,
+  user?: CognitoAccessTokenPayload,
+): SubmissionModelCard | null {
+  if (!card) return null;
+  const groups: unknown = user?.['cognito:groups'];
+  const visible = modelCardVisibleTo(card.status, {
+    isSignedIn: !!user?.sub,
+    isSubmitter:
+      !!user?.sub &&
+      card.submitterUserId !== null &&
+      card.submitterUserId === cognitoSubAsUuid(user.sub),
+    isReviewer:
+      Array.isArray(groups) &&
+      isModelCardReviewerGroups(groups.filter((g): g is string => typeof g === 'string')),
+  });
+  return visible ? toSubmissionModelCard(card) : null;
+}
+
+/** Payload of `evaluation.submission.modelcard.linked`: ids and the card's name, flat. */
+function linkedPayload(
+  card: LinkedModelCardRef,
+  previousModelCardId: string | null,
+  via: 'SUBMISSION' | 'LINK_ENDPOINT',
+): Record<string, unknown> {
+  return {
+    modelCardId: card.id,
+    modelCardSlug: card.slug,
+    modelCardVersion: card.versionMajorMinorPatch,
+    modelCardStatus: card.status,
+    previousModelCardId,
+    via,
+  };
 }
 
 /**
