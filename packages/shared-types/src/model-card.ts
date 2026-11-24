@@ -60,6 +60,64 @@ export function canTransition(from: ModelCardStatus, to: ModelCardStatus): boole
   return allowedTransitionsFrom(from).includes(to);
 }
 
+/**
+ * Cognito groups that review model cards: they may publish a card someone
+ * else submitted. `admin` is the operator override.
+ */
+export const MODEL_CARD_REVIEWER_GROUPS: ReadonlyArray<string> = ['evaluation-reviewer', 'admin'];
+
+export function isModelCardReviewerGroups(groups: ReadonlyArray<string>): boolean {
+  return groups.some((g) => MODEL_CARD_REVIEWER_GROUPS.includes(g));
+}
+
+/** Who is acting on a card, as far as the lifecycle rules care. */
+export interface ModelCardActor {
+  /** The caller filed the card. */
+  isSubmitter: boolean;
+  /** The caller is in a reviewer group (`MODEL_CARD_REVIEWER_GROUPS`). */
+  isReviewer: boolean;
+}
+
+/**
+ * May this actor move a card to `to`? The lifecycle table (`canTransition`)
+ * says whether the move exists at all; this says who may make it (#432,
+ * #651). Submitting is the submitter's act; publishing is a reviewer's, and
+ * review is in pairs, so the submitter may not publish their own card, admin
+ * included. Returning a submission to DRAFT or withdrawing a published card
+ * is open to either: neither approves anything.
+ *
+ * The API enforces it; the web app reads it to decide which buttons to show.
+ */
+export function mayMoveModelCard(to: ModelCardStatus, actor: ModelCardActor): boolean {
+  if (to === 'SUBMITTED') return actor.isSubmitter;
+  if (to === 'PUBLISHED') return actor.isReviewer && !actor.isSubmitter;
+  return actor.isSubmitter || actor.isReviewer;
+}
+
+/** The moves this actor may make from `from`: the table, filtered by `mayMoveModelCard`. */
+export function modelCardMovesFor(
+  from: ModelCardStatus,
+  actor: ModelCardActor,
+): ReadonlyArray<ModelCardStatus> {
+  return allowedTransitionsFrom(from).filter((to) => mayMoveModelCard(to, actor));
+}
+
+/**
+ * The edit rule (#651): a card is edited only while it is DRAFT, and only by
+ * its submitter. Once submitted, a reviewer is reading it; a change goes
+ * through "return to draft" first. Reviewers and admin do not edit someone
+ * else's card.
+ */
+export function canEditModelCard(status: ModelCardStatus, actor: ModelCardActor): boolean {
+  return status === 'DRAFT' && actor.isSubmitter;
+}
+
+/**
+ * Slugs a card may not take, because a web route of the same name sits
+ * beside `/models/[slug]` (#651): a card called `new` could never be opened.
+ */
+export const RESERVED_MODEL_CARD_SLUGS: ReadonlyArray<string> = ['new'];
+
 /** Regulatory approval state (CHAI `ReleaseInfo.RegulatoryApproval`). Reuses the
  * platform's existing pathway vocabulary from #120 rather than a parallel one. */
 export const RegulatoryApprovalSchema = z
@@ -77,7 +135,9 @@ export type RegulatoryApproval = z.infer<typeof RegulatoryApprovalSchema>;
 
 export const CreateModelCardRequestSchema = z
   .object({
-    slug: ModelCardSlugSchema,
+    slug: ModelCardSlugSchema.refine((s) => !RESERVED_MODEL_CARD_SLUGS.includes(s), {
+      message: 'This identifier is reserved; choose another',
+    }),
     intendedUse: IntendedUseStatementSchema,
     /** ADR-0015 door-opener: classical | time-series | foundation | lmm | agent. */
     modelClass: ModelClassSchema,
@@ -109,6 +169,53 @@ export const CreateModelCardRequestSchema = z
   })
   .strict();
 export type CreateModelCardRequest = z.infer<typeof CreateModelCardRequestSchema>;
+
+/**
+ * Edit a DRAFT card — `PATCH /v2/prediction/model-cards/:slug` (#651).
+ *
+ * The create fields, each optional: a field left out keeps its value. Not
+ * editable: the slug (it is the card's address, and links to it may already
+ * exist) and the semver parent (a version promotion is a new card). The
+ * defaults of the create schema are dropped on purpose, so that leaving out
+ * `trainingDataLineage` does not reset it to `{}`. An `intendedUse` sent here
+ * replaces the whole statement and goes through the same validation as on
+ * create.
+ */
+export const UpdateModelCardRequestSchema = CreateModelCardRequestSchema.omit({
+  slug: true,
+  parentModelCardId: true,
+})
+  .extend({
+    trainingDataLineage: z.record(z.string(), z.unknown()),
+    materialChange: z.boolean(),
+    trainingDataJurisdictions: z.array(z.string().min(2).max(64)).max(64),
+    generativeAi: z.boolean(),
+  })
+  .partial()
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, {
+    message: 'Nothing to update: send at least one field',
+  });
+export type UpdateModelCardRequest = z.infer<typeof UpdateModelCardRequestSchema>;
+
+/**
+ * One of the caller's own cards — `GET /v2/prediction/model-cards/mine`
+ * (#651). Every status, newest change first: it is the submitter's
+ * workspace, not the public catalogue.
+ */
+export interface MyModelCardSummary {
+  slug: string;
+  versionMajorMinorPatch: string;
+  modelClass: ModelClass;
+  status: ModelCardStatus;
+  medicalPurpose: string;
+  riskTier: string;
+  updatedAt: string;
+}
+
+export interface ListMyModelCardsResponse {
+  items: MyModelCardSummary[];
+}
 
 export const ModelCardResponseSchema = z.object({
   id: z.string().uuid(),

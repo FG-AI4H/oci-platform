@@ -12,13 +12,18 @@ import type { ModelCard } from '@oci/database';
 import type { ModelFactsLabel } from '@oci/shared-types';
 import {
   allowedTransitionsFrom,
+  canEditModelCard,
   canTransition,
+  isModelCardReviewerGroups,
+  mayMoveModelCard,
   type ChangeModelCardStatusRequest,
   type CreateModelCardRequest,
   type ListModelCardsQuery,
   type ListModelCardsResponse,
+  type ListMyModelCardsResponse,
   type ModelCardResponse,
   type PublicModelCard,
+  type UpdateModelCardRequest,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
@@ -27,6 +32,7 @@ import { IntendedUseService } from '../intended-use/intended-use.service.js';
 import {
   PredictionRepository,
   toModelCardResponse,
+  toMyModelCardSummary,
   toPublicModelCard,
 } from './prediction.repository.js';
 import { buildModelFactsLabel } from './renderers/model-facts-label.js';
@@ -117,6 +123,62 @@ export class PredictionService {
   }
 
   /**
+   * Edit a card (#651). The rule is `canEditModelCard` in @oci/shared-types:
+   * DRAFT only, submitter only. Someone who cannot see the card gets the same
+   * 404 as for a missing slug; a reviewer who can see it but did not file it
+   * gets a 403; the submitter editing a card that is no longer DRAFT gets a
+   * 409, since returning it to DRAFT first would make the edit possible.
+   *
+   * A new Intended-Use Statement goes through `IntendedUseService.validate`,
+   * the same check as on create. The audit event names the changed fields,
+   * not their values.
+   */
+  async update(
+    slug: string,
+    body: UpdateModelCardRequest,
+    user: CognitoAccessTokenPayload,
+  ): Promise<ModelCardResponse> {
+    const existing = await this.findVisible(slug, user);
+    const actorUserId = cognitoSubAsUuid(user.sub);
+    const isSubmitter = existing.submitterUserId === actorUserId;
+    if (!isSubmitter) {
+      throw new ForbiddenException(`Only the submitter may edit model card '${slug}'`);
+    }
+    if (
+      !canEditModelCard(existing.status, { isSubmitter, isReviewer: isModelCardReviewer(user) })
+    ) {
+      throw new ConflictException(
+        `Model card '${slug}' is ${existing.status}; only a DRAFT card can be edited`,
+      );
+    }
+
+    const ius = body.intendedUse ? this.intendedUse.validate(body.intendedUse) : undefined;
+    const updated = await this.repo.update(existing.id, { ...body, intendedUse: ius });
+
+    await this.audit.emitSync({
+      module: 'prediction',
+      action: 'modelcard.updated',
+      subjectType: 'model-card',
+      subjectId: updated.id,
+      actorUserId,
+      payload: {
+        slug: updated.slug,
+        fields: changedFields(body),
+        riskTier: (updated.intendedUse as { riskTier?: string }).riskTier ?? null,
+      },
+    });
+
+    this.logger.log(`prediction.modelcard.updated slug=${slug}`);
+    return toModelCardResponse(updated);
+  }
+
+  /** The caller's own cards, every status (#651). */
+  async listMine(user: CognitoAccessTokenPayload): Promise<ListMyModelCardsResponse> {
+    const rows = await this.repo.listBySubmitter(cognitoSubAsUuid(user.sub));
+    return { items: rows.map(toMyModelCardSummary) };
+  }
+
+  /**
    * Drive the model-card lifecycle (#432). Transitions are validated against
    * the table in `@oci/shared-types` — an illegal move is a 400 that names the
    * moves actually available, and a no-op re-statement of the current status is
@@ -145,20 +207,14 @@ export class PredictionService {
       );
     }
 
-    // Submitting is the submitter's act; publishing is a reviewer's, and review
-    // is in pairs, so the submitter may not publish their own card, admin
-    // included. Returning a submission to DRAFT or withdrawing a published card
-    // is open to either: neither approves anything.
+    // Who may make the move: the rule lives in @oci/shared-types
+    // (`mayMoveModelCard`) so the web app shows exactly the buttons this
+    // check accepts. Submitting is the submitter's act; publishing is a
+    // reviewer's, and never the submitter's own card.
     const actorUserId = cognitoSubAsUuid(user.sub);
     const isSubmitter = existing.submitterUserId === actorUserId;
     const isReviewer = isModelCardReviewer(user);
-    const permitted =
-      to === 'SUBMITTED'
-        ? isSubmitter
-        : to === 'PUBLISHED'
-          ? isReviewer && !isSubmitter
-          : isSubmitter || isReviewer;
-    if (!permitted) {
+    if (!mayMoveModelCard(to, { isSubmitter, isReviewer })) {
       throw new ForbiddenException(
         to === 'SUBMITTED'
           ? `Only the submitter may submit model card '${slug}'`
@@ -276,6 +332,10 @@ export class PredictionService {
 }
 
 function isModelCardReviewer(user: CognitoAccessTokenPayload): boolean {
-  const groups = (user['cognito:groups'] ?? []) as string[];
-  return groups.includes('evaluation-reviewer') || groups.includes('admin');
+  return isModelCardReviewerGroups((user['cognito:groups'] ?? []) as string[]);
+}
+
+/** The fields an update names, for the audit payload: names only, never values. */
+function changedFields(body: UpdateModelCardRequest): string[] {
+  return Object.keys(body).sort();
 }

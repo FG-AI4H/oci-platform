@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ModelCard, Prisma } from '@oci/database';
+import { Prisma, type ModelCard } from '@oci/database';
 import type {
   IntendedUseStatement,
   ModelCardResponse,
   ModelCardSummary,
   ModelCardStatus,
   ModelClass,
+  MyModelCardSummary,
   PublicModelCard,
   RegulatoryApproval,
 } from '@oci/shared-types';
@@ -102,6 +103,25 @@ export interface CreateModelCardArgs {
   securityPosture: string | null;
 }
 
+/** The editable content of a card (#651): every field optional, `undefined` = unchanged. */
+export type UpdateModelCardArgs = Partial<
+  Omit<CreateModelCardArgs, 'slug' | 'submitterUserId' | 'parentModelCardId'>
+>;
+
+/** A row of the submitter's own list (#651). */
+export function toMyModelCardSummary(row: ModelCard): MyModelCardSummary {
+  const ius = row.intendedUse as IntendedUseStatement;
+  return {
+    slug: row.slug,
+    versionMajorMinorPatch: row.versionMajorMinorPatch,
+    modelClass: row.modelClass as ModelClass,
+    status: row.status as ModelCardStatus,
+    medicalPurpose: ius.medicalPurpose,
+    riskTier: ius.riskTier,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 @Injectable()
 export class PredictionRepository {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
@@ -156,6 +176,68 @@ export class PredictionRepository {
     args: SearchPublishedModelCardsArgs,
   ): Promise<{ rows: ModelCardSummary[]; total: number }> {
     return searchPublishedModelCards(this.prisma.client, args);
+  }
+
+  /**
+   * Edit a card's content (#651). Only the fields present in `args` change;
+   * `null` clears a nullable column (SQL NULL for the Json ones).
+   */
+  async update(id: string, args: UpdateModelCardArgs): Promise<ModelCard> {
+    const data: Prisma.ModelCardUpdateInput = {};
+    if (args.intendedUse !== undefined) {
+      data.intendedUse = args.intendedUse as unknown as Prisma.InputJsonValue;
+    }
+    if (args.modelClass !== undefined) data.modelClass = args.modelClass;
+    if (args.architectureSummary !== undefined) {
+      data.architectureSummary = args.architectureSummary;
+    }
+    if (args.trainingDataLineage !== undefined) {
+      data.trainingDataLineage = args.trainingDataLineage as Prisma.InputJsonValue;
+    }
+    if (args.versionMajorMinorPatch !== undefined) {
+      data.versionMajorMinorPatch = args.versionMajorMinorPatch;
+    }
+    if (args.changeJustification !== undefined) {
+      data.changeJustification = args.changeJustification;
+    }
+    if (args.materialChange !== undefined) data.materialChange = args.materialChange;
+    if (args.trainingDataJurisdictions !== undefined) {
+      data.trainingDataJurisdictions = args.trainingDataJurisdictions;
+    }
+    if (args.generativeAi !== undefined) data.generativeAi = args.generativeAi;
+    if (args.lmmSpecificLimitations !== undefined) {
+      data.lmmSpecificLimitations =
+        args.lmmSpecificLimitations === null
+          ? Prisma.DbNull
+          : (args.lmmSpecificLimitations as Prisma.InputJsonValue);
+    }
+    if (args.modelDeveloper !== undefined) data.modelDeveloper = args.modelDeveloper;
+    if (args.developerContact !== undefined) data.developerContact = args.developerContact;
+    if (args.clinicalSummary !== undefined) data.clinicalSummary = args.clinicalSummary;
+    if (args.regulatoryApproval !== undefined) {
+      data.regulatoryApproval =
+        args.regulatoryApproval === null
+          ? Prisma.DbNull
+          : (args.regulatoryApproval as unknown as Prisma.InputJsonValue);
+    }
+    if (args.knownBiasesOrEthicalConsiderations !== undefined) {
+      data.knownBiasesOrEthicalConsiderations = args.knownBiasesOrEthicalConsiderations;
+    }
+    if (args.biasMitigationApproaches !== undefined) {
+      data.biasMitigationApproaches = args.biasMitigationApproaches;
+    }
+    if (args.ongoingMaintenance !== undefined) data.ongoingMaintenance = args.ongoingMaintenance;
+    if (args.securityPosture !== undefined) data.securityPosture = args.securityPosture;
+    return this.prisma.client.modelCard.update({ where: { id }, data });
+  }
+
+  /** The submitter's own cards, every status, most recently changed first (#651). */
+  async listBySubmitter(submitterUserId: string): Promise<ModelCard[]> {
+    return this.prisma.client.modelCard.findMany({
+      where: { submitterUserId },
+      orderBy: [{ updatedAt: 'desc' }, { slug: 'asc' }],
+      take: 200,
+    });
   }
 
   async updateStatus(id: string, status: ModelCardStatus): Promise<ModelCard> {
