@@ -240,6 +240,32 @@ Added with the access-request pages. Every row is a draft.
 | Disposable e-mail address                                                    | Adresse e-mail jetable                                                 | new    |          |
 | Submitted (date of a request)                                                | Envoyée le                                                             | new    |          |
 
+### Evidence summary and diagnostic statistics
+
+Terms of the evidence summary of one evaluated model
+([#652](https://github.com/FG-AI4H/oci-platform/issues/652)). The statistics follow the French
+clinical usage a radiologist reads in a diagnostic-accuracy study.
+
+| English                                    | French (draft)                                  | Source | Reviewer |
+| ------------------------------------------ | ----------------------------------------------- | ------ | -------- |
+| Sensitivity / specificity                  | Sensibilité / spécificité                       | new    |          |
+| Positive / negative predictive value       | Valeur prédictive positive / négative (VPP/VPN) | new    |          |
+| 95% confidence interval (95% CI)           | Intervalle de confiance à 95 % (IC 95 %)        | new    |          |
+| Accuracy / balanced accuracy               | Exactitude / exactitude équilibrée              | new    |          |
+| Area under the ROC curve (AUC)             | Aire sous la courbe ROC (ASC)                   | new    |          |
+| Prevalence / coverage                      | Prévalence / couverture                         | new    |          |
+| Precision / recall (per class)             | Précision (VPP) / rappel (sensibilité)          | new    |          |
+| Quadratic-weighted kappa                   | Kappa pondéré quadratique                       | new    |          |
+| Subgroup / result by subgroup              | Sous-groupe / résultat par sous-groupe          | new    |          |
+| Withheld (a small group's figure)          | Masqué ; « non présenté » for a whole group     | new    |          |
+| Gap (what the evidence does not show)      | Lacune                                          | new    |          |
+| Evaluation method / review status          | Méthode d’évaluation / statut de revue          | new    |          |
+| Reviewer’s rationale                       | Motivation de la décision                       | new    |          |
+| Provisional / published / retracted result | Résultat provisoire / publié / retiré           | new    |          |
+| Audit trail / record hash                  | Piste d’audit / empreinte (d’enregistrement)    | new    |          |
+| Trace (section of the summary)             | Traçabilité                                     | new    |          |
+| Reader (of the reference labels)           | Lecteur                                         | repo   |          |
+
 ## Models
 
 | English                                                                               | French (draft)                                                                                      | Source | Reviewer |
