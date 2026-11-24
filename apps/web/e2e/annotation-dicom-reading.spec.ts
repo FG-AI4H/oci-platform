@@ -124,6 +124,22 @@ async function shownView(page: Page): Promise<string> {
   return raw;
 }
 
+/** A key as a French (AZERTY) keyboard sends it: what it types, and the physical key. */
+async function pressAzerty(page: Page, key: string, code: string) {
+  await viewport(page).evaluate(
+    (element, k) => {
+      element.dispatchEvent(
+        new KeyboardEvent('keydown', { key: k.key, code: k.code, bubbles: true, cancelable: true }),
+      );
+    },
+    { key, code },
+  );
+  // Let the viewer draw whatever the key did before anyone looks.
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  );
+}
+
 /** The form post that carries the answer to the web app's server action. */
 function answerPost(page: Page): Promise<Request> {
   return page.waitForRequest(
@@ -218,6 +234,17 @@ test.describe('reading a DICOM series as a task (#674)', () => {
     await expect(answered.getByText('Bleed', { exact: true })).toHaveCount(1);
     for (const { reader } of readings) await expect(page.getByText(reader)).toHaveCount(0);
 
+    // On a French keyboard the 6 key types "-". In the viewer it is not a
+    // zoom (and with no answer 6 it does nothing); the minus key still is.
+    await expect(page.getByTestId('dicom-status')).toHaveText(`All ${IMAGES} images loaded`);
+    await viewport(page).focus();
+    const before = await viewport(page).screenshot();
+    await pressAzerty(page, '-', 'Digit6');
+    expect((await viewport(page).screenshot()).equals(before)).toBe(true);
+    await pressAzerty(page, '-', 'Minus');
+    expect((await viewport(page).screenshot()).equals(before)).toBe(false);
+    await page.getByRole('button', { name: 'Reset', exact: true }).click();
+
     // Where each reader was when they answered (#674), and a way to look there.
     await expect(answered.getByText(`Image 5 of ${IMAGES} · W 200 · L 75`)).toBeVisible();
     await expect(answered.getByText(`Image 8 of ${IMAGES} · W 2000 · L 500`)).toBeVisible();
@@ -246,7 +273,10 @@ test.describe('reading a DICOM series as a task (#674)', () => {
       .poll(async () => JSON.parse(await shownView(page)) as unknown)
       .toMatchObject({ position: 5, window: { width: 200, center: 75 } });
     const shown = await shownView(page);
-    await page.getByRole('radio', { name: 'Bleed', exact: true }).check();
+    // The 2 key types "é" on a French keyboard: in the viewer it picks answer 2.
+    await viewport(page).focus();
+    await pressAzerty(page, 'é', 'Digit2');
+    await expect(page.getByRole('radio', { name: 'Bleed', exact: true })).toBeChecked();
     await page
       .getByRole('textbox', { name: 'Reason' })
       .fill('Thin subdural collection on slice 5.');
