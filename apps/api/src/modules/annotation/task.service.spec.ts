@@ -137,7 +137,10 @@ const TX = { tx: true };
 
 let campaigns: CampaignsMock;
 let tasks: TasksMock;
-let dicomSeries: { listTaskSamples: ReturnType<typeof vi.fn> };
+let dicomSeries: {
+  listTaskSamples: ReturnType<typeof vi.fn>;
+  taskSampleImageIds: ReturnType<typeof vi.fn>;
+};
 let abandonment: {
   expireStaleForCampaign: ReturnType<typeof vi.fn>;
   release: ReturnType<typeof vi.fn>;
@@ -192,7 +195,10 @@ beforeEach(() => {
     countGoldSamplesInCampaign: vi.fn().mockResolvedValue(0),
     countExistingSampleRefs: vi.fn().mockResolvedValue(0),
   };
-  dicomSeries = { listTaskSamples: vi.fn().mockResolvedValue([]) };
+  dicomSeries = {
+    listTaskSamples: vi.fn().mockResolvedValue([]),
+    taskSampleImageIds: vi.fn(),
+  };
   abandonment = {
     expireStaleForCampaign: vi.fn().mockResolvedValue(0),
     release: vi.fn().mockResolvedValue(true),
@@ -957,6 +963,91 @@ describe('TaskService.submit — campaign labels (#646)', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(tasks.markAssignmentSubmitted).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('TaskService.submit — what was on screen (#674)', () => {
+  const SERIES = '11111111-1111-4111-8111-111111111111';
+  const IMAGES = [
+    'aaaaaaaa-0000-4000-8000-000000000001',
+    'aaaaaaaa-0000-4000-8000-000000000002',
+    'aaaaaaaa-0000-4000-8000-000000000003',
+  ];
+  const onImage2 = {
+    distributionId: IMAGES[1],
+    position: 2,
+    imageCount: 3,
+    window: { width: 80, center: 40 },
+    inverted: false,
+  };
+
+  function given(sampleRef: string) {
+    campaigns.findById.mockResolvedValue({
+      id: 'cmp-1',
+      slug: 'ct',
+      taskKind: 'CLASSIFICATION',
+      manifestVersionId: 'dv-1',
+      currentInstructionsVersion: null,
+      workflowConfig: {
+        nAnnotators: 1,
+        classificationLabels: {
+          labels: [
+            { value: 'normal', display: 'Normal' },
+            { value: 'bleed', display: 'Bleed' },
+          ],
+        },
+      },
+    });
+    tasks.findAssignmentById.mockResolvedValue({
+      ...assignmentRow(),
+      task: taskRow({ sampleRef }),
+    });
+    tasks.countSubmittedAssignmentsAtGate.mockResolvedValue(1);
+    tasks.updateGateState.mockResolvedValue(taskRow({ gateState: 'COMPLETED' }));
+    dicomSeries.taskSampleImageIds.mockResolvedValue(IMAGES);
+  }
+
+  const submit = (submission: Record<string, unknown>) =>
+    service.submit({ assignmentId: 'asn-1', submission, user: userPayload(ANNOTATOR_SUB) });
+
+  it('stores an answer on a series with the image and window on screen', async () => {
+    given(`dicom-series:${SERIES}`);
+    await submit({ label: 'bleed', view: onImage2 });
+    expect(dicomSeries.taskSampleImageIds).toHaveBeenCalledWith({
+      sampleRef: `dicom-series:${SERIES}`,
+      versionId: 'dv-1',
+    });
+    expect(tasks.markAssignmentSubmitted).toHaveBeenCalledWith(
+      expect.objectContaining({ submission: { label: 'bleed', view: onImage2 } }),
+    );
+  });
+
+  it.each([
+    ['no view', undefined],
+    ['an image of another series', { ...onImage2, distributionId: SERIES }],
+    ['the right image at the wrong place', { ...onImage2, position: 3 }],
+    ['the wrong image count', { ...onImage2, imageCount: 4, position: 2 }],
+  ])('refuses an answer on a series with %s', async (_case, view) => {
+    given(`dicom-series:${SERIES}`);
+    await expect(
+      submit({ label: 'bleed', ...(view === undefined ? {} : { view }) }),
+    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    expect(tasks.markAssignmentSubmitted).not.toHaveBeenCalled();
+  });
+
+  it('refuses a view on an answer about an image', async () => {
+    given('file:aaaaaaaa-0000-4000-8000-000000000009');
+    await expect(submit({ label: 'normal', view: onImage2 })).rejects.toBeInstanceOf(
+      UnprocessableEntityException,
+    );
+    expect(dicomSeries.taskSampleImageIds).not.toHaveBeenCalled();
+  });
+
+  it('takes an answer about an image without a view, reading no series', async () => {
+    given('file:aaaaaaaa-0000-4000-8000-000000000009');
+    await submit({ label: 'normal' });
+    expect(dicomSeries.taskSampleImageIds).not.toHaveBeenCalled();
+    expect(tasks.markAssignmentSubmitted).toHaveBeenCalled();
   });
 });
 

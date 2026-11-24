@@ -731,6 +731,10 @@ describe.skipIf(!dockerAvailable)('DICOM series endpoints against Postgres (#674
         page.instances.map((i) => i.distributionId),
       );
       expect(sample.instances.map((i) => i.instanceNumber)).toEqual([1, 2, 3, 4, 5]);
+      // An answer's view is checked against these, in this order (#674).
+      expect(
+        await service.taskSampleImageIds({ sampleRef: dicomSeriesSampleRef(id), versionId: v1 }),
+      ).toEqual(sample.instances.map((i) => i.distributionId));
       for (const instance of sample.instances) {
         expect(instance.held).toBe(false);
         expect(new URL(instance.url).searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
@@ -753,6 +757,9 @@ describe.skipIf(!dockerAvailable)('DICOM series endpoints against Postgres (#674
         await expect(service.taskSample({ sampleRef: ref, versionId: v1 })).rejects.toBeInstanceOf(
           ConflictException,
         );
+        await expect(
+          service.taskSampleImageIds({ sampleRef: ref, versionId: v1 }),
+        ).rejects.toBeInstanceOf(ConflictException);
       }
     });
 
