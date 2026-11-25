@@ -13,6 +13,8 @@ import { CatalogService } from '../modules/catalog/catalog.service.js';
 import { EvalQueueProvider } from '../modules/evaluation/eval-queue.js';
 import { EvaluationRepository } from '../modules/evaluation/evaluation.repository.js';
 import { EvaluationService } from '../modules/evaluation/evaluation.service.js';
+import { RouteRegistryRepository } from '../modules/evaluation/route-registry.repository.js';
+import { RouteRegistryService } from '../modules/evaluation/route-registry.service.js';
 import { scoreClassification } from '../modules/evaluation/scoring-classification.js';
 import type { PrismaService } from '../prisma.service.js';
 import {
@@ -133,10 +135,13 @@ describe.skipIf(!dockerAvailable)(
     beforeAll(async () => {
       db = await startMigratedPostgres();
       prisma = db.prisma;
+      const prismaService = { client: prisma } as unknown as PrismaService;
+      const audit = new AuditEmitter({ prisma: prisma as unknown as AuditPrismaPort });
       evaluation = new EvaluationService(
-        new EvaluationRepository({ client: prisma } as unknown as PrismaService),
+        new EvaluationRepository(prismaService),
         new EvalQueueProvider(),
-        new AuditEmitter({ prisma: prisma as unknown as AuditPrismaPort }),
+        audit,
+        new RouteRegistryService(new RouteRegistryRepository(prismaService), audit),
       );
     }, 180_000);
 

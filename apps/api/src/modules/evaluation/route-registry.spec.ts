@@ -184,3 +184,63 @@ describe('ADR-0021 — which decisions carry a rationale', () => {
     expect(reviewNeedsRationale('UNDER_REVIEW')).toBe(false);
   });
 });
+
+describe('#583 — the version a new submission is pinned to', () => {
+  const ROUTE = { id: 'route-1', slug: 'oci-predictions-scoring' };
+  const version = (reviewStatus: string) => ({
+    id: 'version-2',
+    routeId: ROUTE.id,
+    version: '1.1.0',
+    reviewStatus,
+  });
+  const serviceWith = (route: unknown, latest: unknown) => {
+    const repo = {
+      findReferenceRouteForMode: vi.fn().mockResolvedValue(route),
+      findLatestVersion: vi.fn().mockResolvedValue(latest),
+    };
+    return { repo, svc: new RouteRegistryService(repo as never, {} as never) };
+  };
+
+  it.each(['DECLARED', 'UNDER_REVIEW', 'APPROVED'])(
+    'pins the latest version of the mode’s reference method while it is %s',
+    async (status) => {
+      const { repo, svc } = serviceWith(ROUTE, version(status));
+      await expect(svc.resolveServingVersion('PREDICTIONS')).resolves.toEqual({
+        ok: true,
+        pinned: {
+          routeId: ROUTE.id,
+          routeSlug: ROUTE.slug,
+          versionId: 'version-2',
+          version: '1.1.0',
+          reviewStatus: status,
+        },
+      });
+      expect(repo.findReferenceRouteForMode).toHaveBeenCalledWith('PREDICTIONS');
+      expect(repo.findLatestVersion).toHaveBeenCalledWith(ROUTE.id);
+    },
+  );
+
+  it.each(['REJECTED', 'WITHDRAWN'])(
+    'refuses a %s latest version rather than falling back to an older one',
+    async (status) => {
+      const { svc } = serviceWith(ROUTE, version(status));
+      await expect(svc.resolveServingVersion('CONTAINER')).resolves.toMatchObject({
+        ok: false,
+        reason: 'VERSION_CLOSED',
+        mode: 'CONTAINER',
+        pinned: { version: '1.1.0', reviewStatus: status },
+      });
+    },
+  );
+
+  it('reports NO_VERSION when the mode has no reference method, or it has no version', async () => {
+    await expect(serviceWith(null, null).svc.resolveServingVersion('ENCRYPTED')).resolves.toEqual({
+      ok: false,
+      reason: 'NO_VERSION',
+      mode: 'ENCRYPTED',
+    });
+    await expect(
+      serviceWith(ROUTE, null).svc.resolveServingVersion('PREDICTIONS'),
+    ).resolves.toEqual({ ok: false, reason: 'NO_VERSION', mode: 'PREDICTIONS' });
+  });
+});

@@ -259,6 +259,9 @@ export {
   EvaluationRouteResponseSchema,
   ScoreAttributionSchema,
   LEGACY_ATTRIBUTION_NOTE,
+  NO_METHOD_VERSION_CODE,
+  NoMethodVersionReasonSchema,
+  NoMethodVersionRefusalSchema,
 } from './evaluation-route.js';
 export type {
   RouteParty,
@@ -274,6 +277,8 @@ export type {
   RouteVersionResponse,
   EvaluationRouteResponse,
   ScoreAttribution,
+  NoMethodVersionReason,
+  NoMethodVersionRefusal,
 } from './evaluation-route.js';
 
 // Capability document (#590) — `/.well-known/oci-capabilities.json`, grouped
@@ -4361,17 +4366,18 @@ export type ImageRef = z.infer<typeof ImageRefSchema>;
  * model in the worker; drift between the two is the likeliest source of a
  * silently skipped control.
  *
- * `routeId` / `routeVersion` are optional until WP5 lands the
- * `EvaluationRoute` model. The fields are in the contract now so the worker can
- * be built against the final shape, but the API cannot populate a real route
- * reference before the registry exists, and inventing a UUID that resolves to
- * nothing would be worse than an absent value. WP5 makes them required.
+ * `routeId` / `routeVersion` are the evaluation method version pinned to the
+ * submission when it was accepted (#583). Required: the API refuses a
+ * submission it cannot pin, so every dispatch carries one, and the outbox
+ * refuses a result whose reported `routeVersion` disagrees with it. The
+ * worker's model keeps them optional so a message queued before #583 is still
+ * consumed.
  */
 export const SealedRunMessageSchema = z.object({
   submissionId: z.string().uuid(),
   taskSlug: EvaluationTaskSlugSchema,
-  routeId: z.string().uuid().optional(),
-  routeVersion: z.string().min(1).max(64).optional(),
+  routeId: z.string().uuid(),
+  routeVersion: z.string().min(1).max(64),
   imageRef: ImageRefSchema,
   imageDigest: ImageDigestSchema,
   /**

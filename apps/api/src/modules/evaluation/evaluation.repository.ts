@@ -159,7 +159,7 @@ export interface SubmissionResultContextRow {
   taskId: string;
   mode: SubmissionMode;
   status: SubmissionStatus;
-  /** Route version pinned at dispatch. Null until WP5 populates it. */
+  /** Method version pinned at dispatch (#583). Null for rows dispatched before it. */
   routeVersion: string | null;
   /** Fingerprint of the already-applied result, if any. */
   resultFingerprint: string | null;
@@ -670,43 +670,6 @@ export class EvaluationRepository {
   }
 
   /**
-   * The reference route version for a mode (WP5 §5). Used to attribute every
-   * new submission: invariant 1 requires a SCORED row to carry a route, and a
-   * row created after the registry exists is not "legacy" — it just needs
-   * attributing. Returns null only if the seed is missing, which is a
-   * deployment fault rather than a normal state.
-   */
-  async findReferenceRouteVersionForMode(mode: 'PREDICTIONS' | 'CONTAINER' | 'ENCRYPTED'): Promise<{
-    routeId: string;
-    routeSlug: string;
-    versionId: string;
-    version: string;
-    reviewStatus: string;
-  } | null> {
-    const route = await this.prisma.client.evaluationRoute.findFirst({
-      where: { mode, isReference: true },
-      select: {
-        id: true,
-        slug: true,
-        versions: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: { id: true, version: true, reviewStatus: true },
-        },
-      },
-    });
-    const v = route?.versions.at(0);
-    if (!route || !v) return null;
-    return {
-      routeId: route.id,
-      routeSlug: route.slug,
-      versionId: v.id,
-      version: v.version,
-      reviewStatus: v.reviewStatus,
-    };
-  }
-
-  /**
    * Find the submission already created for an external front-door entry.
    *
    * Backs seam-intake idempotency: an EvalAI submission pk identifies one
@@ -758,7 +721,10 @@ export class EvaluationRepository {
     /** Results by subgroup, already suppressed (#410). Omitted or null when none. */
     subgroupScores?: SubgroupResults | null;
     error: string | null;
-    /** Route attribution (WP5 invariant 1). Null only for rows that predate it. */
+    /**
+     * The method version pinned at submission (#583). Null only for rows that
+     * predate it; the service sets all three on every new row.
+     */
     routeId?: string | null;
     routeVersion?: string | null;
     routeVersionId?: string | null;
@@ -807,8 +773,10 @@ export class EvaluationRepository {
     submittedBy: string | null;
     imageRef: string;
     imageDigest: string;
-    routeId: string | null;
-    routeVersion: string | null;
+    /** The method version pinned at submission (#583). */
+    routeId: string;
+    routeVersion: string;
+    routeVersionId: string;
     /** The model card the submitter linked (#587), already checked by the service. */
     modelCardId?: string | null;
   }): Promise<{ id: string }> {
@@ -824,6 +792,7 @@ export class EvaluationRepository {
         imageDigest: data.imageDigest,
         routeId: data.routeId,
         routeVersion: data.routeVersion,
+        routeVersionId: data.routeVersionId,
       },
       select: { id: true },
     });

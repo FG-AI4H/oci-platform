@@ -318,5 +318,40 @@ export const ScoreAttributionSchema = z.discriminatedUnion('kind', [
 ]);
 export type ScoreAttribution = z.infer<typeof ScoreAttributionSchema>;
 
+/**
+ * The note carried by a LEGACY attribution. Since #583 every new submission
+ * is pinned to a method version, so only results scored before that carry it.
+ */
 export const LEGACY_ATTRIBUTION_NOTE =
-  'Scored before the evaluation-route registry existed (ADR-0018 / WP5). This result carries no route declaration and is excluded from published reporting.';
+  'Result from before method versions were recorded. No version of the evaluation method is attached to it, so it is excluded from published reporting.';
+
+/**
+ * `code` of the 409 that refuses a scored submission when no evaluation
+ * method version can be pinned to it (#583). Every new submission records the
+ * version that serves it, so a submission with none is refused rather than
+ * scored as LEGACY.
+ */
+export const NO_METHOD_VERSION_CODE = 'NO_METHOD_VERSION';
+
+/**
+ * Why no version could be pinned:
+ *   - `NO_VERSION`: no reference method, or no version of it, is registered
+ *     for the submission's mode;
+ *   - `VERSION_CLOSED`: the version that serves the mode is REJECTED or
+ *     WITHDRAWN, so it cannot produce new results until a new version is
+ *     declared.
+ */
+export const NoMethodVersionReasonSchema = z.enum(['NO_VERSION', 'VERSION_CLOSED']);
+export type NoMethodVersionReason = z.infer<typeof NoMethodVersionReasonSchema>;
+
+/**
+ * The 409 body. Nothing was written and no quota was used. `message` is
+ * English for API callers; a page words the refusal from `code` and `reason`.
+ */
+export const NoMethodVersionRefusalSchema = z.object({
+  statusCode: z.literal(409),
+  code: z.literal(NO_METHOD_VERSION_CODE),
+  reason: NoMethodVersionReasonSchema,
+  message: z.string(),
+});
+export type NoMethodVersionRefusal = z.infer<typeof NoMethodVersionRefusalSchema>;

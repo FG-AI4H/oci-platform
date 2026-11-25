@@ -124,10 +124,9 @@ export class SubmissionResultService {
       return replayOrConflict(submission, fingerprint);
     }
 
-    // Route-version gate (contract §5). Only enforceable against a dispatch
-    // that recorded one; `routeVersion` stays null until the EvaluationRoute
-    // registry lands (WP5), so today this is present and inert rather than
-    // silently absent.
+    // Route-version gate (contract §5). Every dispatch since #583 records the
+    // pinned version, so a result reporting another is refused. A row
+    // dispatched before #583 recorded none and is not held to one.
     if (submission.routeVersion !== null && body.routeVersion !== submission.routeVersion) {
       throw new ConflictException(
         `routeVersion does not match the route version dispatched for submission "${submissionId}"`,
