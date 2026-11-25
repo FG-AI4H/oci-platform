@@ -130,44 +130,44 @@ same way when they are. The evaluation pages use them, and the evaluation rows a
 
 Added with the evaluation pages. Every row is a draft.
 
-| English                                                  | French (draft)                                                  | Source | Reviewer |
-| -------------------------------------------------------- | --------------------------------------------------------------- | ------ | -------- |
-| Task (evaluation task) / task kind                       | Tâche (d’évaluation) / type de tâche                            | new    |          |
-| Grading / classification / binary finding (task kinds)   | Gradation / classification / diagnostic binaire                 | new    |          |
-| Item (one image or case a task scores)                   | Élément                                                         | new    |          |
-| Item identifier                                          | Identifiant d’élément                                           | new    |          |
-| Predictions file                                         | Fichier de prédictions                                          | new    |          |
-| Template (the predictions file to fill in)               | Fichier à remplir (not « modèle », which means the AI model)    | new    |          |
-| Method name (a submission’s name)                        | Nom de la méthode                                               | new    |          |
-| Score (verb) / scored / scoring                          | Noter / noté / notation                                         | new    |          |
-| Submit for scoring / scored submission                   | Soumettre à la notation / soumission notée                      | new    |          |
-| Check format / format check                              | Vérifier le format / vérification du format                     | new    |          |
-| Status: scored / pending / failed                        | noté / en attente / échoué                                      | new    |          |
-| Reference labels                                         | Étiquettes de référence                                         | new    |          |
-| Positive class / finding present                         | Classe positive / anomalie présente                             | new    |          |
-| Grade / referable / referable threshold                  | Grade / cas à adresser / seuil d’adressage                      | new    |          |
-| Coverage                                                 | Couverture                                                      | new    |          |
-| Accuracy / balanced accuracy                             | Exactitude / exactitude équilibrée                              | new    |          |
-| Sensitivity / specificity                                | Sensibilité / spécificité                                       | new    |          |
-| Positive / negative predictive value                     | Valeur prédictive positive (VPP) / négative (VPN)               | new    |          |
-| Prevalence                                               | Prévalence                                                      | new    |          |
-| Area under the ROC curve (AUC)                           | Aire sous la courbe ROC (ASC)                                   | new    |          |
-| 95% confidence interval / 95% CI                         | Intervalle de confiance à 95 % / IC 95 %                        | new    |          |
-| Wilson score (interval)                                  | Méthode de Wilson                                               | new    |          |
-| Bootstrap resamples / fixed seed                         | Rééchantillonnages bootstrap / graine fixe                      | new    |          |
-| QWK, quadratic-weighted kappa                            | Kappa pondéré (QWK), kappa pondéré quadratique                  | new    |          |
-| Macro F1 / micro F1                                      | F1 macro / F1 micro                                             | new    |          |
-| Precision / recall (per class)                           | Précision / rappel                                              | new    |          |
-| True / false positives, true / false negatives           | Vrais / faux positifs, vrais / faux négatifs                    | new    |          |
-| Counts (the 2 × 2 table)                                 | Effectifs                                                       | new    |          |
-| Not estimable / not reported                             | Non estimable / non communiqué                                  | new    |          |
-| Subgroup / results by subgroup                           | Sous-groupe / résultats par sous-groupe                         | new    |          |
-| Withheld (a figure or group not published)               | Masqué                                                          | new    |          |
-| n/a (in a table cell)                                    | n.d.                                                            | new    |          |
-| Percentage points (difference)                           | Points de pourcentage, « pts »                                  | new    |          |
-| Published / provisional / withdrawn / retracted / legacy | Publié / provisoire / retiré / rétracté / historique (a result) | new    |          |
-| Not attributed yet (no method version)                   | Pas encore attribué                                             | new    |          |
-| Quota: resets on                                         | Remise à zéro le                                                | new    |          |
+| English                                                                  | French (draft)                                                                     | Source | Reviewer |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- | ------ | -------- |
+| Task (evaluation task) / task kind                                       | Tâche (d’évaluation) / type de tâche                                               | new    |          |
+| Grading / classification / binary finding (task kinds)                   | Gradation / classification / diagnostic binaire                                    | new    |          |
+| Item (one image or case a task scores)                                   | Élément                                                                            | new    |          |
+| Item identifier                                                          | Identifiant d’élément                                                              | new    |          |
+| Predictions file                                                         | Fichier de prédictions                                                             | new    |          |
+| Template (the predictions file to fill in)                               | Fichier à remplir (not « modèle », which means the AI model)                       | new    |          |
+| Method name (a submission’s name)                                        | Nom de la méthode                                                                  | new    |          |
+| Score (verb) / scored / scoring                                          | Noter / noté / notation                                                            | new    |          |
+| Submit for scoring / scored submission                                   | Soumettre à la notation / soumission notée                                         | new    |          |
+| Check format / format check                                              | Vérifier le format / vérification du format                                        | new    |          |
+| Status: scored / pending / failed                                        | noté / en attente / échoué                                                         | new    |          |
+| Reference labels                                                         | Étiquettes de référence                                                            | new    |          |
+| Positive class / finding present                                         | Classe positive / anomalie présente                                                | new    |          |
+| Grade / referable / referable threshold                                  | Grade / cas à adresser / seuil d’adressage                                         | new    |          |
+| Coverage                                                                 | Couverture                                                                         | new    |          |
+| Accuracy / balanced accuracy                                             | Exactitude / exactitude équilibrée                                                 | new    |          |
+| Sensitivity / specificity                                                | Sensibilité / spécificité                                                          | new    |          |
+| Positive / negative predictive value                                     | Valeur prédictive positive (VPP) / négative (VPN)                                  | new    |          |
+| Prevalence                                                               | Prévalence                                                                         | new    |          |
+| Area under the ROC curve (AUC)                                           | Aire sous la courbe ROC (ASC)                                                      | new    |          |
+| 95% confidence interval / 95% CI                                         | Intervalle de confiance à 95 % / IC 95 %                                           | new    |          |
+| Wilson score (interval)                                                  | Méthode de Wilson                                                                  | new    |          |
+| Bootstrap resamples / fixed seed                                         | Rééchantillonnages bootstrap / graine fixe                                         | new    |          |
+| QWK, quadratic-weighted kappa                                            | Kappa pondéré (QWK), kappa pondéré quadratique                                     | new    |          |
+| Macro F1 / micro F1                                                      | F1 macro / F1 micro                                                                | new    |          |
+| Precision / recall (per class)                                           | Précision / rappel                                                                 | new    |          |
+| True / false positives, true / false negatives                           | Vrais / faux positifs, vrais / faux négatifs                                       | new    |          |
+| Counts (the 2 × 2 table)                                                 | Effectifs                                                                          | new    |          |
+| Not estimable / not reported                                             | Non estimable / non communiqué                                                     | new    |          |
+| Subgroup / results by subgroup                                           | Sous-groupe / résultats par sous-groupe                                            | new    |          |
+| Withheld (a figure or group not published)                               | Masqué                                                                             | new    |          |
+| n/a (in a table cell)                                                    | n.d.                                                                               | new    |          |
+| Percentage points (difference)                                           | Points de pourcentage, « pts »                                                     | new    |          |
+| Published / provisional / withdrawn / retracted / before method versions | Publié / provisoire / retiré / rétracté / avant les versions de méthode (a result) | new    |          |
+| Before method versions (a result with no method version)                 | Avant les versions de méthode                                                      | new    |          |
+| Quota: resets on                                                         | Remise à zéro le                                                                   | new    |          |
 
 ## Evaluation methods and their review
 

@@ -193,10 +193,13 @@ is possible, the remediation status is published alongside the finding. Acceptin
 of entry, and it applies to the reference implementation on exactly the same terms as to every other
 route ([ADR-0021](../adr/0021-failed-review-is-published-with-its-reason.md)).
 
-**Where this stands today (21 August 2026).** The review gate is enforced: every
-result carries the route and route version that produced it, and a result from a
-version whose review status is not `APPROVED` is marked provisional and excluded
-from published reporting. Retraction is not yet enforced — the record carries a
+**Where this stands today (25 November 2026).** The review gate is enforced: every
+submission is pinned, when it is accepted, to the route version that will produce
+its result, and a result from a version whose review status is not `APPROVED` is
+marked provisional and excluded from published reporting. A submission no route
+version can be pinned to is refused rather than scored. Results scored before
+route versions were recorded carry none; they are labelled as such and never
+published. Retraction is not yet enforced — the record carries a
 retraction field, but withdrawing the results of a version later `REJECTED` or
 `WITHDRAWN` remains a commitment rather than a mechanism. No Phase 1 result has
 been published; the first are due January 2027, by which point both halves must
