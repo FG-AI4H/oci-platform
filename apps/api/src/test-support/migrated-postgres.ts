@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,20 +61,66 @@ export function replaySeedFile(url: string, sql: string, bucket = 'oci-datasets-
   }
 }
 
-/** Start Postgres, run `prisma migrate deploy` against it, return a client. */
-export async function startMigratedPostgres(): Promise<MigratedPostgres> {
+/**
+ * `prisma migrate deploy` against `url`. With `before`, only the
+ * migrations whose folder name sorts before it are applied, so a spec can
+ * write rows the way an older schema wrote them and then deploy the rest
+ * (again with this function, without `before`) exactly as a release does.
+ */
+export function deployMigrations(url: string, opts: { before?: string } = {}): void {
+  const { before } = opts;
+  if (before === undefined) {
+    execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'deploy'], {
+      cwd: DATABASE_PKG,
+      env: { ...process.env, DATABASE_URL: url },
+      stdio: 'pipe',
+    });
+    return;
+  }
+  const source = path.join(DATABASE_PKG, 'prisma', 'migrations');
+  const names = readdirSync(source).filter((n) => /^\d{14}_/.test(n) && n < before);
+  if (names.length === 0) throw new Error(`deployMigrations: no migration before ${before}`);
+  const dir = mkdtempSync(path.join(tmpdir(), 'oci-migrations-'));
+  try {
+    const migrations = path.join(dir, 'migrations');
+    for (const name of names) {
+      cpSync(path.join(source, name), path.join(migrations, name), { recursive: true });
+    }
+    cpSync(path.join(source, 'migration_lock.toml'), path.join(migrations, 'migration_lock.toml'));
+    // A config with no imports, so that it loads from outside the package.
+    const config = path.join(dir, 'prisma.config.mjs');
+    // eslint-disable-next-line security/detect-non-literal-fs-filename -- a fixed name in a directory mkdtemp just created
+    writeFileSync(
+      config,
+      `export default ${JSON.stringify({
+        schema: path.join(DATABASE_PKG, 'prisma', 'schema.prisma'),
+        migrations: { path: migrations },
+        datasource: { url },
+      })};\n`,
+    );
+    execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'deploy', '--config', config], {
+      cwd: DATABASE_PKG,
+      env: { ...process.env, DATABASE_URL: url },
+      stdio: 'pipe',
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Start an empty Postgres, the major the deployed cluster runs. */
+export async function startPostgres(): Promise<StartedPostgreSqlContainer> {
   // Same major as the Aurora cluster: infra/cdk/lib/data-stack.ts declares
   // AuroraPostgresEngineVersion.VER_16_4 (#742). Change both together.
   // infra/local/docker-compose.yml still runs 17 for local development.
-  const container: StartedPostgreSqlContainer = await new PostgreSqlContainer(
-    'postgres:16-alpine',
-  ).start();
+  return new PostgreSqlContainer('postgres:16-alpine').start();
+}
+
+/** Start Postgres, run `prisma migrate deploy` against it, return a client. */
+export async function startMigratedPostgres(): Promise<MigratedPostgres> {
+  const container = await startPostgres();
   const url = container.getConnectionUri();
-  execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'deploy'], {
-    cwd: DATABASE_PKG,
-    env: { ...process.env, DATABASE_URL: url },
-    stdio: 'pipe',
-  });
+  deployMigrations(url);
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
   return {
     prisma,
