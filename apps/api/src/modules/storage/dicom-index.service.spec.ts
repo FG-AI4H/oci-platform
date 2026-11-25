@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { inspect } from 'node:util';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -350,5 +351,41 @@ describe('DicomIndexService fails closed', () => {
         s3Key: 'demo/1/named.dcm',
       }),
     ).rejects.toThrow('database unavailable');
+  });
+});
+
+describe('DicomIndexService: the digest key stays out of logs and responses (#784)', () => {
+  // Distinctive, so a leak of any of it is found by substring.
+  const SECRET = 'leak-canary-Dq7Xw2Vb9Np4Lm6Kc8Rt1Hs5Jd3Fg0Yu';
+
+  function withKey(): DicomIndexService {
+    vi.stubEnv('OCI_ENV', 'prod');
+    vi.stubEnv('OCI_DICOM_FINDING_DIGEST_KEY', SECRET);
+    return build();
+  }
+
+  it('is not in the instance as JSON.stringify, util.inspect or its own properties see it', () => {
+    const service = withKey();
+    expect(JSON.stringify(service)).not.toContain(SECRET);
+    expect(inspect(service, { showHidden: true, depth: null })).not.toContain(SECRET);
+    expect(JSON.stringify({ ...service })).not.toContain(SECRET);
+  });
+
+  it('is not logged at startup', () => {
+    withKey();
+    expect(logged).toEqual([]);
+  });
+
+  it('is still the key the digests are made with, and is not part of what is stored', async () => {
+    svc = withKey();
+    store('demo/1/named.dcm', ctSlice([NAME]));
+
+    await index('demo/1/named.dcm');
+
+    expect(saved[0]?.findings[0]?.valueDigest).toBe(
+      digest('PatientName', 'Example^Patient', SECRET),
+    );
+    expect(JSON.stringify(saved)).not.toContain(SECRET);
+    expect(logged.join('\n')).not.toContain(SECRET);
   });
 });

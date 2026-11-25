@@ -57,7 +57,10 @@ interface RangeRead {
 @Injectable()
 export class DicomIndexService {
   private readonly logger = new Logger(DicomIndexService.name);
-  private readonly digestKey: string | null;
+  // A runtime-private field, not a TypeScript `private` one: it is left
+  // out of JSON.stringify, util.inspect and any logger that serialises
+  // the instance, so the key cannot reach a log or a response that way.
+  readonly #digestKey: string | null;
 
   constructor(
     @Inject(S3ClientProvider) private readonly s3: S3ClientProvider,
@@ -66,11 +69,11 @@ export class DicomIndexService {
   ) {
     const configured = process.env.OCI_DICOM_FINDING_DIGEST_KEY;
     if (configured) {
-      this.digestKey = configured;
+      this.#digestKey = configured;
     } else if (process.env.OCI_ENV === 'local') {
-      this.digestKey = LOCAL_DIGEST_KEY;
+      this.#digestKey = LOCAL_DIGEST_KEY;
     } else {
-      this.digestKey = null;
+      this.#digestKey = null;
       this.logger.warn(
         'OCI_DICOM_FINDING_DIGEST_KEY is not set: DICOM uploads with findings will be refused',
       );
@@ -217,7 +220,7 @@ export class DicomIndexService {
     findings: readonly DeidentificationFinding[],
   ): Array<{ attribute: string; valueDigest: string }> {
     if (findings.length === 0) return [];
-    const key = this.digestKey;
+    const key = this.#digestKey;
     if (key === null) {
       throw new ServiceUnavailableException(
         'DICOM files cannot be accepted on this deployment: the finding digest key is not configured',
