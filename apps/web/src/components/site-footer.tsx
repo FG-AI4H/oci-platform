@@ -48,6 +48,8 @@ export async function SiteFooter() {
         </FooterColumn>
 
         <FooterColumn title={t('resources')}>
+          {/* The guides, in the interface language (#655). */}
+          <FooterLink href="/help">{t('help')}</FooterLink>
           <FooterLink href="https://github.com/FG-AI4H/oci-platform" external>
             {t('source')}
           </FooterLink>
