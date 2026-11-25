@@ -156,6 +156,34 @@ export class TaskRepository {
   }
 
   /**
+   * Every task of the campaign with its SUBMITTED answers at every gate
+   * (#648): the input of the agreement view and of the export. Released
+   * and expired assignments produced no answer and are not read.
+   * Tasks in creation order, answers in submission order.
+   */
+  async campaignAnswers(campaignId: string): Promise<CampaignTaskAnswers[]> {
+    return this.prisma.client.annotationTask.findMany({
+      where: { campaignId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        sampleRef: true,
+        gateState: true,
+        assignments: {
+          where: { status: 'SUBMITTED' },
+          orderBy: [{ submittedAt: 'asc' }, { id: 'asc' }],
+          select: {
+            assigneeUserId: true,
+            gateAtAssignment: true,
+            submission: true,
+            submittedAt: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
    * Returns a `(taskId|gate) → submittedCount` map for every
    * SUBMITTED assignment in the campaign. The service cross-
    * references this against each task's current `gateState` so the
@@ -625,3 +653,16 @@ export class TaskRepository {
 
 /** Candidate page size for `findNextEligibleTask`. */
 const CANDIDATE_PAGE = 50;
+
+/** One task with its submitted answers, as `campaignAnswers` reads it (#648). */
+export interface CampaignTaskAnswers {
+  id: string;
+  sampleRef: string;
+  gateState: AnnotationGateState;
+  assignments: Array<{
+    assigneeUserId: string;
+    gateAtAssignment: AnnotationGateState;
+    submission: unknown;
+    submittedAt: Date | null;
+  }>;
+}

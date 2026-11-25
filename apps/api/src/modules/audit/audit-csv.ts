@@ -1,21 +1,9 @@
 import { canonicalize } from '@oci/audit';
 import type { AuditEventView } from '@oci/shared-types';
+import { csvCell } from '../../common/csv.js';
 
-/** Characters a spreadsheet reads as the start of a formula. */
-const FORMULA_START = /^[=+\-@\t\r]/;
-
-/**
- * One CSV cell (RFC 4180), safe to open in a spreadsheet.
- *
- * A cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage
- * return is prefixed with an apostrophe, so it is shown as text rather
- * than run as a formula (CSV injection). The apostrophe is part of the
- * value in the file; a program reading the file sees it.
- */
-export function csvCell(value: string): string {
-  const safe = FORMULA_START.test(value) ? `'${value}` : value;
-  return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
-}
+// The cell rule is shared with the annotation export (#648).
+export { csvCell };
 
 export const AUDIT_CSV_COLUMNS = [
   'sequenceNumber',
