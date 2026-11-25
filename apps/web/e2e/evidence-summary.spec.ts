@@ -184,7 +184,7 @@ test.describe('evidence summary (#652)', () => {
       gapCodes,
     );
     await expect(gaps.first()).toContainText(
-      'Aucune fiche du modèle n’est liée à cette soumission',
+      'Aucune fiche de modèle n’est liée à cette soumission',
     );
     await expect(page.getByRole('region', { name: 'Mesures de performance' })).toContainText(
       'Exactitude équilibrée',

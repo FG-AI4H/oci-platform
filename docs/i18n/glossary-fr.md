@@ -271,7 +271,7 @@ clinical usage a radiologist reads in a diagnostic-accuracy study.
 
 | English                                                                               | French (draft)                                                                                      | Source | Reviewer |
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------ | -------- |
-| Model / model card                                                                    | Modèle / fiche du modèle                                                                            | new    |          |
+| Model / model card                                                                    | Modèle / fiche de modèle (« la fiche du modèle » when the text means one given model’s card)        | new    |          |
 | Model Facts label                                                                     | Étiquette « Model Facts » de l’OMS                                                                  | new    |          |
 | Intended use                                                                          | Usage prévu                                                                                         | new    |          |
 | Medical purpose                                                                       | Finalité médicale                                                                                   | new    |          |
@@ -290,7 +290,7 @@ clinical usage a radiologist reads in a diagnostic-accuracy study.
 | Regulatory pathway                                                                    | Voie réglementaire (draft, #651)                                                                    | new    |          |
 | Derived (risk tier derived from the answers)                                          | Déduit (niveau de risque déduit des réponses) (draft, #651)                                         | new    |          |
 | Submit for review / return to draft / withdraw                                        | Soumettre pour relecture / remettre en brouillon / retirer (draft, #651)                            | new    |          |
-| Reviewer (of a model card)                                                            | Relecteur (draft, #651)                                                                             | new    |          |
+| Reviewer (of a model card)                                                            | Relecteur; submitted for review → « soumise pour relecture » (draft, #651)                          | new    |          |
 | Monitoring after deployment                                                           | Surveillance après déploiement (draft, #651)                                                        | new    |          |
 | Risk tier                                                                             | Niveau de risque                                                                                    | new    |          |
 | Regulatory status / approval / jurisdiction                                           | Statut réglementaire / autorisation réglementaire / juridiction                                     | new    |          |

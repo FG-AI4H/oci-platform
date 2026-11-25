@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from 'next-auth';
 import {
+  canReadEvidenceSummary,
   canOverseeCampaign,
   canReadAuditTrail,
   isAdmin,
@@ -131,5 +132,20 @@ describe('canReadAuditTrail', () => {
     expect(canReadAuditTrail(s('dev:rita:regulator'))).toBe(true);
     expect(canReadAuditTrail(s('dev:bob:host,supervisor'))).toBe(false);
     expect(canReadAuditTrail(null)).toBe(false);
+  });
+});
+
+describe('canReadEvidenceSummary (#652)', () => {
+  it('is true for the submitter and for admin, evaluation reviewers and regulators', () => {
+    expect(canReadEvidenceSummary(s('dev:p:participant'), true)).toBe(true);
+    expect(canReadEvidenceSummary(s('dev:alice:admin'), false)).toBe(true);
+    expect(canReadEvidenceSummary(s('dev:eve:evaluation-reviewer'), false)).toBe(true);
+    expect(canReadEvidenceSummary(s('dev:rita:regulator'), false)).toBe(true);
+  });
+
+  it('is false for anyone else, and for a signed-out reader', () => {
+    expect(canReadEvidenceSummary(s('dev:p:participant'), false)).toBe(false);
+    expect(canReadEvidenceSummary(s('dev:bob:host'), false)).toBe(false);
+    expect(canReadEvidenceSummary(null, true)).toBe(false);
   });
 });

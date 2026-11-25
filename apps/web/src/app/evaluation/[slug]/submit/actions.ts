@@ -18,6 +18,10 @@ import {
   buildFormatReport,
   type FormatReportView,
 } from '../../../../components/evaluation/format-report';
+import {
+  modelCardRefusalOf,
+  readModelCardChoice,
+} from '../../../../components/evaluation/model-card-choice';
 import { describeQuotaRefusal } from '../../../../components/evaluation/quota-text';
 import { getEvaluationI18n } from '../../../../components/evaluation/server-i18n';
 import { apiFetch, reauthUrl } from '../../../../lib/api';
@@ -26,13 +30,16 @@ import { MAX_PREDICTIONS_FILE_BYTES, MAX_PREDICTIONS_FILE_KIB } from './limits';
 
 export interface SubmitPredictionsValues {
   methodName: string;
+  /** The chosen model card's id (#587); `''` for "No model card". */
+  modelCardId: string;
 }
 
 /**
  * What the form shows after the action ran. Plain data only (it crosses to the
  * browser), and never the predictions themselves.
  *
- * `values` echoes the method name on every branch, so nothing typed is lost.
+ * `values` echoes the method name and the model card on every branch, so
+ * nothing chosen is lost.
  * The file cannot be echoed — a browser will not let a page set a file input —
  * which is why the form keeps the chosen file selected instead of resetting.
  */
@@ -51,6 +58,8 @@ export type SubmitPredictionsState =
       /** One sentence saying what happened and that nothing was scored. */
       message: string;
       methodNameError?: string;
+      /** Shown next to the model card picker (#587). */
+      modelCardError?: string;
       /** Shown next to the file field. */
       fileError?: string;
       /** The lines of the file that could not be read. */
@@ -105,8 +114,10 @@ export async function submitPredictionsAction(
 ): Promise<SubmitPredictionsState> {
   const [t, i18n] = await Promise.all([getTranslations('EvaluationSubmit'), getEvaluationI18n()]);
   const intent = formData.get('intent') === 'submit' ? 'submit' : 'check';
+  const modelCard = readModelCardChoice(formData.get('modelCardId'));
   const values: SubmitPredictionsValues = {
     methodName: String(formData.get('methodName') ?? '').trim(),
+    modelCardId: modelCard.ok ? (modelCard.modelCardId ?? '') : '',
   };
   const fail = (
     message: string,
@@ -136,6 +147,14 @@ export async function submitPredictionsAction(
     const methodNameError = t('action.nameTooLongField');
     return fail(t('action.nameTooLong'), { methodNameError });
   }
+
+  // The model card (#587) counts only for scoring: a format check records
+  // nothing, so it neither sends nor checks one.
+  if (intent === 'submit' && !modelCard.ok) {
+    const modelCardError = t('modelCard.invalid');
+    return fail(t('action.modelCardInvalid'), { modelCardError });
+  }
+  const modelCardId = intent === 'submit' && modelCard.ok ? modelCard.modelCardId : null;
 
   const file = formData.get('file');
   if (!(file instanceof File) || file.size === 0) {
@@ -217,6 +236,8 @@ export async function submitPredictionsAction(
           methodName: values.methodName,
           intent: 'SCORED',
           predictions: parsed.predictions,
+          // Sent only when one was chosen: without it the result is linked to no card.
+          ...(modelCardId ? { modelCardId } : {}),
         }),
         cache: 'no-store',
       },
@@ -248,10 +269,21 @@ export async function submitPredictionsAction(
     const quota = ScoredSubmissionQuotaStateSchema.safeParse(
       typeof body === 'object' && body !== null && 'quota' in body ? body.quota : undefined,
     );
-    return fail(quota.success ? describeQuotaRefusal(i18n, quota.data) : t('action.notAllowed'), {
+    if (quota.success) return fail(describeQuotaRefusal(i18n, quota.data), { fileName });
+  }
+
+  // The card is checked before the quota and before anything is written
+  // (#587), so a refused card costs nothing. The API's own sentence is not
+  // shown: it is in English and names the card by its id.
+  const refusal = modelCardId ? modelCardRefusalOf(res.status) : null;
+  if (refusal) {
+    return fail(t(`action.modelCard.${refusal}`), {
       fileName,
+      modelCardError: t(`modelCard.refused.${refusal}`),
     });
   }
+
+  if (res.status === 403) return fail(t('action.notAllowed'), { fileName });
 
   if (res.status === 400) {
     // The check above passed and the scoring service still refused the file.

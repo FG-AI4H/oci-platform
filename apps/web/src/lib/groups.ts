@@ -109,6 +109,22 @@ export function canReadAuditTrail(session: Session | null | undefined): boolean 
   return groups.includes('admin') || groups.includes('regulator');
 }
 
+/**
+ * True when the caller may read a submission's evidence summary (#652): its
+ * submitter, or `admin`, `evaluation-reviewer` or `regulator`. Mirrors the
+ * API's `EVIDENCE_READER_GROUPS`; its 403 stays authoritative. Only decides
+ * whether the submission page links to the summary.
+ */
+export function canReadEvidenceSummary(
+  session: Session | null | undefined,
+  viewerIsSubmitter: boolean,
+): boolean {
+  if (!session?.user) return false;
+  if (viewerIsSubmitter) return true;
+  const groups = userGroups(session);
+  return ['admin', 'evaluation-reviewer', 'regulator'].some((g) => groups.includes(g));
+}
+
 /** Server-side guard for /admin/audit (admin or regulator). */
 export function requireAuditReader(session: Session | null | undefined): Session {
   if (!session?.user) {
