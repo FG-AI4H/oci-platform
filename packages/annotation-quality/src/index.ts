@@ -1,6 +1,14 @@
 export { cohensKappa, type CohensKappaResult } from './cohens-kappa.js';
 export { fleissKappa, buildFleissMatrix, type FleissKappaResult } from './fleiss-kappa.js';
 export {
+  fleissKappaBootstrap,
+  fleissResamplesFor,
+  FLEISS_BOOTSTRAP_RESAMPLES,
+  FLEISS_BOOTSTRAP_SEED,
+  type FleissKappaBootstrapOptions,
+  type FleissKappaInterval,
+} from './fleiss-kappa-bootstrap.js';
+export {
   diceFromIndexSets,
   diceFromBinaryMasks,
   diceMulticlass,
