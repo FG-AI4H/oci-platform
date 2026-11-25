@@ -42,7 +42,10 @@ import { OrcidOauthClient } from './orcid-oauth-client.js';
 export class OrcidLinkService {
   private readonly logger = new Logger(OrcidLinkService.name);
   private readonly oauthClient: OrcidOauthClient | null;
-  private readonly stateSecret: string;
+  // Runtime-private, not TypeScript `private`: left out of
+  // JSON.stringify, util.inspect and any logger that serialises the
+  // instance (#784).
+  readonly #stateSecret: string;
 
   constructor(@Inject(OrcidLinkRepository) private readonly repo: OrcidLinkRepository) {
     this.oauthClient = OrcidOauthClient.fromEnv();
@@ -53,7 +56,7 @@ export class OrcidLinkService {
     }
     // A boot-random secret is fine when there's a single replica —
     // the state lives for ~5 minutes during the OAuth dance.
-    this.stateSecret = process.env.OCI_ORCID_STATE_SECRET ?? randomBytes(32).toString('hex');
+    this.#stateSecret = process.env.OCI_ORCID_STATE_SECRET ?? randomBytes(32).toString('hex');
   }
 
   async startAuthorize(user: CognitoAccessTokenPayload): Promise<OrcidAuthorizeResponse> {
@@ -136,7 +139,7 @@ export class OrcidLinkService {
   private signState(payload: { sub: string; nonce: string }): string {
     const json = JSON.stringify(payload);
     const sig = createHash('sha256')
-      .update(this.stateSecret)
+      .update(this.#stateSecret)
       .update('|')
       .update(json)
       .digest('hex')
@@ -150,7 +153,7 @@ export class OrcidLinkService {
     const [encoded, sig] = parts;
     if (!encoded || !sig) return false;
     const expected = createHash('sha256')
-      .update(this.stateSecret)
+      .update(this.#stateSecret)
       .update('|')
       .update(Buffer.from(encoded, 'base64url'))
       .digest('hex')

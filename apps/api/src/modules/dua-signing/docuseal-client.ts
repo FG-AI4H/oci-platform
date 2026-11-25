@@ -91,16 +91,23 @@ export class DocusealClient {
     });
   }
 
-  constructor(private readonly cfg: DocusealConfig) {}
+  // Runtime-private, not a TypeScript `private` parameter property: the
+  // config holds a secret, and a `#` field is left out of JSON.stringify,
+  // util.inspect and any logger that serialises the instance (#784).
+  readonly #cfg: DocusealConfig;
+
+  constructor(cfg: DocusealConfig) {
+    this.#cfg = cfg;
+  }
 
   async createSubmission(input: CreateSubmissionInput): Promise<CreateSubmissionResult> {
-    const url = `${this.stripTrailingSlash(this.cfg.baseUrl)}/api/submissions`;
+    const url = `${this.stripTrailingSlash(this.#cfg.baseUrl)}/api/submissions`;
     const body = {
-      template_id: this.cfg.duaTemplateId,
+      template_id: this.#cfg.duaTemplateId,
       send_email: false,
       submitters: [
         {
-          role: this.cfg.duaRole,
+          role: this.#cfg.duaRole,
           email: input.signerEmail,
           name: input.signerName,
           external_id: input.accessRequestId,
@@ -119,7 +126,7 @@ export class DocusealClient {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Auth-Token': this.cfg.apiToken,
+        'X-Auth-Token': this.#cfg.apiToken,
         Accept: 'application/json',
       },
       body: JSON.stringify(body),
@@ -139,7 +146,7 @@ export class DocusealClient {
     const id = first?.submission_id;
     const signerUrl =
       first?.embed_src ??
-      (first?.slug ? `${this.stripTrailingSlash(this.cfg.baseUrl)}/s/${first.slug}` : null);
+      (first?.slug ? `${this.stripTrailingSlash(this.#cfg.baseUrl)}/s/${first.slug}` : null);
     if (id === undefined || id === null || !signerUrl) {
       throw new Error('DocuSeal response missing submission id or signer URL');
     }
@@ -161,7 +168,7 @@ export class DocusealClient {
   }): boolean {
     if (args.secretHeader) {
       const given = Buffer.from(args.secretHeader.trim());
-      const expected = Buffer.from(this.cfg.webhookSecret);
+      const expected = Buffer.from(this.#cfg.webhookSecret);
       return given.length === expected.length && timingSafeEqual(given, expected);
     }
     return this.verifyWebhookSignature(args.rawBody, args.signatureHeader);
@@ -175,7 +182,7 @@ export class DocusealClient {
    */
   verifyWebhookSignature(rawBody: string, signatureHeader: string | undefined): boolean {
     if (!signatureHeader) return false;
-    const expected = createHmac('sha256', this.cfg.webhookSecret).update(rawBody).digest('hex');
+    const expected = createHmac('sha256', this.#cfg.webhookSecret).update(rawBody).digest('hex');
     const given = signatureHeader.trim();
     if (given.length !== expected.length) return false;
     try {
