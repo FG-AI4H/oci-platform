@@ -24,7 +24,7 @@ The **At a glance** box first says where the result stands:
 - **Result without a reviewed method**: no method version is linked to the result, so no review stands behind it;
 - **No result**: the submission was not scored.
 
-**Today**, a submission made from the submit page is not yet linked to a method version. It therefore reads **Result without a reviewed method**. That is a known limit of the platform, not a fault of the submission.
+Every scored submission is linked to the version of the method that produced it. A recent result therefore reads **Provisional result** until that version is approved, then **Published result**. **Result without a reviewed method** applies only to results scored before method versions were recorded.
 
 Then come the two main measures and the number of gaps, with a link to section 6.
 

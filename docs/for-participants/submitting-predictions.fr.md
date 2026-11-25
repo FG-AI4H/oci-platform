@@ -96,11 +96,12 @@ Chaque résultat est produit par une **méthode d’évaluation** : la procédur
 - « publié » : la version de la méthode a été approuvée. Seul un résultat publié reçoit un rang sur la page de la tâche et compte dans les rapports publiés.
 - « provisoire » : la version n’est pas encore approuvée. Les chiffres sont affichés, mais aucune revue ne les garantit encore. Pas de rang, pas de place dans les rapports publiés. Le résultat sera publié si la méthode est approuvée, retiré si elle est rejetée.
 
-**Une limite aujourd’hui.** Un fichier soumis depuis cette page n’est pas encore rattaché à une version de méthode. C’est prévu, mais pas encore en place : votre résultat ne peut donc pas être publié pour l’instant. Vous le verrez ainsi :
+Votre résultat est rattaché à la version de la méthode qui l’a produit, par exemple `oci-predictions-scoring@1.0.0`. Tant qu’une personne chargée de la revue ne l’a pas approuvée, il est « provisoire ». Dès qu’elle l’approuve, le même résultat devient « publié » et reçoit un rang : vous n’avez rien à soumettre à nouveau.
 
-- sur la page du résultat, la carte « Méthode d’évaluation » indique « pas encore attribué » ;
-- sur la page de la tâche, « historique ». La phrase qui suit parle d’un résultat antérieur au registre des méthodes ; pour un résultat récent, elle veut seulement dire qu’aucune version n’y est rattachée ;
-- dans la synthèse des preuves, « Résultat sans méthode revue ».
+Deux autres cas :
+
+- « avant les versions de méthode » : un résultat noté avant que la plateforme n’enregistre les versions de méthode. Il n’est jamais publié.
+- Si aucune version de la méthode n’est ouverte, la soumission est refusée avec le message « Non soumis : cette tâche ne peut pas recevoir de soumission notée pour le moment… ». Rien n’est noté et aucune de vos soumissions notées n’est utilisée. Prévenez les organisateurs. La vérification du format, elle, fonctionne toujours.
 
 ## 9. Ouvrir la synthèse des preuves
 

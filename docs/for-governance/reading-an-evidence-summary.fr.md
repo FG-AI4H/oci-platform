@@ -24,7 +24,7 @@ L’encadré « En bref » dit d’abord où en est le résultat :
 - « Résultat sans méthode revue » : aucune version de méthode n’est rattachée au résultat, donc aucune revue ne le garantit ;
 - « Aucun résultat » : la soumission n’a pas été notée.
 
-**Aujourd’hui**, une soumission faite depuis la page de soumission n’est pas encore rattachée à une version de méthode. Elle se lit donc « Résultat sans méthode revue ». C’est une limite connue de la plateforme, pas un défaut de la soumission.
+Chaque soumission notée est rattachée à la version de la méthode qui l’a produite. Un résultat récent est donc « Résultat provisoire » jusqu’à l’approbation de cette version, puis « Résultat publié ». « Résultat sans méthode revue » ne concerne que les résultats notés avant l’enregistrement des versions de méthode.
 
 Viennent ensuite les deux mesures principales et le nombre de lacunes, avec un lien vers la section 6.
 

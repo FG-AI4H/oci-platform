@@ -96,11 +96,12 @@ Every result is produced by an **evaluation method**: the procedure that compare
 - **published**: the method version was approved. Only a published result gets a rank on the task page and counts in published reporting.
 - **provisional**: the version is not approved yet. The figures are shown, but no review stands behind them yet. No rank, no place in published reporting. The result becomes published if the method is approved, withdrawn if it is rejected.
 
-**A limit today.** A file submitted from this page is not yet linked to a method version. That is planned but not in place yet, so your result cannot be published for now. You will see it like this:
+Your result is linked to the version of the method that produced it, for example `oci-predictions-scoring@1.0.0`. Until a reviewer approves that version, it is **provisional**. Once they approve it, the same result becomes **published** and gets a rank: you have nothing to submit again.
 
-- on the result page, the **Evaluation method** card says **not attributed yet**;
-- on the task page, **legacy**. The sentence after it talks about a result from before the method registry; for a recent result, it only means that no version is linked to it;
-- in the evidence summary, **Result without a reviewed method**.
+Two other cases:
+
+- **before method versions**: a result scored before the platform recorded method versions. It is never published.
+- If no version of the method is open, the submission is refused with the message "Not submitted: this task cannot take scored submissions just now…". Nothing is scored and none of your scored submissions is used. Tell the organisers. The format check always works.
 
 ## 9. Open the evidence summary
 
