@@ -8,7 +8,7 @@ import { CampaignWorkflowConfigSchema, IntendedUseStatementSchema } from '@oci/s
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { run } from './cli.js';
-import { campaignInstructionsFr, modelCards, termsStatement } from './content.js';
+import { campaignInstructionsFr, campaignLabels, modelCards, termsStatement } from './content.js';
 import { parseCsv } from './csv.js';
 import { prepareImages } from './fetch.js';
 import { buildProfileOutputs, GenerateError } from './generate.js';
@@ -309,14 +309,55 @@ describe('generated files', () => {
     expect(CampaignWorkflowConfigSchema.parse(JSON.parse(workflow))).toMatchObject({
       nAnnotators: 3,
       taskTimeoutHours: 1,
+      // The evaluation task's classes, 0 absent and 1 present, in French, with
+      // « Non interprétable » after them (#646 shape).
+      classificationLabels: {
+        labels: [
+          { value: '0', display: 'Absent' },
+          { value: '1', display: 'Présent' },
+        ],
+        cannotAssess: true,
+        allowComment: true,
+      },
     });
+    // The same set is what a campaign seeded before the labels gets, once.
+    expect(sql).toContain(
+      `jsonb_build_object('classificationLabels', '${JSON.stringify(campaignLabels())}'::jsonb)`,
+    );
     const instructions = campaignInstructionsFr(committedSelection);
     expect(instructions).toContain('Lecture de radiographies thoraciques');
     expect(instructions).toContain('sans valeur diagnostique'); // stand-in notice
+    // The instructions name the answers the screen offers, with their keys.
+    expect(instructions).toContain('**Absent** (touche 1)');
+    expect(instructions).toContain('**Présent** (touche 2)');
+    expect(instructions).toContain('**Non interprétable** (touche 0)');
     expect(instructionsVersion(instructions)).toMatch(/^[0-9a-f]{16}$/);
     expect(sql).toContain(`'${instructionsVersion(instructions)}'`);
     expect(sql).toContain('\'READY\'::"annotation"."CampaignStatus"');
-    expect(sql).not.toContain('annotation_tasks');
+  });
+
+  it('creates one reading task per flagged image, found by file name and hash, never by id', () => {
+    const sql = committed('seed.sql');
+    const block = /DO \$workshop_reading_tasks\$([\s\S]*?)END \$workshop_reading_tasks\$;/.exec(
+      sql,
+    )?.[1];
+    expect(block).toBeDefined();
+    const flagged = committedSelection.images.filter((i) => i.campaign);
+    expect(flagged).toHaveLength(CAMPAIGN_SIZE);
+    const quoted = (array: string) =>
+      [
+        ...(
+          new RegExp(`${array}\\s+CONSTANT text\\[\\] := ARRAY\\[([^\\]]*)\\]`).exec(
+            block ?? '',
+          )?.[1] ?? ''
+        ).matchAll(/'([^']+)'/g),
+      ].map((m) => m[1]);
+    expect(quoted('files')).toEqual(flagged.map((i) => i.file));
+    expect(quoted('hashes')).toEqual(flagged.map((i) => i.hosted?.sha256));
+    // No distribution id and no storage key in the block: they are resolved.
+    expect(block).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
+    expect(block).not.toContain(`${DATASET_SLUG}/`);
+    expect(block).toContain("'file:' || r.distribution_id::text");
   });
 
   it('both model cards carry a valid intended-use statement, and model A a complete one', () => {

@@ -83,18 +83,24 @@ Rules: the same as for `demo.sql` (replayable, a second run changes no row, slug
 
 Content for the December 2026 radiology workshop ([#644](https://github.com/FG-AI4H/oci-platform/issues/644)). Off on every environment until the real images have been prepared.
 
-| Object          | Slug                         | What it is                                                                                                                |
-| --------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Dataset         | `nih-chestxray14-workshop`   | 200 chest radiographs from NIH ChestX-ray14, at most 1024 px, PUBLIC / OPEN, with `metadata.csv` and three teaching files |
-| Evaluation task | `nih-chestxray14-finding`    | One finding, present or absent. `CLASSIFICATION` with two classes: 0 absent, 1 present                                    |
-| Campaign        | `nih-chestxray14-reading`    | Reading exercise on 60 of the images, three readers per image, French instructions, `taskTimeoutHours: 1`, status READY   |
-| Model cards     | `workshop-cxr-model-a`, `-b` | Fictional teaching entries: A is PUBLISHED with a complete intended-use statement, B is a DRAFT                           |
+| Object          | Slug                         | What it is                                                                                                                                   |
+| --------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dataset         | `nih-chestxray14-workshop`   | 200 chest radiographs from NIH ChestX-ray14, at most 1024 px, PUBLIC / OPEN, with `metadata.csv` and three teaching files                    |
+| Evaluation task | `nih-chestxray14-finding`    | One finding, present or absent. `CLASSIFICATION` with two classes: 0 absent, 1 present                                                       |
+| Campaign        | `nih-chestxray14-reading`    | Reading exercise: 60 tasks on 60 of the images, three readers per image, French instructions and labels, `taskTimeoutHours: 1`, status READY |
+| Model cards     | `workshop-cxr-model-a`, `-b` | Fictional teaching entries: A is PUBLISHED with a complete intended-use statement, B is a DRAFT                                              |
 
 **What is in the repository today is a synthetic stand-in**: 200 placeholder images drawn by a script (not committed, 13 MB), invented metadata and invented labels. It exists so the profile can be built, seeded and reset before any real file is fetched. `selection.json` says `"standIn": true`.
 
+**The reading campaign.**
+
+- **Pinned** to version 1.0.0 of the slice.
+- **Labels**, the answers a reader can give (`workflowConfig.classificationLabels`, [#646](https://github.com/FG-AI4H/oci-platform/issues/646)): « Absent » on key 1 and « Présent » on key 2, stored as `0` and `1`, the classes of the evaluation task, and « Non interprétable » on key 0, stored as `cannot-assess`. Readers may add a comment. A campaign seeded before the labels existed gets them on the next replay; a declared set is never overwritten.
+- **Tasks.** The seed creates one task per image flagged `"campaign": true` in `selection.json`, 60 in all. Creating them from the campaign page is not possible here: `tasks/from-dataset` selects by file-name prefix and a count, and the reading subset is a balanced draw spread over the whole slice. Each task points at `file:<distribution id>`, the hosted image in the pinned version. The SQL finds that id from the file's name and sha256, so it holds when the real images replace the stand-in, and it fails the seed if an image of the subset is not hosted in the pinned version. A replay never adds a task twice.
+- **Status READY.** Readers are served only while the campaign is RUNNING. The facilitator presses **Start** on the campaign page in the room (a campaign manager account); until then a reader's queue says the campaign is not running yet.
+
 **Not created by the seed:**
 
-- **Annotation tasks.** They are created from the dataset's files by a campaign manager ([#646](https://github.com/FG-AI4H/oci-platform/issues/646)). The campaign is seeded READY so tasks can be loaded before it is started. The 60 images of the reading subset are the ones flagged `"campaign": true` in `selection.json`.
 - **The evaluation method.** A result on the task is pinned to the latest version of the reference predictions method, `oci-predictions-scoring` ([#583](https://github.com/FG-AI4H/oci-platform/issues/583)). A migration registers it in every environment, `DECLARED`, so the profile does not repeat it. Nothing approves it: in the review exercise ([#649](https://github.com/FG-AI4H/oci-platform/issues/649)) a reviewer approves it in the browser, and the task's results move from provisional to published. The same version serves every predictions task on the environment, the demo tasks included.
 - **Accounts.** They are created from a roster with `pnpm provision-users` (see [admin-user-management.md](./admin-user-management.md)). Give exactly one account the group `arbitration-annotator` **and no other reading group**: a user who is both reader and arbiter is only ever given reading tasks.
 
@@ -141,9 +147,11 @@ Nothing below downloads anything by itself except `fetch --base-url`. Each downl
 
 ### Reset
 
-Removes what people created **on the workshop objects**, between the rehearsal and the first day, or between two days: evaluation submissions on the task, annotation assignments with their answers and calibration flags on the campaign. Annotation tasks are put back at the first reading and a completed campaign is reopened. **Kept:** accounts, the dataset and its files, the answer key, the campaign with its tasks and instructions, the model cards, everything on every other dataset, task and campaign, and the audit trail.
+Removes what people created **on the workshop objects**, between the rehearsal and the first day, or between two days: evaluation submissions on the task, and on the campaign every assignment (readers' answers, arbitration answers, images still open, expired and skipped ones) and the calibration flags. The 60 tasks are put back at the first reading, and a running or completed campaign goes back to READY, as seeded: the facilitator presses **Start** again for the next session. **Kept:** accounts, the dataset and its files, the answer key, the campaign with its pinned version, labels, 60 tasks and instructions, the model cards, everything on every other dataset, task and campaign, and the audit trail.
 
 **Not reset: the method review.** A decision recorded on `oci-predictions-scoring` during the rehearsal stays: a decision is published with its reason and is not undone. To run the review exercise again, an administrator declares a new version of the method with the same declarations and the next number. New submissions are pinned to it, and are provisional until a reviewer approves it, on every predictions task of the environment. Results already scored keep the version they were pinned to.
+
+**A full reset after a rehearsal needs both:** this reset, for the submissions and the reading campaign, and a new method version, for the review exercise. The reset deletes the task's submissions, each pinned to a method version, and writes nothing to the method, its versions or their review.
 
 It is a one-off launch of the migrate task with `OCI_SEED_RESET` set, which then runs the reset and nothing else (no migration, no seed):
 

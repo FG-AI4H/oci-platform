@@ -1,3 +1,4 @@
+import type { ClassificationLabelsConfig } from '@oci/shared-types';
 import {
   CAMPAIGN_SIZE,
   MAX_SIDE_PX,
@@ -82,6 +83,30 @@ export function termsStatement(selection: Selection): string {
   );
 }
 
+/**
+ * The answers of the reading campaign, in the shape the reader's screen
+ * reads (`workflowConfig.classificationLabels`, #646). The stored values
+ * are the evaluation task's classes, `0` absent and `1` present, so a
+ * reading compares with the answer key as it stands. Readers see the
+ * French words, in this order, on keys 1 and 2. « Non interprétable »
+ * (key 0, stored as `cannot-assess`) follows them: a reader must be able
+ * to say an image cannot be read rather than guess. Comments are on,
+ * because the instructions ask a hesitant reader to say why.
+ */
+const ABSENT = { value: '0', display: 'Absent' } as const;
+const PRESENT = { value: '1', display: 'Présent' } as const;
+
+export function campaignLabels(): ClassificationLabelsConfig {
+  return {
+    labels: [{ ...ABSENT }, { ...PRESENT }],
+    cannotAssess: true,
+    allowComment: true,
+  };
+}
+
+/** What the reader's screen shows for « cannot assess » in French (`Annotate.cannotAssess`). */
+const CANNOT_ASSESS_FR = 'Non interprétable';
+
 /** Campaign instructions, in French. They name neither a place nor an institution. */
 export function campaignInstructionsFr(selection: Selection): string {
   const sign = selection.finding.nameFr;
@@ -105,14 +130,18 @@ export function campaignInstructionsFr(selection: Selection): string {
     '',
     '## Réponse attendue',
     '',
-    '- `present` : le signe est visible sur l’image.',
-    '- `absent` : le signe n’est pas visible sur l’image.',
+    `- **${ABSENT.display}** (touche 1) : le signe n’est pas visible sur l’image.`,
+    `- **${PRESENT.display}** (touche 2) : le signe est visible sur l’image.`,
+    `- **${CANNOT_ASSESS_FR}** (touche 0) : l’image ne permet pas de répondre (qualité, cadrage, exposition).`,
     '',
-    'En cas de doute, choisissez la réponse qui vous paraît la plus probable et expliquez votre hésitation dans le commentaire.',
+    'Validez avec Entrée. En cas de doute, choisissez la réponse qui vous paraît la plus probable et expliquez votre hésitation dans le commentaire.',
+    `Réservez « ${CANNOT_ASSESS_FR} » aux images qui ne peuvent pas être lues.`,
+    '',
+    'Pour rendre une image sans la lire, utilisez « Passer » : elle retourne dans la file d’attente.',
     '',
     '## En cas de désaccord',
     '',
-    'Si les lectures ne concordent pas, l’image est transmise à un arbitre. Il voit l’image et les réponses, sans connaître leurs auteurs, et tranche en donnant sa raison.',
+    'Si les lectures ne concordent pas, l’image est transmise à un arbitre. Il voit l’image et les réponses, sans connaître leurs auteurs, et tranche en donnant sa justification.',
     '',
     '## Délai',
     '',
