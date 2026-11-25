@@ -100,4 +100,4 @@ Les événements de cette soumission dans la piste d’audit, du plus ancien au 
 
 Les numéros ne se suivent pas : d’autres événements de la plateforme s’intercalent.
 
-**Vérifier.** Une autorité de régulation ouvre le « Journal d’audit » par le lien en haut de la page ; un administrateur, depuis la page « Administration ». Cette page n’est pas encore traduite. Son bouton « Verify chain » recalcule toutes les empreintes, et un export JSON de la piste permet de comparer les empreintes avec celles de la synthèse imprimée. Gardez cette copie : un même événement doit toujours avoir la même empreinte.
+**Vérifier.** Une autorité de régulation ouvre la « Piste d’audit » par le lien en haut de la page ; un administrateur, depuis la page « Administration ». Cette page n’est pas encore traduite. Son bouton « Verify chain » recalcule toutes les empreintes, et un export JSON de la piste permet de comparer les empreintes avec celles de la synthèse imprimée. Gardez cette copie : un même événement doit toujours avoir la même empreinte.

@@ -357,11 +357,6 @@ Added with the French guides for participants and reviewers
 - **Binary finding.** « Diagnostic binaire » for the task kind, « anomalie » for the finding. A
   radiologist may prefer « signe » or the finding’s own name.
 - **Review of a method.** « Revue » / « relecteur », to keep « examen » for imaging exams.
-- **Care settings in the evidence summary.** Its section 1 still says « Environnements d’utilisation »
-  (`EvidenceSummary.intendedUse.environments`), where the form and the Model Facts label say
-  « Contextes de soins ». The guides quote each page as it is.
-- **Audit trail.** The header link says « Journal d’audit »; the evaluation pages and this glossary
-  say « piste d’audit ». One term may be better throughout.
 - **Reference labels.** The result page says « étiquettes de référence », the evidence summary
   « vérité terrain ». The guides gloss one with the other.
 - **AUC.** « ASC » after « aire sous la courbe ROC », the strict French abbreviation, as the
