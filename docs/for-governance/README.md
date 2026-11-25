@@ -11,6 +11,7 @@ The OCI is **not** a single-jurisdiction product. Compliance posture is configur
 | [Compliance posture](./compliance.md)                            | You need to map the OCI's controls to GDPR / HIPAA / PIPL / equivalents.                                                                |
 | [DUO and DUA framework](./duo-and-dua.md)                        | You need to understand how the platform expresses, matches, and (eventually) formalises data-use agreements.                            |
 | [Audit and transparency](./audit.md)                             | You need to confirm what's recorded, who can read it, and how to subpoena it.                                                           |
+| [Reading an evidence summary](./reading-an-evidence-summary.md)  | You have to judge one evaluated model from its two-page evidence summary: each section, its gaps, its trace (also in French).           |
 | [Risk register](./risks.md)                                      | You need a structured view of platform risks and their mitigations.                                                                     |
 
 ## What the OCI promises
@@ -32,7 +33,7 @@ The OCI is **not** a single-jurisdiction product. Compliance posture is configur
 
 - **Data Protection Officer (DPO)**: start with [data-sovereignty.md](./data-sovereignty.md) and [compliance.md](./compliance.md).
 - **Ethics committee chair**: start with [audit.md](./audit.md) and [duo-and-dua.md](./duo-and-dua.md).
-- **National regulator (e.g. medical-device regulator)**: start with [audit.md](./audit.md) and the model-evaluation traceability section once Phase D ships.
+- **National regulator (e.g. medical-device regulator)**: start with [reading an evidence summary](./reading-an-evidence-summary.md) and [audit.md](./audit.md).
 - **Member-state programme officer**: start with [data-sovereignty.md](./data-sovereignty.md) and the [strategic overview](../for-strategy/strategic-overview.md).
 - **Public-interest advocacy groups**: read everything; the docs are public for a reason.
 

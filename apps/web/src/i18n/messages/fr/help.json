@@ -1,0 +1,27 @@
+{
+  "metaTitle": "Aide — OCI Platform",
+  "metaDescription": "Guides pour les participants aux évaluations, les relecteurs et les autorités de régulation : soumettre des prédictions, déclarer un modèle, lire une synthèse des preuves.",
+  "heading": "Aide",
+  "lead": "De courts guides sur la plateforme, chacun lisible en cinq minutes environ. Ils s’ouvrent sur GitHub, où est conservée la documentation de la plateforme.",
+  "sections": {
+    "participants": "Participer à une évaluation",
+    "reviewers": "Lire les preuves"
+  },
+  "guides": {
+    "submitting": {
+      "title": "Soumettre des prédictions à une évaluation",
+      "description": "Le fichier à remplir, la vérification du format, le choix de votre fiche de modèle et ce que veut dire chaque mesure de la page du résultat."
+    },
+    "declaring": {
+      "title": "Déclarer un modèle",
+      "description": "Les cinq étapes du formulaire de la fiche de modèle, la déclaration d’usage prévu, et pourquoi le niveau de risque est déduit."
+    },
+    "evidence": {
+      "title": "Lire une synthèse des preuves",
+      "description": "Pour les relecteurs, les autorités de régulation et les décideurs : les sept sections, les lacunes, les petits groupes non communiqués et ce que prouve la traçabilité."
+    }
+  },
+  "opensOnGitHub": "s’ouvre sur GitHub",
+  "allDocs": "Toute la documentation",
+  "allDocsNote": "Classée par public, en anglais."
+}

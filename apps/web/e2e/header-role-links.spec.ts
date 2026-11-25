@@ -41,7 +41,7 @@ const LANGUAGES = [
     nav: 'Navigation principale',
     menu: 'Menu',
     reviews: 'Revues',
-    audit: 'Journal d’audit',
+    audit: 'Piste d’audit',
     admin: 'Administration',
     adminRow: [
       'Catalogue',

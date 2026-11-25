@@ -27,6 +27,7 @@ import evaluationTasks from './fr/evaluationTasks.json';
 import evidenceSummary from './fr/evidenceSummary.json';
 import footer from './fr/footer.json';
 import header from './fr/header.json';
+import help from './fr/help.json';
 import home from './fr/home.json';
 import languageSwitch from './fr/languageSwitch.json';
 import modelCardForm from './fr/modelCardForm.json';
@@ -56,6 +57,7 @@ const fr = {
   EvidenceSummary: evidenceSummary,
   Footer: footer,
   Header: header,
+  Help: help,
   Home: home,
   LanguageSwitch: languageSwitch,
   ModelCardForm: modelCardForm,

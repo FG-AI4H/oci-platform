@@ -1,0 +1,27 @@
+{
+  "metaTitle": "Help — OCI Platform",
+  "metaDescription": "Guides for evaluation participants, reviewers and regulators: submitting predictions, declaring a model, reading an evidence summary.",
+  "heading": "Help",
+  "lead": "Short guides to the platform, each one about five minutes to read. They open on GitHub, where the platform’s documentation is kept.",
+  "sections": {
+    "participants": "Taking part in an evaluation",
+    "reviewers": "Reading the evidence"
+  },
+  "guides": {
+    "submitting": {
+      "title": "Submitting predictions to an evaluation",
+      "description": "The template, the format check, choosing your model card, and what each measure on the result page means."
+    },
+    "declaring": {
+      "title": "Declaring a model",
+      "description": "The five steps of the model card form, the intended-use statement, and why the risk tier is derived."
+    },
+    "evidence": {
+      "title": "Reading an evidence summary",
+      "description": "For reviewers, regulators and decision-makers: the seven sections, the gaps, the small groups that are not shown, and what the trace proves."
+    }
+  },
+  "opensOnGitHub": "opens on GitHub",
+  "allDocs": "All the documentation",
+  "allDocsNote": "Organised by audience, in English."
+}
