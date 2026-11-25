@@ -281,9 +281,10 @@ try {
   await client.query(`SET LOCAL statement_timeout = '10min'`);
   await client.query(`SET LOCAL lock_timeout = '15s'`);
   // UTC whatever the server or the role says. audit_events.occurred_at
-  // has no time zone: its default takes the session's clock, and the
-  // chain trigger hashes it as formatted in the session's zone. Anything
-  // but UTC records the wrong time and a hash no verifier reproduces.
+  // has no time zone and its default takes the session's clock: anything
+  // but UTC records the wrong time. (The chain trigger hashes in UTC
+  // whatever the session says since #774; before that, a non-UTC session
+  // also stored a hash no verifier reproduces.)
   await client.query(`SET LOCAL TIME ZONE 'UTC'`);
   // The run id, for a statement that records itself (the sample deletion
   // does), so that its record points at this run's.

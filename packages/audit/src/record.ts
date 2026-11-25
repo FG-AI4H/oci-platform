@@ -18,10 +18,11 @@ export interface AuditRecordFields {
 /**
  * The record-hash rule, in TypeScript.
  *
- * The database computes `record_hash` in the BEFORE INSERT trigger of
- * migration `20260517100000_audit_events_257`, so that a row written
- * without this package (by a reviewed SQL statement, ADR-0028) is
- * chained the same way. This is the one copy of that rule outside the
+ * The database computes `record_hash` in the BEFORE INSERT trigger
+ * (migration `20260517100000_audit_events_257`, its body replaced by
+ * `20261125120000_audit_chain_order_utc_774` with the same formula), so
+ * that a row written without this package (by a reviewed SQL statement,
+ * ADR-0028) is chained the same way. This is the one copy of that rule outside the
  * database. Readers that recompute a record hash call it; they do not
  * write their own. `audit-chain.int.spec.ts` in the API checks it
  * against what the trigger stores.
@@ -32,7 +33,14 @@ export interface AuditRecordFields {
  *          payload_hash | previous_hash or '')
  *
  * `occurred_at` is a `timestamp(3)` column read as UTC, which is what
- * `Date.prototype.toISOString` prints.
+ * `Date.prototype.toISOString` prints. The trigger runs with
+ * `TimeZone = 'UTC'`, so it prints the same whatever the writing
+ * session's zone (#774).
+ *
+ * `previous_hash` is the record hash of the row before in
+ * `sequence_number` order. The trigger assigns `sequence_number` under
+ * the chain lock, one more than the last row, so that order is the order
+ * it linked the rows in; a verifier walks it in that order.
  */
 export function recordHashInput(fields: AuditRecordFields): string {
   return [

@@ -1683,7 +1683,7 @@ model AuditEvent {
   id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   occurredAt     DateTime @default(now()) @map("occurred_at")
   emittedAt      DateTime @default(now()) @map("emitted_at")
-  sequenceNumber BigInt   @default(autoincrement()) @map("sequence_number")
+  sequenceNumber BigInt   @default(autoincrement()) @map("sequence_number") /// chain order and commit order; the trigger overwrites the default under the chain lock with one more than the last row (#774)
   module         String
   action         String
   subjectType    String   @map("subject_type")
