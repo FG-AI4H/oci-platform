@@ -270,10 +270,15 @@ test.describe('submit predictions from the browser (#645)', () => {
     await expect(metric('Referable specificity')).toHaveText('100%');
     await expect(metric('Coverage')).toHaveText('83.3%');
 
-    // A direct submission is not pinned to a method version yet: said plainly,
-    // with no review status invented for it.
+    // The submission is pinned to the version of the reference predictions
+    // method that serves it (#583), with that version's review status:
+    // provisional on a fresh database, published once someone approved it.
     await expect(page.getByRole('heading', { level: 2, name: 'Evaluation method' })).toBeVisible();
-    await expect(page.getByText('not attributed yet', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'oci-predictions-scoring' })).toHaveAttribute(
+      'href',
+      '/evaluation/routes/oci-predictions-scoring',
+    );
+    await expect(page.getByText(/^(provisional|published)$/)).toBeVisible();
     // A grading task has no per-class figures, so no such table is drawn.
     await expect(page.getByRole('heading', { name: 'Per-class results' })).toHaveCount(0);
 

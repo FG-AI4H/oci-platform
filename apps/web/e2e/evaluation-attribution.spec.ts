@@ -93,7 +93,7 @@ const FIXTURE = {
       scores: grading(0.8),
       attribution: {
         kind: 'LEGACY',
-        note: 'Scored before the evaluation-route registry existed (ADR-0018 / WP5). This result carries no route declaration and is excluded from published reporting.',
+        note: 'Result from before method versions were recorded. No version of the evaluation method is attached to it, so it is excluded from published reporting.',
       },
       createdAt: '2026-08-12T00:00:00.000Z',
     },
@@ -153,9 +153,7 @@ test.describe('task page attribution (#486)', () => {
     await expect(provisional.getByRole('heading', { level: 3 })).not.toContainText('#');
     await expect(provisional.getByRole('link', { name: /idrid-qwk@1\.1\.0-rc\.1/ })).toBeVisible();
     await expect(provisional.getByText('provisional', { exact: true })).toBeVisible();
-    await expect(
-      provisional.getByText('has not yet passed review', { exact: false }),
-    ).toBeVisible();
+    await expect(provisional.getByText('is not approved yet', { exact: false })).toBeVisible();
     // Metrics are kept.
     await expect(provisional.getByText('QWK', { exact: true })).toBeVisible();
     await expect(provisional.getByText('0.850', { exact: true })).toBeVisible();
@@ -163,8 +161,10 @@ test.describe('task page attribution (#486)', () => {
     // LEGACY: badge + note, no rank, no route link.
     const legacy = rows.nth(2);
     await expect(legacy.getByRole('heading', { level: 3 })).toHaveText('demo-baseline-v1');
-    await expect(legacy.getByText('legacy', { exact: true })).toBeVisible();
-    await expect(legacy.getByText('carries no route declaration', { exact: false })).toBeVisible();
+    await expect(legacy.getByText('before method versions', { exact: true })).toBeVisible();
+    await expect(
+      legacy.getByText('Result from before method versions were recorded', { exact: false }),
+    ).toBeVisible();
     await expect(legacy.locator('a[href^="/evaluation/routes/"]')).toHaveCount(0);
     await expect(legacy.getByText('0.800', { exact: true })).toBeVisible();
 

@@ -78,6 +78,7 @@
     "tooLargeForService": "Non soumis : le fichier est trop volumineux pour le service de notation.",
     "serviceError": "Non soumis : le service de notation a répondu par une erreur ({status}).",
     "modelCardInvalid": "Non soumis : choisissez une fiche de modèle dans la liste, ou « Aucune fiche de modèle ».",
+    "noMethodVersion": "Non soumis : cette tâche ne peut pas recevoir de soumission notée pour le moment, car aucune version de sa méthode d’évaluation n’est ouverte pour y rattacher votre résultat. Rien n’a été noté et aucune de vos soumissions notées n’a été utilisée. Contactez les organisateurs de la tâche.",
     "modelCard": {
       "notFound": "Non soumis : la fiche de modèle choisie n’existe plus. Rien n’a été noté et aucune de vos soumissions notées n’a été utilisée.",
       "notYours": "Non soumis : un résultat ne peut être lié qu’à une fiche de modèle que vous avez déclarée. Rien n’a été noté et aucune de vos soumissions notées n’a été utilisée.",

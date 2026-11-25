@@ -78,6 +78,7 @@
     "tooLargeForService": "Not submitted: the file is too large for the scoring service.",
     "serviceError": "Not submitted: the scoring service answered with an error ({status}).",
     "modelCardInvalid": "Not submitted: choose a model card from the list, or “No model card”.",
+    "noMethodVersion": "Not submitted: this task cannot take scored submissions just now, because no version of its evaluation method is open to record your result. Nothing was scored and none of your scored submissions was used. Contact the task organisers.",
     "modelCard": {
       "notFound": "Not submitted: the chosen model card no longer exists. Nothing was scored and none of your scored submissions was used.",
       "notYours": "Not submitted: a result can only be linked to a model card you declared. Nothing was scored and none of your scored submissions was used.",

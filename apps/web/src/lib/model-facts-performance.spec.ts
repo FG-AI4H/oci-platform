@@ -48,7 +48,7 @@ describe('performanceLayout (#587)', () => {
     });
   });
 
-  it('shows provisional results with no published one: LEGACY results until #583', () => {
+  it('shows provisional results with no published one: LEGACY results from before #583', () => {
     const legacy = entry('NOT_ATTRIBUTED');
     const layout = performanceLayout(perf([], [legacy]));
     expect(layout).toEqual({ kind: 'results', published: [], provisional: [legacy] });

@@ -122,14 +122,16 @@ test.describe('evaluation surface (ADR-0017)', () => {
         const row = submissions.nth(i);
         if ((await row.getByText('scored', { exact: true }).count()) === 0) continue;
         await expect(
-          row.getByText(/^(published|provisional|withdrawn|retracted|legacy)$/),
+          row.getByText(/^(published|provisional|withdrawn|retracted|before method versions)$/),
         ).toBeVisible();
       }
       const legacyBaseline = submissions.filter({
         has: page.getByRole('heading', { level: 3, name: /demo-baseline-v1/ }),
       });
       if ((await legacyBaseline.count()) > 0) {
-        await expect(legacyBaseline.getByText('legacy', { exact: true })).toBeVisible();
+        await expect(
+          legacyBaseline.getByText('before method versions', { exact: true }),
+        ).toBeVisible();
         await expect(legacyBaseline.getByRole('heading', { level: 3 })).not.toContainText('#');
       }
     }

@@ -51,8 +51,8 @@
     "title": "Evaluation method",
     "description": "The scoring procedure that produced these numbers, and whether it has been reviewed.",
     "version": "version {version}",
-    "notAttributed": "not attributed yet",
-    "notAttributedBody": "This result is not linked to a version of an evaluation method, so there is no review status to show and it is not part of published reporting."
+    "notAttributed": "before method versions",
+    "notAttributedBody": "Result from before method versions were recorded. It is not linked to a version of an evaluation method, so there is no review status to show and it is not part of published reporting."
   },
   "modelCard": {
     "title": "Model card",

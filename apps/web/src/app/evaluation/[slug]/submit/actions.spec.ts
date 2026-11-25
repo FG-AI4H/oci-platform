@@ -208,6 +208,32 @@ describe('submitPredictionsAction: the model card (#587)', () => {
     expect(state.modelCardError).toBeUndefined();
   });
 
+  it.each(['NO_VERSION', 'VERSION_CLOSED'])(
+    'words a 409 with no method version (%s) as that, not as a card refusal (#583)',
+    async (reason) => {
+      mocks.fetchAsUser.mockResolvedValue(
+        json(409, {
+          statusCode: 409,
+          code: 'NO_METHOD_VERSION',
+          reason,
+          message: 'Evaluation task cannot take scored submissions (in English)',
+        }),
+      );
+
+      const state = await submit(form({ modelCardId: CARD }));
+
+      expect(state).toMatchObject({
+        status: 'error',
+        message:
+          'Not submitted: this task cannot take scored submissions just now, because no version of its evaluation method is open to record your result. Nothing was scored and none of your scored submissions was used. Contact the task organisers.',
+        values: { methodName: 'model v2', modelCardId: CARD },
+        fileName: 'predictions.csv',
+      });
+      if (state.status === 'error') expect(state.modelCardError).toBeUndefined();
+      expect(JSON.stringify(state)).not.toContain('in English');
+    },
+  );
+
   it('says "not allowed" for a 403 without a card, as before', async () => {
     mocks.fetchAsUser.mockResolvedValue(json(403, { message: 'Forbidden' }));
 

@@ -693,10 +693,9 @@ function PerClassCard({
 
 /**
  * The evaluation method version behind the score, and where it stands in
- * review. A result that carries no version is said to be not attributed yet,
- * in plain words: submissions made directly on the platform are not pinned to
- * a version at the moment, so that is the state of every new result until
- * they are.
+ * review. Every submission is pinned to a version when it is accepted (#583);
+ * a result that carries none was scored before that, and is said to be from
+ * before method versions, in plain words, with no review status invented.
  */
 function MethodCard({
   attribution,
