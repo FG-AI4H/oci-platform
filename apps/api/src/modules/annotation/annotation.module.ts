@@ -7,6 +7,8 @@ import { CalibrationController } from './calibration.controller.js';
 import { CalibrationRepository } from './calibration.repository.js';
 import { CalibrationScheduler } from './calibration.scheduler.js';
 import { CalibrationService } from './calibration.service.js';
+import { CampaignAnnotationsController } from './campaign-annotations.controller.js';
+import { CampaignAnnotationsService } from './campaign-annotations.service.js';
 import { CampaignController } from './campaign.controller.js';
 import { CampaignService } from './campaign.service.js';
 import { CampaignRepository } from './campaign.repository.js';
@@ -14,6 +16,7 @@ import { InstructionsController } from './instructions.controller.js';
 import { InstructionsService } from './instructions.service.js';
 import { MetadataVisibilityController } from './metadata-visibility.controller.js';
 import { MetadataVisibilityService } from './metadata-visibility.service.js';
+import { ReaderPseudonymiser } from './reader-pseudonym.js';
 import { AnnotationRolesGuard } from './roles.guard.js';
 import { TaskAbandonmentScheduler } from './task-abandonment.scheduler.js';
 import { TaskAbandonmentService } from './task-abandonment.service.js';
@@ -42,6 +45,7 @@ import { ToolIntegrationService } from './tool-integration.service.js';
   imports: [AuthModule, StorageModule],
   controllers: [
     CalibrationController,
+    CampaignAnnotationsController,
     CampaignController,
     InstructionsController,
     MetadataVisibilityController,
@@ -55,10 +59,12 @@ import { ToolIntegrationService } from './tool-integration.service.js';
     CalibrationRepository,
     CalibrationScheduler,
     CalibrationService,
+    CampaignAnnotationsService,
     CampaignService,
     CampaignRepository,
     InstructionsService,
     MetadataVisibilityService,
+    ReaderPseudonymiser,
     TaskService,
     TaskRepository,
     TaskAbandonmentService,

@@ -65,6 +65,34 @@ export type {
 } from './submission-validation.js';
 export type { RegulatoryPathway } from './regulatory-pathway.js';
 
+// Agreement between readers and the export of a campaign's annotations (#648).
+export {
+  AGREEMENT_MIN_TASKS,
+  ANNOTATION_EXPORT_COLUMNS,
+  AgreementCoefficientStatusSchema,
+  AnnotationExportRowSchema,
+  AnnotationExportSchema,
+  CampaignAgreementSchema,
+  ExportGateSchema,
+  ExportTaskStatusSchema,
+  KappaIntervalSchema,
+  PairwiseAgreementSchema,
+  ReaderLabelCountsSchema,
+  ReaderPseudonymSchema,
+} from './campaign-agreement.js';
+export type {
+  AgreementCoefficientStatus,
+  AnnotationExport,
+  AnnotationExportRow,
+  CampaignAgreement,
+  ExportGate,
+  ExportTaskStatus,
+  KappaInterval,
+  PairwiseAgreement,
+  ReaderLabelCounts,
+  ReaderPseudonym,
+} from './campaign-agreement.js';
+
 // Predictions files as a participant uploads them in the browser (#645): the
 // CSV / JSON reader and the template a task hands out.
 export {

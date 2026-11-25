@@ -133,6 +133,16 @@ campaign instructions do, and speaks of a reading room rather than of tooling.
 | Skip / Start                    | Passer / Commencer                            | new    |          |
 | Image controls                  | Réglages de l’image                           | new    |          |
 | Sample (task reference)         | Référence                                     | new    |          |
+| Agreement between readers       | Accord entre lecteurs                         | new    |          |
+| Fleiss’ / Cohen’s kappa         | Kappa de Fleiss / de Cohen                    | new    |          |
+| 95% CI x to y                   | IC 95 % : x à y                               | new    |          |
+| Landis and Koch bands           | Catégories de Landis et Koch                  | new    |          |
+| Bands: poor, slight, fair       | mauvais, très faible, faible                  | new    |          |
+| Bands: moderate, substantial    | modéré, important                             | new    |          |
+| Band: almost perfect            | presque parfait                               | new    |          |
+| Sent to arbitration             | Envoyée en arbitrage                          | new    |          |
+| Pseudonymous reader id          | Identifiant pseudonyme                        | new    |          |
+| Export annotations              | Exporter les annotations                      | new    |          |
 | Campaign manager                | Responsable de campagne                       | new    |          |
 | Lifecycle (campaign states)     | Cycle de vie                                  | new    |          |
 | Annotators per data point       | Lecteurs par donnée                           | new    |          |

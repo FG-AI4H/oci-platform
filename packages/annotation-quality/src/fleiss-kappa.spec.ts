@@ -25,8 +25,11 @@ describe('fleissKappa', () => {
     expect(r.ratersPerItem).toBe(14);
     expect(r.nItems).toBe(10);
     expect(r.nCategories).toBe(5);
-    // Fleiss' published κ for this dataset.
+    // Fleiss' published κ for this dataset, with its two components
+    // (P̄ = 0.378, P̄e = 0.213 in the worked example).
     expect(r.kappa).toBeCloseTo(0.21, 2);
+    expect(r.meanAgreement).toBeCloseTo(0.378, 3);
+    expect(r.expectedAgreement).toBeCloseTo(0.213, 3);
   });
 
   it('returns 1 for unanimous agreement (everyone picks the same on every item)', () => {

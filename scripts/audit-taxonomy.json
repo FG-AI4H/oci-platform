@@ -14,6 +14,7 @@
     "annotation.campaign.annotator.flagged",
     "annotation.task.assignment.expired",
     "annotation.task.assignment.released",
+    "annotation.campaign.exported",
     "access-request.submitted",
     "access-request.matched",
     "access-request.approved",
