@@ -3,11 +3,22 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ConflictException, UnprocessableEntityException } from '@nestjs/common';
 import { AuditEmitter, type AuditPrismaPort } from '@oci/audit';
 import type { PrismaClient } from '@oci/database';
-import { DatasetSlugSchema, SubmitPredictionsRequestSchema } from '@oci/shared-types';
+import {
+  DatasetSlugSchema,
+  parseFileSampleRef,
+  SubmitPredictionsRequestSchema,
+} from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { AssignmentSampleService } from '../modules/annotation/assignment-sample.service.js';
+import { CampaignRepository } from '../modules/annotation/campaign.repository.js';
+import { CampaignService } from '../modules/annotation/campaign.service.js';
+import { TaskAbandonmentService } from '../modules/annotation/task-abandonment.service.js';
+import { TaskRepository } from '../modules/annotation/task.repository.js';
+import { TaskService } from '../modules/annotation/task.service.js';
 import { CatalogRepository } from '../modules/catalog/catalog.repository.js';
 import { CatalogService } from '../modules/catalog/catalog.service.js';
 import { EvalQueueProvider } from '../modules/evaluation/eval-queue.js';
@@ -16,6 +27,8 @@ import { EvaluationService } from '../modules/evaluation/evaluation.service.js';
 import { RouteRegistryRepository } from '../modules/evaluation/route-registry.repository.js';
 import { RouteRegistryService } from '../modules/evaluation/route-registry.service.js';
 import { scoreClassification } from '../modules/evaluation/scoring-classification.js';
+import type { DicomSeriesService } from '../modules/storage/dicom-series.service.js';
+import type { StorageService } from '../modules/storage/storage.service.js';
 import type { PrismaService } from '../prisma.service.js';
 import {
   dockerAvailable as checkDocker,
@@ -76,6 +89,26 @@ const metadata = rows(`fixtures/${DATASET}/metadata.csv`).map(
     band,
   }),
 );
+/** The images of the reading subset: flagged `"campaign": true` in selection.json. */
+const readingFiles = (
+  JSON.parse(read(path.join(PROFILE_DIR, 'selection.json'))) as {
+    images: { file: string; campaign: boolean }[];
+  }
+).images
+  .filter((i) => i.campaign)
+  .map((i) => i.file)
+  .sort();
+/** The answers of the reading campaign, as the reader's screen reads them (#646). */
+const READING_LABELS = {
+  labels: [
+    { value: '0', display: 'Absent' },
+    { value: '1', display: 'Présent' },
+  ],
+  cannotAssess: true,
+  allowComment: true,
+};
+const fileNameOfKey = (key: string | null | undefined) => key?.split('/').at(-1) ?? '';
+
 /** The hidden reference labels, read here only to state what the design promises. */
 const reference = new Map(
   rows('reference-labels.hidden.csv').map(([id = '', label = '']) => [id, Number(label)]),
@@ -100,8 +133,8 @@ function changedRows(before: readonly string[], after: readonly string[]): strin
   ].sort();
 }
 
-function user(): CognitoAccessTokenPayload {
-  return { sub: randomUUID() } as unknown as CognitoAccessTokenPayload;
+function user(sub: string = randomUUID()): CognitoAccessTokenPayload {
+  return { sub } as unknown as CognitoAccessTokenPayload;
 }
 
 function runReset(url: string, env: Record<string, string>) {
@@ -129,10 +162,18 @@ describe.skipIf(!dockerAvailable)(
     let db: MigratedPostgres;
     let prisma: PrismaClient;
     let evaluation: EvaluationService;
+    let campaignRepo: CampaignRepository;
+    let campaigns: CampaignService;
+    let readingTasks: TaskService;
+    let samples: AssignmentSampleService;
+    /** What the sample service asked storage to sign; storage itself is stubbed. */
+    const signed: { bucket: string; key: string; contentType: string }[] = [];
 
     const lines = async () => snapshotLines(await snapshotTables(prisma));
 
     beforeAll(async () => {
+      // Pulls free abandoned slots themselves; no BullMQ sweeper here.
+      delete process.env.REDIS_URL;
       db = await startMigratedPostgres();
       prisma = db.prisma;
       const prismaService = { client: prisma } as unknown as PrismaService;
@@ -143,6 +184,26 @@ describe.skipIf(!dockerAvailable)(
         audit,
         new RouteRegistryService(new RouteRegistryRepository(prismaService), audit),
       );
+      campaignRepo = new CampaignRepository(prismaService);
+      campaigns = new CampaignService(campaignRepo);
+      const taskRepo = new TaskRepository(prismaService);
+      // The reading campaign has image files only, no DICOM series.
+      const noSeries = { listTaskSamples: async () => [] } as unknown as DicomSeriesService;
+      const storage = {
+        authoriseDatasetBytes: async () => ({}),
+        signHostedRead: async (args: { bucket: string; key: string; contentType: string }) => {
+          signed.push({ bucket: args.bucket, key: args.key, contentType: args.contentType });
+          return `https://storage.test/${randomUUID()}`;
+        },
+      } as unknown as StorageService;
+      readingTasks = new TaskService(
+        campaignRepo,
+        taskRepo,
+        new TaskAbandonmentService(taskRepo, audit),
+        noSeries,
+        storage,
+      );
+      samples = new AssignmentSampleService(campaignRepo, taskRepo, storage, noSeries);
     }, 180_000);
 
     afterAll(async () => {
@@ -201,12 +262,41 @@ describe.skipIf(!dockerAvailable)(
           'CLASSIFICATION',
           version.id,
         ]);
-        expect(campaign.workflowConfig).toEqual({ nAnnotators: 3, taskTimeoutHours: 1 });
+        expect(campaign.workflowConfig).toEqual({
+          nAnnotators: 3,
+          taskTimeoutHours: 1,
+          classificationLabels: READING_LABELS,
+        });
+        // The API reads the labels the way the reader's screen gets them (#646).
+        const detail = await campaigns.detail(CAMPAIGN);
+        expect(detail.workflowConfig.classificationLabels).toEqual(READING_LABELS);
         expect(campaign.instructions).toHaveLength(1);
         expect(campaign.currentInstructionsVersion).toBe(campaign.instructions.at(0)?.version);
         expect(campaign.instructions.at(0)?.markdownBody).toContain('Lecture de radiographies');
-        // Task creation from the dataset's files is #646: the seed creates none.
-        expect(await prisma.annotationTask.count({ where: { campaignId: campaign.id } })).toBe(0);
+        expect(campaign.instructions.at(0)?.markdownBody).toContain(
+          '**Non interprétable** (touche 0)',
+        );
+
+        // One reading task per flagged image, each a `file:<distribution id>`
+        // reference to a hosted image of the pinned version (#646).
+        const tasks = await prisma.annotationTask.findMany({ where: { campaignId: campaign.id } });
+        expect(tasks).toHaveLength(60);
+        expect(
+          tasks.every(
+            (t) =>
+              t.gateState === 'INDEPENDENT' &&
+              t.nAnnotatorsRequired === 3 &&
+              t.completedAt === null &&
+              /^file:[0-9a-f-]{36}$/.test(t.sampleRef),
+          ),
+        ).toBe(true);
+        const hosted = await Promise.all(
+          tasks.map((t) =>
+            campaignRepo.findHostedImageFile(version.id, parseFileSampleRef(t.sampleRef) ?? ''),
+          ),
+        );
+        expect(hosted.every((f) => f?.contentType === 'image/png')).toBe(true);
+        expect(hosted.map((f) => fileNameOfKey(f?.s3Key)).sort()).toEqual(readingFiles);
 
         const cards = await prisma.modelCard.findMany({
           where: { slug: { startsWith: 'workshop-cxr-model-' } },
@@ -222,6 +312,85 @@ describe.skipIf(!dockerAvailable)(
         const before = await lines();
         replaySeedFile(db.url, profileSql);
         expect(await lines()).toEqual(before);
+      });
+
+      it('gives a campaign seeded before #646 its labels and its reading tasks, once', async () => {
+        // The campaign as the profile left it before #646: no labels, no task.
+        const { id } = await prisma.annotationCampaign.findUniqueOrThrow({
+          where: { slug: CAMPAIGN },
+        });
+        await prisma.annotationTask.deleteMany({ where: { campaignId: id } });
+        await prisma.annotationCampaign.update({
+          where: { id },
+          data: { workflowConfig: { nAnnotators: 3, taskTimeoutHours: 1 } },
+        });
+
+        replaySeedFile(db.url, profileSql);
+        const campaign = await prisma.annotationCampaign.findUniqueOrThrow({ where: { id } });
+        expect(campaign.workflowConfig).toEqual({
+          nAnnotators: 3,
+          taskTimeoutHours: 1,
+          classificationLabels: READING_LABELS,
+        });
+        expect(await prisma.annotationTask.count({ where: { campaignId: id } })).toBe(60);
+
+        const before = await lines();
+        replaySeedFile(db.url, profileSql);
+        expect(await lines()).toEqual(before);
+      });
+
+      it('never overwrites labels the campaign already declares', async () => {
+        const { id, workflowConfig } = await prisma.annotationCampaign.findUniqueOrThrow({
+          where: { slug: CAMPAIGN },
+        });
+        const own = {
+          nAnnotators: 3,
+          taskTimeoutHours: 1,
+          classificationLabels: { ...READING_LABELS, cannotAssess: false },
+        };
+        await prisma.annotationCampaign.update({ where: { id }, data: { workflowConfig: own } });
+        try {
+          replaySeedFile(db.url, profileSql);
+          expect(
+            (await prisma.annotationCampaign.findUniqueOrThrow({ where: { id } })).workflowConfig,
+          ).toEqual(own);
+        } finally {
+          await prisma.annotationCampaign.update({
+            where: { id },
+            data: { workflowConfig: workflowConfig as object },
+          });
+        }
+      });
+
+      it('fails, naming counts only, when an image of the reading subset is not hosted in the pinned version', async () => {
+        const [victimFile = ''] = readingFiles;
+        const victim = await prisma.distribution.findFirstOrThrow({
+          where: { s3Key: { endsWith: `/${victimFile}` } },
+        });
+        await prisma.distribution.update({
+          where: { id: victim.id },
+          data: { s3Key: `${victim.s3Key ?? ''}.moved` },
+        });
+        try {
+          const before = await lines();
+          let message = '';
+          try {
+            replaySeedFile(db.url, profileSql);
+          } catch (error) {
+            const failure = error as { stdout?: Buffer; stderr?: Buffer; message?: string };
+            message = `${String(failure.stdout ?? '')}${String(failure.stderr ?? '')}${failure.message ?? ''}`;
+          }
+          expect(message).toContain(
+            `campaign ${CAMPAIGN}: 59 of the 60 images of the reading subset resolve to exactly one hosted image of the pinned version`,
+          );
+          expect(message).not.toContain(victimFile);
+          expect(await lines()).toEqual(before);
+        } finally {
+          await prisma.distribution.update({
+            where: { id: victim.id },
+            data: { s3Key: victim.s3Key },
+          });
+        }
       });
 
       it('leaves the demo seed as it is, and the demo seed leaves the profile as it is', async () => {
@@ -511,6 +680,93 @@ describe.skipIf(!dockerAvailable)(
       });
     });
 
+    // The room: the facilitator presses Start, readers pull images and answer.
+    // Through the services the controllers call, with storage stubbed.
+    describe('the reading exercise', () => {
+      const READER = ['annotator'] as const;
+      const manager = {
+        sub: randomUUID(),
+        'cognito:groups': ['campaign-manager'],
+      } as unknown as CognitoAccessTokenPayload;
+      const readers = [randomUUID(), randomUUID(), randomUUID()];
+
+      it('serves no reader until the facilitator starts the campaign', async () => {
+        await expect(
+          readingTasks.pullNext({ slug: CAMPAIGN, user: user(), userGroups: READER }),
+        ).rejects.toBeInstanceOf(ConflictException);
+
+        const started = await campaigns.transition(CAMPAIGN, 'start', undefined, manager);
+        expect(started.status).toBe('RUNNING');
+      });
+
+      it('gives a reader an image of the pinned version, never a storage key', async () => {
+        const { assignment } = await readingTasks.pullNext({
+          slug: CAMPAIGN,
+          user: user(readers[0]),
+          userGroups: READER,
+        });
+        expect(assignment?.sampleRef).toMatch(/^file:[0-9a-f-]{36}$/);
+
+        const sample = await samples.sample({
+          assignmentId: assignment?.id ?? '',
+          user: user(readers[0]),
+          userGroups: READER,
+        });
+        expect(sample).toMatchObject({ kind: 'image', contentType: 'image/png' });
+        expect(sample.kind === 'image' ? sample.url : '').toMatch(/^https:\/\/storage\.test\//);
+
+        // The file signed is the hosted image the task names, one of the subset.
+        const distributionId = parseFileSampleRef(assignment?.sampleRef ?? '');
+        const last = signed.at(-1);
+        expect(last?.bucket).toBe('oci-datasets-test');
+        expect(last?.key).toMatch(new RegExp(`^${DATASET}/${distributionId}/[^/]+\\.png$`));
+        expect(readingFiles).toContain(fileNameOfKey(last?.key));
+      });
+
+      it('takes the campaign’s answers only, « Non interprétable » included, and lets a reader skip', async () => {
+        const { currentInstructionsVersion } = await prisma.annotationCampaign.findUniqueOrThrow({
+          where: { slug: CAMPAIGN },
+        });
+        const pull = async (sub: string) =>
+          (await readingTasks.pullNext({ slug: CAMPAIGN, user: user(sub), userGroups: READER }))
+            .assignment?.id ?? '';
+        const answer = (assignmentId: string, sub: string, label: string) =>
+          readingTasks.submit({
+            assignmentId,
+            submission: { label },
+            acknowledgedInstructionsVersion: currentInstructionsVersion,
+            user: user(sub),
+          });
+
+        const [first = '', second = '', third = ''] = readers;
+        const a = await pull(first);
+        await expect(answer(a, first, 'present')).rejects.toBeInstanceOf(
+          UnprocessableEntityException,
+        );
+        await answer(a, first, '1');
+
+        await answer(await pull(second), second, 'cannot-assess');
+
+        const skipped = await pull(third);
+        await readingTasks.release({ assignmentId: skipped, user: user(third) });
+
+        const { id } = await prisma.annotationCampaign.findUniqueOrThrow({
+          where: { slug: CAMPAIGN },
+        });
+        const rows = await prisma.annotationTaskAssignment.findMany({
+          where: { task: { campaignId: id } },
+          orderBy: { assignedAt: 'asc' },
+        });
+        expect(
+          rows.map((r) => [r.status, (r.submission as { label?: string } | null)?.label]),
+        ).toEqual([
+          ['SUBMITTED', '1'],
+          ['SUBMITTED', 'cannot-assess'],
+          ['RELEASED', undefined],
+        ]);
+      });
+    });
+
     describe('reset', () => {
       let workshopTaskId: string;
       let workshopCampaignId: string;
@@ -577,18 +833,92 @@ describe.skipIf(!dockerAvailable)(
         return task.id;
       }
 
+      /**
+       * A session on the seeded reading tasks, on top of what the reading
+       * exercise above left (two answers and a skip): one image read by three
+       * readers and settled by the arbiter, one set aside by a supervisor, one
+       * open on a reader's screen, a calibration flag, and the campaign
+       * COMPLETED.
+       */
+      async function sessionOnSeededTasks(campaignId: string): Promise<void> {
+        const [settled, setAside, open] = await prisma.annotationTask.findMany({
+          where: { campaignId },
+          orderBy: { sampleRef: 'asc' },
+          take: 3,
+        });
+        if (!settled || !setAside || !open) throw new Error('the seed made fewer than 3 tasks');
+        await prisma.annotationTask.update({
+          where: { id: settled.id },
+          data: { gateState: 'COMPLETED', completedAt: new Date() },
+        });
+        await prisma.annotationTaskAssignment.createMany({
+          data: [
+            ...['1', '1', '0'].map((label) => ({
+              taskId: settled.id,
+              assigneeUserId: randomUUID(),
+              assigneeRole: 'annotator',
+              gateAtAssignment: 'INDEPENDENT' as const,
+              status: 'SUBMITTED' as const,
+              submission: { label },
+              submittedAt: new Date(),
+            })),
+            {
+              taskId: settled.id,
+              assigneeUserId: randomUUID(),
+              assigneeRole: 'arbitration-annotator',
+              gateAtAssignment: 'AWAITING_ARBITRATION' as const,
+              status: 'SUBMITTED' as const,
+              submission: { label: '1', reason: 'Opacité nette du lobe inférieur.' },
+              submittedAt: new Date(),
+            },
+            {
+              taskId: open.id,
+              assigneeUserId: randomUUID(),
+              assigneeRole: 'annotator',
+              gateAtAssignment: 'INDEPENDENT' as const,
+              status: 'IN_PROGRESS' as const,
+              startedAt: new Date(),
+            },
+          ],
+        });
+        await prisma.annotationTask.update({
+          where: { id: setAside.id },
+          data: { gateState: 'SKIPPED', skipReason: 'Image en double.' },
+        });
+        await prisma.annotatorCalibrationFlag.create({
+          data: {
+            campaignId,
+            annotatorUserId: randomUUID(),
+            flagType: 'DRIFT',
+            metric: 'vs-peers',
+            score: 0.4,
+            threshold: 0.6,
+            sampleSize: 12,
+            windowMeta: {},
+          },
+        });
+        await prisma.annotationCampaign.update({
+          where: { id: campaignId },
+          data: { status: 'COMPLETED', completedAt: new Date() },
+        });
+      }
+
       beforeAll(async () => {
         workshopTaskId = (await prisma.evaluationTask.findUniqueOrThrow({ where: { slug: TASK } }))
           .id;
         workshopCampaignId = (
           await prisma.annotationCampaign.findUniqueOrThrow({ where: { slug: CAMPAIGN } })
         ).id;
+        workshopAnnotationTaskIds = (
+          await prisma.annotationTask.findMany({
+            where: { campaignId: workshopCampaignId },
+            select: { id: true },
+          })
+        ).map((t) => t.id);
 
-        // Work on the workshop objects: two scored submissions exist already.
-        workshopAnnotationTaskIds = [
-          await participantWorkOn(workshopCampaignId, `${DATASET}/reading-1`),
-          await participantWorkOn(workshopCampaignId, `${DATASET}/reading-2`),
-        ];
+        // Work on the workshop objects: two scored submissions exist already,
+        // and the reading exercise above left two answers and a skip.
+        await sessionOnSeededTasks(workshopCampaignId);
 
         // The same kinds of rows on objects that are NOT the workshop's: the demo
         // evaluation task and the demo campaign. All of it must survive.
@@ -648,20 +978,36 @@ describe.skipIf(!dockerAvailable)(
         expect(run.status).toBe(0);
         expect(run.output).toContain('DRY RUN, nothing will be changed');
         expect(run.output).toMatch(/ 2 {2}evaluation submissions deleted \(would be\)/);
+        // The exercise's two answers and skip, three readings, an arbitration
+        // and one open image.
         expect(run.output).toMatch(
-          / 6 {2}annotation assignments \(with their answers\) deleted \(would be\)/,
+          / 8 {2}annotation assignments \(with their answers\) deleted \(would be\)/,
         );
-        expect(run.output).toMatch(/ 2 {2}annotator calibration flags deleted \(would be\)/);
+        expect(run.output).toMatch(/ 1 {2}annotator calibration flags deleted \(would be\)/);
         expect(run.output).toMatch(
           / 2 {2}annotation tasks put back at the first reading \(would be\)/,
         );
-        expect(run.output).toMatch(/ 1 {2}completed campaigns reopened \(would be\)/);
+        expect(run.output).toMatch(/ 1 {2}started campaigns put back to READY \(would be\)/);
         expect(run.output).toContain(`OCI_SEED_RESET_CONFIRM=${PROFILE}@dev`);
         expect(await lines()).toEqual(before);
       });
 
       it('applied, removes the work on the workshop objects and nothing else', async () => {
         const others = await untouchable();
+        // #583: the submissions it deletes are pinned to a method version. The
+        // method, its versions and their review are not the workshop's work:
+        // the reset leaves them as they are (written by nobody, by xmin).
+        const methodRows = async () =>
+          snapshotLines(
+            (await snapshotTables(prisma)).filter(({ table }) =>
+              ['evaluation.evaluation_routes', 'evaluation.route_versions'].includes(table),
+            ),
+          );
+        const methodBefore = await methodRows();
+        expect(methodBefore.length).toBeGreaterThan(0);
+        const scored = await prisma.submission.findMany({ where: { taskId: workshopTaskId } });
+        expect(scored.length).toBeGreaterThan(0);
+        expect(scored.every((s) => s.routeVersionId !== null)).toBe(true);
         const started = Date.now();
         const run = runReset(db.url, { OCI_ENV: 'dev', OCI_SEED_RESET_CONFIRM: `${PROFILE}@dev` });
         const elapsedMs = Date.now() - started;
@@ -671,6 +1017,7 @@ describe.skipIf(!dockerAvailable)(
 
         // Everything outside the workshop objects is identical, row for row and write for write.
         expect(await untouchable()).toEqual(others);
+        expect(await methodRows()).toEqual(methodBefore);
 
         // The workshop objects are back to how the seed left them.
         expect(await prisma.submission.count({ where: { taskId: workshopTaskId } })).toBe(0);
@@ -684,22 +1031,35 @@ describe.skipIf(!dockerAvailable)(
             where: { campaignId: workshopCampaignId },
           }),
         ).toBe(0);
+        // The 60 seeded tasks, the same rows, all open at the first reading.
         const tasks = await prisma.annotationTask.findMany({
           where: { campaignId: workshopCampaignId },
         });
-        expect(tasks.map((t) => [t.gateState, t.completedAt])).toEqual([
-          ['INDEPENDENT', null],
-          ['INDEPENDENT', null],
-        ]);
+        expect(tasks.map((t) => t.id).sort()).toEqual([...workshopAnnotationTaskIds].sort());
+        expect(tasks).toHaveLength(60);
+        expect(
+          tasks.every(
+            (t) => t.gateState === 'INDEPENDENT' && t.completedAt === null && t.skipReason === null,
+          ),
+        ).toBe(true);
+        // READY as seeded, with its pinned version, labels and instructions.
         const campaign = await prisma.annotationCampaign.findUniqueOrThrow({
           where: { id: workshopCampaignId },
           include: { instructions: true },
         });
-        expect([campaign.status, campaign.completedAt, campaign.instructions.length]).toEqual([
-          'RUNNING',
-          null,
-          1,
-        ]);
+        const pinned = await prisma.datasetVersion.findFirstOrThrow({
+          where: { dataset: { slug: DATASET }, version: '1.0.0' },
+        });
+        expect([
+          campaign.status,
+          campaign.startedAt,
+          campaign.completedAt,
+          campaign.manifestVersionId,
+          campaign.instructions.length,
+        ]).toEqual(['READY', null, null, pinned.id, 1]);
+        expect(
+          (campaign.workflowConfig as { classificationLabels?: unknown }).classificationLabels,
+        ).toEqual(READING_LABELS);
 
         // Kept: the account, the seeded dataset with its files, the answer key, the cards.
         expect(await prisma.user.count({ where: { email: 'reader@workshop.example' } })).toBe(1);
@@ -731,10 +1091,30 @@ describe.skipIf(!dockerAvailable)(
         });
         expect(run.status).toBe(0);
         expect(run.output).toMatch(/ 0 {2}evaluation submissions deleted/);
-        expect(run.output).toMatch(/ 0 {2}completed campaigns reopened/);
+        expect(run.output).toMatch(/ 0 {2}started campaigns put back to READY/);
         expect(await lines()).toEqual(before);
         replaySeedFile(db.url, profileSql);
         expect(await lines()).toEqual(before);
+      });
+
+      it('leaves the next session ready: Start, and a reader gets an image again', async () => {
+        const manager = {
+          sub: randomUUID(),
+          'cognito:groups': ['campaign-manager'],
+        } as unknown as CognitoAccessTokenPayload;
+        await campaigns.transition(CAMPAIGN, 'start', undefined, manager);
+        const reader = randomUUID();
+        const { assignment } = await readingTasks.pullNext({
+          slug: CAMPAIGN,
+          user: user(reader),
+          userGroups: ['annotator'],
+        });
+        const sample = await samples.sample({
+          assignmentId: assignment?.id ?? '',
+          user: user(reader),
+          userGroups: ['annotator'],
+        });
+        expect(sample).toMatchObject({ kind: 'image', contentType: 'image/png' });
       });
     });
 

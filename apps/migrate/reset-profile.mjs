@@ -1,8 +1,10 @@
 // One-off reset of a seed profile's objects (#644): removes what people
 // created ON those objects (evaluation submissions, annotation assignments
-// with their answers, calibration flags) and puts the annotation tasks back
-// at the start. Accounts, the seeded objects themselves, every other dataset,
-// task and campaign, and the audit trail are not touched.
+// with their answers, arbitrations and skips, calibration flags), puts the
+// annotation tasks back at the first reading and a started campaign back to
+// READY, as seeded. Accounts, the seeded objects themselves (a campaign's
+// tasks, labels and pinned version included), every other dataset, task and
+// campaign, and the audit trail are not touched.
 //
 // Invoked by `apps/migrate/entrypoint.sh` INSTEAD of migrate + seed when the
 // task is launched with `OCI_SEED_RESET=<profile>`. Operator guide:
@@ -159,6 +161,12 @@ try {
         run: 'DELETE FROM "evaluation"."submissions" WHERE task_id = ANY($1::uuid[])',
       },
       {
+        // Every assignment of the campaigns' tasks, whatever its status
+        // and step: the readers' answers, the arbitration and expert
+        // answers (assignments at those steps), the ones in progress, and
+        // the expired and skipped (RELEASED, #646) ones. An answer, with
+        // the image and window it was given on (#674), lives in the
+        // assignment's `submission`, so it goes with it.
         label: 'annotation assignments (with their answers) deleted',
         ids: campaignIds,
         count: `SELECT count(*)::int AS n FROM "annotation"."annotation_task_assignments" WHERE task_id IN (${annotationTasksOfCampaigns})`,
@@ -178,10 +186,13 @@ try {
         run: `UPDATE "annotation"."annotation_tasks" SET gate_state = 'INDEPENDENT', completed_at = NULL, skip_reason = NULL, updated_at = CURRENT_TIMESTAMP WHERE campaign_id = ANY($1::uuid[]) AND (gate_state <> 'INDEPENDENT' OR completed_at IS NOT NULL OR skip_reason IS NOT NULL)`,
       },
       {
-        label: 'completed campaigns reopened',
+        // As seeded: READY, so the facilitator starts the next session with
+        // Start, and no reader is served before. An ARCHIVED campaign is
+        // left as it is: archiving is a decision, not participants' work.
+        label: 'started campaigns put back to READY',
         ids: campaignIds,
-        count: `SELECT count(*)::int AS n FROM "annotation"."annotation_campaigns" WHERE id = ANY($1::uuid[]) AND status = 'COMPLETED'`,
-        run: `UPDATE "annotation"."annotation_campaigns" SET status = 'RUNNING', completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($1::uuid[]) AND status = 'COMPLETED'`,
+        count: `SELECT count(*)::int AS n FROM "annotation"."annotation_campaigns" WHERE id = ANY($1::uuid[]) AND status IN ('RUNNING', 'COMPLETED')`,
+        run: `UPDATE "annotation"."annotation_campaigns" SET status = 'READY', started_at = NULL, completed_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ANY($1::uuid[]) AND status IN ('RUNNING', 'COMPLETED')`,
       },
     ];
 
@@ -198,7 +209,7 @@ try {
     if (apply) {
       await client.query('COMMIT');
       console.log(
-        `reset: done in ${Date.now() - started} ms. Kept: accounts, the seeded dataset, task, campaign, its tasks and instructions, model cards, the audit trail.`,
+        `reset: done in ${Date.now() - started} ms. Kept: accounts, the seeded dataset, task, campaign, its tasks, labels and instructions, model cards, the audit trail.`,
       );
     } else {
       await client.query('ROLLBACK');
