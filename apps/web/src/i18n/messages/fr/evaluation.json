@@ -19,14 +19,14 @@
       "provisional": "provisoire",
       "withdrawn": "retiré",
       "retracted": "rétracté",
-      "legacy": "historique"
+      "legacy": "avant les versions de méthode"
     },
     "description": {
       "published": "Publié : la méthode d’évaluation qui a produit ce résultat a été approuvée lors de sa revue.",
-      "provisional": "Provisoire : la méthode d’évaluation qui a produit ce résultat n’a pas encore été approuvée lors de sa revue ; le résultat est donc exclu des rapports publiés.",
+      "provisional": "Provisoire : la version de la méthode d’évaluation qui a produit ce résultat n’est pas encore approuvée ; le résultat est donc exclu des rapports publiés.",
       "withdrawn": "Retiré : la méthode d’évaluation qui a produit ce résultat a été rejetée ou retirée de la revue ; le résultat est donc exclu des rapports publiés.",
       "retracted": "Les résultats de cette version de la méthode ont été retirés après la revue.",
-      "legacy": "Noté avant la création du registre des méthodes d’évaluation (ADR-0018 / WP5). Ce résultat n’est rattaché à aucune déclaration de méthode et il est exclu des rapports publiés."
+      "legacy": "Résultat antérieur à l’enregistrement des versions de méthode. Aucune version de la méthode d’évaluation n’y est rattachée ; il est donc exclu des rapports publiés."
     }
   },
   "metric": {

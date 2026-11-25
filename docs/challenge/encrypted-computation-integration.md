@@ -142,9 +142,10 @@ The track is scoped to **inference, not training**.
 
 Stated plainly, as the specification does for its own gaps. The platform-side adapter that
 dispatches a run to an encrypted-computation route and takes in its result is in progress
-([#413](https://github.com/FG-AI4H/oci-platform/issues/413)), and so is pinning the route version on
-every submission ([#583](https://github.com/FG-AI4H/oci-platform/issues/583)). Neither blocks the
-declarations or the implementation, and both are ours to finish before review.
+([#413](https://github.com/FG-AI4H/oci-platform/issues/413)). It does not block the declarations or
+the implementation, and it is ours to finish before review. Every submission is already pinned to the
+route version that produces its result ([#583](https://github.com/FG-AI4H/oci-platform/issues/583));
+an encrypted-computation submission will be pinned the same way once the adapter takes them.
 
 ## 10 Submitting
 

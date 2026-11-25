@@ -20,6 +20,7 @@ import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import type { EvalQueueProvider } from './eval-queue.js';
 import type { EvaluationRepository, LinkedModelCardRef } from './evaluation.repository.js';
 import { EvaluationService } from './evaluation.service.js';
+import { servingVersionStub } from '../../test-support/serving-version-stub.js';
 
 /**
  * #587 — the linking rule between a submission and a model card: on submit in
@@ -96,7 +97,6 @@ beforeEach(() => {
       subgroups: null,
     }),
     findTaskRefBySlug: vi.fn().mockResolvedValue({ id: TASK_ID, slug: 'task-587' }),
-    findReferenceRouteVersionForMode: vi.fn().mockResolvedValue(null),
     countScoredSubmissionsForParticipant: vi.fn().mockResolvedValue(0),
     createSubmission: vi.fn().mockResolvedValue({ id: SUBMISSION_ID }),
     createContainerSubmission: vi.fn().mockResolvedValue({ id: SUBMISSION_ID }),
@@ -118,6 +118,7 @@ beforeEach(() => {
     repo as unknown as EvaluationRepository,
     queue as unknown as EvalQueueProvider,
     audit.asEmitter(),
+    servingVersionStub().asService(),
   );
 });
 

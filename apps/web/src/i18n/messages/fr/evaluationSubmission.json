@@ -51,8 +51,8 @@
     "title": "Méthode d’évaluation",
     "description": "La procédure de notation qui a produit ces chiffres, et si elle a fait l’objet d’une revue.",
     "version": "version {version}",
-    "notAttributed": "pas encore attribué",
-    "notAttributedBody": "Ce résultat n’est rattaché à aucune version d’une méthode d’évaluation : il n’a donc pas de statut de revue à afficher et ne fait pas partie des rapports publiés."
+    "notAttributed": "avant les versions de méthode",
+    "notAttributedBody": "Résultat antérieur à l’enregistrement des versions de méthode. Il n’est rattaché à aucune version d’une méthode d’évaluation : il n’a donc pas de statut de revue à afficher et ne fait pas partie des rapports publiés."
   },
   "modelCard": {
     "title": "Fiche de modèle",

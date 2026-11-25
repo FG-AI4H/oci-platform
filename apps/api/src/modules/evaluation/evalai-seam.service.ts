@@ -11,7 +11,8 @@ import { externalParticipantAsUuid } from './seam-identity.js';
  * A thin adapter, on purpose. It maps EvalAI's vocabulary onto the OCI's and
  * then calls the SAME service methods a direct participant submission uses —
  * so a seam submission cannot accidentally take a different scoring path, skip
- * a quota or bypass route attribution. Every guarantee the participant path has
+ * a quota or bypass route attribution: it is pinned to a method version, or
+ * refused, exactly as a direct one is (#583). Every guarantee the participant path has
  * is inherited rather than reimplemented.
  */
 @Injectable()
@@ -139,20 +140,28 @@ export class EvalAiSeamService {
       throw err;
     }
 
-    const ref = await this.repo.findReferenceRouteVersionForMode('PREDICTIONS');
+    // The version is pinned by `submitPredictions`, which refuses the entry
+    // with a 409 when none can be (#583). The answer reads it back from the
+    // stored row, as a replay does, so both report the version that scored
+    // the entry rather than one resolved a second time.
+    const stored = await this.repo.findByExternalRef({
+      externalChallengeId: body.externalChallengeId,
+      externalSubmissionId: body.externalSubmissionId,
+    });
     this.logger.log(
       `seam.intake SCORED task=${body.taskSlug} evalai=${body.externalSubmissionId} ` +
-        `team=${body.externalParticipantId} oci=${created.id} route=${ref?.routeSlug ?? 'NONE'}`,
+        `team=${body.externalParticipantId} oci=${created.id} ` +
+        `route=${stored?.routeSlug ?? 'NONE'}@${stored?.routeVersion ?? 'NONE'}`,
     );
     return {
       intent: 'SCORED',
       ociSubmissionId: created.id,
-      routeSlug: ref?.routeSlug ?? null,
-      routeVersion: ref?.version ?? null,
+      routeSlug: stored?.routeSlug ?? null,
+      routeVersion: stored?.routeVersion ?? null,
       // Invariant 2: only APPROVED counts as published. The reference route is
       // seeded DECLARED because nothing self-approves, so early results are
       // provisional — real, stored, and excluded from published reporting.
-      published: ref?.reviewStatus === 'APPROVED',
+      published: stored?.reviewStatus === 'APPROVED',
       validation: null,
     };
   }

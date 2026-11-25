@@ -1,5 +1,5 @@
 import { Prisma } from '@oci/database';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { intentForPhase } from '@oci/shared-types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { EvalAiSeamService } from './evalai-seam.service.js';
@@ -50,8 +50,12 @@ let evaluation: {
 };
 let repo: {
   findByExternalRef: ReturnType<typeof vi.fn>;
-  findReferenceRouteVersionForMode: ReturnType<typeof vi.fn>;
 };
+/**
+ * The row `submitPredictions` stored, as `findByExternalRef` reads it back:
+ * pinned to the seeded reference version, DECLARED (#583).
+ */
+let stored: { id: string; routeSlug: string; routeVersion: string; reviewStatus: string };
 let svc: EvalAiSeamService;
 
 beforeEach(() => {
@@ -59,16 +63,20 @@ beforeEach(() => {
     submitPredictions: vi.fn().mockResolvedValue({ id: '11111111-1111-4111-8111-111111111111' }),
     validatePredictions: vi.fn().mockResolvedValue(VALIDATION_REPORT),
   };
+  stored = {
+    id: '11111111-1111-4111-8111-111111111111',
+    routeSlug: 'oci-predictions-scoring',
+    routeVersion: '1.0.0',
+    reviewStatus: 'DECLARED',
+  };
   repo = {
-    // No prior submission for this pk unless a test says otherwise.
-    findByExternalRef: vi.fn().mockResolvedValue(null),
-    findReferenceRouteVersionForMode: vi.fn().mockResolvedValue({
-      routeId: 'r1',
-      routeSlug: 'oci-predictions-scoring',
-      versionId: 'v1',
-      version: '1.0.0',
-      reviewStatus: 'DECLARED',
-    }),
+    // No prior submission for this pk unless a test says otherwise; once
+    // `submitPredictions` has run, the row it stored.
+    findByExternalRef: vi
+      .fn()
+      .mockImplementation(async () =>
+        evaluation.submitPredictions.mock.calls.length > 0 ? stored : null,
+      ),
   };
   svc = new EvalAiSeamService(evaluation as never, repo as never);
 });
@@ -148,15 +156,27 @@ describe('SCORED (test) — the quota binds the TEAM, not the calling worker', (
   });
 
   it('marks the result published only once the route version is APPROVED', async () => {
-    repo.findReferenceRouteVersionForMode.mockResolvedValue({
-      routeId: 'r1',
-      routeSlug: 'oci-predictions-scoring',
-      versionId: 'v1',
-      version: '1.0.0',
-      reviewStatus: 'APPROVED',
-    });
+    stored.reviewStatus = 'APPROVED';
     const out = await svc.intake(BODY);
     expect(out.published).toBe(true);
+  });
+
+  it('answers with the version the stored row was pinned to (#583)', async () => {
+    stored.routeVersion = '1.1.0';
+    const out = await svc.intake(BODY);
+    expect(out.routeVersion).toBe('1.1.0');
+    expect(repo.findByExternalRef).toHaveBeenCalledTimes(2);
+  });
+
+  it('passes a no-method-version refusal through: the entry is not scored as legacy (#583)', async () => {
+    const refusal = new ConflictException({
+      statusCode: 409,
+      code: 'NO_METHOD_VERSION',
+      reason: 'NO_VERSION',
+      message: 'no version',
+    });
+    evaluation.submitPredictions.mockRejectedValueOnce(refusal);
+    await expect(svc.intake(BODY)).rejects.toBe(refusal);
   });
 
   it('never returns a score — the write-back is the only delivery path', async () => {
@@ -202,13 +222,12 @@ describe('idempotency — a retried POST must not spend a second scored slot', (
     // The reference route has since moved on; a replay must still report the
     // route that actually scored the entry.
     repo.findByExternalRef.mockResolvedValue({ ...EXISTING, routeVersion: '0.9.0' });
-    repo.findReferenceRouteVersionForMode.mockResolvedValue({
-      routeId: 'r2',
+    stored = {
+      ...stored,
       routeSlug: 'some-newer-route',
-      versionId: 'v2',
-      version: '2.0.0',
+      routeVersion: '2.0.0',
       reviewStatus: 'APPROVED',
-    });
+    };
 
     const out = await svc.intake(BODY);
 

@@ -14,6 +14,7 @@ import { Prisma } from '@oci/database';
 import {
   GradingScoresSchema,
   MIN_SUBGROUP_CELL_SIZE,
+  NO_METHOD_VERSION_CODE,
   TaskKindScoresSchema,
   isModelCardReviewerGroups,
   modelCardLinkRefusal,
@@ -27,6 +28,7 @@ import type {
   EvaluationTaskSummary,
   LinkSubmissionModelCardRequest,
   LinkSubmissionModelCardResponse,
+  NoMethodVersionRefusal,
   SubmissionModelCard,
   ScoredSubmissionQuotaSummary,
   SealedRunFailureCode,
@@ -46,6 +48,11 @@ import { AUDIT_EMITTER } from '../audit/audit.module.js';
 import { attributionFor } from './route-registry.js';
 import { EvalQueueProvider } from './eval-queue.js';
 import { EvaluationRepository, type LinkedModelCardRef } from './evaluation.repository.js';
+import {
+  RouteRegistryService,
+  type PinnedRouteVersion,
+  type ServingVersionOutcome,
+} from './route-registry.service.js';
 import {
   imageRefMatchesDigest,
   participantFacingFailureMessage,
@@ -99,6 +106,34 @@ export const SCORED_SUBMISSION_REQUIRES_IDENTITY_MESSAGE =
 // figure by the message that refuses them.
 
 /**
+ * The 409 for a scored submission no method version can be pinned to (#583).
+ * Thrown before anything is scored or written and before the quota is
+ * checked, so it leaves no row and uses no slot. The body carries `code` and
+ * `reason` so a page can word it in the reader's language.
+ */
+export function noMethodVersionRefusal(
+  taskSlug: string,
+  outcome: Exclude<ServingVersionOutcome, { ok: true }>,
+): ConflictException {
+  const why =
+    outcome.reason === 'NO_VERSION'
+      ? `no evaluation method version is registered for ${outcome.mode} submissions`
+      : `the evaluation method version that serves ${outcome.mode} submissions ` +
+        `(${outcome.pinned.routeSlug}@${outcome.pinned.version}) is ${outcome.pinned.reviewStatus} ` +
+        'and cannot produce new results until a new version is declared';
+  const body: NoMethodVersionRefusal = {
+    statusCode: 409,
+    code: NO_METHOD_VERSION_CODE,
+    reason: outcome.reason,
+    message:
+      `Evaluation task "${taskSlug}" cannot take scored submissions: ${why}. ` +
+      'Every result is recorded with the method version that produced it, so nothing was ' +
+      'scored and no submission was used.',
+  };
+  return new ConflictException(body);
+}
+
+/**
  * Evaluation service (ADR-0017 / ADR-0018). Owns:
  *   - the public read surface (list + detail), which strips ground truth;
  *   - Mode 1: in-process scoring of a predictions-file submission against
@@ -123,7 +158,11 @@ export const SCORED_SUBMISSION_REQUIRES_IDENTITY_MESSAGE =
  *     prediction, a label or a refusal text that could quote one;
  *   - the link from a submission to the model card it scored (#587), checked
  *     on submit and changed through `linkModelCard`, with the events
- *     `evaluation.submission.modelcard.linked` and `.unlinked`.
+ *     `evaluation.submission.modelcard.linked` and `.unlinked`;
+ *   - pinning every scored submission, in both modes and from the EvalAI
+ *     seam, to the evaluation method version that serves it (#583), and
+ *     refusing one that no version can be pinned to. Validation submissions
+ *     are not pinned: they write no row and produce no result.
  *
  * The controller enforces role gating; this layer trusts that gate. It does NOT
  * trust the controller for participant identity on a scored path — `requireParticipant`
@@ -145,6 +184,7 @@ export class EvaluationService {
     @Inject(EvaluationRepository) private readonly repo: EvaluationRepository,
     @Inject(EvalQueueProvider) private readonly queue: EvalQueueProvider,
     @Inject(AUDIT_EMITTER) private readonly audit: AuditEmitter,
+    @Inject(RouteRegistryService) private readonly routes: RouteRegistryService,
   ) {
     const { limits, warnings } = resolveScoredQuotaLimits(process.env);
     this.quotaLimits = limits;
@@ -329,6 +369,12 @@ export class EvaluationService {
     const ctx = await this.repo.findScoringContext(slug);
     if (!ctx) throw new NotFoundException(`evaluation task "${slug}" not found`);
 
+    // The method version this submission is scored under (#583), pinned
+    // before the card, the quota and the scoring, so a submission with no
+    // version is refused having used nothing. A seam submission is pinned the
+    // same way: its response reports the version and whether it counts.
+    const pinned = await this.pinMethodVersion(slug, 'PREDICTIONS');
+
     // The model card this result is evidence for (#587), checked before the
     // quota and before anything is written, so a refused link costs no slot
     // and leaves no row. Never taken from a seam submission: its participant is
@@ -344,7 +390,7 @@ export class EvaluationService {
 
     // What the audit trail records of the file: its hash, never its content.
     const predictionsSha256 = canonicalSha256(body.predictions);
-    const failure = { taskId: ctx.id, taskSlug: slug, predictionsSha256 };
+    const failure = { taskId: ctx.id, taskSlug: slug, predictionsSha256, pinned };
 
     // Build the imageId -> grade map, rejecting duplicate imageIds (the DTO
     // validates the array shape but not cross-row uniqueness). Scores, where a
@@ -405,18 +451,6 @@ export class EvaluationService {
       minCellSize: MIN_SUBGROUP_CELL_SIZE,
     });
 
-    // Seam submissions are attributed to the reference route here, because the
-    // seam's response contract reports the route and whether its result counts
-    // as published. Direct participant submissions are left unattributed on
-    // purpose: pinning the route on every submission, in both modes and with a
-    // refusal when none resolves, is #583 and lands there.
-    const ref = seam ? await this.repo.findReferenceRouteVersionForMode('PREDICTIONS') : null;
-    if (seam && !ref) {
-      this.logger.error(
-        'no reference PREDICTIONS route is seeded — this seam submission is scored ' +
-          'without attribution and will read as a pre-registry result',
-      );
-    }
     const created = await this.repo.createSubmission({
       taskId: ctx.id,
       methodName: body.methodName,
@@ -425,9 +459,7 @@ export class EvaluationService {
       scores,
       subgroupScores,
       error: null,
-      routeId: ref?.routeId ?? null,
-      routeVersion: ref?.version ?? null,
-      routeVersionId: ref?.versionId ?? null,
+      ...routeColumns(pinned),
       externalSubmissionId: seam?.externalSubmissionId ?? null,
       externalChallengeId: seam?.externalChallengeId ?? null,
       // Linked on the scored row only. A file refused on its format above is
@@ -447,9 +479,7 @@ export class EvaluationService {
       taskKind: ctx.taskKind,
       mode: 'PREDICTIONS' satisfies SubmissionMode,
       methodName: body.methodName,
-      routeId: ref?.routeId ?? null,
-      routeVersion: ref?.version ?? null,
-      routeVersionId: ref?.versionId ?? null,
+      ...routeColumns(pinned),
       externalSubmissionId: seam?.externalSubmissionId ?? null,
       externalChallengeId: seam?.externalChallengeId ?? null,
       predictionCount: body.predictions.length,
@@ -504,6 +534,11 @@ export class EvaluationService {
     const task = await this.repo.findTaskRefBySlug(slug);
     if (!task) throw new NotFoundException(`evaluation task "${slug}" not found`);
 
+    // Pinned as in Mode 1 (#583), before the card, the quota and any row. The
+    // version travels in the sealed-run message, and the outbox refuses a
+    // result that reports another.
+    const pinned = await this.pinMethodVersion(task.slug, 'CONTAINER');
+
     // Same rule and same place as in Mode 1 (#587): before the quota, before
     // any row.
     const card = await this.modelCardToLink(body.modelCardId, submittedBy);
@@ -532,11 +567,7 @@ export class EvaluationService {
       submittedBy,
       imageRef: body.imageRef,
       imageDigest: body.imageDigest,
-      // No route registry yet (WP5). Dispatching an invented uuid/version that
-      // resolves to nothing would be worse than an absent value, and the outbox
-      // only enforces a routeVersion match when one WAS dispatched.
-      routeId: null,
-      routeVersion: null,
+      ...routeColumns(pinned),
       ...(card ? { modelCardId: card.id } : {}),
     });
 
@@ -547,8 +578,7 @@ export class EvaluationService {
       taskSlug: task.slug,
       mode: 'CONTAINER' satisfies SubmissionMode,
       methodName: body.methodName,
-      routeId: null,
-      routeVersion: null,
+      ...routeColumns(pinned),
       imageDigest: body.imageDigest,
       modelCardId: card?.id ?? null,
     };
@@ -565,6 +595,8 @@ export class EvaluationService {
     const message: SealedRunMessage = {
       submissionId: created.id,
       taskSlug: task.slug,
+      routeId: pinned.routeId,
+      routeVersion: pinned.version,
       imageRef: body.imageRef,
       imageDigest: body.imageDigest,
       timeoutSec: this.queue.runTimeoutSec,
@@ -864,12 +896,40 @@ export class EvaluationService {
   }
 
   /**
+   * The method version a scored submission in `mode` is pinned to (#583), or
+   * the 409 that refuses it. See `RouteRegistryService.resolveServingVersion`
+   * for which version that is.
+   */
+  private async pinMethodVersion(
+    taskSlug: string,
+    mode: 'PREDICTIONS' | 'CONTAINER',
+  ): Promise<PinnedRouteVersion> {
+    const outcome = await this.routes.resolveServingVersion(mode);
+    if (outcome.ok) return outcome.pinned;
+    // An operator needs to know at once: every scored submission in this mode
+    // is refused until a version is registered or a new one is declared.
+    this.logger.error(
+      `scored ${mode} submission refused on task=${taskSlug}: ${outcome.reason}` +
+        (outcome.reason === 'VERSION_CLOSED'
+          ? ` (${outcome.pinned.routeSlug}@${outcome.pinned.version} is ${outcome.pinned.reviewStatus})`
+          : ''),
+    );
+    throw noMethodVersionRefusal(taskSlug, outcome);
+  }
+
+  /**
    * Persist a FAILED submission and throw a 400 carrying the same reason.
    * Never returns normally — the `Promise<never>`-flavoured return type lets
    * callers write `return await this.failSubmission(...)`.
    */
   private async failSubmission(
-    task: { taskId: string; taskSlug: string; predictionsSha256: string },
+    task: {
+      taskId: string;
+      taskSlug: string;
+      predictionsSha256: string;
+      /** The version the file was submitted under (#583), recorded on the failure too. */
+      pinned: PinnedRouteVersion;
+    },
     methodName: string,
     submittedBy: string | null,
     reason: string,
@@ -881,6 +941,7 @@ export class EvaluationService {
       status: 'FAILED' satisfies SubmissionStatus,
       scores: null,
       error: reason,
+      ...routeColumns(task.pinned),
     });
     // `emitSync`, so a refused file is always in the trail: if the event
     // cannot be written the caller gets the error, not a 400. The reason is
@@ -898,9 +959,7 @@ export class EvaluationService {
         taskSlug: task.taskSlug,
         mode: 'PREDICTIONS' satisfies SubmissionMode,
         methodName,
-        routeId: null,
-        routeVersion: null,
-        routeVersionId: null,
+        ...routeColumns(task.pinned),
         failureCode: null,
         predictionsSha256: task.predictionsSha256,
       },
@@ -1146,4 +1205,21 @@ export function parseScores(raw: unknown): TaskKindScores | null {
   if (legacy.success) return { kind: 'GRADING', metrics: legacy.data };
 
   return null;
+}
+
+/**
+ * The three route columns of a submission, and of its audit events, from the
+ * pinned version (#583). `routeVersion` is the string the outbox compares the
+ * worker's report with; `routeVersionId` is what attribution reads.
+ */
+function routeColumns(pinned: PinnedRouteVersion): {
+  routeId: string;
+  routeVersion: string;
+  routeVersionId: string;
+} {
+  return {
+    routeId: pinned.routeId,
+    routeVersion: pinned.version,
+    routeVersionId: pinned.versionId,
+  };
 }

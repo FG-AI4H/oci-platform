@@ -6,9 +6,10 @@ import { evaluationI18n } from './i18n.testing';
 
 const { t } = evaluationI18n('en');
 
-// The English sentences, as they read before the messages moved to files (#654).
+// The English sentences. The provisional one names the method version as
+// what is not approved yet (#583).
 const PROVISIONAL_DESCRIPTION =
-  'Provisional: the evaluation method that produced this result has not yet passed review, so it is excluded from published reporting.';
+  'Provisional: the version of the evaluation method that produced this result is not approved yet, so the result is excluded from published reporting.';
 const RETRACTED_DESCRIPTION = 'Results from this method version were withdrawn after review.';
 
 type Routed = Extract<ScoreAttribution, { kind: 'ROUTED' }>;
@@ -75,10 +76,13 @@ describe('describeAttribution', () => {
   it('LEGACY is neutral and carries the API note verbatim', () => {
     expect(describeAttribution(legacy, t)).toEqual({
       label: 'legacy',
-      text: 'legacy',
+      text: 'before method versions',
       tone: 'neutral',
       description: LEGACY_ATTRIBUTION_NOTE,
     });
+    // Since #583 only results from before method versions were recorded are
+    // LEGACY, and the sentence says so plainly.
+    expect(LEGACY_ATTRIBUTION_NOTE).toMatch(/^Result from before method versions were recorded\./);
   });
 
   it('APPROVED is published', () => {
@@ -115,12 +119,18 @@ describe('describeAttribution', () => {
     );
     expect(d.label).toBe('provisional');
     expect(d.text).toBe('provisoire');
-    expect(d.description).toMatch(/^Provisoire\u00a0: la méthode d’évaluation/);
+    expect(d.description).toMatch(
+      /^Provisoire\u00a0: la version de la méthode d’évaluation .* n’est pas encore approuvée/,
+    );
   });
 
   it('words the API’s fixed legacy note in French, and any other note as sent (#654)', () => {
     const fr = evaluationI18n('fr').t;
-    expect(describeAttribution(legacy, fr).description).toMatch(/^Noté avant la création/);
+    const d = describeAttribution(legacy, fr);
+    expect(d.text).toBe('avant les versions de méthode');
+    expect(d.description).toMatch(
+      /^Résultat antérieur à l’enregistrement des versions de méthode\./,
+    );
     expect(describeAttribution({ kind: 'LEGACY', note: 'Imported by hand.' }, fr).description).toBe(
       'Imported by hand.',
     );

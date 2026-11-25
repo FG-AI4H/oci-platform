@@ -12,7 +12,7 @@ import { attributionFor } from './route-registry.js';
 /**
  * #587 — where each linked result stands on the Model Facts label. The rule is
  * `attributionFor`'s: only an APPROVED route version publishes. A LEGACY row
- * (no route version, which is every direct submission until #583) is listed as
+ * (no route version: a result scored before #583) is listed as
  * not attributed and never as published.
  */
 

@@ -29,6 +29,8 @@ import { EvalQueueProvider } from './eval-queue.js';
 import { EvaluationController } from './evaluation.controller.js';
 import { EvaluationRepository } from './evaluation.repository.js';
 import { EvaluationService } from './evaluation.service.js';
+import { RouteRegistryRepository } from './route-registry.repository.js';
+import { RouteRegistryService } from './route-registry.service.js';
 import { ModelCardEvidenceService } from './model-card-evidence.service.js';
 
 /**
@@ -60,6 +62,9 @@ const verifier = {
   },
 };
 
+/** The reference predictions method version, seeded DECLARED by a migration. */
+const REFERENCE_PREDICTIONS_VERSION_ID = '3f0e6a52-0000-4000-8000-000000000012';
+
 const TASK = 'int-587-grading';
 const DATASET = 'int-587-dataset';
 const IUS = {
@@ -89,6 +94,8 @@ describe.skipIf(!dockerAvailable)('Submission to model card link against Postgre
       providers: [
         EvaluationService,
         EvaluationRepository,
+        RouteRegistryService,
+        RouteRegistryRepository,
         ModelCardEvidenceService,
         PredictionService,
         PredictionRepository,
@@ -155,8 +162,9 @@ describe.skipIf(!dockerAvailable)('Submission to model card link against Postgre
     withdrawnCardId = await cardOf('alice-old-grader', ALICE, 'WITHDRAWN');
     bobCardId = await cardOf('bob-grader', BOB, 'SUBMITTED');
 
-    // An approved method version, for the result #583 would pin. Today a
-    // direct submission records none, so the spec sets it directly below.
+    // An approved method version of another route. A submission is pinned to
+    // the reference version, seeded DECLARED (#583); the spec moves the result
+    // to this one below to see it published.
     const route = await prisma.evaluationRoute.create({
       data: { slug: 'int-587-route', name: 'Route for #587', mode: 'PREDICTIONS' },
     });
@@ -242,7 +250,8 @@ describe.skipIf(!dockerAvailable)('Submission to model card link against Postgre
 
     const row = await prisma.submission.findUniqueOrThrow({ where: { id: linkedId } });
     expect(row.modelCardId).toBe(aliceCardId);
-    expect(row.routeVersionId).toBeNull();
+    // Pinned to the reference predictions method, seeded DECLARED (#583).
+    expect(row.routeVersionId).toBe(REFERENCE_PREDICTIONS_VERSION_ID);
 
     const detail = EvaluationSubmissionDetailSchema.parse(
       (
@@ -279,7 +288,7 @@ describe.skipIf(!dockerAvailable)('Submission to model card link against Postgre
     expect(await evaluationRepo.findLinkedModelCard(randomUUID())).toBeNull();
   });
 
-  it('shows the result as not attributed, never published, while it carries no method version', async () => {
+  it('shows the result as provisional, never published, while its method version is not approved', async () => {
     const label = await facts();
     expect(label.validationAndPerformance.entries).toEqual([]);
     expect(label.validationAndPerformance.provisional).toHaveLength(1);
@@ -289,14 +298,33 @@ describe.skipIf(!dockerAvailable)('Submission to model card link against Postgre
       primaryMetricLabel: 'Quadratic-weighted kappa',
       datasetSlug: DATASET,
       datasetVersion: '1.0.0',
-      routeSlug: null,
-      standing: 'NOT_ATTRIBUTED',
+      routeSlug: 'oci-predictions-scoring',
+      routeVersion: '1.0.0',
+      routeReviewStatus: 'DECLARED',
+      standing: 'PROVISIONAL',
     });
     expect(label.gaps.join('\n')).toContain('Per-subgroup performance');
 
     const md = await markdown();
     expect(md).toContain('_None. No linked result comes from an approved');
-    expect(md).toContain('Provisional (no method version recorded)');
+  });
+
+  it('still shows a result with no method version (scored before #583) as not attributed', async () => {
+    await prisma.submission.update({ where: { id: linkedId }, data: { routeVersionId: null } });
+    try {
+      const label = await facts();
+      expect(label.validationAndPerformance.provisional[0]).toMatchObject({
+        submissionId: linkedId,
+        routeSlug: null,
+        standing: 'NOT_ATTRIBUTED',
+      });
+      expect(await markdown()).toContain('Provisional (no method version recorded)');
+    } finally {
+      await prisma.submission.update({
+        where: { id: linkedId },
+        data: { routeVersionId: REFERENCE_PREDICTIONS_VERSION_ID },
+      });
+    }
   });
 
   it('shows it as published once it comes from an approved method version', async () => {

@@ -39,6 +39,18 @@ export class RouteRegistryRepository {
     });
   }
 
+  /**
+   * The version that serves new submissions on a route: the one declared
+   * last. A declaration is frozen once review begins, so a change to what
+   * runs arrives as a new version, and the newest is what runs now.
+   */
+  async findLatestVersion(routeId: string): Promise<RouteVersion | null> {
+    return this.prisma.client.routeVersion.findFirst({
+      where: { routeId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async createRoute(args: {
     slug: string;
     name: string;

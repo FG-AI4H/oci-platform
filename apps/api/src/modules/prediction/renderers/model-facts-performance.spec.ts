@@ -110,7 +110,7 @@ describe('Model Facts performance (#587)', () => {
     expect(gapsOf(l)).toContain('Dataset version:');
   });
 
-  it('LEGACY results only (every result until #583): nothing is published', () => {
+  it('LEGACY results only (scored before #583): nothing is published', () => {
     const l = label({
       entries: [entry('NOT_ATTRIBUTED'), entry('NOT_ATTRIBUTED')],
       retracted: 0,

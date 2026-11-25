@@ -95,6 +95,7 @@ Content for the December 2026 radiology workshop ([#644](https://github.com/FG-A
 **Not created by the seed:**
 
 - **Annotation tasks.** They are created from the dataset's files by a campaign manager ([#646](https://github.com/FG-AI4H/oci-platform/issues/646)). The campaign is seeded READY so tasks can be loaded before it is started. The 60 images of the reading subset are the ones flagged `"campaign": true` in `selection.json`.
+- **The evaluation method.** A result on the task is pinned to the latest version of the reference predictions method, `oci-predictions-scoring` ([#583](https://github.com/FG-AI4H/oci-platform/issues/583)). A migration registers it in every environment, `DECLARED`, so the profile does not repeat it. Nothing approves it: in the review exercise ([#649](https://github.com/FG-AI4H/oci-platform/issues/649)) a reviewer approves it in the browser, and the task's results move from provisional to published. The same version serves every predictions task on the environment, the demo tasks included.
 - **Accounts.** They are created from a roster with `pnpm provision-users` (see [admin-user-management.md](./admin-user-management.md)). Give exactly one account the group `arbitration-annotator` **and no other reading group**: a user who is both reader and arbiter is only ever given reading tasks.
 
 ### Files of the profile
@@ -141,6 +142,8 @@ Nothing below downloads anything by itself except `fetch --base-url`. Each downl
 ### Reset
 
 Removes what people created **on the workshop objects**, between the rehearsal and the first day, or between two days: evaluation submissions on the task, annotation assignments with their answers and calibration flags on the campaign. Annotation tasks are put back at the first reading and a completed campaign is reopened. **Kept:** accounts, the dataset and its files, the answer key, the campaign with its tasks and instructions, the model cards, everything on every other dataset, task and campaign, and the audit trail.
+
+**Not reset: the method review.** A decision recorded on `oci-predictions-scoring` during the rehearsal stays: a decision is published with its reason and is not undone. To run the review exercise again, an administrator declares a new version of the method with the same declarations and the next number. New submissions are pinned to it, and are provisional until a reviewer approves it, on every predictions task of the environment. Results already scored keep the version they were pinned to.
 
 It is a one-off launch of the migrate task with `OCI_SEED_RESET` set, which then runs the reset and nothing else (no migration, no seed):
 

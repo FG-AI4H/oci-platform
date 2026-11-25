@@ -122,10 +122,10 @@ test.describe('evidence summary (#652)', () => {
     expect(evidence.ok()).toBe(true);
     const body = (await evidence.json()) as { gaps: { code: string }[]; modelCard: unknown };
     gapCodes = body.gaps.map((g) => g.code);
-    // Today no submission is linked to a model card (#587) and a direct
-    // submission is pinned to no method version (#583).
+    // This submission is linked to no model card (#587), and it is pinned to
+    // the reference method version, which nothing has approved here (#583).
     expect(body.modelCard).toBeNull();
-    expect(gapCodes).toEqual(expect.arrayContaining(['NO_MODEL_CARD', 'METHOD_NOT_ATTRIBUTED']));
+    expect(gapCodes).toEqual(expect.arrayContaining(['NO_MODEL_CARD', 'METHOD_NOT_APPROVED']));
   });
 
   test('English: seven sections, and section 6 lists exactly the gaps', async ({ browser }) => {

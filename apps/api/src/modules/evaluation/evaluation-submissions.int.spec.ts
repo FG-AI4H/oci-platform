@@ -27,6 +27,8 @@ import { EvalQueueProvider } from './eval-queue.js';
 import { EvaluationController } from './evaluation.controller.js';
 import { EvaluationRepository } from './evaluation.repository.js';
 import { EvaluationService } from './evaluation.service.js';
+import { RouteRegistryRepository } from './route-registry.repository.js';
+import { RouteRegistryService } from './route-registry.service.js';
 import { consumesScoredQuota } from './submission-quota.js';
 
 /**
@@ -99,6 +101,8 @@ describe.skipIf(!dockerAvailable)(
         providers: [
           EvaluationService,
           EvaluationRepository,
+          RouteRegistryService,
+          RouteRegistryRepository,
           SubmissionBodyPipe,
           RolesGuard,
           CognitoJwtGuard,
@@ -476,8 +480,15 @@ describe.skipIf(!dockerAvailable)(
             coverage: 0.75,
           }),
         });
-        // A direct submission is not pinned to a route version yet (#583).
-        expect(detail.attribution?.kind).toBe('LEGACY');
+        // Pinned to the reference predictions method, seeded DECLARED (#583).
+        expect(detail.attribution).toEqual({
+          kind: 'ROUTED',
+          routeSlug: 'oci-predictions-scoring',
+          routeVersion: '1.0.0',
+          reviewStatus: 'DECLARED',
+          published: false,
+          retractedAt: null,
+        });
 
         // The schema is strict, so the parse above already refuses extra keys.
         // Say the important ones out loud anyway.

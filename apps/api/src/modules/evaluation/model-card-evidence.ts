@@ -17,10 +17,10 @@ import { isScorableTaskKind, primaryMetricLabelOf, primaryMetricOf } from './sco
  *
  *   - APPROVED route version, not retracted -> `PUBLISHED`;
  *   - DECLARED or UNDER_REVIEW route version -> `PROVISIONAL`;
- *   - no route version at all (LEGACY) -> `NOT_ATTRIBUTED`. Until route-version
- *     pinning lands (#583) a direct submission records no route version, so
- *     every such result is here. It is listed, labelled, and never published:
- *     backfilling a route would assert a review that never happened;
+ *   - no route version at all (LEGACY) -> `NOT_ATTRIBUTED`. Only results
+ *     scored before every submission was pinned to a version (#583) are here.
+ *     They are listed, labelled, and never published: backfilling a route
+ *     would assert a review that never happened;
  *   - REJECTED or WITHDRAWN route version, or a stamped `retractedAt` ->
  *     retracted: not listed, only counted, so the label can say so.
  *

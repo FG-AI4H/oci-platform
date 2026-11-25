@@ -27,6 +27,7 @@ import {
   type RouteReviewBar,
   type RouteReviewStatus,
   type RouteVersionResponse,
+  type SubmissionMode,
   type ThreatModel,
 } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
@@ -36,6 +37,26 @@ import { RouteRegistryRepository } from './route-registry.repository.js';
 
 type VersionRow = RouteVersion;
 type RouteRow = EvaluationRoute & { versions?: VersionRow[] };
+
+/** The method version a submission is attributed to (#583). */
+export interface PinnedRouteVersion {
+  routeId: string;
+  routeSlug: string;
+  versionId: string;
+  version: string;
+  reviewStatus: RouteReviewStatus;
+}
+
+/** What `resolveServingVersion` found. `pinned` names the closed version. */
+export type ServingVersionOutcome =
+  | { ok: true; pinned: PinnedRouteVersion }
+  | { ok: false; reason: 'NO_VERSION'; mode: SubmissionMode }
+  | { ok: false; reason: 'VERSION_CLOSED'; mode: SubmissionMode; pinned: PinnedRouteVersion };
+
+/** A REJECTED or WITHDRAWN version keeps its results but produces no new one. */
+function isClosedToNewResults(row: Pick<RouteVersion, 'reviewStatus'>): boolean {
+  return row.reviewStatus === 'REJECTED' || row.reviewStatus === 'WITHDRAWN';
+}
 
 function toVersionResponse(v: VersionRow): RouteVersionResponse {
   return {
@@ -249,12 +270,38 @@ export class RouteRegistryService {
     if (!route) throw new NotFoundException(`route '${slug}' not found`);
     const row = await this.repo.findVersion(route.id, version);
     if (!row) throw new NotFoundException(`route '${slug}' has no version ${version}`);
-    if (row.reviewStatus === 'REJECTED' || row.reviewStatus === 'WITHDRAWN') {
+    if (isClosedToNewResults(row)) {
       throw new ConflictException(
         `route ${slug}@${version} is ${row.reviewStatus} and cannot produce new results`,
       );
     }
     return row;
+  }
+
+  /**
+   * The version a new submission in `mode` is pinned to (#583): the latest
+   * version of the mode's reference route, under the same rule as
+   * `resolveVersionForSubmission` — a REJECTED or WITHDRAWN version produces
+   * no new result. There is no fallback to an older version: what runs now is
+   * what the newest declaration describes, so attributing a result to an
+   * earlier one would credit it to a declaration that does not describe it.
+   *
+   * Returns an outcome rather than throwing, so the submission boundary words
+   * the refusal for its own caller.
+   */
+  async resolveServingVersion(mode: SubmissionMode): Promise<ServingVersionOutcome> {
+    const route = await this.repo.findReferenceRouteForMode(mode);
+    const row = route ? await this.repo.findLatestVersion(route.id) : null;
+    if (!route || !row) return { ok: false, reason: 'NO_VERSION', mode };
+    const pinned: PinnedRouteVersion = {
+      routeId: route.id,
+      routeSlug: route.slug,
+      versionId: row.id,
+      version: row.version,
+      reviewStatus: row.reviewStatus as RouteReviewStatus,
+    };
+    if (isClosedToNewResults(row)) return { ok: false, reason: 'VERSION_CLOSED', mode, pinned };
+    return { ok: true, pinned };
   }
 
   /**

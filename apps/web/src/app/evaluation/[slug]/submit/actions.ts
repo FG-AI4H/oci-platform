@@ -4,6 +4,7 @@ import { redirect, unstable_rethrow } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import {
   EvaluationTaskSlugSchema,
+  NoMethodVersionRefusalSchema,
   ScoredSubmissionQuotaStateSchema,
   SubmissionValidationReportSchema,
   SubmitPredictionsRequestSchema,
@@ -270,6 +271,13 @@ export async function submitPredictionsAction(
       typeof body === 'object' && body !== null && 'quota' in body ? body.quota : undefined,
     );
     if (quota.success) return fail(describeQuotaRefusal(i18n, quota.data), { fileName });
+  }
+
+  // No evaluation method version could be recorded for the result (#583). The
+  // API checks it before the card, and a withdrawn card is a 409 too, so it
+  // is told apart by its code, not its status.
+  if (res.status === 409 && NoMethodVersionRefusalSchema.safeParse(body).success) {
+    return fail(t('action.noMethodVersion'), { fileName });
   }
 
   // The card is checked before the quota and before anything is written

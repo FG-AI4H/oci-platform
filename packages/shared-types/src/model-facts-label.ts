@@ -24,9 +24,9 @@ import { RouteReviewStatusSchema } from './evaluation-route.js';
  *     The only standing that counts as validation evidence.
  *   - `PROVISIONAL`: produced by a route version still DECLARED or
  *     UNDER_REVIEW. A real result, not yet published.
- *   - `NOT_ATTRIBUTED`: scored with no route version recorded (LEGACY). Until
- *     route-version pinning lands (#583) every direct submission is in this
- *     state. Never shown as published.
+ *   - `NOT_ATTRIBUTED`: scored with no route version recorded (LEGACY): a
+ *     result from before every submission was pinned to a version (#583).
+ *     Never shown as published.
  *
  * A result whose route version was REJECTED or WITHDRAWN is retracted: it is
  * listed nowhere and counted in `gaps`.

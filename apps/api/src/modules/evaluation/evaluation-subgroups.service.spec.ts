@@ -11,6 +11,7 @@ import { RecordingAuditEmitter } from '../../test-support/recording-audit-emitte
 import type { EvalQueueProvider } from './eval-queue.js';
 import type { EvaluationRepository } from './evaluation.repository.js';
 import { EvaluationService } from './evaluation.service.js';
+import { servingVersionStub } from '../../test-support/serving-version-stub.js';
 import { SubmissionResultService } from './submission-result.service.js';
 import { scoreSubgroups } from './subgroup-scoring.js';
 
@@ -46,6 +47,7 @@ function service(repo: Record<string, unknown>) {
     repo as unknown as EvaluationRepository,
     { missingConfig: () => [] } as unknown as EvalQueueProvider,
     new RecordingAuditEmitter().asEmitter(),
+    servingVersionStub().asService(),
   );
 }
 

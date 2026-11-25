@@ -19,14 +19,14 @@
       "provisional": "provisional",
       "withdrawn": "withdrawn",
       "retracted": "retracted",
-      "legacy": "legacy"
+      "legacy": "before method versions"
     },
     "description": {
       "published": "Published: the evaluation method that produced this result has passed review.",
-      "provisional": "Provisional: the evaluation method that produced this result has not yet passed review, so it is excluded from published reporting.",
+      "provisional": "Provisional: the version of the evaluation method that produced this result is not approved yet, so the result is excluded from published reporting.",
       "withdrawn": "Withdrawn: the evaluation method that produced this result was rejected or withdrawn from review, so it is excluded from published reporting.",
       "retracted": "Results from this method version were withdrawn after review.",
-      "legacy": "Scored before the evaluation-route registry existed (ADR-0018 / WP5). This result carries no route declaration and is excluded from published reporting."
+      "legacy": "Result from before method versions were recorded. No version of the evaluation method is attached to it, so it is excluded from published reporting."
     }
   },
   "metric": {

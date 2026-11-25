@@ -21,6 +21,7 @@ import {
   isFlatPayload,
   RecordingAuditEmitter,
 } from '../../test-support/recording-audit-emitter.js';
+import { SERVING_VERSIONS, servingVersionStub } from '../../test-support/serving-version-stub.js';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import type { EvalQueueProvider } from './eval-queue.js';
 import type { EvaluationRepository } from './evaluation.repository.js';
@@ -55,7 +56,6 @@ const PARTICIPANT = { sub: 'participant-sub' } as unknown as CognitoAccessTokenP
 
 interface RepoMock {
   findScoringContext: ReturnType<typeof vi.fn>;
-  findReferenceRouteVersionForMode: ReturnType<typeof vi.fn>;
   countScoredSubmissionsForParticipant: ReturnType<typeof vi.fn>;
   findTaskRefBySlug: ReturnType<typeof vi.fn>;
   findBySlugWithSubmissions: ReturnType<typeof vi.fn>;
@@ -76,21 +76,12 @@ interface QueueMock {
 let repo: RepoMock;
 let queue: QueueMock;
 let audit: RecordingAuditEmitter;
+let routes: ReturnType<typeof servingVersionStub>;
 let service: EvaluationService;
 
 beforeEach(() => {
   repo = {
     findScoringContext: vi.fn(),
-    // The reference route a seam submission is attributed to. DECLARED,
-    // matching the seed — nothing self-approves. Direct submissions do not
-    // read it (#583 owns pinning the route on every submission).
-    findReferenceRouteVersionForMode: vi.fn().mockResolvedValue({
-      routeId: 'ref-route',
-      routeSlug: 'oci-predictions-scoring',
-      versionId: 'ref-version',
-      version: '1.0.0',
-      reviewStatus: 'DECLARED',
-    }),
     // WP6: scored submissions are quota-counted per participant. Default to an
     // unused quota so the pre-WP6 behavioural assertions below stay the subject.
     countScoredSubmissionsForParticipant: vi.fn().mockResolvedValue(0),
@@ -111,10 +102,14 @@ beforeEach(() => {
     runTimeoutSec: 1800,
   };
   audit = new RecordingAuditEmitter();
+  // The version each mode is pinned to (#583): the seeded reference version,
+  // DECLARED, since nothing self-approves.
+  routes = servingVersionStub();
   service = new EvaluationService(
     repo as unknown as EvaluationRepository,
     queue as unknown as EvalQueueProvider,
     audit.asEmitter(),
+    routes.asService(),
   );
 });
 
@@ -384,20 +379,85 @@ describe('EvaluationService.submitPredictions (Mode 1 — unchanged)', () => {
     ],
   };
 
-  it('leaves a direct participant submission unattributed (route pinning is #583)', async () => {
+  it('pins a direct participant submission to the version that serves predictions (#583)', async () => {
     await service.submitPredictions('idrid-grading-demo', GRADING_BODY, PARTICIPANT);
 
-    expect(repo.findReferenceRouteVersionForMode).not.toHaveBeenCalled();
+    expect(routes.resolveServingVersion).toHaveBeenCalledWith('PREDICTIONS');
     expect(repo.createSubmission).toHaveBeenCalledWith(
       expect.objectContaining({
-        routeId: null,
-        routeVersion: null,
-        routeVersionId: null,
+        status: 'SCORED',
+        routeId: SERVING_VERSIONS.PREDICTIONS.routeId,
+        routeVersion: '1.0.0',
+        routeVersionId: SERVING_VERSIONS.PREDICTIONS.versionId,
         externalSubmissionId: null,
         externalChallengeId: null,
       }),
     );
+    // The audit trail records the same version.
+    expect(audit.only('evaluation.submitted').payload).toMatchObject({
+      routeId: SERVING_VERSIONS.PREDICTIONS.routeId,
+      routeVersion: '1.0.0',
+      routeVersionId: SERVING_VERSIONS.PREDICTIONS.versionId,
+    });
   });
+
+  it('pins a file refused on its format too, so the failure names the version it was sent to', async () => {
+    await expect(
+      service.submitPredictions(
+        'idrid-grading-demo',
+        {
+          ...GRADING_BODY,
+          predictions: [
+            { imageId: 'idrid_01', grade: 0 },
+            { imageId: 'idrid_01', grade: 1 },
+          ],
+        },
+        PARTICIPANT,
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.createSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'FAILED',
+        routeVersionId: SERVING_VERSIONS.PREDICTIONS.versionId,
+      }),
+    );
+  });
+
+  it.each([
+    [
+      'NO_VERSION',
+      { ok: false, reason: 'NO_VERSION', mode: 'PREDICTIONS' },
+      'no evaluation method version is registered',
+    ],
+    [
+      'VERSION_CLOSED',
+      {
+        ok: false,
+        reason: 'VERSION_CLOSED',
+        mode: 'PREDICTIONS',
+        pinned: { ...SERVING_VERSIONS.PREDICTIONS, reviewStatus: 'REJECTED' },
+      },
+      'oci-predictions-scoring@1.0.0) is REJECTED',
+    ],
+  ] as const)(
+    'refuses with a 409 %s, before the quota, the scoring and any row (#583)',
+    async (reason, outcome, says) => {
+      routes.resolveServingVersion.mockResolvedValueOnce(outcome);
+
+      const err = await service
+        .submitPredictions('idrid-grading-demo', GRADING_BODY, PARTICIPANT)
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(ConflictException);
+      const body = (err as ConflictException).getResponse();
+      expect(body).toMatchObject({ statusCode: 409, code: 'NO_METHOD_VERSION', reason });
+      expect((body as { message: string }).message).toContain(says);
+      expect((body as { message: string }).message).toContain('no submission was used');
+      expect(repo.countScoredSubmissionsForParticipant).not.toHaveBeenCalled();
+      expect(repo.createSubmission).not.toHaveBeenCalled();
+      expect(audit.events).toHaveLength(0);
+    },
+  );
 
   it('attributes a seam submission to the reference route and to the entrant it names', async () => {
     const seam = {
@@ -408,13 +468,13 @@ describe('EvaluationService.submitPredictions (Mode 1 — unchanged)', () => {
 
     await service.submitPredictions('idrid-grading-demo', GRADING_BODY, undefined, seam);
 
-    expect(repo.findReferenceRouteVersionForMode).toHaveBeenCalledWith('PREDICTIONS');
+    expect(routes.resolveServingVersion).toHaveBeenCalledWith('PREDICTIONS');
     expect(repo.createSubmission).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 'SCORED',
-        routeId: 'ref-route',
+        routeId: SERVING_VERSIONS.PREDICTIONS.routeId,
         routeVersion: '1.0.0',
-        routeVersionId: 'ref-version',
+        routeVersionId: SERVING_VERSIONS.PREDICTIONS.versionId,
         externalSubmissionId: '9001',
         externalChallengeId: '493',
       }),
@@ -488,10 +548,13 @@ describe('EvaluationService.submitContainer (Mode 2 — dispatch)', () => {
         methodName: 'acme-dr-grader',
         imageRef: IMAGE_REF,
         imageDigest: DIGEST,
-        routeId: null,
-        routeVersion: null,
+        // Pinned to the version that serves sealed runs (#583).
+        routeId: SERVING_VERSIONS.CONTAINER.routeId,
+        routeVersion: '1.0.0',
+        routeVersionId: SERVING_VERSIONS.CONTAINER.versionId,
       }),
     );
+    expect(routes.resolveServingVersion).toHaveBeenCalledWith('CONTAINER');
     // Nothing was scored, and the hidden ground truth was never loaded.
     expect(repo.createSubmission).not.toHaveBeenCalled();
     expect(repo.findScoringContext).not.toHaveBeenCalled();
@@ -505,6 +568,9 @@ describe('EvaluationService.submitContainer (Mode 2 — dispatch)', () => {
     expect(parsed.data.taskSlug).toBe('idrid-grading-demo');
     expect(parsed.data.imageRef).toBe(IMAGE_REF);
     expect(parsed.data.imageDigest).toBe(DIGEST);
+    // The worker reports this version back and the outbox checks it (#583).
+    expect(parsed.data.routeId).toBe(SERVING_VERSIONS.CONTAINER.routeId);
+    expect(parsed.data.routeVersion).toBe('1.0.0');
     expect(parsed.data.timeoutSec).toBe(1800);
     expect(parsed.data.callbackUrl).toBe(
       `https://dev.oci.ai4h.net/v2/submissions/${SUBMISSION_ID}/result`,
@@ -520,6 +586,28 @@ describe('EvaluationService.submitContainer (Mode 2 — dispatch)', () => {
     await expect(
       service.submitContainer('nope', containerBody(), PARTICIPANT),
     ).rejects.toBeInstanceOf(NotFoundException);
+    expect(repo.createContainerSubmission).not.toHaveBeenCalled();
+    expect(queue.publish).not.toHaveBeenCalled();
+  });
+
+  it('409s when no version serves sealed runs, before the queue check and any row (#583)', async () => {
+    routes.resolveServingVersion.mockResolvedValueOnce({
+      ok: false,
+      reason: 'NO_VERSION',
+      mode: 'CONTAINER',
+    });
+    queue.missingConfig.mockReturnValue(['OCI_EVAL_QUEUE_URL']);
+
+    const err = await service
+      .submitContainer('idrid-grading-demo', containerBody(), PARTICIPANT)
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ConflictException);
+    expect((err as ConflictException).getResponse()).toMatchObject({
+      code: 'NO_METHOD_VERSION',
+      reason: 'NO_VERSION',
+    });
+    expect(repo.countScoredSubmissionsForParticipant).not.toHaveBeenCalled();
     expect(repo.createContainerSubmission).not.toHaveBeenCalled();
     expect(queue.publish).not.toHaveBeenCalled();
   });
@@ -703,6 +791,7 @@ describe('evaluation audit events (#653)', () => {
     'modelCardId',
     'routeId',
     'routeVersion',
+    'routeVersionId',
     'taskId',
     'taskSlug',
   ];
@@ -764,10 +853,10 @@ describe('evaluation audit events (#653)', () => {
         taskKind: 'GRADING',
         mode: 'PREDICTIONS',
         methodName: 'audited-method',
-        // Direct submissions are not pinned to a method version yet (#583).
-        routeId: null,
-        routeVersion: null,
-        routeVersionId: null,
+        // Every submission records the method version it is pinned to (#583).
+        routeId: SERVING_VERSIONS.PREDICTIONS.routeId,
+        routeVersion: '1.0.0',
+        routeVersionId: SERVING_VERSIONS.PREDICTIONS.versionId,
         predictionCount: 4,
         predictionsSha256: canonicalSha256(PREDICTIONS),
       });
@@ -788,9 +877,9 @@ describe('evaluation audit events (#653)', () => {
         const e = audit.only(action);
         expect(e.actorUserId).toBe(seam.submittedBy);
         expect(e.payload).toMatchObject({
-          routeId: 'ref-route',
+          routeId: SERVING_VERSIONS.PREDICTIONS.routeId,
           routeVersion: '1.0.0',
-          routeVersionId: 'ref-version',
+          routeVersionId: SERVING_VERSIONS.PREDICTIONS.versionId,
           externalSubmissionId: '9001',
           externalChallengeId: '493',
         });
@@ -885,8 +974,9 @@ describe('evaluation audit events (#653)', () => {
       expect(submitted.payload).toMatchObject({
         mode: 'CONTAINER',
         imageDigest: DIGEST,
-        routeId: null,
-        routeVersion: null,
+        routeId: SERVING_VERSIONS.CONTAINER.routeId,
+        routeVersion: '1.0.0',
+        routeVersionId: SERVING_VERSIONS.CONTAINER.versionId,
       });
       expectNoItemData();
     });
