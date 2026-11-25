@@ -238,5 +238,71 @@
     "rejected": "La campagne n’a pas été acceptée. Vérifiez les champs et réessayez.",
     "unexpected": "L’API a renvoyé une campagne de forme inattendue.",
     "serverError": "Une erreur s’est produite sur le serveur (erreur {status}). Réessayez."
+  },
+  "agreement": {
+    "title": "Accord entre lecteurs",
+    "unavailable": "L’accord ne peut pas être affiché pour l’instant. Rechargez la page pour réessayer.",
+    "fleiss": "Kappa de Fleiss",
+    "interval": "IC 95 % : {lower} à {upper}",
+    "intervalSpoken": "intervalle de confiance à 95 % : de {lower} à {upper}",
+    "reading": "Selon les catégories conventionnelles de Landis et Koch, l’accord est <strong>{band}</strong>.",
+    "readingSpan": "L’intervalle va de « {from} » à « {to} ».",
+    "caveat": "Ces catégories sont une convention, pas une norme de qualité : le niveau suffisant dépend de la tâche et de l’usage des étiquettes.",
+    "band": {
+      "poor": "mauvais (inférieur au hasard)",
+      "slight": "très faible",
+      "fair": "faible",
+      "moderate": "modéré",
+      "substantial": "important",
+      "almostPerfect": "presque parfait"
+    },
+    "status": {
+      "tooFewTasks": "Pas encore assez de tâches. L’accord est calculé dès que {minimum} tâches ont toutes leurs lectures indépendantes : {counted, plural, =0 {aucune pour l’instant} one {# pour l’instant} other {# pour l’instant}}.",
+      "singleAnswer": "Toutes les lectures ont donné la même réponse, le kappa n’est donc pas défini : les lecteurs ont été d’accord sur chaque tâche.",
+      "singleReader": "Chaque tâche n’a qu’un lecteur : il n’y a pas d’accord entre lecteurs à mesurer."
+    },
+    "counts": {
+      "counted": "Tâches prises en compte",
+      "readers": "Lecteurs",
+      "readersPerTask": "Lecteurs par tâche",
+      "arbitration": "Envoyées en arbitrage",
+      "arbitrationValue": "{count} ({share})",
+      "percentAgreement": "Accord global",
+      "unanimous": "Tâches unanimes"
+    },
+    "pairs": {
+      "title": "Entre paires de lecteurs",
+      "caption": "Kappa de Cohen pour chaque paire de lecteurs, sur les tâches lues par les deux.",
+      "pair": "Lecteurs",
+      "pairValue": "<id>{a}</id> et <id>{b}</id>",
+      "shared": "Tâches communes",
+      "kappa": "Kappa de Cohen",
+      "agreement": "Accord",
+      "tooFew": "Moins de {minimum} tâches",
+      "singleAnswer": "Une seule réponse",
+      "none": "Aucune tâche n’a encore été lue par deux lecteurs."
+    },
+    "answers": {
+      "title": "Réponses par lecteur",
+      "caption": "Nombre de fois où chaque lecteur a donné chaque réponse, sur les tâches prises en compte.",
+      "reader": "Lecteur",
+      "readings": "Lectures"
+    },
+    "cannotAssess": "Non interprétable",
+    "method": {
+      "basis": "Calculé à partir des seules lectures indépendantes. Les réponses d’arbitrage et de relecture par un expert ne sont pas comptées, ni les tâches qu’un lecteur a rendues ou abandonnées. Une tâche est prise en compte quand tous ses lecteurs ont répondu.",
+      "cannotAssess": "« Non interprétable » compte comme une réponse à part entière : deux lecteurs qui ne peuvent ni l’un ni l’autre interpréter l’image sont d’accord. Une tâche est close ou envoyée en arbitrage selon la même règle.",
+      "interval": "L’intervalle est un bootstrap par percentiles sur les tâches ({resamples} rééchantillonnages, graine fixe) : les mêmes lectures donnent toujours le même intervalle.",
+      "notCounted": "Non prises en compte : {open} en cours de lecture, {skipped} écartées, {excluded} avec une réponse manquante ou un nombre inhabituel de lecteurs.",
+      "readers": "Les lecteurs sont désignés par des identifiants pseudonymes propres à cette campagne.",
+      "readersExport": "Les lecteurs sont désignés par des identifiants pseudonymes propres à cette campagne, ici comme dans l’export. Chaque export est consigné dans le journal d’audit."
+    },
+    "export": {
+      "title": "Exporter les annotations",
+      "csv": "CSV",
+      "json": "JSON",
+      "csvLabel": "Exporter les annotations en CSV",
+      "jsonLabel": "Exporter les annotations en JSON"
+    }
   }
 }

@@ -175,25 +175,29 @@ function Burndown({
         </div>
       </div>
 
-      <table className="sr-only">
-        <caption>{t('progress.tableCaption')}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{t('progress.day')}</th>
-            <th scope="col">{t('progress.remaining')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {points.map((pt) => (
-            <tr key={pt.date}>
-              <td>
-                <time dateTime={pt.date}>{f.day(pt.date)}</time>
-              </td>
-              <td>{f.n(pt.remaining)}</td>
+      {/* A table ignores the 1px width of sr-only and grew past a phone's
+          width in French (#648 audit): the wrapper takes the class. */}
+      <div className="sr-only">
+        <table>
+          <caption>{t('progress.tableCaption')}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t('progress.day')}</th>
+              <th scope="col">{t('progress.remaining')}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {points.map((pt) => (
+              <tr key={pt.date}>
+                <td>
+                  <time dateTime={pt.date}>{f.day(pt.date)}</time>
+                </td>
+                <td>{f.n(pt.remaining)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </figure>
   );
 }

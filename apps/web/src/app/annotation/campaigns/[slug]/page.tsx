@@ -15,14 +15,16 @@ import {
 } from '@oci/ui';
 import {
   availableCampaignActions,
+  type CampaignAgreement,
   type CampaignDetail,
   type CampaignStatus,
   type TaskSummary,
 } from '@oci/shared-types';
 import { auth } from '../../../../auth';
 import { getFormatters } from '../../../../i18n/server';
-import { apiFetch } from '../../../../lib/api';
+import { ApiError, apiFetch } from '../../../../lib/api';
 import { canOverseeCampaign, isAnnotationWorker, isCampaignManager } from '../../../../lib/groups';
+import { AgreementCard } from './agreement-card';
 import { ProgressCard } from './progress-card';
 import { TasksCard } from './tasks-card';
 import { TransitionActions } from './transition-actions';
@@ -82,6 +84,18 @@ export default async function CampaignDetailPage({ params }: PageProps) {
           { session, revalidate: 0 },
         )) ?? [])
       : [];
+  // Agreement between readers (#648), for the same audience. A failure
+  // shows in the card, not as a broken page.
+  const agreement =
+    canOversee && hasTasks
+      ? await apiFetch<CampaignAgreement>(
+          `/v2/annotation/campaigns/${encodeURIComponent(detail.slug)}/agreement`,
+          { session, revalidate: 0 },
+        ).catch((err: unknown) => {
+          if (err instanceof ApiError) return null;
+          throw err;
+        })
+      : null;
 
   return (
     <Container size="md">
@@ -229,6 +243,10 @@ export default async function CampaignDetailPage({ params }: PageProps) {
               <ProgressCard tasks={tasks} today={new Date()} />
             </CardContent>
           </Card>
+        ) : null}
+
+        {canOversee && hasTasks ? (
+          <AgreementCard slug={detail.slug} agreement={agreement} canExport={canManage} />
         ) : null}
 
         {canManage && hasTasks ? (

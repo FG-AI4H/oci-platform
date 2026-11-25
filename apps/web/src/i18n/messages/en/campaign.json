@@ -238,5 +238,71 @@
     "rejected": "The campaign was not accepted. Check the fields and try again.",
     "unexpected": "The API returned an unexpected campaign shape.",
     "serverError": "Something went wrong on the server (error {status}). Try again."
+  },
+  "agreement": {
+    "title": "Agreement between readers",
+    "unavailable": "Agreement cannot be shown just now. Reload the page to try again.",
+    "fleiss": "Fleiss’ kappa",
+    "interval": "95% CI {lower} to {upper}",
+    "intervalSpoken": "95% confidence interval {lower} to {upper}",
+    "reading": "On the conventional bands of Landis and Koch, this is <strong>{band}</strong> agreement.",
+    "readingSpan": "The interval runs from {from} to {to}.",
+    "caveat": "The bands are a convention, not a quality standard: what is enough depends on the task and on what the labels are for.",
+    "band": {
+      "poor": "poor (worse than chance)",
+      "slight": "slight",
+      "fair": "fair",
+      "moderate": "moderate",
+      "substantial": "substantial",
+      "almostPerfect": "almost perfect"
+    },
+    "status": {
+      "tooFewTasks": "Not enough tasks yet. Agreement is computed once {minimum} tasks have all their independent readings: {counted, plural, =0 {none so far} one {# so far} other {# so far}}.",
+      "singleAnswer": "Every reading gave the same answer, so kappa is not defined: the readers agreed on every task.",
+      "singleReader": "Each task has one reader: there is no agreement between readers to measure."
+    },
+    "counts": {
+      "counted": "Tasks counted",
+      "readers": "Readers",
+      "readersPerTask": "Readers per task",
+      "arbitration": "Sent to arbitration",
+      "arbitrationValue": "{count} ({share})",
+      "percentAgreement": "Overall agreement",
+      "unanimous": "Unanimous tasks"
+    },
+    "pairs": {
+      "title": "Between pairs of readers",
+      "caption": "Cohen’s kappa for each pair of readers, over the tasks both read.",
+      "pair": "Readers",
+      "pairValue": "<id>{a}</id> and <id>{b}</id>",
+      "shared": "Shared tasks",
+      "kappa": "Cohen’s kappa",
+      "agreement": "Agreement",
+      "tooFew": "Under {minimum} tasks",
+      "singleAnswer": "One answer only",
+      "none": "No two readers share a task yet."
+    },
+    "answers": {
+      "title": "Answers per reader",
+      "caption": "How often each reader gave each answer, on the tasks counted.",
+      "reader": "Reader",
+      "readings": "Readings"
+    },
+    "cannotAssess": "Cannot assess",
+    "method": {
+      "basis": "Computed from the independent readings only. Arbitration and expert-review answers are not counted, nor are tasks a reader gave back or left. A task counts once all its readers have answered.",
+      "cannotAssess": "“Cannot assess” counts as an answer of its own: two readers who both cannot assess agree. A task is closed or sent to arbitration by the same rule.",
+      "interval": "The interval is a percentile bootstrap over tasks ({resamples} resamples, fixed seed): the same readings always give the same interval.",
+      "notCounted": "Not counted: {open} still being read, {skipped} skipped, {excluded} with a missing answer or an unusual number of readers.",
+      "readers": "Readers are shown under pseudonymous ids that hold for this campaign only.",
+      "readersExport": "Readers are shown under pseudonymous ids that hold for this campaign only, here and in the export. Each export is recorded in the audit trail."
+    },
+    "export": {
+      "title": "Export annotations",
+      "csv": "CSV",
+      "json": "JSON",
+      "csvLabel": "Export annotations as CSV",
+      "jsonLabel": "Export annotations as JSON"
+    }
   }
 }
