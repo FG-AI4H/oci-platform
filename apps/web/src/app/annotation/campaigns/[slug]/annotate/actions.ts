@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { PullNextResponse, SubmitAssignmentResponse } from '@oci/shared-types';
+import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
+import type { PullNextResponse } from '@oci/shared-types';
 import { fetchAsUser } from '../../../../../lib/api-action';
 import { isAnnotationWorker } from '../../../../../lib/groups';
 import { sessionForAction } from '../../../../../lib/session-recovery';
@@ -11,48 +13,58 @@ export type PullState =
   | { status: 'success'; assignmentId: string | null; message: string }
   | { status: 'error'; message: string };
 
+// A successful submit redirects back to the queue, so only the idle
+// and error states reach the form.
 export type SubmitState =
   | { status: 'idle' }
-  | {
-      status: 'success';
-      assignmentId: string;
-      message: string;
-      newGateState: SubmitAssignmentResponse['newGateState'];
-    }
   | { status: 'error'; message: string; submission: string };
+
+export type ReleaseState = { status: 'idle' } | { status: 'error'; message: string };
 
 // Initial `useActionState` values live in `annotate-form.tsx`. This
 // file is `'use server'` — Next 16 only allows async exports here.
 
 /**
- * Pull the caller's next eligible task. Idempotent — re-issues an
- * in-flight assignment if one exists, otherwise creates a new one
+ * "Start": reserve the caller's next eligible task. Opening the page
+ * reserves nothing (#646); this is the only place a task is taken.
+ * Idempotent — re-issues an in-flight assignment if one exists
  * (router behaviour lives on the API side; this action just forwards).
  */
-export async function pullNextAction(_prev: PullState, formData: FormData): Promise<PullState> {
+export async function startTaskAction(_prev: PullState, formData: FormData): Promise<PullState> {
   const session = await sessionForAction();
+  const [t, common] = await Promise.all([
+    getTranslations('Annotate.actions'),
+    getTranslations('Common'),
+  ]);
   if (!session?.user || !isAnnotationWorker(session)) {
     return {
       status: 'error',
-      message: 'You need an annotation role (annotator / arbitration-annotator / expert-reviewer).',
+      message: t('needRole'),
     };
   }
   const slug = String(formData.get('slug') ?? '');
-  if (!slug) return { status: 'error', message: 'Missing campaign slug.' };
+  if (!slug) return { status: 'error', message: t('missingSlug') };
 
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!base) return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
+  if (!base) return { status: 'error', message: common('apiBaseUrlMissing') };
 
   const res = await fetchAsUser(
     `${base}/v2/annotation/campaigns/${encodeURIComponent(slug)}/tasks/next`,
     { method: 'POST', cache: 'no-store' },
   );
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    return {
-      status: 'error',
-      message: `API ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
-    };
+    // The reader sees a sentence in their language, never the API's
+    // English body (#646 review); the body goes to the server log.
+    logRefusal('start', res.status, await res.text().catch(() => ''));
+    const message =
+      res.status === 403
+        ? t('startForbidden')
+        : res.status === 404
+          ? t('campaignNotFound')
+          : res.status === 409
+            ? t('campaignNotRunning')
+            : t('serverError', { status: res.status });
+    return { status: 'error', message };
   }
   const out = (await res.json()) as PullNextResponse;
   revalidatePath(`/annotation/campaigns/${slug}/annotate`);
@@ -60,13 +72,13 @@ export async function pullNextAction(_prev: PullState, formData: FormData): Prom
     return {
       status: 'success',
       assignmentId: null,
-      message: 'No eligible tasks at your gate right now. Check back later.',
+      message: t('nothingWaiting'),
     };
   }
   return {
     status: 'success',
     assignmentId: out.assignment.id,
-    message: `You picked up ${out.assignment.sampleRef}.`,
+    message: t('pickedUp', { sampleRef: out.assignment.sampleRef }),
   };
 }
 
@@ -81,11 +93,15 @@ export async function submitAssignmentAction(
   formData: FormData,
 ): Promise<SubmitState> {
   const session = await sessionForAction();
-  const submissionRaw = String(formData.get('submission') ?? '');
+  const [t, common] = await Promise.all([
+    getTranslations('Annotate.actions'),
+    getTranslations('Common'),
+  ]);
+  let submissionRaw = String(formData.get('submission') ?? '');
   if (!session?.user || !isAnnotationWorker(session)) {
     return {
       status: 'error',
-      message: 'You need an annotation role to submit.',
+      message: t('needRoleToSubmit'),
       submission: submissionRaw,
     };
   }
@@ -93,7 +109,7 @@ export async function submitAssignmentAction(
   if (!assignmentId) {
     return {
       status: 'error',
-      message: 'Missing assignment id.',
+      message: t('missingAssignment'),
       submission: submissionRaw,
     };
   }
@@ -104,17 +120,69 @@ export async function submitAssignmentAction(
     formData.get('acknowledgedInstructionsVersion') ?? '',
   );
 
-  let submission: Record<string, unknown>;
-  try {
-    const parsed: unknown = JSON.parse(submissionRaw);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('Submission must be a JSON object.');
+  // What the DICOM viewer had on screen (#674). The field is there only
+  // when the task is a series, and empty while the image asked for is
+  // not drawn: the answer would not say what it is about. The API
+  // checks the view against the series; an image answer has none.
+  const viewField = formData.get('view');
+  let view: unknown;
+  if (viewField !== null) {
+    try {
+      view = JSON.parse(String(viewField));
+    } catch {
+      view = undefined;
     }
-    submission = parsed as Record<string, unknown>;
-  } catch (err) {
+  }
+
+  let submission: Record<string, unknown>;
+  if (formData.get('mode') === 'labels') {
+    // The label form (#646): one radio choice and an optional comment;
+    // at arbitration, the final label and the required reason.
+    const label = String(formData.get('label') ?? '');
+    const comment = String(formData.get('comment') ?? '').trim();
+    const reasonField = formData.get('reason');
+    const reason = reasonField === null ? null : String(reasonField).trim();
+    submission = {
+      label,
+      ...(comment ? { comment } : {}),
+      ...(reason !== null ? { reason } : {}),
+      ...(view !== undefined ? { view } : {}),
+    };
+    submissionRaw = JSON.stringify(submission);
+    if (!label) {
+      return { status: 'error', message: t('chooseAnswer'), submission: submissionRaw };
+    }
+    if (reason === '') {
+      return {
+        status: 'error',
+        message: t('giveReason'),
+        submission: submissionRaw,
+      };
+    }
+  } else {
+    try {
+      const parsed: unknown = JSON.parse(submissionRaw);
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error(t('notJsonObject'));
+      }
+      submission = {
+        ...(parsed as Record<string, unknown>),
+        ...(view !== undefined ? { view } : {}),
+      };
+    } catch (err) {
+      return {
+        status: 'error',
+        message: t('invalidJson', {
+          detail: err instanceof Error ? err.message : t('unparseable'),
+        }),
+        submission: submissionRaw,
+      };
+    }
+  }
+  if (viewField !== null && view === undefined) {
     return {
       status: 'error',
-      message: `Invalid JSON: ${err instanceof Error ? err.message : 'unparseable'}`,
+      message: t('notOnScreen'),
       submission: submissionRaw,
     };
   }
@@ -123,7 +191,7 @@ export async function submitAssignmentAction(
   if (!base) {
     return {
       status: 'error',
-      message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.',
+      message: common('apiBaseUrlMissing'),
       submission: submissionRaw,
     };
   }
@@ -151,31 +219,85 @@ export async function submitAssignmentAction(
       if (slug) revalidatePath(`/annotation/campaigns/${slug}/annotate`);
       return {
         status: 'error',
-        message: `The instructions have changed (now version ${body.requiredInstructionsVersion}). Read the current instructions and confirm them before submitting. Your annotation was kept.`,
+        message: t('instructionsChanged', { version: body.requiredInstructionsVersion }),
         submission: submissionRaw,
       };
     }
+    // Any other 409: the task closed while the reader worked on it
+    // (another arbiter settled it, it moved on, it expired, or it was
+    // already answered). Nothing can be saved, so back to the queue,
+    // which says so and offers the next task.
+    logRefusal('submit', res.status, JSON.stringify(body));
+    revalidatePath(`/annotation/campaigns/${slug}/annotate`);
+    redirect(`/annotation/campaigns/${encodeURIComponent(slug)}/annotate?after=closed`);
   }
   if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    return {
-      status: 'error',
-      message: `API ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
-      submission: submissionRaw,
-    };
+    // The reader sees a sentence in their language, never the API's
+    // English body (#646 review). The 422 reasons are the API's
+    // English too; the form already checks what they cover.
+    logRefusal('submit', res.status, await res.text().catch(() => ''));
+    const message =
+      res.status === 422
+        ? t('notAccepted')
+        : res.status === 403
+          ? t('notYourTask')
+          : res.status === 404
+            ? t('taskNotFound')
+            : t('serverError', { status: res.status });
+    return { status: 'error', message, submission: submissionRaw };
   }
-  const out = (await res.json()) as SubmitAssignmentResponse;
-  if (slug) revalidatePath(`/annotation/campaigns/${slug}/annotate`);
+  // Back to the queue, which offers the next task. The gate the task
+  // moved to is not shown: it would tell the last reader whether the
+  // others agreed.
+  revalidatePath(`/annotation/campaigns/${slug}/annotate`);
+  redirect(`/annotation/campaigns/${encodeURIComponent(slug)}/annotate?after=submitted`);
+}
 
-  const tail = out.newGateState
-    ? out.newGateState === 'COMPLETED' || out.newGateState === 'SKIPPED'
-      ? `Gate advanced to ${out.newGateState}. Task closed.`
-      : `Gate advanced to ${out.newGateState}.`
-    : 'Submission counted; waiting for the rest of the panel.';
-  return {
-    status: 'success',
-    assignmentId: out.assignmentId,
-    message: tail,
-    newGateState: out.newGateState,
-  };
+/**
+ * "Skip": give the current task back unread (#646). The slot reopens
+ * for other annotators at once; the queue then offers the next task,
+ * preferring ones the caller hasn't skipped.
+ */
+export async function releaseAssignmentAction(
+  _prev: ReleaseState,
+  formData: FormData,
+): Promise<ReleaseState> {
+  const session = await sessionForAction();
+  const [t, common] = await Promise.all([
+    getTranslations('Annotate.actions'),
+    getTranslations('Common'),
+  ]);
+  if (!session?.user || !isAnnotationWorker(session)) {
+    return { status: 'error', message: t('needRoleToSkip') };
+  }
+  const assignmentId = String(formData.get('assignmentId') ?? '');
+  const slug = String(formData.get('slug') ?? '');
+  if (!assignmentId || !slug) return { status: 'error', message: t('missingAssignmentOrCampaign') };
+
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (!base) return { status: 'error', message: common('apiBaseUrlMissing') };
+
+  const res = await fetchAsUser(
+    `${base}/v2/annotation/assignments/${encodeURIComponent(assignmentId)}/release`,
+    { method: 'POST', cache: 'no-store' },
+  );
+  // 409: already submitted, expired or released — the task is no
+  // longer the caller's either way, so carry on to the queue.
+  if (!res.ok && res.status !== 409) {
+    logRefusal('release', res.status, await res.text().catch(() => ''));
+    const message =
+      res.status === 403
+        ? t('skipForbidden')
+        : res.status === 404
+          ? t('taskNotFound')
+          : t('serverError', { status: res.status });
+    return { status: 'error', message };
+  }
+  revalidatePath(`/annotation/campaigns/${slug}/annotate`);
+  redirect(`/annotation/campaigns/${encodeURIComponent(slug)}/annotate?after=skipped`);
+}
+
+/** What the API said, for the server log; the reader gets a translated sentence. */
+function logRefusal(action: string, status: number, body: string): void {
+  console.warn(`annotate ${action}: API answered ${status}: ${body.slice(0, 300)}`);
 }

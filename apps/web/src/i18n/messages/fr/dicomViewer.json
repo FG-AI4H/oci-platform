@@ -10,7 +10,7 @@
     "allLoaded": "{count, plural, one {# image chargée} other {Les # images sont chargées}}",
     "someMissing": "{loaded} images chargées sur {count}, {missing, plural, one {# n’a pas pu être chargée} other {# n’ont pas pu être chargées}}"
   },
-  "missingAlert": "{missing, plural, one {# image sur {count} n’a pas pu être chargée} other {# images sur {count} n’ont pas pu être chargées}}. Chacune le signale lorsque vous l’atteignez. Fermez la visionneuse et rouvrez la série pour réessayer.",
+  "missingAlert": "{missing, plural, one {# image sur {count} n’a pas pu être chargée} other {# images sur {count} n’ont pas pu être chargées}}. Chacune le signale lorsque vous l’atteignez. {context, select, task {Rechargez la page pour réessayer.} other {Fermez la visionneuse et rouvrez la série pour réessayer.}}",
   "standInFailed": "L’image {index} n’a pas pu être chargée",
   "standInLoading": "Chargement de l’image {index}…",
   "windowReadout": "L {width} · N {center}",
@@ -45,16 +45,21 @@
     "emptyTitle": "Rien à afficher",
     "emptyDetail": "Cette série ne contient aucune image que vous pouvez ouvrir.",
     "decoderTitle": "La visionneuse ne peut pas décoder cette série",
-    "decoderDetail": "L’image {position} est enregistrée en {syntax}, une compression pour laquelle cette visionneuse n’a pas de décodeur. Téléchargez les fichiers pour les ouvrir dans une autre visionneuse.",
+    "decoderDetail": "L’image {position} est enregistrée en {syntax}, une compression pour laquelle cette visionneuse n’a pas de décodeur. {context, select, task {Passez cette tâche et prévenez le responsable de la campagne.} other {Téléchargez les fichiers pour les ouvrir dans une autre visionneuse.}}",
     "refusedTitle": "La visionneuse ne peut pas afficher cette série fidèlement",
-    "refusedDetail": "L’image {position} est enregistrée en {syntax}, une compression que cette visionneuse décode avec des erreurs dans les niveaux de gris. Téléchargez les fichiers pour les ouvrir dans une autre visionneuse.",
+    "refusedDetail": "L’image {position} est enregistrée en {syntax}, une compression que cette visionneuse décode avec des erreurs dans les niveaux de gris. {context, select, task {Passez cette tâche et prévenez le responsable de la campagne.} other {Téléchargez les fichiers pour les ouvrir dans une autre visionneuse.}}",
     "openTitle": "La série n’a pas pu être ouverte",
     "openAddress": "Le stockage a refusé le fichier. Il n’est peut-être plus disponible pour vous ; rechargez la page et réessayez.",
     "openNetwork": "La première image n’a pas pu être récupérée depuis le stockage. Vérifiez votre connexion et réessayez.",
     "changedTitle": "La série a changé",
-    "changedDetail": "Ses fichiers ne sont plus ceux qui étaient affichés. Fermez la visionneuse et rouvrez la série.",
+    "changedDetail": "Ses fichiers ne sont plus ceux qui étaient affichés. {context, select, task {Rechargez la page.} other {Fermez la visionneuse et rouvrez la série.}}",
     "startTitle": "La visionneuse n’a pas pu démarrer",
-    "startDetail": "La série n’a pas pu être chargée. Rechargez la page et réessayez ; si l’échec persiste, téléchargez plutôt les fichiers.",
+    "startDetail": "La série n’a pas pu être chargée. Rechargez la page et réessayez ; si l’échec persiste, {context, select, task {passez cette tâche et prévenez le responsable de la campagne.} other {téléchargez plutôt les fichiers.}}",
     "transferSyntaxUnknown": "non indiquée dans le fichier"
+  },
+  "readerView": {
+    "summary": "Image {position} sur {count}",
+    "inverted": "inversée",
+    "show": "Afficher l’image {position}"
   }
 }

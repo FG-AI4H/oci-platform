@@ -15,6 +15,8 @@ import { CampaignRepository } from './campaign.repository.js';
 import { TaskAbandonmentService } from './task-abandonment.service.js';
 import { TaskRepository } from './task.repository.js';
 import { TaskService } from './task.service.js';
+import type { DicomSeriesService } from '../storage/dicom-series.service.js';
+import type { StorageService } from '../storage/storage.service.js';
 
 /**
  * #647 — the annotation router against a real Postgres with every
@@ -57,6 +59,10 @@ describe.skipIf(!dockerAvailable)('Annotation router against Postgres (#647)', (
       new CampaignRepository(prismaService),
       tasks,
       new TaskAbandonmentService(tasks, audit),
+      // No DICOM series in these runs.
+      { listTaskSamples: async () => [] } as unknown as DicomSeriesService,
+      // The download rule has its own tests; here the manager may.
+      { authoriseDatasetBytes: async () => ({}) } as unknown as StorageService,
     );
 
     datasetId = (
@@ -290,5 +296,337 @@ describe.skipIf(!dockerAvailable)('Annotation router against Postgres (#647)', (
       where: { campaignId, gateState: { not: 'COMPLETED' } },
     });
     expect(open).toBe(0);
+  }, 60_000);
+
+  it('a skipped task goes back to the pool and the skipper is offered another first (#646)', async () => {
+    const slug = 'router-646-skip';
+    await runningCampaign({ slug, nAnnotators: 1, sampleCount: 2 });
+    const [skipper, other] = [randomUUID(), randomUUID()];
+
+    const first = await pull(slug, skipper);
+    await service.release({ assignmentId: first!.id, user: user(skipper) });
+
+    const released = await prisma.annotationTaskAssignment.findUniqueOrThrow({
+      where: { id: first!.id },
+    });
+    expect(released.status).toBe('RELEASED');
+    expect(released.releasedAt).not.toBeNull();
+    expect(
+      await prisma.auditEvent.count({
+        where: { action: 'task.assignment.released', subjectId: first!.id },
+      }),
+    ).toBe(1);
+
+    // The skipper moves on to the other image …
+    const next = await pull(slug, skipper);
+    expect(next?.taskId).not.toBe(first!.taskId);
+    // … and the skipped one is open to someone else at once.
+    const forOther = await pull(slug, other);
+    expect(forOther?.taskId).toBe(first!.taskId);
+
+    // A released assignment can't be submitted or released again.
+    await expect(submit(first!.id, skipper)).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.release({ assignmentId: first!.id, user: user(skipper) }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  }, 60_000);
+
+  it('a skipped task comes back to the skipper when nothing else is open (#646)', async () => {
+    const slug = 'router-646-skip-only';
+    const campaignId = await runningCampaign({ slug, nAnnotators: 1, sampleCount: 1 });
+    const skipper = randomUUID();
+
+    const first = await pull(slug, skipper);
+    await service.release({ assignmentId: first!.id, user: user(skipper) });
+    const again = await pull(slug, skipper);
+    expect(again?.taskId).toBe(first!.taskId);
+    await submit(again!.id, skipper);
+
+    const task = await prisma.annotationTask.findFirstOrThrow({ where: { campaignId } });
+    expect(task.gateState).toBe('COMPLETED');
+  }, 60_000);
+
+  it('opening the queue reserves nothing until the annotator starts (#646)', async () => {
+    const slug = 'router-646-current';
+    const campaignId = await runningCampaign({ slug, nAnnotators: 1, sampleCount: 1 });
+    const sub = randomUUID();
+
+    const before = await service.current({ slug, user: user(sub), userGroups: ANNOTATOR });
+    expect(before.assignment).toBeNull();
+    expect(await prisma.annotationTaskAssignment.count({ where: { task: { campaignId } } })).toBe(
+      0,
+    );
+
+    const started = await pull(slug, sub);
+    const after = await service.current({ slug, user: user(sub), userGroups: ANNOTATOR });
+    expect(after.assignment?.id).toBe(started!.id);
+  }, 60_000);
+
+  it('an annotator who has read the first 50 tasks is still offered the open ones after them', async () => {
+    const slug = 'router-646-deep-queue';
+    await runningCampaign({ slug, nAnnotators: 2, sampleCount: 55 });
+    const sub = randomUUID();
+
+    // Seeded in one batch, the tasks share a creation time, so FIFO
+    // order is by id: track what was read rather than which sample.
+    const read = new Set<string>();
+    for (let i = 0; i < 50; i += 1) {
+      const a = await pull(slug, sub);
+      read.add(a!.taskId);
+      await submit(a!.id, sub);
+    }
+    const next = await pull(slug, sub);
+    expect(next).not.toBeNull();
+    expect(read.has(next!.taskId)).toBe(false);
+  }, 120_000);
+
+  it('tasks already full do not hide an open one further down the queue', async () => {
+    const slug = 'router-646-full-tasks';
+    const campaignId = await runningCampaign({ slug, nAnnotators: 1, sampleCount: 52 });
+    const tasks = await prisma.annotationTask.findMany({
+      where: { campaignId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    // Make the open task strictly the newest, so it sits behind more
+    // than a page of full ones whatever the tie order.
+    await prisma.annotationTask.update({
+      where: { id: tasks[51]!.id },
+      data: { createdAt: new Date(tasks[51]!.createdAt.getTime() + 1000) },
+    });
+    // The first 51 in FIFO order each reserved by someone else: full,
+    // but still at the independent step. Only the last one is open.
+    await prisma.annotationTaskAssignment.createMany({
+      data: tasks.slice(0, 51).map((t) => ({
+        taskId: t.id,
+        assigneeUserId: randomUUID(),
+        assigneeRole: 'annotator',
+        gateAtAssignment: 'INDEPENDENT' as const,
+        status: 'PENDING' as const,
+      })),
+    });
+
+    const open = await pull(slug, randomUUID());
+    expect(open?.taskId).toBe(tasks[51]!.id);
+  }, 120_000);
+
+  it('never gives an arbiter a task they read (#646)', async () => {
+    const slug = 'router-646-arbiter';
+    const campaignId = await runningCampaign({ slug, nAnnotators: 1, sampleCount: 2 });
+    const [read, unread] = await prisma.annotationTask.findMany({
+      where: { campaignId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    // Both tasks wait for arbitration. The arbiter read the first one
+    // (an earlier group membership); someone else read the second.
+    await prisma.annotationTask.updateMany({
+      where: { campaignId },
+      data: { gateState: 'AWAITING_ARBITRATION' },
+    });
+    const arbiter = 'arbiter-who-read';
+    await prisma.annotationTaskAssignment.createMany({
+      data: [
+        { taskId: read!.id, assigneeUserId: cognitoSubAsUuid(arbiter) },
+        { taskId: unread!.id, assigneeUserId: randomUUID() },
+      ].map((a) => ({
+        ...a,
+        assigneeRole: 'annotator',
+        gateAtAssignment: 'INDEPENDENT' as const,
+        status: 'SUBMITTED' as const,
+        submission: { label: 'normal' },
+        submittedAt: new Date(),
+      })),
+    });
+    const arbitrate = async () =>
+      (
+        await service.pullNext({
+          slug,
+          user: user(arbiter),
+          userGroups: ['arbitration-annotator'],
+        })
+      ).assignment;
+
+    const first = await arbitrate();
+    expect(first?.taskId).toBe(unread!.id);
+    await service.submit({
+      assignmentId: first!.id,
+      submission: { label: 'normal', reason: 'agrees with the reading' },
+      user: user(arbiter),
+    });
+    // Only the task they read is left, and they are not given it.
+    expect(await arbitrate()).toBeNull();
+  }, 60_000);
+
+  it('readers who press Start together never over-fill a task (#646 review, item 1)', async () => {
+    // One task needing 3 readers, 8 readers pulling at once. Without
+    // the campaign's pull lock every pull saw 3 free slots: 8 assignments.
+    const slug = 'router-646-parallel-start';
+    const campaignId = await runningCampaign({ slug, nAnnotators: 3, sampleCount: 1 });
+    const readers = Array.from({ length: 8 }, () => randomUUID());
+
+    const pulled = await Promise.all(readers.map((sub) => pull(slug, sub)));
+
+    expect(pulled.filter((a) => a !== null)).toHaveLength(3);
+    expect(
+      await prisma.annotationTaskAssignment.count({
+        where: { task: { campaignId }, status: { in: ['PENDING', 'IN_PROGRESS'] } },
+      }),
+    ).toBe(3);
+  }, 60_000);
+
+  /** A task at arbitration, read by three readers who disagreed. */
+  async function taskAwaitingArbitration(slug: string): Promise<string> {
+    const campaignId = await runningCampaign({ slug, nAnnotators: 3, sampleCount: 1 });
+    const task = await prisma.annotationTask.findFirstOrThrow({ where: { campaignId } });
+    await prisma.annotationTask.update({
+      where: { id: task.id },
+      data: { gateState: 'AWAITING_ARBITRATION' },
+    });
+    await prisma.annotationTaskAssignment.createMany({
+      data: ['normal', 'abnormal', 'normal'].map((label) => ({
+        taskId: task.id,
+        assigneeUserId: randomUUID(),
+        assigneeRole: 'annotator',
+        gateAtAssignment: 'INDEPENDENT' as const,
+        status: 'SUBMITTED' as const,
+        submission: { label },
+        submittedAt: new Date(),
+      })),
+    });
+    return task.id;
+  }
+
+  it('arbitration has one slot, even when arbiters pull together (#646 review, item 2)', async () => {
+    const slug = 'router-646-one-arbiter';
+    const taskId = await taskAwaitingArbitration(slug);
+    const arbiters = [randomUUID(), randomUUID(), randomUUID()];
+
+    const pulled = await Promise.all(
+      arbiters.map(
+        async (sub) =>
+          (
+            await service.pullNext({
+              slug,
+              user: user(sub),
+              userGroups: ['arbitration-annotator'],
+            })
+          ).assignment,
+      ),
+    );
+
+    const held = pulled.filter((a) => a !== null);
+    expect(held).toHaveLength(1);
+    expect(held[0]?.taskId).toBe(taskId);
+  }, 60_000);
+
+  it('two arbiters settling one task at once: one answer is kept, the other gets 409 (#646 review, item 2)', async () => {
+    // Two arbitration assignments on one task, as the old router made
+    // them (one slot per reader).
+    const slug = 'router-646-two-arbiters';
+    const taskId = await taskAwaitingArbitration(slug);
+    const [first, second] = [randomUUID(), randomUUID()];
+    const held = await Promise.all(
+      [first, second].map((sub) =>
+        prisma.annotationTaskAssignment.create({
+          data: {
+            taskId,
+            assigneeUserId: cognitoSubAsUuid(sub),
+            assigneeRole: 'arbitration-annotator',
+            gateAtAssignment: 'AWAITING_ARBITRATION',
+            status: 'PENDING',
+          },
+        }),
+      ),
+    );
+
+    const results = await Promise.allSettled(
+      (
+        [
+          [held[0]!.id, first, 'normal'],
+          [held[1]!.id, second, 'abnormal'],
+        ] as const
+      ).map(([assignmentId, sub, label]) =>
+        service.submit({
+          assignmentId,
+          submission: { label, reason: 'settles the disagreement' },
+          user: user(sub),
+        }),
+      ),
+    );
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(ConflictException);
+
+    // One final label on the task, and the losing answer was not stored.
+    const answers = await prisma.annotationTaskAssignment.findMany({
+      where: { taskId, gateAtAssignment: 'AWAITING_ARBITRATION', status: 'SUBMITTED' },
+    });
+    expect(answers).toHaveLength(1);
+    const task = await prisma.annotationTask.findUniqueOrThrow({ where: { id: taskId } });
+    expect(task.gateState).toBe('COMPLETED');
+  }, 60_000);
+
+  it("tasks from the dataset's hosted images: one per image, and a second run adds none (#646)", async () => {
+    const version = await prisma.datasetVersion.create({
+      data: { datasetId, version: '646.0', croissant: {}, publishedById: randomUUID() },
+    });
+    const file = (name: string, contentType: string, ready = true) => ({
+      datasetVersionId: version.id,
+      croissantId: randomUUID(),
+      contentType,
+      storageBackend: 'S3' as const,
+      s3Bucket: 'oci-datasets-test',
+      s3Key: `router-646/${randomUUID()}/${name}`,
+      uploadStatus: ready ? ('READY' as const) : ('PENDING' as const),
+    });
+    await prisma.distribution.createMany({
+      data: [
+        file('a.png', 'image/png'),
+        file('b.jpg', 'image/jpeg'),
+        file('notes.csv', 'text/csv'),
+        file('c.png', 'image/png', false),
+      ],
+    });
+    await prisma.distribution.create({
+      data: { datasetVersionId: version.id, croissantId: randomUUID(), contentType: 'image/png' },
+    });
+    const slug = 'router-646-from-dataset';
+    const campaign = await prisma.annotationCampaign.create({
+      data: {
+        slug,
+        name: slug,
+        status: 'READY',
+        taskKind: 'CLASSIFICATION',
+        datasetId,
+        manifestVersionId: version.id,
+        toolIntegrationId,
+        outputLicense: 'CC_BY_4_0',
+        workflowConfig: { nAnnotators: 3 },
+        createdById: randomUUID(),
+      },
+    });
+
+    const preview = await service.seedFromDataset({ slug, dryRun: true, user: user(randomUUID()) });
+    expect(preview).toEqual({ matched: 2, created: 2, skipped: 0, held: 0, dryRun: true });
+    expect(await prisma.annotationTask.count({ where: { campaignId: campaign.id } })).toBe(0);
+
+    const first = await service.seedFromDataset({ slug, dryRun: false, user: user(randomUUID()) });
+    expect(first).toEqual({ matched: 2, created: 2, skipped: 0, held: 0, dryRun: false });
+    const second = await service.seedFromDataset({ slug, dryRun: false, user: user(randomUUID()) });
+    expect(second).toEqual({ matched: 2, created: 0, skipped: 2, held: 0, dryRun: false });
+
+    const tasks = await prisma.annotationTask.findMany({ where: { campaignId: campaign.id } });
+    // The task stores the distribution id, never the storage key (#646).
+    const read = await prisma.distribution.findMany({
+      where: {
+        datasetVersionId: version.id,
+        OR: [{ s3Key: { endsWith: '/a.png' } }, { s3Key: { endsWith: '/b.jpg' } }],
+      },
+      select: { id: true },
+    });
+    const expected = read.map((d) => `file:${d.id}`).sort();
+    expect(tasks.map((t) => t.sampleRef).sort()).toEqual(expected);
+    expect(tasks.every((t) => t.nAnnotatorsRequired === 3)).toBe(true);
   }, 60_000);
 });

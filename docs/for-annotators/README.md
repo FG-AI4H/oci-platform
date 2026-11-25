@@ -9,13 +9,14 @@ You've been invited to label data on an OCI campaign. As an annotator, you:
 
 The platform handles the bookkeeping (routing, gate progression, IRR scoring, provenance) so you can focus on the labelling. This section explains what you'll see and what's expected of you.
 
-| Guide                                                                   | Read when                                                                                                                                                             |
-| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Getting started](./getting-started.md)                                 | First time on a campaign — what to set up before you claim your first task.                                                                                           |
-| [Working on tasks](./working-on-tasks.md)                               | The per-task lifecycle: claim → instructions ack → submit, plus what happens when you walk away.                                                                      |
-| [The 3-gate workflow](./3-gate-workflow.md)                             | You're curious why a task you submitted is now showing "AWAITING_ARBITRATION" or "AWAITING_EXPERT" — or what arbitration / expert reviewers actually do.              |
-| [Your rights, your work, the licensing](./your-rights-and-licensing.md) | You've been asked to sign an annotator agreement and want the plain-English version before clicking through.                                                          |
-| [Annotation tool integrations](../for-developers/annotation-module.md)  | You're switching between campaigns that use different annotation tools (CVAT, MD.ai, RedBrick AI…) and want the developer-side overview of how OCI hands off to them. |
+| Guide                                                                                        | Read when                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Getting started](./getting-started.md)                                                      | First time on a campaign — what to set up before you claim your first task.                                                                                           |
+| [Working on tasks](./working-on-tasks.md)                                                    | The per-task lifecycle: claim → instructions ack → submit, plus what happens when you walk away.                                                                      |
+| [Reading a CT series](./reading-a-ct-series.md) ([en français](./reading-a-ct-series.fr.md)) | Your campaign's samples are CT exams: moving through the images, setting the window, and what your answer records.                                                    |
+| [The 3-gate workflow](./3-gate-workflow.md)                                                  | You're curious why a task you submitted is now showing "AWAITING_ARBITRATION" or "AWAITING_EXPERT" — or what arbitration / expert reviewers actually do.              |
+| [Your rights, your work, the licensing](./your-rights-and-licensing.md)                      | You've been asked to sign an annotator agreement and want the plain-English version before clicking through.                                                          |
+| [Annotation tool integrations](../for-developers/annotation-module.md)                       | You're switching between campaigns that use different annotation tools (CVAT, MD.ai, RedBrick AI…) and want the developer-side overview of how OCI hands off to them. |
 
 ## Quick orientation
 
@@ -37,6 +38,6 @@ The platform handles the bookkeeping (routing, gate progression, IRR scoring, pr
 ## Where to ask
 
 - The campaign manager is your first point of contact — every campaign has a named manager visible at the top of the campaign page.
-- **Stuck on a sample?** Skip it. The campaign manager reviews skipped samples and either re-queues them with a clarification or accepts the skip. Use the reason field — it improves the instructions for everyone.
+- **Stuck on a sample?** Skip it: it goes back to the queue for someone else. If the sample itself is the problem (unreadable, not de-identified, unclear instructions), tell the campaign manager — it improves the instructions for everyone.
 - **Disagree with an arbitration decision?** Flag the task for supervisor review (per [ADR-0011](../adr/0011-annotation-sample-rejection.md)). The supervisor can roll back the gate or invite the expert reviewer.
 - Email: `oci-platform@itu.int`.

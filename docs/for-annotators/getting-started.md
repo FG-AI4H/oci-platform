@@ -49,16 +49,16 @@ Most campaigns publish per-campaign instructions — a Markdown page the campaig
 
 If a campaign has no instructions, ask the campaign manager. Unwritten instructions are a recipe for low IRR.
 
-## 5. Claim your first task
+## 5. Start your first task
 
-Click **Claim next task** on the campaign page. The router picks one for you based on:
+Open the campaign's annotate page and press **Start**. Opening the page reserves nothing; Start does. The router picks a task for you based on:
 
 - Your role (`annotator` for independent gate, `arbitration-annotator` for arbitration, `expert-reviewer` for expert review).
 - FIFO — the longest-queued task that matches your role wins.
 - A **bias-prevention cap** — you'll never be given a task that would push your share of the campaign above 1.5× the per-annotator average.
 - (Slice 3+) Stratification across sub-populations; experience-weighted ranking; calibration cooldown.
 
-You won't see "all available tasks" — just the one the router picked. If you can't work on it (you've seen the patient ID before, you don't have the equipment, you're conflicted out for any reason), submit a skip with a reason. The campaign manager reviews skips.
+You won't see "all available tasks" — just the one the router picked. If you can't work on it (you've seen the patient ID before, you don't have the equipment, you're conflicted out for any reason), press **Skip**: the task goes back to the queue for someone else and you're offered another. If the sample itself is the problem, tell the campaign manager too — see [Skip a task](./working-on-tasks.md#skip-a-task).
 
 ## 6. Do the work
 

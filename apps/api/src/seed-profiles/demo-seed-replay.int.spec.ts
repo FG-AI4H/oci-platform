@@ -21,6 +21,8 @@ import {
   startMigratedPostgres,
 } from '../test-support/migrated-postgres.js';
 import { snapshotLines, snapshotTables } from '../test-support/table-snapshot.raw.js';
+import type { DicomSeriesService } from '../modules/storage/dicom-series.service.js';
+import type { StorageService } from '../modules/storage/storage.service.js';
 
 /**
  * #641 — the demo seed is replayed on every non-prod deploy, so it must
@@ -182,6 +184,10 @@ describe.skipIf(!dockerAvailable)('Demo seed replay against Postgres (#641)', ()
         campaigns,
         taskRepo,
         new TaskAbandonmentService(taskRepo, audit),
+        // No DICOM series in these runs.
+        { listTaskSamples: async () => [] } as unknown as DicomSeriesService,
+        // Not reached: this replay creates no tasks from files.
+        { authoriseDatasetBytes: async () => ({}) } as unknown as StorageService,
       );
 
       // -- Catalogue ------------------------------------------------------

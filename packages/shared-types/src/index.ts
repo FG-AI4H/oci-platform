@@ -12,6 +12,10 @@ import type { DatasetSlug } from './slug.js';
 import { MAX_PREDICTION_ROWS, PredictionRowSchema } from './predictions-file.js';
 import { EvaluationTaskSlugSchema, SubmissionModeSchema } from './submission-validation.js';
 import {
+  DicomSeriesSampleSchema as DicomSeriesSampleSchemaLocal,
+  DicomViewSchema as DicomViewSchemaLocal,
+} from './dicom.js';
+import {
   SubgroupDeclarationSchema,
   SubgroupFieldKeySchema,
   SubgroupFieldSchema,
@@ -117,6 +121,7 @@ export {
   DicomSeriesSampleSchema,
   DicomViewSchema,
   RecordDicomFindingDecisionRequestSchema,
+  answerViewProblems,
   dicomSeriesSampleRef,
   parseDicomSeriesSampleRef,
 } from './dicom.js';
@@ -2349,6 +2354,100 @@ export const N_ANNOTATORS_MIN = 1;
 export const N_ANNOTATORS_MAX = 12;
 
 /**
+ * The "cannot assess" answer a CLASSIFICATION campaign may offer (#646).
+ * Reserved: no declared label may use this value.
+ */
+export const CANNOT_ASSESS_LABEL = 'cannot-assess';
+
+/** One answer a reader can give on a CLASSIFICATION campaign (#646). */
+export const ClassificationLabelSchema = z.object({
+  /** Stored in the submission as `label`. Lower-case, digits, `-` and `_`. */
+  value: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9][a-z0-9_-]*$/, 'use lower-case letters, digits, "-" or "_"')
+    .refine((v) => v !== CANNOT_ASSESS_LABEL, `"${CANNOT_ASSESS_LABEL}" is reserved`),
+  /** What the reader sees. */
+  display: z.string().trim().min(1).max(120),
+});
+export type ClassificationLabel = z.infer<typeof ClassificationLabelSchema>;
+
+/**
+ * The answers a CLASSIFICATION campaign offers, declared at creation
+ * (#646). The order is the order readers see, and the number key that
+ * picks each one.
+ */
+export const ClassificationLabelsConfigSchema = z
+  .object({
+    labels: z.array(ClassificationLabelSchema).min(2).max(9),
+    /** Offer "Cannot assess" after the labels. */
+    cannotAssess: z.boolean().default(false),
+    /** Let readers add a free-text comment. */
+    allowComment: z.boolean().default(false),
+  })
+  .refine((c) => new Set(c.labels.map((l) => l.value)).size === c.labels.length, {
+    message: 'label values must be unique',
+    path: ['labels'],
+  });
+export type ClassificationLabelsConfig = z.infer<typeof ClassificationLabelsConfigSchema>;
+
+/** Longest comment a reader may attach to a label. */
+export const LABEL_COMMENT_MAX = 2000;
+
+/**
+ * Check a `{ label, comment, view? }` submission against the campaign's
+ * declared labels (#646). `view` is optional: a DICOM answer stores what
+ * the viewer had on screen (`DicomViewSchema`); an image answer leaves
+ * it out. Returns the reasons it is refused; empty when
+ * it is accepted. Shared by the API (which refuses) and the web form.
+ *
+ * At arbitration the arbiter must also say why they chose the final
+ * label: pass `reasonRequired` and the submission must carry a
+ * non-empty `reason`. Readers never send one.
+ */
+export function labelSubmissionProblems(
+  config: ClassificationLabelsConfig,
+  submission: Record<string, unknown>,
+  options: { reasonRequired?: boolean } = {},
+): string[] {
+  const problems: string[] = [];
+  const reasonRequired = options.reasonRequired ?? false;
+  const allowed = new Set(config.labels.map((l) => l.value));
+  if (config.cannotAssess) allowed.add(CANNOT_ASSESS_LABEL);
+  const label = submission.label;
+  if (typeof label !== 'string' || !allowed.has(label)) {
+    problems.push(`label must be one of: ${[...allowed].join(', ')}`);
+  }
+  const comment = submission.comment;
+  if (comment !== undefined && comment !== null && comment !== '') {
+    if (!config.allowComment) problems.push('this campaign does not take comments');
+    else if (typeof comment !== 'string') problems.push('comment must be text');
+    else if (comment.length > LABEL_COMMENT_MAX) {
+      problems.push(`comment must be at most ${LABEL_COMMENT_MAX} characters`);
+    }
+  }
+  if (reasonRequired) {
+    const reason = submission.reason;
+    if (typeof reason !== 'string' || reason.trim() === '') {
+      problems.push('give the reason for the final label');
+    } else if (reason.length > LABEL_COMMENT_MAX) {
+      problems.push(`reason must be at most ${LABEL_COMMENT_MAX} characters`);
+    }
+  }
+  // What the screen showed when the reader answered (#674): kept for the
+  // record and for reviewing a disagreement; agreement ignores it.
+  if (submission.view !== undefined && !DicomViewSchemaLocal.safeParse(submission.view).success) {
+    problems.push('view is not a valid record of the screen');
+  }
+  const fields = new Set(['label', 'comment', 'view', ...(reasonRequired ? ['reason'] : [])]);
+  for (const key of Object.keys(submission)) {
+    if (!fields.has(key)) problems.push(`unexpected field "${key}"`);
+  }
+  return problems;
+}
+
+/**
  * Workflow configuration (ADR-0009 Decisions 2 + 4). Phase B.A.1 only
  * surfaces `nAnnotators`; IRR thresholds + gate config + experience-
  * model knobs land as #216 (E4) ships.
@@ -2377,6 +2476,12 @@ export const CampaignWorkflowConfigSchema = z.object({
    * workflows where incomplete annotations are a liability.
    */
   completenessMode: CampaignCompletenessModeSchema.default('soft-warn'),
+  /**
+   * The answers a CLASSIFICATION campaign offers (#646). Required when
+   * a CLASSIFICATION campaign is created; absent on other kinds and on
+   * campaigns created before #646, which keep the free-form JSON form.
+   */
+  classificationLabels: ClassificationLabelsConfigSchema.optional(),
 });
 export type CampaignWorkflowConfig = z.infer<typeof CampaignWorkflowConfigSchema>;
 
@@ -3128,6 +3233,7 @@ export const AnnotationAssignmentStatusSchema = z.enum([
   'IN_PROGRESS',
   'SUBMITTED',
   'EXPIRED',
+  'RELEASED',
 ]);
 export type AnnotationAssignmentStatus = z.infer<typeof AnnotationAssignmentStatusSchema>;
 
@@ -3354,6 +3460,113 @@ export type MetadataVisibilityResolveRequest = z.infer<
   typeof MetadataVisibilityResolveRequestSchema
 >;
 
+/**
+ * `POST /v2/annotation/campaigns/:slug/tasks/from-dataset` (#646): one
+ * task per platform-hosted PNG / JPEG file, and one per DICOM series
+ * (#674), of the campaign's pinned dataset version. Idempotent: samples
+ * that already have a task count as `skipped`. A series with a held
+ * image (ADR-0026) is never made into a task and counts as `held`.
+ */
+export const SeedTasksFromDatasetRequestSchema = z.object({
+  /**
+   * Only image files whose name starts with this. A series has no file
+   * name of its own, so a prefix leaves series out.
+   */
+  prefix: z.string().max(200).optional(),
+  /** At most this many samples: image files in file-name order, then series. */
+  limit: z.number().int().min(1).max(10_000).optional(),
+  /** Count what would be created without creating anything. */
+  dryRun: z.boolean().default(false),
+});
+export type SeedTasksFromDatasetRequest = z.infer<typeof SeedTasksFromDatasetRequestSchema>;
+
+export const SeedTasksFromDatasetResponseSchema = z.object({
+  /** Samples that matched: image files and series. */
+  matched: z.number().int().nonnegative(),
+  /** Tasks created (on a dry run: that would be created). */
+  created: z.number().int().nonnegative(),
+  /** Matched samples that already have a task. */
+  skipped: z.number().int().nonnegative(),
+  /** Series left out because an image of theirs is held (ADR-0026). Not in `matched`. */
+  held: z.number().int().nonnegative(),
+  dryRun: z.boolean(),
+});
+export type SeedTasksFromDatasetResponse = z.infer<typeof SeedTasksFromDatasetResponseSchema>;
+
+// ==== How a task points at its sample (#646, #674) ======================
+//
+// A typed platform id, never a storage key: the reference goes into the
+// append-only audit trail, the calibration grouping and exports (#648),
+// and a key carries the file name as uploaded.
+//
+//   file:<distribution id>     an image file, this module
+//   dicom-series:<series id>   a DICOM series (`dicomSeriesSampleRef`)
+//
+// Both resolve against the campaign's pinned dataset version.
+
+const FILE_SAMPLE_PREFIX = 'file:';
+
+/** The sample reference of a task on one hosted file. */
+export function fileSampleRef(distributionId: string): string {
+  return `${FILE_SAMPLE_PREFIX}${distributionId}`;
+}
+
+/** The distribution id of a `file:` reference, or null for any other. */
+export function parseFileSampleRef(sampleRef: string): string | null {
+  if (!sampleRef.startsWith(FILE_SAMPLE_PREFIX)) return null;
+  const id = sampleRef.slice(FILE_SAMPLE_PREFIX.length);
+  return z.string().uuid().safeParse(id).success ? id : null;
+}
+
+/**
+ * The `image` answer of a task's sample address: one PNG or JPEG behind
+ * a short-lived address. Nothing else about the sample travels with it
+ * (ADR-0010 blinding).
+ */
+export const ImageSampleSchema = z
+  .object({
+    kind: z.literal('image'),
+    url: z.string().url(),
+    contentType: z.string(),
+    /** The address works at least until then. */
+    expiresAt: z.string().datetime(),
+  })
+  .strict();
+export type ImageSample = z.infer<typeof ImageSampleSchema>;
+
+/**
+ * `GET /v2/annotation/assignments/:id/sample` (#646): the sample of an
+ * assignment, tagged by `kind`. The annotate and arbitration screens
+ * pick the viewer by it: the image viewer, or the DICOM viewer (#674).
+ */
+export const AssignmentSampleResponseSchema = z.discriminatedUnion('kind', [
+  ImageSampleSchema,
+  DicomSeriesSampleSchemaLocal,
+]);
+export type AssignmentSampleResponse = z.infer<typeof AssignmentSampleResponseSchema>;
+
+/**
+ * `GET /v2/annotation/assignments/:id/readings` (#646): what the
+ * independent readers answered on an arbitration task, each label with
+ * its comment, without who gave them. Sorted by label, so the order
+ * says nothing about who read first.
+ *
+ * On a DICOM series each reading also says what the reader had on
+ * screen when they answered (#674): the image, by its place in the
+ * series, and the window. The arbiter can show it. Null on an image.
+ */
+export const AssignmentReadingSchema = z.object({
+  label: z.string(),
+  comment: z.string().nullable(),
+  view: DicomViewSchemaLocal.nullable(),
+});
+export type AssignmentReading = z.infer<typeof AssignmentReadingSchema>;
+
+export const AssignmentReadingsResponseSchema = z.object({
+  readings: z.array(AssignmentReadingSchema),
+});
+export type AssignmentReadingsResponse = z.infer<typeof AssignmentReadingsResponseSchema>;
+
 export const SeedTasksResponseSchema = z.object({
   created: z.number().int().nonnegative(),
   skipped: z.number().int().nonnegative(),
@@ -3421,6 +3634,13 @@ export const PullNextResponseSchema = z.object({
   assignment: AssignmentSummarySchema.nullable(),
 });
 export type PullNextResponse = z.infer<typeof PullNextResponseSchema>;
+
+export const ReleaseAssignmentResponseSchema = z.object({
+  assignmentId: z.string().uuid(),
+  taskId: z.string().uuid(),
+  releasedAt: z.string().datetime(),
+});
+export type ReleaseAssignmentResponse = z.infer<typeof ReleaseAssignmentResponseSchema>;
 
 export const SubmitAssignmentRequestSchema = z.object({
   /**

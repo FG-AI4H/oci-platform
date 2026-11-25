@@ -18,17 +18,28 @@ import type {
   CampaignTaskKind,
   GateTransitionAction,
   PullNextResponse,
+  ReleaseAssignmentResponse,
   SeedTaskItem,
+  SeedTasksFromDatasetResponse,
   SeedTasksResponse,
   SubmitAssignmentResponse,
   TaskSummary,
 } from '@oci/shared-types';
-import { evaluateCompleteness } from '@oci/shared-types';
+import {
+  answerViewProblems,
+  evaluateCompleteness,
+  fileSampleRef,
+  labelSubmissionProblems,
+  parseDicomSeriesSampleRef,
+} from '@oci/shared-types';
 // ANNOTATION_GATE_ROLES is the canonical gate → group mapping shared
 // with the web; `roleForGate` is the local typed accessor.
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
+import { DicomSeriesService } from '../storage/dicom-series.service.js';
+import { StorageService } from '../storage/storage.service.js';
 import { CampaignRepository } from './campaign.repository.js';
+import { readClassificationLabels } from './campaign.service.js';
 import { evaluateGate1Predicate } from './gate-irr-predicate.js';
 import { lookupGateTransition } from './gate-state-machine.js';
 import {
@@ -63,6 +74,13 @@ export class TaskService {
     @Inject(CampaignRepository) private readonly campaigns: CampaignRepository,
     @Inject(TaskRepository) private readonly tasks: TaskRepository,
     @Inject(TaskAbandonmentService) private readonly abandonment: TaskAbandonmentService,
+    @Inject(DicomSeriesService)
+    private readonly dicomSeries: Pick<
+      DicomSeriesService,
+      'listTaskSamples' | 'taskSampleImageIds'
+    >,
+    @Inject(StorageService)
+    private readonly storage: Pick<StorageService, 'authoriseDatasetBytes'>,
   ) {}
 
   // --- Seed --------------------------------------------------------------
@@ -73,19 +91,7 @@ export class TaskService {
   }): Promise<SeedTasksResponse> {
     const campaign = await this.campaigns.findBySlug(args.slug);
     if (!campaign) throw new NotFoundException(`Campaign '${args.slug}' not found`);
-
-    // Tasks can only be seeded once the campaign is past DRAFT.
-    // Allowing seed at READY lets a manager pre-load work before
-    // calling `start`; seeding at DRAFT would risk losing the tasks
-    // if the manager reverts.
-    if (campaign.status === 'DRAFT' || campaign.status === 'ARCHIVED') {
-      throw new ConflictException(
-        `Cannot seed tasks while campaign is ${campaign.status}; transition to READY or RUNNING first`,
-      );
-    }
-    if (campaign.status === 'COMPLETED') {
-      throw new ConflictException('Cannot seed tasks on a COMPLETED campaign');
-    }
+    assertCanSeed(campaign.status);
 
     // Normalise the union shape: a string ref is implicitly a non-gold
     // sample. Gold rows MUST carry a label — the supervisor IRR-vs-
@@ -111,6 +117,113 @@ export class TaskService {
       `seed: campaign=${campaign.slug} created=${result.created} skipped=${result.skipped} n=${n} gold=${goldCount}`,
     );
     return result;
+  }
+
+  /**
+   * One task per platform-hosted PNG / JPEG file, and one per DICOM
+   * series (#674), of the campaign's pinned dataset version (#646).
+   *
+   * The sample reference is a typed platform id, `file:<distribution
+   * id>` or `dicom-series:<series id>`, never the storage key: it goes
+   * into the audit trail and exports, and a key carries the file name.
+   * A series with a held image (ADR-0026) is not made into a task and
+   * is counted as `held`: a held file never reaches a reader.
+   *
+   * Idempotent: a sample that already has a task is `skipped`. `prefix`
+   * matches image file names and leaves series out; `limit` takes the
+   * first samples, image files in file-name order, then series. A dry
+   * run reports the counts and creates nothing, for the manager's
+   * confirmation step.
+   *
+   * ACCESS (#646, question 1). The manager who creates the tasks must be
+   * allowed to download the files, by the same rule as a download
+   * (`authoriseDatasetBytes`): a RESTRICTED dataset or an individually
+   * gated file needs the host, an admin or an approved access request.
+   * The campaign then stands as its readers' access, so readers need no
+   * request of their own. The dataset is checked before anything about
+   * its contents is read, a dry run included; the gated files among
+   * those selected are checked once the selection is known.
+   */
+  async seedFromDataset(args: {
+    slug: string;
+    prefix?: string;
+    limit?: number;
+    dryRun: boolean;
+    user: CognitoAccessTokenPayload;
+  }): Promise<SeedTasksFromDatasetResponse> {
+    const campaign = await this.campaigns.findBySlug(args.slug);
+    if (!campaign) throw new NotFoundException(`Campaign '${args.slug}' not found`);
+    assertCanSeed(campaign.status);
+    if (!campaign.manifestVersionId) {
+      throw new ConflictException(
+        'The campaign has no pinned dataset version, so there are no files to create tasks from',
+      );
+    }
+
+    await this.storage.authoriseDatasetBytes({
+      datasetId: campaign.datasetId,
+      requiresAccess: false,
+      user: args.user,
+    });
+
+    const prefix = args.prefix?.trim() ?? '';
+    const [images, series] = await Promise.all([
+      this.campaigns.findHostedImages(campaign.manifestVersionId),
+      prefix ? Promise.resolve([]) : this.dicomSeries.listTaskSamples(campaign.manifestVersionId),
+    ]);
+    // In file-name order, as the form and the API promise: the storage
+    // key starts with a random id per file, so its order is arbitrary
+    // and "at most N" would take an arbitrary N. The key breaks ties
+    // between two files of the same name.
+    const matchingImages = images
+      .map((f) => ({
+        id: f.id,
+        key: f.s3Key,
+        name: fileNameOf(f.s3Key),
+        requiresAccess: f.requiresAccess,
+      }))
+      .filter((f) => f.name.startsWith(prefix))
+      .sort((x, y) => compareCodeUnits(x.name, y.name) || compareCodeUnits(x.key, y.key));
+    const imageRefs = matchingImages.map((f) => fileSampleRef(f.id));
+    const seriesRefs = series.filter((c) => c.heldImageCount === 0).map((c) => c.sampleRef);
+    const held = series.length - seriesRefs.length;
+    const all = [...imageRefs, ...seriesRefs];
+    const refs = args.limit !== undefined ? all.slice(0, args.limit) : all;
+
+    // An individually gated file among those selected needs the
+    // download rule for gated files. Series never hold one: the series
+    // index leaves gated files out.
+    const selected = new Set(refs);
+    if (matchingImages.some((f) => f.requiresAccess && selected.has(fileSampleRef(f.id)))) {
+      await this.storage.authoriseDatasetBytes({
+        datasetId: campaign.datasetId,
+        requiresAccess: true,
+        user: args.user,
+      });
+    }
+
+    if (args.dryRun) {
+      const existing = await this.tasks.countExistingSampleRefs(campaign.id, refs);
+      return {
+        matched: refs.length,
+        created: refs.length - existing,
+        skipped: existing,
+        held,
+        dryRun: true,
+      };
+    }
+    if (refs.length === 0) return { matched: 0, created: 0, skipped: 0, held, dryRun: false };
+
+    const n = this.requireNAnnotators(campaign.workflowConfig);
+    const result = await this.tasks.seedTasks(
+      campaign.id,
+      n,
+      refs.map((sampleRef) => ({ sampleRef })),
+    );
+    this.logger.log(
+      `seed-from-dataset: campaign=${campaign.slug} matched=${refs.length} created=${result.created} skipped=${result.skipped} held=${held}`,
+    );
+    return { matched: refs.length, ...result, held, dryRun: false };
   }
 
   /**
@@ -158,6 +271,35 @@ export class TaskService {
       const submittedCount = submittedByKey.get(key) ?? 0;
       return toTaskSummary(row, submittedCount);
     });
+  }
+
+  // --- Current (read-only) ----------------------------------------------
+
+  /**
+   * The caller's in-flight assignment for this campaign at their gate,
+   * or null. Reserves nothing: the annotate page reads this on open and
+   * only "Start" pulls a task (#646), so visiting the page doesn't hold
+   * a slot other annotators could be reading.
+   */
+  async current(args: {
+    slug: string;
+    user: CognitoAccessTokenPayload;
+    userGroups: readonly string[];
+  }): Promise<PullNextResponse> {
+    const campaign = await this.campaigns.findBySlug(args.slug);
+    if (!campaign) throw new NotFoundException(`Campaign '${args.slug}' not found`);
+    const gate = this.gateFromGroups(args.userGroups);
+    if (!gate) {
+      throw new ForbiddenException(
+        'Caller has no annotation role group (annotator / arbitration-annotator / expert-reviewer)',
+      );
+    }
+    const existing = await this.tasks.findActiveAssignmentForUser({
+      campaignId: campaign.id,
+      gate,
+      assigneeUserId: cognitoSubAsUuid(args.user.sub),
+    });
+    return { assignment: existing ? toAssignmentSummary(existing, existing.task) : null };
   }
 
   // --- Next (router) -----------------------------------------------------
@@ -214,8 +356,12 @@ export class TaskService {
     await this.abandonment.expireStaleForCampaign({ campaign, nowMs });
 
     // The cap check, the pick and the new assignment share one
-    // transaction, so the slot count the pick sees is the one it fills.
+    // transaction, behind the campaign's pull lock: readers who press
+    // Start together are served one after another, so each counts the
+    // slots the previous one left and a task never gets more readers
+    // than it needs (#646 review, item 1).
     return this.tasks.inTransaction(async (tasks) => {
+      await tasks.lockCampaignPulls(campaign.id);
       // A concurrent pull by the same caller may have assigned since
       // the check above.
       const existing = await tasks.findActiveAssignmentForUser(activeArgs);
@@ -226,8 +372,8 @@ export class TaskService {
       // Bias-prevention 1.5× cap (ADR-0009 Decision 1 Predicate 4).
       // The router refuses to give this caller another independent
       // reading if doing so would push their per-campaign share above
-      // the soft ceiling. EXPIRED rows are excluded (abandonment
-      // doesn't burden the cap per ADR-0009 + #229). When the cap
+      // the soft ceiling. EXPIRED and RELEASED rows are excluded
+      // (abandonment and skips don't burden the cap per ADR-0009 + #229). When the cap
       // binds the task stays in the queue for another annotator. The
       // cap shares out independent readings only; arbitration and
       // expert review are single-reader gates it doesn't govern.
@@ -270,6 +416,48 @@ export class TaskService {
     });
   }
 
+  // --- Release (skip) ----------------------------------------------------
+
+  /**
+   * The assignee gives the task back unread (#646). The slot reopens
+   * at once for other annotators, and the router offers the caller
+   * other tasks before this one. Only the assignee may release, and
+   * only an assignment still in flight.
+   */
+  async release(args: {
+    assignmentId: string;
+    user: CognitoAccessTokenPayload;
+  }): Promise<ReleaseAssignmentResponse> {
+    const callerUserId = cognitoSubAsUuid(args.user.sub);
+    return this.tasks.inTransaction(async (tasks, tx) => {
+      const assignment = await tasks.findAssignmentById(args.assignmentId);
+      if (!assignment) throw new NotFoundException(`Assignment '${args.assignmentId}' not found`);
+      if (assignment.assigneeUserId !== callerUserId) {
+        throw new ForbiddenException('Assignment belongs to a different user');
+      }
+      if (assignment.status !== 'PENDING' && assignment.status !== 'IN_PROGRESS') {
+        throw new ConflictException(
+          `Assignment is ${assignment.status}; only an assignment in progress can be released`,
+        );
+      }
+      const campaign = await this.campaigns.findById(assignment.task.campaignId);
+      const released = await this.abandonment.release({
+        row: assignment,
+        campaignSlug: campaign?.slug ?? 'unknown',
+        tasks,
+        tx,
+      });
+      if (!released) {
+        throw new ConflictException('Assignment was submitted or expired while being released');
+      }
+      return {
+        assignmentId: assignment.id,
+        taskId: assignment.taskId,
+        releasedAt: new Date().toISOString(),
+      };
+    });
+  }
+
   // --- Submit ------------------------------------------------------------
 
   async submit(args: {
@@ -291,15 +479,26 @@ export class TaskService {
     if (assignment.status === 'EXPIRED') {
       throw new ConflictException('Assignment expired due to abandonment timeout; pull a new task');
     }
+    if (assignment.status === 'RELEASED') {
+      throw new ConflictException('Assignment was released; pull a new task');
+    }
     if (assignment.gateAtAssignment !== assignment.task.gateState) {
       // Task moved on while the caller was working. Slice 2 surfaces
       // a 409; slice 3 may auto-rollover with a notification.
-      throw new ConflictException(
-        `Task gate has advanced (assignment for ${assignment.gateAtAssignment}, task at ${assignment.task.gateState})`,
-      );
+      // The text names no step: telling a reader where the task went
+      // would say whether the others agreed (#646 review).
+      throw new ConflictException('This task no longer needs your answer; pull a new task');
     }
     if (assignment.task.gateState === 'COMPLETED' || assignment.task.gateState === 'SKIPPED') {
       throw new ConflictException(`Task is ${assignment.task.gateState}; submissions closed`);
+    }
+    // The router never gives an arbiter a task they read (#646); this
+    // holds the line for an assignment made before that rule.
+    if (
+      assignment.task.gateState === 'AWAITING_ARBITRATION' &&
+      (await this.tasks.hasReadTask(assignment.task.id, callerUserId))
+    ) {
+      throw new ForbiddenException('An arbiter cannot settle a task they read');
     }
 
     // Completeness check (#231). Read the parent campaign once for
@@ -329,6 +528,44 @@ export class TaskService {
         });
       }
     }
+    // A campaign with declared labels takes only `{ label, comment }`
+    // with one of them (#646), at every gate. The arbiter also gives
+    // the reason for the final label, stored with it as `reason`.
+    const labels =
+      campaignForSubmit?.taskKind === 'CLASSIFICATION'
+        ? readClassificationLabels(campaignForSubmit.workflowConfig)
+        : null;
+    if (labels) {
+      const problems = labelSubmissionProblems(labels, args.submission, {
+        reasonRequired: assignment.task.gateState === 'AWAITING_ARBITRATION',
+      });
+      if (problems.length > 0) {
+        throw new UnprocessableEntityException({
+          message: 'Submission does not match the campaign labels',
+          reasons: problems,
+          campaignSlug: campaignForSubmit?.slug ?? null,
+        });
+      }
+    }
+    // An answer about a DICOM series records what was on screen (#674):
+    // the image, by its place in the series, and the window. Checked
+    // against the series itself, so the record names an image the
+    // reader was given. An answer about anything else carries no view.
+    const sampleRef = assignment.task.sampleRef;
+    let seriesImageIds: string[] | null = null;
+    if (parseDicomSeriesSampleRef(sampleRef) !== null) {
+      const versionId = campaignForSubmit?.manifestVersionId;
+      if (!versionId) throw new ConflictException('The campaign has no pinned dataset version');
+      seriesImageIds = await this.dicomSeries.taskSampleImageIds({ sampleRef, versionId });
+    }
+    const viewProblems = answerViewProblems(args.submission.view, seriesImageIds);
+    if (viewProblems.length > 0) {
+      throw new UnprocessableEntityException({
+        message: 'Submission does not record what was on screen',
+        reasons: viewProblems,
+        campaignSlug: campaignForSubmit?.slug ?? null,
+      });
+    }
     const completenessMode = readCompletenessMode(campaignForSubmit?.workflowConfig);
     const completeness = evaluateCompleteness(
       (campaignForSubmit?.taskKind ?? 'CLASSIFICATION') as CampaignTaskKind,
@@ -348,113 +585,134 @@ export class TaskService {
       );
     }
 
-    const submitted = await this.tasks.markAssignmentSubmitted({
-      assignmentId: assignment.id,
-      submission: args.submission,
-      acknowledgedInstructionsVersion: args.acknowledgedInstructionsVersion ?? null,
-    });
-    if (!submitted) {
-      // Another pull expired the assignment, or a parallel submit
-      // landed, after the status checks above (#669 review).
-      throw new ConflictException(
-        'Assignment is no longer open (it expired or was already submitted); pull a new task',
-      );
-    }
-
-    const submittedCount = await this.tasks.countSubmittedAssignmentsAtGate(
-      assignment.task.id,
-      assignment.task.gateState,
-    );
-
-    const action = gateActionForSubmittedRole(assignment.assigneeRole);
-    if (!action) {
-      // Submission persisted, but the role doesn't correspond to a
-      // gate-advancing action. This shouldn't happen in slice 2 (the
-      // three known roles all map to actions); log and exit
-      // gracefully so the assignment row is still saved.
-      this.logger.warn(
-        `submit: assignee role '${assignment.assigneeRole}' has no gate action mapping`,
-      );
-      return {
+    const record = async (
+      tasks: TaskRepository,
+      singleAnswer: boolean,
+    ): Promise<SubmitAssignmentResponse> => {
+      const submitted = await tasks.markAssignmentSubmitted({
         assignmentId: assignment.id,
-        taskId: assignment.task.id,
-        newGateState: null,
-      };
-    }
+        submission: args.submission,
+        acknowledgedInstructionsVersion: args.acknowledgedInstructionsVersion ?? null,
+      });
+      if (!submitted) {
+        // Another pull expired the assignment, or a parallel submit
+        // landed, after the status checks above (#669 review).
+        throw new ConflictException(
+          'Assignment is no longer open (it expired or was already submitted); pull a new task',
+        );
+      }
 
-    // INDEPENDENT gate needs N submissions before advancing; the
-    // other gates advance on the single submission (per ADR-0008
-    // §gate-1/2/3 semantics and the state machine table).
-    if (
-      assignment.task.gateState === 'INDEPENDENT' &&
-      submittedCount < assignment.task.nAnnotatorsRequired
-    ) {
-      return {
-        assignmentId: assignment.id,
-        taskId: assignment.task.id,
-        newGateState: null,
-      };
-    }
-
-    // Slice-3 decision-box predicate (#215, ADR-0008): when the
-    // N-th independent submission lands AND N ≥ 2, compute IRR
-    // across all N submissions. If raters agreed above the
-    // campaign's threshold, route INDEPENDENT → COMPLETED instead
-    // of AWAITING_ARBITRATION.
-    let irrPassed = false;
-    if (
-      assignment.task.gateState === 'INDEPENDENT' &&
-      assignment.task.nAnnotatorsRequired >= 2 &&
-      action === 'independent-submitted'
-    ) {
-      // Re-use the campaign row read above for completeness; both
-      // paths need the same parent campaign + workflowConfig.
-      const campaign = campaignForSubmit;
-      const quality = readQualityConfig(campaign?.workflowConfig);
-      const taskKind = (campaign?.taskKind ?? 'CLASSIFICATION') as CampaignTaskKind;
-      const submissions = await this.tasks.submissionPayloadsAtGate(
+      const submittedCount = await tasks.countSubmittedAssignmentsAtGate(
         assignment.task.id,
-        'INDEPENDENT',
+        assignment.task.gateState,
       );
-      const result = evaluateGate1Predicate({ taskKind, quality, submissions });
-      irrPassed = result.passed;
-      this.logger.log(
-        `gate-1 decision: task=${assignment.task.id} ${result.reason} ` +
-          `(irr=${result.irr ?? 'n/a'}, metric=${result.metricApplied ?? 'n/a'}, threshold=${result.threshold})`,
-      );
-    }
 
-    const rule = lookupGateTransition(
-      assignment.task.gateState,
-      action,
-      assignment.task.nAnnotatorsRequired,
-      { irrPassed },
-    );
-    if (!rule) {
-      this.logger.warn(
-        `submit: no transition rule for gate=${assignment.task.gateState} action=${action}`,
+      const action = gateActionForSubmittedRole(assignment.assigneeRole);
+      if (!action) {
+        // Submission persisted, but the role doesn't correspond to a
+        // gate-advancing action. This shouldn't happen in slice 2 (the
+        // three known roles all map to actions); log and exit
+        // gracefully so the assignment row is still saved.
+        this.logger.warn(
+          `submit: assignee role '${assignment.assigneeRole}' has no gate action mapping`,
+        );
+        return {
+          assignmentId: assignment.id,
+          taskId: assignment.task.id,
+          newGateState: null,
+        };
+      }
+
+      // INDEPENDENT gate needs N submissions before advancing; the
+      // other gates advance on the single submission (per ADR-0008
+      // §gate-1/2/3 semantics and the state machine table).
+      if (
+        assignment.task.gateState === 'INDEPENDENT' &&
+        submittedCount < assignment.task.nAnnotatorsRequired
+      ) {
+        return {
+          assignmentId: assignment.id,
+          taskId: assignment.task.id,
+          newGateState: null,
+        };
+      }
+
+      // Slice-3 decision-box predicate (#215, ADR-0008): when the
+      // N-th independent submission lands AND N ≥ 2, compute IRR
+      // across all N submissions. If raters agreed above the
+      // campaign's threshold, route INDEPENDENT → COMPLETED instead
+      // of AWAITING_ARBITRATION.
+      let irrPassed = false;
+      if (
+        assignment.task.gateState === 'INDEPENDENT' &&
+        assignment.task.nAnnotatorsRequired >= 2 &&
+        action === 'independent-submitted'
+      ) {
+        // Re-use the campaign row read above for completeness; both
+        // paths need the same parent campaign + workflowConfig.
+        const campaign = campaignForSubmit;
+        const quality = readQualityConfig(campaign?.workflowConfig);
+        const taskKind = (campaign?.taskKind ?? 'CLASSIFICATION') as CampaignTaskKind;
+        const submissions = await tasks.submissionPayloadsAtGate(assignment.task.id, 'INDEPENDENT');
+        const result = evaluateGate1Predicate({ taskKind, quality, submissions });
+        irrPassed = result.passed;
+        this.logger.log(
+          `gate-1 decision: task=${assignment.task.id} ${result.reason} ` +
+            `(irr=${result.irr ?? 'n/a'}, metric=${result.metricApplied ?? 'n/a'}, threshold=${result.threshold})`,
+        );
+      }
+
+      const rule = lookupGateTransition(
+        assignment.task.gateState,
+        action,
+        assignment.task.nAnnotatorsRequired,
+        { irrPassed },
+      );
+      if (!rule) {
+        this.logger.warn(
+          `submit: no transition rule for gate=${assignment.task.gateState} action=${action}`,
+        );
+        return {
+          assignmentId: assignment.id,
+          taskId: assignment.task.id,
+          newGateState: null,
+        };
+      }
+
+      const moved = await tasks.updateGateState({
+        taskId: assignment.task.id,
+        expectedFrom: assignment.task.gateState,
+        to: rule.to,
+        ...(rule.stampCompletedAt ? { stampCompletedAt: true } : {}),
+      });
+      if (!moved && singleAnswer) {
+        // Another arbiter (or expert) settled the task first. Throwing
+        // rolls this answer back, so the task keeps one final label.
+        throw new ConflictException(
+          'This task was settled by someone else while you worked on it; pull a new task',
+        );
+      }
+      this.logger.log(
+        `submit: campaign-scoped task=${assignment.task.id} ${assignment.task.gateState}→${rule.to}`,
       );
       return {
         assignmentId: assignment.id,
         taskId: assignment.task.id,
-        newGateState: null,
+        newGateState: rule.to,
       };
-    }
-
-    await this.tasks.updateGateState({
-      taskId: assignment.task.id,
-      expectedFrom: assignment.task.gateState,
-      to: rule.to,
-      ...(rule.stampCompletedAt ? { stampCompletedAt: true } : {}),
-    });
-    this.logger.log(
-      `submit: campaign-scoped task=${assignment.task.id} ${assignment.task.gateState}→${rule.to}`,
-    );
-    return {
-      assignmentId: assignment.id,
-      taskId: assignment.task.id,
-      newGateState: rule.to,
     };
+
+    // Arbitration and expert review take one answer. Recording it and
+    // moving the task share a transaction: if another arbiter settled
+    // the task first, the gate update finds nothing to move and this
+    // answer is rolled back with a 409, so a task never carries two
+    // final labels (#646 review, item 2). Independent readings stay
+    // outside a transaction: each is committed before it counts the
+    // others, so of two last readers at least one sees both.
+    if (assignment.task.gateState !== 'INDEPENDENT') {
+      return this.tasks.inTransaction((tasks) => record(tasks, true));
+    }
+    return record(this.tasks, false);
   }
 
   // --- Helpers -----------------------------------------------------------
@@ -523,6 +781,32 @@ export class TaskService {
  * default an annotator gone for two days stops holding others back.
  */
 const ACTIVE_WINDOW_TIMEOUTS = 2;
+
+/**
+ * Tasks are seeded once the campaign is past DRAFT. Allowing seed at
+ * READY lets a manager pre-load work before calling `start`; seeding
+ * at DRAFT would risk losing the tasks if the manager reverts.
+ */
+function assertCanSeed(status: string): void {
+  if (status === 'DRAFT' || status === 'ARCHIVED') {
+    throw new ConflictException(
+      `Cannot seed tasks while campaign is ${status}; transition to READY or RUNNING first`,
+    );
+  }
+  if (status === 'COMPLETED') {
+    throw new ConflictException('Cannot seed tasks on a COMPLETED campaign');
+  }
+}
+
+/** Plain code-unit order: the same on every server, whatever its locale. */
+function compareCodeUnits(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** The file name at the end of a storage key. */
+function fileNameOf(key: string): string {
+  return key.slice(key.lastIndexOf('/') + 1);
+}
 
 function gateActionForSubmittedRole(role: string): GateTransitionAction | null {
   if (role === 'annotator') return 'independent-submitted';

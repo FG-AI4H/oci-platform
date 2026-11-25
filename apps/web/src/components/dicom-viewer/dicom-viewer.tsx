@@ -78,6 +78,29 @@ export interface DicomViewerProps {
    * last one as the answer's `view`.
    */
   onViewChange?: (view: DicomView | null) => void;
+  /**
+   * Where the viewer is shown, for what a message tells the reader to do
+   * next. On the dataset page they can close the viewer and download the
+   * files; on a task screen they can do neither, and skip the task
+   * instead. Defaults to the dataset page.
+   */
+  context?: DicomViewerContext;
+  /**
+   * A recorded view to show: the viewer goes to its image and sets its
+   * window and inversion, once the series is open. Each request is a
+   * new object, so asking for the same view twice shows it again after
+   * the reader has moved on.
+   */
+  showView?: DicomViewRequest | null;
+}
+
+export type DicomViewerContext = 'dataset' | 'task';
+
+/** What `showView` restores: the image by its place from 1, the window, inversion. */
+export interface DicomViewRequest {
+  position: number;
+  window: { width: number; center: number } | null;
+  inverted: boolean;
 }
 
 type Phase = 'starting' | 'ready' | 'failed';
@@ -98,7 +121,11 @@ type Failure =
 
 type Translate = ReturnType<typeof useTranslations<'DicomViewer'>>;
 
-function failureText(t: Translate, failure: Failure): { title: string; detail: string } {
+function failureText(
+  t: Translate,
+  failure: Failure,
+  context: DicomViewerContext,
+): { title: string; detail: string } {
   switch (failure.kind) {
     case 'empty':
       return { title: t('failure.emptyTitle'), detail: t('failure.emptyDetail') };
@@ -106,6 +133,7 @@ function failureText(t: Translate, failure: Failure): { title: string; detail: s
       return {
         title: t('failure.decoderTitle'),
         detail: t('failure.decoderDetail', {
+          context,
           position: failure.position + 1,
           syntax:
             failure.transferSyntaxUid === null
@@ -117,6 +145,7 @@ function failureText(t: Translate, failure: Failure): { title: string; detail: s
       return {
         title: t('failure.refusedTitle'),
         detail: t('failure.refusedDetail', {
+          context,
           position: failure.position + 1,
           syntax:
             failure.transferSyntaxUid === null
@@ -130,9 +159,9 @@ function failureText(t: Translate, failure: Failure): { title: string; detail: s
         detail: failure.reason === 'address' ? t('failure.openAddress') : t('failure.openNetwork'),
       };
     case 'changed':
-      return { title: t('failure.changedTitle'), detail: t('failure.changedDetail') };
+      return { title: t('failure.changedTitle'), detail: t('failure.changedDetail', { context }) };
     case 'start':
-      return { title: t('failure.startTitle'), detail: t('failure.startDetail') };
+      return { title: t('failure.startTitle'), detail: t('failure.startDetail', { context }) };
   }
 }
 
@@ -194,7 +223,13 @@ function releaseImages(): void {
   }
 }
 
-export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProps) {
+export function DicomViewer({
+  loadSeries,
+  label,
+  onViewChange,
+  context = 'dataset',
+  showView = null,
+}: DicomViewerProps) {
   const t = useTranslations('DicomViewer');
   const reactId = useId();
   const helpId = `${reactId}-help`;
@@ -571,6 +606,24 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
   }, []);
 
   const ready = phase === 'ready';
+
+  // A recorded view asked for from outside (an arbiter showing where a
+  // reader answered): its image, then its window and inversion. The
+  // window holds while the image loads.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    const goTo = goToRef.current;
+    if (!showView || !ready || !viewport || !goTo) return;
+    goTo(showView.position - 1);
+    if (showView.window) applyWindow(showView.window);
+    viewport.setProperties({ invert: showView.inverted });
+    setInverted(showView.inverted);
+    viewport.render();
+    // On a phone the answers sit below the viewer: bring it back into
+    // sight. Where it is already visible, nothing moves.
+    elementRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [showView, ready, applyWindow]);
+
   const activePreset = matchingPreset(windowSetting);
   const missingCount = failedPositions.size;
   const allLoaded = ready && loadedCount + missingCount >= count;
@@ -583,7 +636,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
       : drawnIndex !== index
         ? t('standInLoading', { index: index + 1 })
         : null;
-  const failureMessage = failure ? failureText(t, failure) : null;
+  const failureMessage = failure ? failureText(t, failure, context) : null;
 
   const view =
     ready && !failure
@@ -635,7 +688,7 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
           data-testid="dicom-viewport"
           data-view={view ? JSON.stringify(view) : undefined}
           onKeyDown={(event) => {
-            const action = actionForKey(event.key, event.shiftKey);
+            const action = actionForKey(event.key, event.shiftKey, event.code);
             if (!action || event.altKey || event.ctrlKey || event.metaKey) return;
             event.preventDefault();
             perform(action);
@@ -702,7 +755,9 @@ export function DicomViewer({ loadSeries, label, onViewChange }: DicomViewerProp
       </p>
       {ready && allLoaded && missingCount > 0 ? (
         <Alert tone="warning">
-          <AlertDescription>{t('missingAlert', { missing: missingCount, count })}</AlertDescription>
+          <AlertDescription>
+            {t('missingAlert', { context, missing: missingCount, count })}
+          </AlertDescription>
         </Alert>
       ) : null}
 

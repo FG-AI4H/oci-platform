@@ -147,6 +147,34 @@ export const DicomViewSchema = z
   });
 export type DicomView = z.infer<typeof DicomViewSchema>;
 
+/**
+ * Check the `view` of an answer against the task's sample (#674).
+ *
+ * An answer about a series must say what was on screen: the reader's
+ * slice and window are part of the record. `imageIds` is the series'
+ * images as distribution ids in display order; `null` when the sample
+ * is not a series, and then an answer carries no view. Returns the
+ * reasons it is refused; empty when it is accepted.
+ */
+export function answerViewProblems(view: unknown, imageIds: readonly string[] | null): string[] {
+  if (imageIds === null) {
+    return view === undefined ? [] : ['an answer on an image carries no view'];
+  }
+  if (view === undefined) {
+    return ['an answer on a series says which image was on screen (view)'];
+  }
+  const parsed = DicomViewSchema.safeParse(view);
+  if (!parsed.success) return ['view is not a valid record of the screen'];
+  const { distributionId, position, imageCount } = parsed.data;
+  if (imageCount !== imageIds.length) {
+    return [`view counts ${imageCount} images; the series has ${imageIds.length}`];
+  }
+  if (imageIds[position - 1] !== distributionId) {
+    return [`view names an image that is not image ${position} of this series`];
+  }
+  return [];
+}
+
 /** What the built-in viewer needs of a series, wherever it comes from. */
 export type DicomViewerSeries = Pick<DicomSeriesDetail, 'modality' | 'expiresAt' | 'instances'>;
 

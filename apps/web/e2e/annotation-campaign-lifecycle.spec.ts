@@ -68,6 +68,8 @@ async function createDraft(page: Page, slug: string) {
   if (!license) throw new Error(`No output license allowed for terms ${SEED_DATASET_TERMS}`);
   await page.getByLabel('Output license').selectOption(license);
 
+  // A CLASSIFICATION campaign declares its labels (#646).
+  await page.getByRole('textbox', { name: 'Labels' }).fill('Normal\nAbnormal');
   await page.getByRole('button', { name: /create draft/i }).click();
   await expect(page).toHaveURL(new RegExp(`/annotation/campaigns/${slug}$`));
 }

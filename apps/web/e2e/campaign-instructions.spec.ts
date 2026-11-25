@@ -364,6 +364,7 @@ test.describe('annotating under published instructions (#555)', () => {
     // A fresh annotator per run, so pull-next hands out a new task.
     await signInAs(page, `ack-${Date.now()}`, 'annotator');
     await page.goto(ANNOTATE, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: /^start$/i }).click();
     await expect(page.getByRole('heading', { name: /your current task/i })).toBeVisible();
     const ack = page.getByRole('checkbox', { name: new RegExp(`version ${v1}`) });
     await expect(ack).not.toBeChecked();
@@ -373,11 +374,8 @@ test.describe('annotating under published instructions (#555)', () => {
 
     // Unconfirmed: the browser blocks the submit.
     const submit = page.getByRole('button', { name: /^submit$/i });
-    const submitted = page
-      .getByText(/submission counted|gate advanced/i)
-      // A successful submit re-renders the page; with no task left for
-      // this annotator it shows the empty queue instead of the form.
-      .or(page.getByRole('heading', { name: 'All caught up' }));
+    // A successful submit returns to the queue with a notice.
+    const submitted = page.getByText('Your annotation was saved.');
     await submit.click();
     expect(await ack.evaluate((el: HTMLInputElement) => el.validity.valueMissing)).toBe(true);
     await expect(submitted).toHaveCount(0);
@@ -439,6 +437,17 @@ test.describe('annotating under published instructions (#555)', () => {
       await page.emulateMedia({ colorScheme });
       await signInAs(page, `ack-axe-${Date.now()}`, 'annotator');
       await page.goto(ANNOTATE, { waitUntil: 'networkidle' });
+      // The queue before Start (#646) …
+      const before = await new AxeBuilder({ page })
+        .include('main')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
+        .analyze();
+      expect(
+        before.violations.map((v) => `${v.impact}: ${v.id} (${v.nodes.length})`),
+        'axe violations before Start',
+      ).toEqual([]);
+      // … and the task with its checkbox.
+      await page.getByRole('button', { name: /^start$/i }).click();
       await expect(
         page.getByRole('checkbox', { name: /I have read the current instructions/ }),
       ).toBeVisible();

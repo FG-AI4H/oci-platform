@@ -9,6 +9,7 @@ interface TasksMock {
   findAbandonmentCandidates: ReturnType<typeof vi.fn>;
   findStaleAssignmentsForCampaign: ReturnType<typeof vi.fn>;
   markAssignmentExpired: ReturnType<typeof vi.fn>;
+  markAssignmentReleased: ReturnType<typeof vi.fn>;
 }
 
 interface AuditMock {
@@ -76,6 +77,7 @@ beforeEach(() => {
     findAbandonmentCandidates: vi.fn(),
     findStaleAssignmentsForCampaign: vi.fn().mockResolvedValue([]),
     markAssignmentExpired: vi.fn().mockResolvedValue(true),
+    markAssignmentReleased: vi.fn().mockResolvedValue(true),
   };
   audit = {
     emit: vi.fn().mockResolvedValue(undefined),
@@ -214,5 +216,59 @@ describe('TaskAbandonmentService.expireStaleForCampaign (#647)', () => {
     audit.emitSync.mockRejectedValueOnce(new Error('audit down'));
 
     await expect(run()).rejects.toThrow('audit down');
+  });
+});
+
+describe('TaskAbandonmentService.release (#646)', () => {
+  const TX = { tx: true };
+
+  it('releases and writes the audit row in the same transaction', async () => {
+    const row = candidate({ id: 'asn-skip', assignedAtMs: NOW - HOUR_MS, status: 'PENDING' });
+
+    const ok = await service.release({
+      row,
+      campaignSlug: 'pilot',
+      tasks: tasks as unknown as TaskRepository,
+      tx: TX as never,
+    });
+
+    expect(ok).toBe(true);
+    expect(tasks.markAssignmentReleased).toHaveBeenCalledWith('asn-skip');
+    expect(audit.emitSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        module: 'annotation',
+        action: 'task.assignment.released',
+        subjectId: 'asn-skip',
+        payload: expect.objectContaining({ campaignSlug: 'pilot', previousStatus: 'PENDING' }),
+      }),
+      TX,
+    );
+  });
+
+  it('writes no audit row when the release lost a race', async () => {
+    tasks.markAssignmentReleased.mockResolvedValue(false);
+
+    const ok = await service.release({
+      row: candidate({ assignedAtMs: NOW }),
+      campaignSlug: 'pilot',
+      tasks: tasks as unknown as TaskRepository,
+      tx: TX as never,
+    });
+
+    expect(ok).toBe(false);
+    expect(audit.emitSync).not.toHaveBeenCalled();
+  });
+
+  it('propagates an audit failure so the transaction rolls the release back', async () => {
+    audit.emitSync.mockRejectedValue(new Error('audit down'));
+
+    await expect(
+      service.release({
+        row: candidate({ assignedAtMs: NOW }),
+        campaignSlug: 'pilot',
+        tasks: tasks as unknown as TaskRepository,
+        tx: TX as never,
+      }),
+    ).rejects.toThrow('audit down');
   });
 });

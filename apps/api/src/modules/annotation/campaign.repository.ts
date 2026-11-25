@@ -8,6 +8,7 @@ import type {
   CampaignStatus as PrismaStatus,
   CampaignTaskKind as PrismaTaskKind,
 } from '@oci/database';
+import type { CampaignWorkflowConfig } from '@oci/shared-types';
 
 /**
  * Phase B.A.1 — Campaign repository. Only the create + read paths the
@@ -131,6 +132,65 @@ export class CampaignRepository {
     });
   }
 
+  /**
+   * The platform-hosted image files of one dataset version (#646):
+   * bytes in our bucket, upload complete, PNG or JPEG. Ordered by
+   * storage key so a `limit` takes a stable slice. The key is read only
+   * to filter and order; a task stores the distribution id.
+   */
+  async findHostedImages(
+    datasetVersionId: string,
+  ): Promise<Array<{ id: string; s3Key: string; contentType: string; requiresAccess: boolean }>> {
+    const rows = await this.prisma.client.distribution.findMany({
+      where: {
+        datasetVersionId,
+        storageBackend: 'S3',
+        uploadStatus: 'READY',
+        contentType: { in: [...HOSTED_IMAGE_TYPES] },
+        s3Key: { not: null },
+        s3Bucket: { not: null },
+      },
+      select: { id: true, s3Key: true, contentType: true, requiresAccess: true },
+      // Stable order only; the caller sorts by file name.
+      orderBy: { s3Key: 'asc' },
+    });
+    return rows.flatMap((r) =>
+      r.s3Key
+        ? [
+            {
+              id: r.id,
+              s3Key: r.s3Key,
+              contentType: r.contentType,
+              requiresAccess: r.requiresAccess,
+            },
+          ]
+        : [],
+    );
+  }
+
+  /**
+   * The hosted image file a `file:<distribution id>` sample reference
+   * points at (#646), within the campaign's pinned version. Null when
+   * the id is not a hosted PNG / JPEG of that version.
+   */
+  async findHostedImageFile(
+    datasetVersionId: string,
+    distributionId: string,
+  ): Promise<{ s3Bucket: string; s3Key: string; contentType: string } | null> {
+    const row = await this.prisma.client.distribution.findFirst({
+      where: {
+        id: distributionId,
+        datasetVersionId,
+        storageBackend: 'S3',
+        uploadStatus: 'READY',
+        contentType: { in: [...HOSTED_IMAGE_TYPES] },
+      },
+      select: { s3Bucket: true, s3Key: true, contentType: true },
+    });
+    if (!row?.s3Bucket || !row.s3Key) return null;
+    return { s3Bucket: row.s3Bucket, s3Key: row.s3Key, contentType: row.contentType };
+  }
+
   async create(args: {
     slug: string;
     name: string;
@@ -140,7 +200,7 @@ export class CampaignRepository {
     manifestVersionId: string | null;
     toolIntegrationId: string;
     outputLicense: PrismaOutputLicense;
-    workflowConfig: { nAnnotators: number };
+    workflowConfig: CampaignWorkflowConfig | { nAnnotators: number };
     createdById: string;
   }): Promise<AnnotationCampaign & { toolIntegration: AnnotationToolIntegration }> {
     return this.prisma.client.annotationCampaign.create({
@@ -273,3 +333,6 @@ export class CampaignRepository {
     });
   }
 }
+
+/** Image types `tasks/from-dataset` makes one task per file of (#646). */
+export const HOSTED_IMAGE_TYPES = ['image/png', 'image/jpeg'] as const;

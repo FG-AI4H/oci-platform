@@ -10,7 +10,7 @@
     "allLoaded": "All {count} images loaded",
     "someMissing": "{loaded} of {count} images loaded, {missing} could not be loaded"
   },
-  "missingAlert": "{missing} of {count} images could not be loaded. Each one says so when you reach it. Close the viewer and open the series again to retry.",
+  "missingAlert": "{missing} of {count} images could not be loaded. Each one says so when you reach it. {context, select, task {Reload the page to retry.} other {Close the viewer and open the series again to retry.}}",
   "standInFailed": "Image {index} could not be loaded",
   "standInLoading": "Loading image {index}…",
   "windowReadout": "W {width} · L {center}",
@@ -45,16 +45,21 @@
     "emptyTitle": "Nothing to show",
     "emptyDetail": "This series has no image you can open.",
     "decoderTitle": "The viewer cannot decode this series",
-    "decoderDetail": "Image {position} is stored as {syntax}, a compression this viewer has no decoder for. Download the files to open them in another viewer.",
+    "decoderDetail": "Image {position} is stored as {syntax}, a compression this viewer has no decoder for. {context, select, task {Skip this task and tell the campaign manager.} other {Download the files to open them in another viewer.}}",
     "refusedTitle": "The viewer cannot show this series faithfully",
-    "refusedDetail": "Image {position} is stored as {syntax}, a compression this viewer decodes with errors in the grey levels. Download the files to open them in another viewer.",
+    "refusedDetail": "Image {position} is stored as {syntax}, a compression this viewer decodes with errors in the grey levels. {context, select, task {Skip this task and tell the campaign manager.} other {Download the files to open them in another viewer.}}",
     "openTitle": "The series could not be opened",
     "openAddress": "Storage refused the file. It may no longer be available to you; reload the page and try again.",
     "openNetwork": "The first image could not be fetched from storage. Check your connection and try again.",
     "changedTitle": "The series changed",
-    "changedDetail": "Its files are no longer the ones that were being shown. Close the viewer and open the series again.",
+    "changedDetail": "Its files are no longer the ones that were being shown. {context, select, task {Reload the page.} other {Close the viewer and open the series again.}}",
     "startTitle": "The viewer could not start",
-    "startDetail": "The series could not be loaded. Reload the page and try again; if it keeps failing, download the files instead.",
+    "startDetail": "The series could not be loaded. Reload the page and try again; if it keeps failing, {context, select, task {skip this task and tell the campaign manager.} other {download the files instead.}}",
     "transferSyntaxUnknown": "not stated in the file"
+  },
+  "readerView": {
+    "summary": "Image {position} of {count}",
+    "inverted": "inverted",
+    "show": "Show image {position}"
   }
 }

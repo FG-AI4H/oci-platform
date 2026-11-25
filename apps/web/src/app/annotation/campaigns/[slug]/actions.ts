@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { getTranslations } from 'next-intl/server';
 import {
   CampaignTransitionActionSchema,
   type CampaignTransitionAction,
@@ -25,17 +26,22 @@ export async function transitionCampaignAction(
   formData: FormData,
 ): Promise<TransitionState> {
   const session = await sessionForAction();
+  const [t, tc, common] = await Promise.all([
+    getTranslations('Campaign.transitions'),
+    getTranslations('Campaign'),
+    getTranslations('Common'),
+  ]);
   if (!session?.user || !isCampaignManager(session)) {
-    return { status: 'error', message: 'Only campaign managers can transition campaigns.' };
+    return { status: 'error', message: t('onlyManagers') };
   }
 
   const slug = String(formData.get('slug') ?? '');
-  if (!slug) return { status: 'error', message: 'Missing campaign slug.' };
+  if (!slug) return { status: 'error', message: tc('seedActions.missingSlug') };
 
   const actionRaw = String(formData.get('action') ?? '');
   const actionParse = CampaignTransitionActionSchema.safeParse(actionRaw);
   if (!actionParse.success) {
-    return { status: 'error', message: `Unknown action: ${actionRaw}` };
+    return { status: 'error', message: t('unknownAction', { action: actionRaw }) };
   }
   const action: CampaignTransitionAction = actionParse.data;
 
@@ -44,7 +50,7 @@ export async function transitionCampaignAction(
     typeof reasonRaw === 'string' && reasonRaw.trim().length > 0 ? reasonRaw.trim() : undefined;
 
   const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-  if (!base) return { status: 'error', message: 'NEXT_PUBLIC_API_BASE_URL not set in web env.' };
+  if (!base) return { status: 'error', message: common('apiBaseUrlMissing') };
 
   const res = await fetchAsUser(
     `${base}/v2/annotation/campaigns/${encodeURIComponent(slug)}/transitions`,
@@ -59,11 +65,18 @@ export async function transitionCampaignAction(
   );
 
   if (!res.ok) {
+    // A sentence in the manager's language; the API's body goes to the log.
     const body = await res.text().catch(() => '');
-    return {
-      status: 'error',
-      message: `API ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
-    };
+    console.warn(`campaign transition: API answered ${res.status}: ${body.slice(0, 300)}`);
+    const message =
+      res.status === 403
+        ? t('forbidden')
+        : res.status === 404
+          ? tc('seedActions.campaignNotFound')
+          : res.status === 409 || res.status === 400
+            ? t('notAllowed')
+            : tc('seedActions.serverError', { status: res.status });
+    return { status: 'error', message };
   }
 
   const detail = (await res.json()) as CampaignDetail;
@@ -73,6 +86,6 @@ export async function transitionCampaignAction(
 
   return {
     status: 'success',
-    message: `Campaign is now ${detail.status.toLowerCase()}.`,
+    message: t('nowStatus', { status: tc(`status.${detail.status}`) }),
   };
 }
