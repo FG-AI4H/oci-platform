@@ -32,6 +32,7 @@
     "classesTerm": "Classes",
     "classes": "<num>{n}</num> <muted>(label 0 to {top})</muted>"
   },
+  "evidenceSummary": "Evidence summary",
   "allResults": "All results for this task",
   "submitAnother": "Submit another file",
   "submit": "Submit predictions",
@@ -52,5 +53,18 @@
     "version": "version {version}",
     "notAttributed": "not attributed yet",
     "notAttributedBody": "This result is not linked to a version of an evaluation method, so there is no review status to show and it is not part of published reporting."
+  },
+  "modelCard": {
+    "title": "Model card",
+    "description": "The model this result is evidence for. A linked result is listed on that model’s card.",
+    "version": "version {version}",
+    "status": "{status, select, DRAFT {Draft, not reviewed yet} SUBMITTED {Submitted for review} PUBLISHED {Published} WITHDRAWN {Withdrawn} other {{status}}}",
+    "none": "No model card linked.",
+    "noneShown": "No model card is shown: none is linked, or the linked card is not published yet.",
+    "saved": {
+      "linked": "The model card is linked.",
+      "unlinked": "The link to the model card is removed.",
+      "unchanged": "Nothing changed: this is the card already linked."
+    }
   }
 }

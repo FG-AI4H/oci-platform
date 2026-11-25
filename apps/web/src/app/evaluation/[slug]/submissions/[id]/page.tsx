@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { Session } from 'next-auth';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { notFound, redirect, unstable_rethrow } from 'next/navigation';
@@ -24,7 +25,9 @@ import type {
   BinaryDiagnosticScores,
   ClassMetrics,
   EvaluationSubmissionDetail,
+  ModelCardStatus,
   ScoreAttribution,
+  SubmissionModelCard,
   SubmissionStatus,
 } from '@oci/shared-types';
 import { auth } from '../../../../../auth';
@@ -40,9 +43,16 @@ import {
   describeAttribution,
   ReviewStatusBadge,
 } from '../../../../../components/evaluation/review-status-badge';
+import {
+  modelCardOptions,
+  type ModelCardOption,
+} from '../../../../../components/evaluation/model-card-choice';
 import { getEvaluationI18n } from '../../../../../components/evaluation/server-i18n';
 import { SubgroupResultsCard } from '../../../../../components/evaluation/subgroup-results';
 import { ApiError, apiFetch, reauthUrl } from '../../../../../lib/api';
+import { canReadEvidenceSummary } from '../../../../../lib/groups';
+import { myModelCards } from '../../../../../lib/model-card-viewer';
+import { LinkModelCardForm } from './model-card-form';
 
 /**
  * One submission's own page (#645): its metrics, the per-class table where the
@@ -53,9 +63,10 @@ import { ApiError, apiFetch, reauthUrl } from '../../../../../lib/api';
  * administrators; for anyone else the API answers 404 and so does this page.
  * The session's token is forwarded server-side so the submitter is recognised.
  *
- * Not here yet, on purpose: the link to the submitter's model card and the
- * link to the evidence summary. Both depend on work that has not landed, and a
- * link to nothing is worse than no link.
+ * The model card the result is evidence for (#587), when the reader may see
+ * it, and for the submitter a form to link, change or remove it. A link to
+ * the evidence summary (#652) for those who may read it: the submitter,
+ * administrators, evaluation reviewers and regulators.
  *
  * Text in the interface language (#654): `EvaluationSubmission` and the
  * shared `Evaluation` vocabulary. The failure reason comes from the scoring
@@ -71,6 +82,17 @@ const STATUS_TONE: Record<SubmissionStatus, 'success' | 'info' | 'danger'> = {
   PENDING: 'info',
   FAILED: 'danger',
 };
+
+const MODEL_CARD_TONE: Record<ModelCardStatus, 'neutral' | 'info' | 'success' | 'warning'> = {
+  DRAFT: 'neutral',
+  SUBMITTED: 'info',
+  PUBLISHED: 'success',
+  WITHDRAWN: 'warning',
+};
+
+/** What the page says after the link form saved (`?modelCard=`). */
+const SAVED = ['linked', 'unlinked', 'unchanged'] as const;
+type Saved = (typeof SAVED)[number];
 
 const LINK =
   'rounded font-medium text-[var(--color-primary)] underline underline-offset-2 hover:text-[var(--color-primary-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-ring)]';
@@ -98,9 +120,9 @@ export async function generateMetadata({
 async function loadSubmission(
   slug: string,
   id: string,
+  session: Session | null,
 ): Promise<EvaluationSubmissionDetail | null> {
   const path = `/v2/evaluation/tasks/${encodeURIComponent(slug)}/submissions/${id}`;
-  const session = await auth();
   try {
     return await apiFetch<EvaluationSubmissionDetail>(path, { session, revalidate: 0 });
   } catch (err) {
@@ -113,10 +135,13 @@ async function loadSubmission(
 
 export default async function SubmissionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string; id: string }>;
+  searchParams: Promise<{ modelCard?: string | string[] }>;
 }) {
-  const { slug, id } = await params;
+  const [{ slug, id }, query] = await Promise.all([params, searchParams]);
+  const saved = SAVED.find((s) => s === query.modelCard) ?? null;
   // Anything that is not a submission id is not found, without asking the API.
   if (!UUID.test(id)) notFound();
   const [t, i18n] = await Promise.all([
@@ -125,10 +150,11 @@ export default async function SubmissionPage({
   ]);
   const { f } = i18n;
 
+  const session = await auth();
   let submission: EvaluationSubmissionDetail | null = null;
   let error: string | null = null;
   try {
-    submission = await loadSubmission(slug, id);
+    submission = await loadSubmission(slug, id, session);
   } catch (err) {
     // `redirect()` works by throwing; let it through.
     unstable_rethrow(err);
@@ -152,7 +178,13 @@ export default async function SubmissionPage({
   if (!submission) notFound();
 
   const { task, scores, attribution, failure } = submission;
+  // The submitter's own cards, for the link form. Nobody else is offered one.
+  const mine = submission.viewerIsSubmitter ? await myModelCards(session) : null;
+  const cardOptions: ModelCardOption[] | null = mine
+    ? modelCardOptions(mine.items, submission.modelCard)
+    : null;
   const taskHref = `/evaluation/${encodeURIComponent(task.slug)}` as const;
+  const evidenceHref = `${taskHref}/submissions/${submission.id}/evidence`;
   const cells = metricCells(i18n, task, scores);
   const perClass = scores?.kind === 'CLASSIFICATION' ? scores.metrics.perClass : null;
   const binary = scores?.kind === 'BINARY_DIAGNOSTIC' ? scores.metrics : null;
@@ -270,6 +302,22 @@ export default async function SubmissionPage({
 
           {attribution ? <MethodCard attribution={attribution} t={t} i18n={i18n} /> : null}
 
+          <ModelCardSection
+            card={submission.modelCard}
+            viewerIsSubmitter={submission.viewerIsSubmitter}
+            saved={saved}
+            t={t}
+          >
+            {submission.viewerIsSubmitter ? (
+              <LinkModelCardForm
+                slug={task.slug}
+                submissionId={submission.id}
+                options={cardOptions}
+                currentModelCardId={submission.modelCard?.id ?? ''}
+              />
+            ) : null}
+          </ModelCardSection>
+
           <Card>
             <CardHeader>
               <CardTitle as="h2">{t('task.title')}</CardTitle>
@@ -330,6 +378,11 @@ export default async function SubmissionPage({
           </Card>
 
           <p className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            {canReadEvidenceSummary(session, submission.viewerIsSubmitter) ? (
+              <Link href={evidenceHref} className={LINK}>
+                {t('evidenceSummary')}
+              </Link>
+            ) : null}
             <Link href={taskHref} className={LINK}>
               {t('allResults')}
             </Link>
@@ -340,6 +393,64 @@ export default async function SubmissionPage({
         </Section>
       </Container>
     </>
+  );
+}
+
+/**
+ * The model card this result is evidence for (#587): its identifier and
+ * version, linking to its page, and its status. `card` is `null` when none is
+ * linked and also when the reader may not see the linked one (a card not yet
+ * published), so only the submitter is told plainly that there is none.
+ * `children` is the submitter's link form.
+ */
+function ModelCardSection({
+  card,
+  viewerIsSubmitter,
+  saved,
+  t,
+  children,
+}: {
+  card: SubmissionModelCard | null;
+  viewerIsSubmitter: boolean;
+  saved: Saved | null;
+  t: SubmissionT;
+  children: ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle as="h2">{t('modelCard.title')}</CardTitle>
+        <CardDescription>{t('modelCard.description')}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {card ? (
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+            <Link
+              href={`/models/${encodeURIComponent(card.slug)}`}
+              className={`${LINK} break-all font-mono text-xs`}
+            >
+              {card.slug}
+            </Link>
+            <span className="font-mono text-xs text-[var(--color-muted-foreground)]">
+              {t('modelCard.version', { version: card.version })}
+            </span>
+            <Badge tone={MODEL_CARD_TONE[card.status]}>
+              {t('modelCard.status', { status: card.status })}
+            </Badge>
+          </p>
+        ) : (
+          <p className="text-sm text-[var(--color-muted-foreground)]">
+            {viewerIsSubmitter ? t('modelCard.none') : t('modelCard.noneShown')}
+          </p>
+        )}
+        {saved ? (
+          <p role="status" className="text-sm font-medium text-[var(--color-foreground)]">
+            {t(`modelCard.saved.${saved}`)}
+          </p>
+        ) : null}
+        {children}
+      </CardContent>
+    </Card>
   );
 }
 

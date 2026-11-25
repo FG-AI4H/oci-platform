@@ -32,6 +32,7 @@
     "classesTerm": "Classes",
     "classes": "<num>{n}</num> <muted>(étiquettes 0 à {top})</muted>"
   },
+  "evidenceSummary": "Synthèse des preuves",
   "allResults": "Tous les résultats de cette tâche",
   "submitAnother": "Soumettre un autre fichier",
   "submit": "Soumettre des prédictions",
@@ -52,5 +53,18 @@
     "version": "version {version}",
     "notAttributed": "pas encore attribué",
     "notAttributedBody": "Ce résultat n’est rattaché à aucune version d’une méthode d’évaluation : il n’a donc pas de statut de revue à afficher et ne fait pas partie des rapports publiés."
+  },
+  "modelCard": {
+    "title": "Fiche de modèle",
+    "description": "Le modèle dont ce résultat est une preuve. Un résultat lié figure sur la fiche de ce modèle.",
+    "version": "version {version}",
+    "status": "{status, select, DRAFT {Brouillon, pas encore relu} SUBMITTED {Soumise pour relecture} PUBLISHED {Publiée} WITHDRAWN {Retirée} other {{status}}}",
+    "none": "Aucune fiche de modèle liée.",
+    "noneShown": "Aucune fiche de modèle n’est affichée : aucune n’est liée, ou la fiche liée n’est pas encore publiée.",
+    "saved": {
+      "linked": "La fiche de modèle est liée.",
+      "unlinked": "Le lien vers la fiche de modèle est supprimé.",
+      "unchanged": "Rien n’a changé : c’est déjà la fiche liée."
+    }
   }
 }
