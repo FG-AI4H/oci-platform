@@ -4,7 +4,7 @@ This is the first-time flow: from "I've been invited to a campaign" to "I've jus
 
 ## 1. Sign in
 
-The OCI uses Amazon Cognito for sign-in. Your account was created by the campaign manager (or your institution's GI-AI4H contact) and you'll have been notified by email.
+The OCI uses Amazon Cognito for sign-in. Your account was created by an administrator of the platform, who sent you an email with a temporary password (the first time you sign in, you choose your own), or you created it yourself on the sign-in page. A campaign manager cannot create accounts.
 
 - The web app lives at `https://oci.ai4h.net` in production, `https://int.oci.ai4h.net` for integration, and `https://dev.oci.ai4h.net` for development. The campaign manager will tell you which one to use.
 - MFA is required for the `annotator` role only in **prod** (per the platform security baseline). Set it up on first login — the platform walks you through it.
