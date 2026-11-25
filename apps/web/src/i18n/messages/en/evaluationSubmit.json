@@ -30,6 +30,31 @@
   "missingSummary": "{count, plural, one {{n} item has} other {{n} items have}} no prediction. That is allowed.",
   "missingBody": "They are left out of the scoring and show as lower coverage in the result.",
   "andMore": "and {n} more.",
+  "modelCard": {
+    "label": "Model card",
+    "none": "No model card",
+    "option": "{slug}, version {version} ({status, select, DRAFT {draft, not reviewed yet} SUBMITTED {submitted for review} PUBLISHED {published} WITHDRAWN {withdrawn} other {{status}}})",
+    "hint": "Optional: the model this result is evidence for, listed on its card. Used only when you submit for scoring; you can change it on the result page.",
+    "noCards": "You have not declared a model yet. <link>Declare a model</link> to list its results on its card; you can link this result to it afterwards, from the result page.",
+    "unavailable": "Your model cards could not be read just now. You can submit without one and link the result to a card afterwards, from the result page.",
+    "invalid": "Choose a model card from the list, or “No model card”.",
+    "refused": {
+      "notFound": "This model card no longer exists. Choose another, or “No model card”.",
+      "notYours": "Only the participant who declared a model card can link results to it.",
+      "withdrawn": "This model card has been withdrawn and takes no new results. Choose another, or “No model card”."
+    },
+    "link": {
+      "label": "Linked card",
+      "hint": "Choose “No model card” to remove the link.",
+      "save": "Save",
+      "saving": "Saving…",
+      "errorTitle": "The model card was not changed",
+      "notAllowed": "Only the participant who made this submission can change its model card, and only to a card they declared.",
+      "submissionMissing": "This submission could not be found. Reload the page.",
+      "invalid": "This request is not valid. Reload the page and try again.",
+      "serviceError": "The platform answered with an error ({status}). Try again in a moment."
+    }
+  },
   "action": {
     "taskMissing": "This evaluation task does not exist.",
     "notConfigured": "The scoring service is not configured on this environment.",
@@ -51,6 +76,12 @@
     "refused": "Not scored: {reason}. None of your scored submissions was used.",
     "refusedFallback": "the scoring service refused the file",
     "tooLargeForService": "Not submitted: the file is too large for the scoring service.",
-    "serviceError": "Not submitted: the scoring service answered with an error ({status})."
+    "serviceError": "Not submitted: the scoring service answered with an error ({status}).",
+    "modelCardInvalid": "Not submitted: choose a model card from the list, or “No model card”.",
+    "modelCard": {
+      "notFound": "Not submitted: the chosen model card no longer exists. Nothing was scored and none of your scored submissions was used.",
+      "notYours": "Not submitted: a result can only be linked to a model card you declared. Nothing was scored and none of your scored submissions was used.",
+      "withdrawn": "Not submitted: the chosen model card has been withdrawn and takes no new results. Nothing was scored and none of your scored submissions was used."
+    }
   }
 }

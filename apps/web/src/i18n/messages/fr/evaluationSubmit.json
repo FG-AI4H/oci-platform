@@ -30,6 +30,31 @@
   "missingSummary": "{count, plural, one {{n} élément n’a pas de prédiction} other {{n} éléments n’ont pas de prédiction}}. C’est autorisé.",
   "missingBody": "Ils sont exclus de la notation et apparaissent comme une couverture réduite dans le résultat.",
   "andMore": "et {n} de plus.",
+  "modelCard": {
+    "label": "Fiche de modèle",
+    "none": "Aucune fiche de modèle",
+    "option": "{slug}, version {version} ({status, select, DRAFT {brouillon, pas encore relu} SUBMITTED {soumise pour relecture} PUBLISHED {publiée} WITHDRAWN {retirée} other {{status}}})",
+    "hint": "Facultatif : le modèle dont ce résultat est une preuve, qui figure sur sa fiche. Utilisé uniquement lors de la soumission à la notation ; modifiable ensuite depuis la page du résultat.",
+    "noCards": "Vous n’avez pas encore déclaré de modèle. <link>Déclarez un modèle</link> pour que ses résultats figurent sur sa fiche ; vous pourrez y lier ce résultat ensuite, depuis la page du résultat.",
+    "unavailable": "Vos fiches de modèle n’ont pas pu être lues pour le moment. Vous pouvez soumettre sans fiche et lier le résultat à une fiche ensuite, depuis la page du résultat.",
+    "invalid": "Choisissez une fiche de modèle dans la liste, ou « Aucune fiche de modèle ».",
+    "refused": {
+      "notFound": "Cette fiche de modèle n’existe plus. Choisissez-en une autre, ou « Aucune fiche de modèle ».",
+      "notYours": "Seul le participant qui a déclaré une fiche de modèle peut y lier des résultats.",
+      "withdrawn": "Cette fiche de modèle a été retirée et n’accepte plus de nouveaux résultats. Choisissez-en une autre, ou « Aucune fiche de modèle »."
+    },
+    "link": {
+      "label": "Fiche liée",
+      "hint": "Choisissez « Aucune fiche de modèle » pour supprimer le lien.",
+      "save": "Enregistrer",
+      "saving": "Enregistrement…",
+      "errorTitle": "La fiche de modèle n’a pas été modifiée",
+      "notAllowed": "Seul le participant qui a fait cette soumission peut en modifier la fiche de modèle, et uniquement pour une fiche qu’il a déclarée.",
+      "submissionMissing": "Cette soumission est introuvable. Rechargez la page.",
+      "invalid": "Cette demande n’est pas valide. Rechargez la page et réessayez.",
+      "serviceError": "La plateforme a répondu par une erreur ({status}). Réessayez dans un instant."
+    }
+  },
   "action": {
     "taskMissing": "Cette tâche d’évaluation n’existe pas.",
     "notConfigured": "Le service de notation n’est pas configuré dans cet environnement.",
@@ -51,6 +76,12 @@
     "refused": "Non noté : {reason}. Aucune de vos soumissions notées n’a été utilisée.",
     "refusedFallback": "le service de notation a refusé le fichier",
     "tooLargeForService": "Non soumis : le fichier est trop volumineux pour le service de notation.",
-    "serviceError": "Non soumis : le service de notation a répondu par une erreur ({status})."
+    "serviceError": "Non soumis : le service de notation a répondu par une erreur ({status}).",
+    "modelCardInvalid": "Non soumis : choisissez une fiche de modèle dans la liste, ou « Aucune fiche de modèle ».",
+    "modelCard": {
+      "notFound": "Non soumis : la fiche de modèle choisie n’existe plus. Rien n’a été noté et aucune de vos soumissions notées n’a été utilisée.",
+      "notYours": "Non soumis : un résultat ne peut être lié qu’à une fiche de modèle que vous avez déclarée. Rien n’a été noté et aucune de vos soumissions notées n’a été utilisée.",
+      "withdrawn": "Non soumis : la fiche de modèle choisie a été retirée et n’accepte plus de nouveaux résultats. Rien n’a été noté et aucune de vos soumissions notées n’a été utilisée."
+    }
   }
 }

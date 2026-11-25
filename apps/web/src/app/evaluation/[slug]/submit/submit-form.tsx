@@ -13,6 +13,8 @@ import {
 import { useTranslations } from 'next-intl';
 import { Alert, AlertDescription, AlertTitle, Button, Field, Input } from '@oci/ui';
 import type { FormatReportView } from '../../../../components/evaluation/format-report';
+import type { ModelCardOption } from '../../../../components/evaluation/model-card-choice';
+import { ModelCardPicker } from '../../../../components/evaluation/model-card-picker';
 import type { QuotaText } from '../../../../components/evaluation/quota-text';
 import { useFormatters } from '../../../../i18n/client';
 import type { Formatters } from '../../../../i18n/format';
@@ -46,10 +48,24 @@ const initial: SubmitPredictionsState = { status: 'idle' };
  * file selected. `action` is still set, so the form works before the script
  * has loaded: the button's `intent` travels with a plain form post.
  *
+ * A signed-in reader also picks the model card the result is evidence for
+ * (#587), from `modelCards` (their own cards, withdrawn ones left out). Only
+ * "Submit for scoring" uses it; a format check records nothing. Signed out
+ * there is no picker: there is nothing to submit.
+ *
  * Text in the interface language (#654): `EvaluationSubmit`. What the server
  * worked out (the format report, the quota sentences) arrives already worded.
  */
-export function SubmitPredictionsForm({ slug, access }: { slug: string; access: ScoringAccess }) {
+export function SubmitPredictionsForm({
+  slug,
+  access,
+  modelCards,
+}: {
+  slug: string;
+  access: ScoringAccess;
+  /** The cards to offer; `null` when they could not be read. Unused signed out. */
+  modelCards: readonly ModelCardOption[] | null;
+}) {
   const t = useTranslations('EvaluationSubmit');
   const tCommon = useTranslations('Common');
   const f = useFormatters();
@@ -110,6 +126,8 @@ export function SubmitPredictionsForm({ slug, access }: { slug: string; access: 
   const methodNameError =
     local.methodName ?? (shown.status === 'error' ? shown.methodNameError : undefined);
   const fileError = local.file ?? (shown.status === 'error' ? shown.fileError : undefined);
+  const modelCardError = shown.status === 'error' ? shown.modelCardError : undefined;
+  const signedIn = access.kind === 'ready' || access.kind === 'unknown';
   const hasResult = shown.status !== 'idle';
 
   const canSubmit =
@@ -145,6 +163,16 @@ export function SubmitPredictionsForm({ slug, access }: { slug: string; access: 
           onChange={() => setLocal((l) => ({ ...l, methodName: undefined }))}
         />
       </Field>
+
+      {signedIn ? (
+        <ModelCardPicker
+          id="field-model-card"
+          options={modelCards}
+          defaultValue={echoed?.modelCardId ?? ''}
+          hint={t('modelCard.hint')}
+          error={modelCardError}
+        />
+      ) : null}
 
       <div className="space-y-3">
         <Field

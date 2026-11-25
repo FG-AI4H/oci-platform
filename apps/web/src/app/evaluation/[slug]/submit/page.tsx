@@ -18,12 +18,18 @@ import {
   buttonVariants,
 } from '@oci/ui';
 import type { EvaluationTaskDetail, ScoredSubmissionQuotaSummary } from '@oci/shared-types';
+import type { Session } from 'next-auth';
 import { auth } from '../../../../auth';
 import type { EvaluationI18n } from '../../../../components/evaluation/i18n';
 import { positiveClassOf } from '../../../../components/evaluation/metrics';
 import { describeQuota } from '../../../../components/evaluation/quota-text';
+import {
+  modelCardOptions,
+  type ModelCardOption,
+} from '../../../../components/evaluation/model-card-choice';
 import { getEvaluationI18n } from '../../../../components/evaluation/server-i18n';
 import { ApiError, apiFetch } from '../../../../lib/api';
+import { myModelCards } from '../../../../lib/model-card-viewer';
 import { SubmitPredictionsForm, type ScoringAccess } from './submit-form';
 
 /**
@@ -37,6 +43,10 @@ import { SubmitPredictionsForm, type ScoringAccess } from './submit-form';
  * The page is three numbered steps in reading order — get the template, fill
  * it in, check and submit — because the reader is expected to be doing this
  * for the first time.
+ *
+ * A signed-in reader may link the result to one of their model cards (#587).
+ * The list is read here, with their session, and only the cards reach the
+ * form.
  *
  * Text in the interface language (#654): `EvaluationTasks.submitPage`, the
  * form's own `EvaluationSubmit`, and the shared `Evaluation` vocabulary. The
@@ -62,8 +72,11 @@ export async function generateMetadata({
 }
 
 /** What the signed-in reader may do, without the token leaving the server. */
-async function scoringAccess(slug: string, i18n: EvaluationI18n): Promise<ScoringAccess> {
-  const session = await auth();
+async function scoringAccess(
+  session: Session | null,
+  slug: string,
+  i18n: EvaluationI18n,
+): Promise<ScoringAccess> {
   if (!session?.user) return { kind: 'signed-out' };
   try {
     const quota = await apiFetch<ScoredSubmissionQuotaSummary>(
@@ -114,7 +127,12 @@ export default async function SubmitPredictionsPage({
   }
   if (!task) notFound();
 
-  const access = await scoringAccess(task.slug, i18n);
+  const session = await auth();
+  const [access, mine] = await Promise.all([
+    scoringAccess(session, task.slug, i18n),
+    myModelCards(session),
+  ]);
+  const modelCards: ModelCardOption[] | null = mine ? modelCardOptions(mine.items) : null;
   const taskHref = `/evaluation/${encodeURIComponent(task.slug)}` as const;
   const templateHref = `${taskHref}/template.csv`;
   const topLabel = task.numClasses - 1;
@@ -246,7 +264,7 @@ export default async function SubmitPredictionsPage({
                   <CardDescription>{t('submitPage.step3Description')}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <SubmitPredictionsForm slug={task.slug} access={access} />
+                  <SubmitPredictionsForm slug={task.slug} access={access} modelCards={modelCards} />
                 </CardContent>
               </Card>
             </li>
