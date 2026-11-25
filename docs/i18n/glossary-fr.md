@@ -316,6 +316,25 @@ clinical usage a radiologist reads in a diagnostic-accuracy study.
 | Status                         | Statut                              | new    |          |
 | Menu                           | Menu                                | new    |          |
 
+## Guides and help
+
+Added with the French guides for participants and reviewers
+([#655](https://github.com/FG-AI4H/oci-platform/issues/655)). Every row is a draft.
+
+| English                                      | French (draft)                                                                       | Source | Reviewer |
+| -------------------------------------------- | ------------------------------------------------------------------------------------ | ------ | -------- |
+| Help (footer link and page)                  | Aide                                                                                 | new    |          |
+| Guide / documentation                        | Guide / documentation                                                                | new    |          |
+| Evaluation participant                       | Participant (à une évaluation)                                                       | new    |          |
+| Intended-use statement                       | Déclaration d’usage prévu                                                            | new    |          |
+| Regulator                                    | Autorité de régulation                                                               | new    |          |
+| Decision-maker                               | Décideur                                                                             | new    |          |
+| Rank (of a published result)                 | Rang                                                                                 | new    |          |
+| Scored-submission limit                      | Nombre limité de soumissions notées                                                  | new    |          |
+| Hash chain / verify the chain                | Chaînage des empreintes / vérifier la chaîne                                         | new    |          |
+| Small group not shown (subgroup suppression) | Petit groupe non communiqué                                                          | new    |          |
+| IMDRF                                        | IMDRF (forum international des autorités de réglementation des dispositifs médicaux) | new    |          |
+
 ## Open points for the reviewer
 
 - **Host.** « Hôte » is literal. « Fournisseur de données » or « responsable du jeu de données » may
@@ -338,5 +357,12 @@ clinical usage a radiologist reads in a diagnostic-accuracy study.
 - **Binary finding.** « Diagnostic binaire » for the task kind, « anomalie » for the finding. A
   radiologist may prefer « signe » or the finding’s own name.
 - **Review of a method.** « Revue » / « relecteur », to keep « examen » for imaging exams.
+- **Care settings in the evidence summary.** Its section 1 still says « Environnements d’utilisation »
+  (`EvidenceSummary.intendedUse.environments`), where the form and the Model Facts label say
+  « Contextes de soins ». The guides quote each page as it is.
+- **Audit trail.** The header link says « Journal d’audit »; the evaluation pages and this glossary
+  say « piste d’audit ». One term may be better throughout.
+- **Reference labels.** The result page says « étiquettes de référence », the evidence summary
+  « vérité terrain ». The guides gloss one with the other.
 - **AUC.** « ASC » after « aire sous la courbe ROC », the strict French abbreviation, as the
   evidence summary (#652) writes it; « AUC » is also common in French clinical papers.
