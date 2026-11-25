@@ -152,6 +152,21 @@ Each event carries enough payload to make sense **without** the application runn
 - **External SIEM integration (Splunk / Datadog audit).** Rejected for the regulator-export use case — SIEMs aren't built for "give a signed snapshot to a Notified Body"; they're built for live ops. We do plan to _also_ tee audit events to a SIEM in Phase C for ops; this ADR doesn't depend on it.
 - **Synchronous emission only.** Rejected — for high-frequency events the latency hit is unacceptable; the BullMQ-backed asynchronous path with at-least-once delivery is sufficient for non-critical events. Critical events (DUA, access grant) use `emitSync`.
 
+## Amendment, 25 November 2026: the chain trigger numbers rows under its lock and hashes in UTC
+
+Tracked in [#774](https://github.com/FG-AI4H/oci-platform/issues/774). Migration `20261125120000_audit_chain_order_utc_774`.
+
+**What was wrong.** §2 says `previousHash` is the `recordHash` of the row with the immediately preceding `sequenceNumber`. The trigger did not guarantee it. `sequenceNumber` came from the column's sequence before the trigger took the chain lock, and the row was linked to the last row numbered below it. When the lock was granted in another order than the numbers, two rows pointed at the same predecessor, and verification reported a break that was not tampering. A transaction that writes two events while another insert waits produced one every time; 24 concurrent transactions of one event each produced about one in 140 rows. Separately, the trigger formatted `occurredAt` in the session's time zone, so a session outside UTC stored a hash the verifier could not reproduce.
+
+**Decision.**
+
+- The trigger takes the lock, reads the last row, and gives the new row `sequenceNumber` = last + 1 and `previousHash` = that row's `recordHash`. `sequenceNumber` is therefore the chain order and the commit order, with no gaps from the migration on. The sequence default still fills the column; the trigger overwrites it. Under READ COMMITTED the read after the lock sees every row of every earlier lock holder, so the link is always to the true end of the chain; a rolled-back insert takes its number with it; under REPEATABLE READ a stale snapshot computes a number that is taken and the unique index rejects the insert, an error and not a fork.
+- The trigger function runs with `TimeZone = 'UTC'`. The record-hash formula is unchanged.
+
+**Existing rows** keep verifying with no change to the verifier: the formula is the same, every existing row was written by a UTC session, and the verifier still walks in `sequenceNumber` order. A fork already stored by the old trigger stays in the data; the fix cannot repair it.
+
+**Not decided here.** The `occurredAt` and `emittedAt` column defaults still take the session's clock, so a raw SQL insert from a non-UTC session that relies on them records a time off by the zone's offset (its hash still verifies). Rows written through the Prisma client get the time from the client, not from the default, and the one-off runner runs in UTC. Changing the defaults is a separate, locking migration.
+
 ## References
 
 - [ADR-0003](./0003-tiered-identity-assurance-and-access-requirements.md) — Visa scopes; `regulatory-advisor` Visa gates the export endpoint.
