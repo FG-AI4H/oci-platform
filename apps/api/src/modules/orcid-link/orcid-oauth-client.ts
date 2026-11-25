@@ -54,7 +54,14 @@ export class OrcidOauthClient {
     return new OrcidOauthClient({ clientId, clientSecret, baseUrl, redirectUri });
   }
 
-  constructor(private readonly cfg: OrcidConfig) {}
+  // Runtime-private, not a TypeScript `private` parameter property: the
+  // config holds a secret, and a `#` field is left out of JSON.stringify,
+  // util.inspect and any logger that serialises the instance (#784).
+  readonly #cfg: OrcidConfig;
+
+  constructor(cfg: OrcidConfig) {
+    this.#cfg = cfg;
+  }
 
   /**
    * Build the ORCID authorize URL the web should redirect to. The
@@ -63,13 +70,13 @@ export class OrcidOauthClient {
    */
   buildAuthorizeUrl(state: string): string {
     const params = new URLSearchParams({
-      client_id: this.cfg.clientId,
+      client_id: this.#cfg.clientId,
       response_type: 'code',
       scope: '/authenticate',
-      redirect_uri: this.cfg.redirectUri,
+      redirect_uri: this.#cfg.redirectUri,
       state,
     });
-    return `${this.cfg.baseUrl}/oauth/authorize?${params.toString()}`;
+    return `${this.#cfg.baseUrl}/oauth/authorize?${params.toString()}`;
   }
 
   /**
@@ -80,13 +87,13 @@ export class OrcidOauthClient {
    */
   async exchangeCode(code: string): Promise<OrcidTokenResult> {
     const body = new URLSearchParams({
-      client_id: this.cfg.clientId,
-      client_secret: this.cfg.clientSecret,
+      client_id: this.#cfg.clientId,
+      client_secret: this.#cfg.clientSecret,
       grant_type: 'authorization_code',
       code,
-      redirect_uri: this.cfg.redirectUri,
+      redirect_uri: this.#cfg.redirectUri,
     });
-    const res = await fetch(`${this.cfg.baseUrl}/oauth/token`, {
+    const res = await fetch(`${this.#cfg.baseUrl}/oauth/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -125,7 +132,7 @@ export class OrcidOauthClient {
    * we route to `https://pub.sandbox.orcid.org`.
    */
   async fetchPersonRecord(orcidId: string, accessToken: string): Promise<OrcidPersonRecord> {
-    const pubBase = this.cfg.baseUrl.replace('://', '://pub.');
+    const pubBase = this.#cfg.baseUrl.replace('://', '://pub.');
     const headers = {
       Accept: 'application/vnd.orcid+json',
       Authorization: `Bearer ${accessToken}`,

@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { inspect } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocusealClient, DUA_PAGE_FIELDS } from './docuseal-client.js';
 
@@ -211,5 +212,37 @@ describe('DocusealClient.verifyWebhook', () => {
     expect(
       c.verifyWebhook({ rawBody: body, secretHeader: undefined, signatureHeader: undefined }),
     ).toBe(false);
+  });
+});
+
+describe('DocusealClient: the API token and webhook secret stay out of logs (#784)', () => {
+  // Distinctive, so a leak of any of them is found by substring.
+  const TOKEN = 'leak-canary-token-Tq7Xw2Vb9Np4Lm6Kc8Rt1Hs5';
+  const SECRET = 'leak-canary-webhook-Wq7Xw2Vb9Np4Lm6Kc8Rt1Hs5';
+
+  function configured(): DocusealClient {
+    process.env.OCI_DOCUSEAL_BASE_URL = 'https://docuseal.example';
+    process.env.OCI_DOCUSEAL_API_TOKEN = TOKEN;
+    process.env.OCI_DOCUSEAL_WEBHOOK_SECRET = SECRET;
+    process.env.OCI_DOCUSEAL_DUA_TEMPLATE_ID = '3';
+    const c = DocusealClient.fromEnv();
+    if (!c) throw new Error('expected a configured client');
+    return c;
+  }
+
+  it('are not in the instance as JSON.stringify, util.inspect or its own properties see it', () => {
+    const c = configured();
+    for (const secret of [TOKEN, SECRET]) {
+      expect(JSON.stringify(c)).not.toContain(secret);
+      expect(inspect(c, { showHidden: true, depth: null })).not.toContain(secret);
+      expect(JSON.stringify({ ...c })).not.toContain(secret);
+    }
+  });
+
+  it('are still used: the webhook secret authenticates a webhook call', () => {
+    const c = configured();
+    expect(
+      c.verifyWebhook({ rawBody: '{}', secretHeader: SECRET, signatureHeader: undefined }),
+    ).toBe(true);
   });
 });

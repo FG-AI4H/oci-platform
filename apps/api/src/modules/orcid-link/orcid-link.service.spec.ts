@@ -1,3 +1,4 @@
+import { inspect } from 'node:util';
 import {
   BadRequestException,
   ConflictException,
@@ -243,5 +244,40 @@ describe('OrcidLinkService.hasActiveOrcidLink', () => {
 
   it('returns false on a missing sub (defensive)', async () => {
     expect(await service.hasActiveOrcidLink({} as CognitoAccessTokenPayload)).toBe(false);
+  });
+});
+
+describe('OrcidLinkService: the state secret and client secret stay out of logs (#784)', () => {
+  // Distinctive, so a leak of any of them is found by substring.
+  const STATE_SECRET = 'leak-canary-state-Sq7Xw2Vb9Np4Lm6Kc8Rt1Hs5';
+  const CLIENT_SECRET = 'leak-canary-client-Cq7Xw2Vb9Np4Lm6Kc8Rt1Hs5';
+
+  afterEach(() => {
+    delete process.env.OCI_ORCID_STATE_SECRET;
+  });
+
+  function configured(): OrcidLinkService {
+    process.env.OCI_ORCID_CLIENT_ID = 'APP-FAKECLIENT';
+    process.env.OCI_ORCID_CLIENT_SECRET = CLIENT_SECRET;
+    process.env.OCI_ORCID_REDIRECT_URI = 'https://oci.example/orcid/callback';
+    process.env.OCI_ORCID_STATE_SECRET = STATE_SECRET;
+    return new OrcidLinkService(repo as unknown as OrcidLinkRepository);
+  }
+
+  it('are not in the service or its OAuth client as JSON.stringify, util.inspect or a spread see it', () => {
+    const svc = configured();
+    for (const secret of [STATE_SECRET, CLIENT_SECRET]) {
+      expect(JSON.stringify(svc)).not.toContain(secret);
+      expect(inspect(svc, { showHidden: true, depth: null })).not.toContain(secret);
+      expect(JSON.stringify({ ...svc })).not.toContain(secret);
+    }
+  });
+
+  it('are not part of the authorize URL or the state handed to the browser', async () => {
+    const out = await configured().startAuthorize(user(REQUESTER_SUB));
+    for (const secret of [STATE_SECRET, CLIENT_SECRET]) {
+      expect(out.authorizeUrl).not.toContain(secret);
+      expect(out.state).not.toContain(secret);
+    }
   });
 });
