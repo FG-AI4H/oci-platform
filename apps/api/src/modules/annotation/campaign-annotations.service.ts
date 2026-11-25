@@ -29,7 +29,7 @@ export interface AnnotationExportFile {
 }
 
 /** Groups recorded with an export: the ones that allowed it. */
-const EXPORT_ROLES = ['campaign-manager', 'admin'] as const;
+const EXPORT_ROLES = ['campaign-manager', 'task-supervisor', 'admin'] as const;
 
 /**
  * A campaign's reader agreement and its annotation export (#648). Both

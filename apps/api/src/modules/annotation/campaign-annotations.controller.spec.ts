@@ -36,17 +36,15 @@ describe('CampaignAnnotationsController role rules (#648)', () => {
     expect(guards).toEqual([CognitoJwtGuard, AnnotationRolesGuard]);
   });
 
-  it.each(HANDLERS)('%s: a campaign manager and an admin may', (handler) => {
+  it.each(HANDLERS)('%s: a campaign manager, a task supervisor and an admin may', (handler) => {
     expect(allowed(handler, ['campaign-manager'])).toBe(true);
+    expect(allowed(handler, ['task-supervisor'])).toBe(true);
     expect(allowed(handler, ['admin'])).toBe(true);
   });
 
-  it('agreement: a task supervisor may', () => {
-    expect(allowed('agreement', ['task-supervisor'])).toBe(true);
-  });
-
-  it.each(EXPORTS)('%s: a task supervisor may not export', (handler) => {
-    expect(allowed(handler, ['task-supervisor'])).toBe(false);
+  it.each(EXPORTS)('%s: a task supervisor may export (decision of 2026-11-25)', (handler) => {
+    expect(allowed(handler, ['task-supervisor'])).toBe(true);
+    expect(allowed(handler, ['task-supervisor', 'annotator'])).toBe(true);
   });
 
   it.each(HANDLERS)('%s: readers, arbiters, experts and outsiders may not', (handler) => {

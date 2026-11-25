@@ -246,7 +246,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         ) : null}
 
         {canOversee && hasTasks ? (
-          <AgreementCard slug={detail.slug} agreement={agreement} canExport={canManage} />
+          <AgreementCard slug={detail.slug} agreement={agreement} canExport={canOversee} />
         ) : null}
 
         {canManage && hasTasks ? (

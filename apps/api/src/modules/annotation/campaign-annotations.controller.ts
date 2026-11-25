@@ -16,12 +16,13 @@ import {
  * A campaign's reader agreement and its annotation export (#648).
  *
  *   GET /v2/annotation/campaigns/:slug/agreement         managers, supervisors
- *   GET /v2/annotation/campaigns/:slug/annotations.csv   managers
- *   GET /v2/annotation/campaigns/:slug/annotations.json  managers
+ *   GET /v2/annotation/campaigns/:slug/annotations.csv   managers, supervisors
+ *   GET /v2/annotation/campaigns/:slug/annotations.json  managers, supervisors
  *
  * The same group rule as the rest of the module: `campaign-manager`
- * (and `task-supervisor` for the agreement), `admin` overriding.
- * Every export is written to the audit trail.
+ * and `task-supervisor`, `admin` overriding (supervisors may export,
+ * decision of 2026-11-25 on #648). Every export is written to the
+ * audit trail.
  */
 @ApiTags('annotation')
 @Controller({ path: 'annotation/campaigns', version: '2' })
@@ -49,12 +50,13 @@ export class CampaignAnnotationsController {
   @Get(':slug/annotations.csv')
   @ApiBearerAuth()
   @ApiOperation({
-    summary: "Export the campaign's annotations as CSV (managers; the export is audited)",
+    summary:
+      "Export the campaign's annotations as CSV (managers, supervisors; the export is audited)",
   })
   @ApiOkResponse({ description: 'text/csv, UTF-8 with a byte-order mark.' })
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @UseGuards(CognitoJwtGuard, AnnotationRolesGuard)
-  @AnnotationRoles('campaign-manager')
+  @AnnotationRoles('campaign-manager', 'task-supervisor')
   exportCsv(
     @Param('slug', new ZodPipe(CampaignSlugSchema)) slug: CampaignSlug,
     @CurrentUser() user: CognitoAccessTokenPayload,
@@ -66,12 +68,13 @@ export class CampaignAnnotationsController {
   @Get(':slug/annotations.json')
   @ApiBearerAuth()
   @ApiOperation({
-    summary: "Export the campaign's annotations as JSON (managers; the export is audited)",
+    summary:
+      "Export the campaign's annotations as JSON (managers, supervisors; the export is audited)",
   })
   @ApiOkResponse({ description: 'oci-annotation-export/v1.' })
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @UseGuards(CognitoJwtGuard, AnnotationRolesGuard)
-  @AnnotationRoles('campaign-manager')
+  @AnnotationRoles('campaign-manager', 'task-supervisor')
   exportJson(
     @Param('slug', new ZodPipe(CampaignSlugSchema)) slug: CampaignSlug,
     @CurrentUser() user: CognitoAccessTokenPayload,

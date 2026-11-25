@@ -240,11 +240,30 @@ test.describe('agreement card and export (#648), English', () => {
     expect(arbitration?.arbitrationReason).toBe('Opacity at the base, see apex');
   });
 
-  test('a supervisor sees the card but no export', async ({ page }) => {
+  test('a supervisor sees the card and can download the export', async ({ page }) => {
     await signIn(page, 'e2e-648-sup', 'task-supervisor');
     await page.goto(`/annotation/campaigns/${SLUG}`);
-    await expect(card(page).getByTestId('fleiss-kappa')).toBeVisible();
-    await expect(card(page).getByRole('link', { name: /Export annotations/ })).toHaveCount(0);
+    const c = card(page);
+    await expect(c.getByTestId('fleiss-kappa')).toBeVisible();
+    for (const [format, name] of [
+      ['csv', 'Export annotations as CSV'],
+      ['json', 'Export annotations as JSON'],
+    ] as const) {
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        c.getByRole('link', { name }).click(),
+      ]);
+      expect(download.suggestedFilename()).toMatch(
+        new RegExp(`^annotations-${SLUG}-\\d{8}T\\d{6}Z\\.${format}$`),
+      );
+      const bytes = readFileSync(await download.path());
+      if (format === 'csv') {
+        expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+        expect(bytes.subarray(3).toString('utf8').split('\r\n')[0]).toBe(HEADER);
+      } else {
+        expect((JSON.parse(bytes.toString('utf8')) as { rowCount: number }).rowCount).toBe(37);
+      }
+    }
   });
 
   test('a reader sees no card', async ({ page }) => {

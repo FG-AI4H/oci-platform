@@ -127,6 +127,24 @@ describe('CampaignAnnotationsService (#648)', () => {
     expect(doc.rows[1]).toMatchObject({ taskStatus: 'open', reader: null, finalLabel: null });
   });
 
+  it('a task supervisor may export; the event records the supervisor role', async () => {
+    const supervisor = {
+      sub: 'supervisor-sub',
+      'cognito:groups': ['task-supervisor', 'annotator'],
+    } as unknown as CognitoAccessTokenPayload;
+    for (const format of ['csv', 'json'] as const) {
+      const file = await service.export('chest-648', format, supervisor);
+      expect(file.rowCount).toBe(2);
+    }
+    expect(emitted).toHaveLength(2);
+    expect(emitted.map((e) => e.payload.format)).toEqual(['csv', 'json']);
+    expect(emitted[0]).toMatchObject({
+      action: 'campaign.exported',
+      actorUserId: cognitoSubAsUuid('supervisor-sub'),
+      actorRoles: ['task-supervisor'],
+    });
+  });
+
   it('the export names no reader: no user id, no email, no Cognito sub', async () => {
     for (const format of ['csv', 'json'] as const) {
       const file = await service.export('chest-648', format, manager);

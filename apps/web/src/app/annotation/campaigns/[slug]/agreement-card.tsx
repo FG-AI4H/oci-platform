@@ -8,7 +8,8 @@ import { intervalBands, kappaBand } from './agreement-reading';
  * « Agreement between readers » on the campaign page (#648), for the
  * campaign's managers and supervisors: Fleiss' kappa with its interval
  * and a plain-language reading, the counts, the pairwise table and the
- * answers per reader. Managers also get the export beside it.
+ * answers per reader, with the export beside it (managers and
+ * supervisors alike, as the API allows).
  *
  * `agreement` is null when the API could not give it (the card says so
  * rather than breaking the page).
