@@ -341,11 +341,18 @@ export class TaskService {
     // row idempotently so a reload of the annotator UI doesn't start
     // counting double work, and does it without the expiry scan or a
     // transaction. An assignment past the time limit is not re-issued:
-    // the expiry below releases it and the caller gets a fresh one.
+    // it is expired below and the caller gets a fresh one.
     const activeArgs = { campaignId: campaign.id, gate, assigneeUserId };
     const inFlight = await this.tasks.findActiveAssignmentForUser(activeArgs);
     if (inFlight && inFlight.assignedAt.getTime() >= staleBefore) {
       return { assignment: toAssignmentSummary(inFlight, inFlight.task) };
+    }
+
+    // The caller's own row is past the time limit. Expire it here: the
+    // campaign scan below stops at the 20 oldest rows and may not reach
+    // it, and the pull transaction would then hand it back (#672).
+    if (inFlight) {
+      await this.abandonment.expireOwnStale({ row: inFlight, campaign });
     }
 
     // The caller needs a new task, so free abandoned slots first

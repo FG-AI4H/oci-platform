@@ -219,6 +219,40 @@ describe('TaskAbandonmentService.expireStaleForCampaign (#647)', () => {
   });
 });
 
+describe('TaskAbandonmentService.expireOwnStale (#672)', () => {
+  const campaign = { slug: 'pilot', workflowConfig: { taskTimeoutHours: 4 } };
+  const row = candidate({ id: 'asn-mine', assignedAtMs: NOW - 5 * HOUR_MS });
+
+  it('expires the row and audits it in one transaction', async () => {
+    expect(await service.expireOwnStale({ row, campaign })).toBe(true);
+
+    expect(tasks.inTransaction).toHaveBeenCalledTimes(1);
+    expect(tasks.markAssignmentExpired).toHaveBeenCalledWith('asn-mine');
+    expect(audit.emitSync).toHaveBeenCalledTimes(1);
+    expect(audit.emitSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'task.assignment.expired',
+        subjectId: 'asn-mine',
+        payload: expect.objectContaining({ campaignSlug: 'pilot', timeoutHours: 4 }),
+      }),
+      TX,
+    );
+  });
+
+  it('writes no audit row when another writer already moved the row', async () => {
+    tasks.markAssignmentExpired.mockResolvedValueOnce(false);
+
+    expect(await service.expireOwnStale({ row, campaign })).toBe(false);
+    expect(audit.emitSync).not.toHaveBeenCalled();
+  });
+
+  it('lets an audit failure propagate so the transaction rolls the expiry back', async () => {
+    audit.emitSync.mockRejectedValueOnce(new Error('audit down'));
+
+    await expect(service.expireOwnStale({ row, campaign })).rejects.toThrow('audit down');
+  });
+});
+
 describe('TaskAbandonmentService.release (#646)', () => {
   const TX = { tx: true };
 

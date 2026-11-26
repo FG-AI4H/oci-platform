@@ -71,33 +71,63 @@ export class TaskAbandonmentService {
     });
     let expired = 0;
     for (const row of rows) {
-      const flipped = await this.tasks.inTransaction(async (tasks, tx) => {
-        // Conditional: a concurrent pull or submit may have moved the
-        // row since the read. False means someone else handled it.
-        if (!(await tasks.markAssignmentExpired(row.id))) return false;
-        await this.audit.emitSync(
-          {
-            module: 'annotation',
-            action: 'task.assignment.expired',
-            subjectType: 'annotation-task-assignment',
-            subjectId: row.id,
-            payload: expiredPayload(row, args.campaign.slug, timeoutHours),
-          },
-          // The port needs only `auditEvent`, so a transaction client
-          // (no `$transaction`) fits. The cast is for Prisma's tagged
-          // `InputJsonValue`, which a `Record<string, unknown>` payload
-          // is not assignable to; audit.module.ts casts the root client
-          // for the same reason.
-          tx as unknown as AuditTransactionPort,
-        );
-        return true;
-      });
-      if (flipped) expired += 1;
+      if (await this.expireOne(row, args.campaign.slug, timeoutHours)) expired += 1;
     }
     if (expired > 0) {
       this.logger.log(`pull-next expiry — campaign=${args.campaign.slug} expired=${expired}`);
     }
     return expired;
+  }
+
+  /**
+   * Expire the caller's own assignment, which pull-next has found past
+   * the campaign's time limit (#672). The campaign scan is bounded and
+   * oldest first, so behind a backlog of older stale rows it may not
+   * reach this one; pull-next would then hand it back. Same conditional
+   * update and per-row audit transaction as the scan. Returns false
+   * when the row was submitted or expired in the meantime.
+   */
+  async expireOwnStale(args: {
+    row: AnnotationTaskAssignment & { task: AnnotationTask };
+    campaign: { slug: string; workflowConfig: unknown };
+  }): Promise<boolean> {
+    const timeoutHours = readTaskTimeoutHours(args.campaign.workflowConfig);
+    const flipped = await this.expireOne(args.row, args.campaign.slug, timeoutHours);
+    if (flipped) {
+      this.logger.log(
+        `pull-next expiry — campaign=${args.campaign.slug} own assignment=${args.row.id}`,
+      );
+    }
+    return flipped;
+  }
+
+  /** One conditional expiry and its audit row, in one short transaction. */
+  private async expireOne(
+    row: AnnotationTaskAssignment & { task: AnnotationTask },
+    campaignSlug: string,
+    timeoutHours: number,
+  ): Promise<boolean> {
+    return this.tasks.inTransaction(async (tasks, tx) => {
+      // Conditional: a concurrent pull or submit may have moved the
+      // row since the read. False means someone else handled it.
+      if (!(await tasks.markAssignmentExpired(row.id))) return false;
+      await this.audit.emitSync(
+        {
+          module: 'annotation',
+          action: 'task.assignment.expired',
+          subjectType: 'annotation-task-assignment',
+          subjectId: row.id,
+          payload: expiredPayload(row, campaignSlug, timeoutHours),
+        },
+        // The port needs only `auditEvent`, so a transaction client
+        // (no `$transaction`) fits. The cast is for Prisma's tagged
+        // `InputJsonValue`, which a `Record<string, unknown>` payload
+        // is not assignable to; audit.module.ts casts the root client
+        // for the same reason.
+        tx as unknown as AuditTransactionPort,
+      );
+      return true;
+    });
   }
 
   /**
