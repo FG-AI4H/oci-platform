@@ -147,6 +147,7 @@ let dicomSeries: {
 let storage: { authoriseDatasetBytes: ReturnType<typeof vi.fn> };
 let abandonment: {
   expireStaleForCampaign: ReturnType<typeof vi.fn>;
+  expireOwnStale: ReturnType<typeof vi.fn>;
   release: ReturnType<typeof vi.fn>;
 };
 let service: TaskService;
@@ -209,6 +210,7 @@ beforeEach(() => {
   storage = { authoriseDatasetBytes: vi.fn().mockResolvedValue({}) };
   abandonment = {
     expireStaleForCampaign: vi.fn().mockResolvedValue(0),
+    expireOwnStale: vi.fn().mockResolvedValue(true),
     release: vi.fn().mockResolvedValue(true),
   };
   service = new TaskService(
@@ -618,6 +620,7 @@ describe('TaskService.pullNext', () => {
     expect(result.assignment?.id).toBe('asn-1');
     // A reload costs one read: no expiry scan, no transaction.
     expect(abandonment.expireStaleForCampaign).not.toHaveBeenCalled();
+    expect(abandonment.expireOwnStale).not.toHaveBeenCalled();
     expect(tasks.inTransaction).not.toHaveBeenCalled();
   });
 
@@ -816,6 +819,55 @@ describe('TaskService.pullNext', () => {
 
     expect(abandonment.expireStaleForCampaign).toHaveBeenCalledTimes(1);
     expect(result.assignment?.id).toBe('asn-2');
+  });
+
+  it("expires the caller's own stale assignment before the bounded campaign scan (#672)", async () => {
+    const order: string[] = [];
+    abandonment.expireOwnStale.mockImplementation(async () => {
+      order.push('own');
+      return true;
+    });
+    abandonment.expireStaleForCampaign.mockImplementation(async () => {
+      order.push('scan');
+      return 20;
+    });
+    tasks.inTransaction.mockImplementation((fn: (t: unknown, tx: unknown) => unknown) => {
+      order.push('pull-tx');
+      return fn(tasks, TX);
+    });
+    const task = taskRow();
+    const stale = {
+      ...assignmentRow({ assignedAt: new Date(Date.now() - 25 * 60 * 60 * 1000) }),
+      task,
+    };
+    tasks.findActiveAssignmentForUser.mockResolvedValueOnce(stale).mockResolvedValueOnce(null);
+    tasks.findNextEligibleTask.mockResolvedValue(taskRow({ id: 'task-2' }));
+    tasks.createAssignment.mockResolvedValue(assignmentRow({ id: 'asn-2' }));
+
+    await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(abandonment.expireOwnStale).toHaveBeenCalledWith({
+      row: stale,
+      campaign: expect.objectContaining({ id: 'cmp-1' }),
+    });
+    expect(order).toEqual(['own', 'scan', 'pull-tx']);
+  });
+
+  it('does not call the own-row expiry when nothing is in flight', async () => {
+    tasks.findActiveAssignmentForUser.mockResolvedValue(null);
+    tasks.findNextEligibleTask.mockResolvedValue(null);
+
+    await service.pullNext({
+      slug: 'pilot',
+      user: userPayload(ANNOTATOR_SUB),
+      userGroups: ['annotator'],
+    });
+
+    expect(abandonment.expireOwnStale).not.toHaveBeenCalled();
   });
 
   it('passes the activity window (2 × taskTimeoutHours) to the cap inputs', async () => {

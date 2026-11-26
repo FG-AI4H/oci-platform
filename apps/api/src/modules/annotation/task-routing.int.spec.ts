@@ -265,6 +265,51 @@ describe.skipIf(!dockerAvailable)('Annotation router against Postgres (#647)', (
     expect(task.gateState).toBe('INDEPENDENT');
   }, 60_000);
 
+  it("the caller's own stale assignment is expired even behind more than 20 older ones (#672)", async () => {
+    // 21 other annotators each hold one task, all stale and older than
+    // the caller's. The campaign scan expires the 20 oldest per pull,
+    // so without its own step the caller's row is never reached and
+    // pull-next hands it back past the time limit.
+    const slug = 'router-672-own-stale';
+    const campaignId = await runningCampaign({ slug, nAnnotators: 1, sampleCount: 23 });
+    const others = Array.from({ length: 21 }, () => randomUUID());
+    const caller = randomUUID();
+
+    // Pull everything first: a pull after backdating would run the scan.
+    const othersHeld = [];
+    for (const sub of others) othersHeld.push((await pull(slug, sub))!);
+    const mine = await pull(slug, caller);
+    // Campaign timeout is 1 h. others[0] is the oldest row; the caller's
+    // is younger than every other one.
+    for (const [i, held] of othersHeld.entries()) await backdate(held.id, 30 - i);
+    await backdate(mine!.id, 2);
+
+    const next = await pull(slug, caller);
+
+    expect(next).not.toBeNull();
+    expect(next!.id).not.toBe(mine!.id);
+    expect(next!.taskId).not.toBe(mine!.taskId);
+    const row = await prisma.annotationTaskAssignment.findUniqueOrThrow({
+      where: { id: mine!.id },
+    });
+    expect(row.status).toBe('EXPIRED');
+    const auditRows = await prisma.auditEvent.findMany({
+      where: { action: 'task.assignment.expired', subjectId: mine!.id },
+    });
+    expect(auditRows).toHaveLength(1);
+
+    // The scan stayed bounded: the youngest of the others is still held.
+    const youngestOther = await prisma.annotationTaskAssignment.findUniqueOrThrow({
+      where: { id: othersHeld[20]!.id },
+    });
+    expect(['PENDING', 'IN_PROGRESS']).toContain(youngestOther.status);
+    expect(
+      await prisma.annotationTaskAssignment.count({
+        where: { task: { campaignId }, status: 'EXPIRED' },
+      }),
+    ).toBe(21);
+  }, 120_000);
+
   it('annotators who left stop counting toward the cap, so the rest can finish (#669 review)', async () => {
     // 6 tasks × 2 readers = 12 readings, four annotators. Two read one
     // task each and leave. Counting them for ever gives cap
