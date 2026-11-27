@@ -138,6 +138,30 @@
       "label": "Training data jurisdictions",
       "hint": "Country or region codes, separated by commas, for example EU, CH."
     },
+    "datasetRefs": {
+      "label": "Datasets",
+      "hint": "The datasets the model was trained, tuned, validated or tested on. Shown on the public page, each with a link when it is in this catalogue.",
+      "none": "No dataset declared.",
+      "row": "Dataset {n}",
+      "add": "Add a dataset",
+      "remove": "Remove dataset {n}",
+      "limit": "A card lists at most {max} datasets.",
+      "role": {
+        "label": "Used for"
+      },
+      "target": {
+        "label": "Dataset",
+        "hint": "The identifier of a dataset of this catalogue, or the web address (https://…) of one held elsewhere."
+      },
+      "name": {
+        "label": "Name of the dataset",
+        "hint": "Shown as the link text for this web address."
+      },
+      "note": {
+        "label": "Note",
+        "hint": "What the catalogue entry does not say: the subset used, the population. Up to 500 characters."
+      }
+    },
     "regulatory": {
       "legend": "Regulatory status"
     },
@@ -250,6 +274,7 @@
     "slugTaken": "A model card with the identifier “{slug}” already exists.",
     "slugTakenField": "Already in use; choose another identifier.",
     "notFound": "This model card does not exist, or you cannot see it.",
-    "notEditable": "This card can no longer be edited: only a draft can be, by the person who declared it."
+    "notEditable": "This card can no longer be edited: only a draft can be, by the person who declared it.",
+    "datasetUnknown": "Not in this catalogue, or you may not see it. For a dataset held elsewhere, give its web address."
   }
 }

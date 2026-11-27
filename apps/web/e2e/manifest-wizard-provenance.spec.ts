@@ -1,6 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { PROVENANCE_CONFORMANCE_TARGET } from '@oci/croissant';
 
 /**
  * Provenance step of the publish wizard + dataset-page provenance card
@@ -250,9 +251,11 @@ test.describe('publish wizard: provenance step (#496)', () => {
       page.getByText('P1 · Source organisation is required for a SENSITIVE dataset'),
     ).toBeVisible();
 
-    // The live preview carries the block the step wrote.
+    // The live preview carries the block the step wrote. It is folded under
+    // the step since the wizard lost its side panes (0c8e701).
+    await page.getByText('Show the JSON-LD generated so far').click();
     await expect(page.getByText('"bio:irbApproval"').first()).toBeVisible();
-    await expect(page.getByText('"bio-prov/0.1"').first()).toBeVisible();
+    await expect(page.getByText(`"${PROVENANCE_CONFORMANCE_TARGET}"`).first()).toBeVisible();
 
     // Next is not gated on the pre-flight (only on the schema), as for the other layers.
     await expect(page.getByRole('button', { name: /^Next:.*Data use/ })).toBeEnabled();

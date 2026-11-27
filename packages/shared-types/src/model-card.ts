@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { IntendedUseStatementSchema } from './intended-use.js';
 import { ModelClassSchema, type ModelClass } from './evaluation-task-kind.js';
 import { RegulatoryPathwaySchema } from './regulatory-pathway.js';
+import { DatasetSlugSchema } from './slug.js';
 
 /**
  * Model Card — the AI-submission carrier (#260, ADR-0013 amended + ADR-0015).
@@ -204,6 +205,176 @@ export const RegulatoryApprovalSchema = z
   .strict();
 export type RegulatoryApproval = z.infer<typeof RegulatoryApprovalSchema>;
 
+/**
+ * The part a dataset played for a model (#820).
+ *
+ *   - `TRAINING`: the model was fitted on it;
+ *   - `TUNING`: used to choose hyper-parameters or thresholds;
+ *   - `VALIDATION`: the developer's own check during development;
+ *   - `EVALUATION`: an independent test, declared by the developer. A result
+ *     measured on this platform is not declared here: it is read from the
+ *     linked submissions and served as `evaluatedOn`.
+ */
+export const ModelCardDatasetRoleSchema = z.enum([
+  'TRAINING',
+  'TUNING',
+  'VALIDATION',
+  'EVALUATION',
+]);
+export type ModelCardDatasetRole = z.infer<typeof ModelCardDatasetRoleSchema>;
+
+/** How many datasets one card may declare. */
+export const MAX_MODEL_CARD_DATASET_REFS = 20;
+
+/**
+ * An http or https address with a host and nothing a browser would not take as
+ * one. `z.string().url()` alone would let `javascript:` through, and this
+ * package has no `URL` type to lean on (it compiles without DOM or Node libs).
+ */
+function isHttpUrl(value: string): boolean {
+  const lower = value.toLowerCase();
+  const prefix = lower.startsWith('https://') ? 8 : lower.startsWith('http://') ? 7 : 0;
+  if (prefix === 0) return false;
+  if (/[\s"'<>\\]/.test(value)) return false;
+  const host = value.slice(prefix).split(/[/?#]/, 1)[0] ?? '';
+  return host.length > 0 && !host.startsWith('.') && !host.startsWith(':');
+}
+
+/**
+ * One dataset a model declares (#820), as the developer writes it.
+ *
+ * Exactly one target: `datasetSlug` for a dataset of this catalogue, or
+ * `externalUrl` (a Croissant `@id`, a DOI link, a landing page) with the name
+ * to show for it. `note` says what the catalogue entry does not: the subset
+ * used, the population.
+ */
+export const ModelCardDatasetRefInputSchema = z
+  .object({
+    role: ModelCardDatasetRoleSchema,
+    datasetSlug: DatasetSlugSchema.optional(),
+    externalUrl: z
+      .string()
+      .trim()
+      .max(2000)
+      .refine(isHttpUrl, 'Give a web address that starts with https:// or http://')
+      .optional(),
+    externalName: z.string().trim().min(1).max(200).optional(),
+    note: z.string().trim().max(500).nullable().optional(),
+  })
+  .strict()
+  .superRefine((ref, ctx) => {
+    const hasSlug = ref.datasetSlug !== undefined;
+    const hasUrl = ref.externalUrl !== undefined;
+    if (hasSlug === hasUrl) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [hasSlug ? 'externalUrl' : 'datasetSlug'],
+        message: 'Name a dataset of the catalogue or give a web address, not both',
+      });
+      return;
+    }
+    if (hasUrl && ref.externalName === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['externalName'],
+        message: 'Give the name of the dataset this address points to',
+      });
+    }
+    if (hasSlug && ref.externalName !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['externalName'],
+        message: 'A dataset of the catalogue is shown under its own name',
+      });
+    }
+  });
+export type ModelCardDatasetRefInput = z.infer<typeof ModelCardDatasetRefInputSchema>;
+
+/** The declared datasets of one card: at most 20, no dataset twice in the same role. */
+const DatasetRefListSchema = z
+  .array(ModelCardDatasetRefInputSchema)
+  .max(MAX_MODEL_CARD_DATASET_REFS)
+  .superRefine((refs, ctx) => {
+    const seen = new Set<string>();
+    refs.forEach((ref, index) => {
+      const key = `${ref.role} ${ref.datasetSlug ?? ref.externalUrl ?? ''}`;
+      if (seen.has(key)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index],
+          message: 'This dataset is already listed in the same role',
+        });
+      }
+      seen.add(key);
+    });
+  });
+
+/** What the catalogue says about a referenced dataset the reader may see. */
+export const ModelCardDatasetFactsSchema = z.object({
+  name: z.string(),
+  modalities: z.array(z.string()),
+  /** Media types of its files, most frequent first. */
+  formats: z.array(z.string()),
+  licence: z.string().nullable(),
+  latestVersion: z.string().nullable(),
+});
+export type ModelCardDatasetFacts = z.infer<typeof ModelCardDatasetFactsSchema>;
+
+/**
+ * One declared dataset, as served (#820).
+ *
+ *   - `CATALOGUE`: a dataset of this catalogue. `dataset` holds its facts when
+ *     the reader may see it;
+ *   - `EXTERNAL`: held elsewhere; `externalUrl` and `externalName` are set;
+ *   - `WITHHELD`: a dataset of this catalogue the reader may not see. Only the
+ *     role is served: no slug, no name, no note.
+ *
+ * `manifestVersion` and `manifestSha256` are the catalogue version current
+ * when the reference was saved.
+ */
+export const ModelCardDatasetRefSchema = z.object({
+  role: ModelCardDatasetRoleSchema,
+  kind: z.enum(['CATALOGUE', 'EXTERNAL', 'WITHHELD']),
+  datasetSlug: z.string().nullable(),
+  externalUrl: z.string().nullable(),
+  externalName: z.string().nullable(),
+  note: z.string().nullable(),
+  manifestVersion: z.string().nullable(),
+  manifestSha256: z.string().nullable(),
+  dataset: ModelCardDatasetFactsSchema.nullable(),
+});
+export type ModelCardDatasetRef = z.infer<typeof ModelCardDatasetRefSchema>;
+
+/**
+ * A dataset the model was measured on, on this platform (#820): derived from
+ * the published results linked to the card (#587), never declared. The task
+ * and its dataset slug are public already (the task page and the Model Facts
+ * label name them); `dataset` is filled when the reader may see the dataset.
+ */
+export const ModelCardEvaluatedOnSchema = z.object({
+  taskSlug: z.string(),
+  taskName: z.string(),
+  datasetSlug: z.string(),
+  datasetVersion: z.string().nullable(),
+  dataset: ModelCardDatasetFactsSchema.nullable(),
+});
+export type ModelCardEvaluatedOn = z.infer<typeof ModelCardEvaluatedOnSchema>;
+
+/** A published card that declares a dataset: one row of the dataset page (#820). */
+export interface ModelCardForDataset {
+  slug: string;
+  modelDeveloper: string | null;
+  versionMajorMinorPatch: string;
+  medicalPurpose: string;
+  riskTier: string;
+  roles: ModelCardDatasetRole[];
+}
+
+/** `GET /v2/prediction/datasets/:slug/model-cards` (#820). */
+export interface ListModelCardsForDatasetResponse {
+  items: ModelCardForDataset[];
+}
+
 export const CreateModelCardRequestSchema = z
   .object({
     slug: ModelCardSlugSchema.refine((s) => !RESERVED_MODEL_CARD_SLUGS.includes(s), {
@@ -220,6 +391,8 @@ export const CreateModelCardRequestSchema = z
     changeJustification: z.string().max(4000).nullable().optional(),
     materialChange: z.boolean().default(false),
     trainingDataJurisdictions: z.array(z.string().min(2).max(64)).max(64).default([]),
+    /** The datasets the model was trained, tuned, validated or evaluated on (#820). */
+    datasetRefs: DatasetRefListSchema.default([]),
     generativeAi: z.boolean().default(false),
     lmmSpecificLimitations: z.record(z.string(), z.unknown()).nullable().optional(),
 
@@ -248,7 +421,8 @@ export type CreateModelCardRequest = z.infer<typeof CreateModelCardRequestSchema
  * editable: the slug (it is the card's address, and links to it may already
  * exist) and the semver parent (a version promotion is a new card). The
  * defaults of the create schema are dropped on purpose, so that leaving out
- * `trainingDataLineage` does not reset it to `{}`. An `intendedUse` sent here
+ * `trainingDataLineage` does not reset it to `{}`. `datasetRefs`, when sent,
+ * replaces the whole list (#820). An `intendedUse` sent here
  * replaces the whole statement and goes through the same validation as on
  * create.
  */
@@ -260,6 +434,7 @@ export const UpdateModelCardRequestSchema = CreateModelCardRequestSchema.omit({
     trainingDataLineage: z.record(z.string(), z.unknown()),
     materialChange: z.boolean(),
     trainingDataJurisdictions: z.array(z.string().min(2).max(64)).max(64),
+    datasetRefs: DatasetRefListSchema,
     generativeAi: z.boolean(),
   })
   .partial()
@@ -303,6 +478,10 @@ export const ModelCardResponseSchema = z.object({
   changeJustification: z.string().nullable(),
   materialChange: z.boolean(),
   trainingDataJurisdictions: z.array(z.string()),
+  /** Declared datasets, in the order the developer listed them (#820). */
+  datasetRefs: z.array(ModelCardDatasetRefSchema),
+  /** Datasets of the published results linked to the card (#820). */
+  evaluatedOn: z.array(ModelCardEvaluatedOnSchema),
   generativeAi: z.boolean(),
   lmmSpecificLimitations: z.record(z.string(), z.unknown()).nullable(),
   status: ModelCardStatusSchema,
@@ -330,6 +509,9 @@ export type ModelCardResponse = z.infer<typeof ModelCardResponseSchema>;
  * `parentModelCardId` (may point at a card never published) and
  * `changeJustification` (a note for reviewers). `developerContact` stays: it is
  * the CHAI developer-contact disclosure, meant to be published.
+ *
+ * `datasetRefs` is public (#820): its fields are typed, and a dataset the
+ * reader may not see is served as `WITHHELD`, with its role only.
  */
 export const PublicModelCardSchema = ModelCardResponseSchema.pick({
   id: true,
@@ -340,6 +522,8 @@ export const PublicModelCardSchema = ModelCardResponseSchema.pick({
   versionMajorMinorPatch: true,
   materialChange: true,
   trainingDataJurisdictions: true,
+  datasetRefs: true,
+  evaluatedOn: true,
   generativeAi: true,
   lmmSpecificLimitations: true,
   status: true,

@@ -141,6 +141,9 @@ export default async function HomePage() {
                   <Button asChild variant="outline" size="lg">
                     <Link href="/catalog">{t('browseCatalog')}</Link>
                   </Button>
+                  <Button asChild variant="ghost" size="lg">
+                    <Link href="/use-case">{t('startFromUseCase')}</Link>
+                  </Button>
                 </>
               ) : (
                 <>
@@ -159,6 +162,9 @@ export default async function HomePage() {
                   </Button>
                   <Button asChild variant="outline" size="lg">
                     <Link href="/catalog">{t('browseCatalog')}</Link>
+                  </Button>
+                  <Button asChild variant="ghost" size="lg">
+                    <Link href="/use-case">{t('startFromUseCase')}</Link>
                   </Button>
                 </>
               )}

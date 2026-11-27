@@ -116,6 +116,11 @@ export class WebStack extends cdk.Stack {
         // this up as AUTH_URL) and the OCI API base URL.
         AUTH_URL: `https://${props.cfg.domainName}`,
         NEXT_PUBLIC_API_BASE_URL: `https://${props.cfg.domainName}`,
+        // The address the pages publish as their own: canonical links,
+        // JSON-LD, sitemap, robots (#831). Read at run time by
+        // `apps/web/src/lib/site-url.ts`; without it a deployed page named
+        // localhost and no search engine or harvester could follow it.
+        NEXT_PUBLIC_SITE_URL: `https://${props.cfg.domainName}`,
         AUTH_COGNITO_ID: cognitoClientId,
         AUTH_COGNITO_ISSUER: `https://cognito-idp.${this.region}.amazonaws.com/${userPoolId}`,
         // The web app ends a session after this long without activity
@@ -190,7 +195,7 @@ export class WebStack extends cdk.Stack {
         {
           id: 'AwsSolutions-ECS2',
           reason:
-            'Plaintext envs on the Web task are non-secret build/runtime configuration only (NODE_ENV, OCI_ENV, NEXT_PUBLIC_API_BASE_URL, AUTH_URL, AUTH_COGNITO_ID, AUTH_COGNITO_ISSUER, OCI_SESSION_IDLE_SECONDS — all are public URLs / non-secret IDs / a timeout). The two real secrets, AUTH_SECRET and AUTH_COGNITO_SECRET, are injected via ecs.Secret.fromSecretsManager.',
+            'Plaintext envs on the Web task are non-secret build/runtime configuration only (NODE_ENV, OCI_ENV, NEXT_PUBLIC_API_BASE_URL, NEXT_PUBLIC_SITE_URL, AUTH_URL, AUTH_COGNITO_ID, AUTH_COGNITO_ISSUER, OCI_SESSION_IDLE_SECONDS — all are public URLs / non-secret IDs / a timeout). The two real secrets, AUTH_SECRET and AUTH_COGNITO_SECRET, are injected via ecs.Secret.fromSecretsManager.',
         },
       ],
       true,

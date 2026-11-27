@@ -5,6 +5,7 @@
   "lede": "Une plateforme unique pour l’Initiative mondiale sur l’IA pour la santé : cataloguer, annoter, évaluer et rendre compte de l’IA dans les parcours cliniques et de santé publique, de bout en bout.",
   "openDashboard": "Ouvrir le tableau de bord",
   "browseCatalog": "Parcourir le catalogue",
+  "startFromUseCase": "Partir d’un cas d’usage",
   "signInLocal": "Se connecter (développement local)",
   "signInCognito": "Se connecter avec Cognito",
   "stats": {

@@ -6,6 +6,7 @@ import {
   ModelCardStatusSchema as EvidenceModelCardStatusSchema,
   SubmissionModelCardSchema,
 } from './model-card.js';
+import type { ModelCardSummary as UseCaseModelSummary } from './model-card.js';
 import { RegulatoryPathwaySchema } from './regulatory-pathway.js';
 import { DatasetSlugSchema } from './slug.js';
 import type { DatasetSlug } from './slug.js';
@@ -250,6 +251,12 @@ export {
   ListModelCardsSortSchema,
   RegulatoryApprovalSchema,
   UpdateModelCardRequestSchema,
+  ModelCardDatasetRoleSchema,
+  ModelCardDatasetRefInputSchema,
+  ModelCardDatasetRefSchema,
+  ModelCardDatasetFactsSchema,
+  ModelCardEvaluatedOnSchema,
+  MAX_MODEL_CARD_DATASET_REFS,
   MODEL_CARD_REVIEWER_GROUPS,
   RESERVED_MODEL_CARD_SLUGS,
   allowedTransitionsFrom,
@@ -277,6 +284,13 @@ export type {
   ModelCardSummary,
   ListModelCardsResponse,
   UpdateModelCardRequest,
+  ModelCardDatasetRole,
+  ModelCardDatasetRefInput,
+  ModelCardDatasetRef,
+  ModelCardDatasetFacts,
+  ModelCardEvaluatedOn,
+  ModelCardForDataset,
+  ListModelCardsForDatasetResponse,
   ModelCardActor,
   MyModelCardSummary,
   ListMyModelCardsResponse,
@@ -1557,8 +1571,48 @@ export interface AccessRequestSummary {
   /** Cognito sub of the host/admin who decided. */
   decidedById: string | null;
   decisionNote: string | null;
+  /**
+   * When an approval ends (#130, #819). Set on approval; `null` on a request
+   * that is not approved, and on approvals older than the end-date rule.
+   * Access is read through `isAccessGrantActive`, never from `status` alone.
+   */
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** What `isAccessGrantActive` and `accessGrantEndedAt` read of a request. */
+export interface AccessGrantView {
+  status: AccessRequestStatus;
+  expiresAt?: string | null;
+}
+
+/**
+ * Whether an access request gives access at `now` (#819): approved, and not
+ * past its end date. An approval with no end date does not end.
+ *
+ * The one rule for every read of dataset bytes and for every page that says
+ * "you have access". The renewal job also revokes ended approvals, but access
+ * must not depend on that job having run.
+ */
+export function isAccessGrantActive(request: AccessGrantView, now: Date = new Date()): boolean {
+  return request.status === 'APPROVED' && accessGrantEndedAt(request, now) === null;
+}
+
+/**
+ * The end date of an approval that has ended at `now`, or `null`: for a
+ * request that is not approved, has no end date, or has not reached it. An
+ * end date that cannot be read counts as reached: a grant must not outlive a
+ * date nobody can interpret.
+ */
+export function accessGrantEndedAt(
+  request: AccessGrantView,
+  now: Date = new Date(),
+): string | null {
+  if (request.status !== 'APPROVED') return null;
+  if (request.expiresAt === null || request.expiresAt === undefined) return null;
+  const end = Date.parse(request.expiresAt);
+  return Number.isNaN(end) || end <= now.getTime() ? request.expiresAt : null;
 }
 
 /** `POST /v2/catalog/datasets/:slug/access-requests` */
@@ -4379,6 +4433,86 @@ export const EvaluationTaskSummarySchema = z.object({
   submissionCount: z.number().int(),
 });
 export type EvaluationTaskSummary = z.infer<typeof EvaluationTaskSummarySchema>;
+
+// ---------------------------------------------------------------------------
+// From a use case to resources (#829; Lab requirements Req-001 and Req-002)
+// ---------------------------------------------------------------------------
+
+/** An empty form field (`?q=`) is a field left out, not a too-short value. */
+const blankAsAbsent = (value: unknown): unknown =>
+  typeof value === 'string' && value.trim().length === 0 ? undefined : value;
+
+/**
+ * A use case, as someone describes it before they know what the platform
+ * holds: what kind of data, for which condition or body site, to do what,
+ * under which kind of use, in which country.
+ *
+ * `GET /v2/use-case/suggestions`. Every field is optional except the kind of
+ * use, which has a default: an empty use case lists what was published last.
+ */
+export const UseCaseQuerySchema = z.object({
+  /** Condition, body site or any other word of the use case. */
+  q: z.preprocess(blankAsAbsent, z.string().trim().min(2).max(200).optional()),
+  /** A modality label as datasets declare it, e.g. "CT" or "Fundus photography". */
+  modality: z.preprocess(blankAsAbsent, z.string().trim().min(1).max(100).optional()),
+  /** The kind of task to evaluate a model on. */
+  taskKind: z.preprocess(blankAsAbsent, EvaluationTaskKindDbSchema.optional()),
+  /** The kind of use, as an access request declares it. */
+  intendedUse: z.preprocess(
+    blankAsAbsent,
+    IntendedUseCategorySchema.default('NON_COMMERCIAL_RESEARCH'),
+  ),
+  /** Whether an ethics approval covers the project. Some datasets require one. */
+  irbApproved: z.preprocess(
+    blankAsAbsent,
+    z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+  ),
+  /** Country or region of use: matches models trained or approved there. */
+  country: z.preprocess(blankAsAbsent, z.string().trim().min(2).max(64).optional()),
+});
+export type UseCaseQuery = z.infer<typeof UseCaseQuerySchema>;
+/** The query as a caller writes it, before defaults. */
+export type UseCaseQueryInput = z.input<typeof UseCaseQuerySchema>;
+
+/**
+ * A dataset suggested for a use case, with what the access matcher would say
+ * about this use (`match`): the same rule a real request goes through, so the
+ * suggestion does not promise what the request would then refuse. `MATCHED`
+ * is not an approval: the holder decides each request.
+ */
+export interface UseCaseDatasetSuggestion {
+  slug: DatasetSlug;
+  name: string;
+  description: string | null;
+  visibility: DatasetVisibility;
+  accessTier: AccessTier;
+  modalities: string[];
+  match: AccessRequestMatchStatus;
+  /** True when the files are behind an access request. */
+  requiresRequest: boolean;
+}
+
+/** An evaluation task suggested for a use case. */
+export interface UseCaseTaskSuggestion {
+  slug: string;
+  name: string;
+  taskKind: EvaluationTaskKindDb;
+  datasetSlug: string;
+  /** True when the task evaluates on one of the suggested datasets. */
+  onSuggestedDataset: boolean;
+}
+
+/** `GET /v2/use-case/suggestions` (#829). */
+export interface UseCaseSuggestionsResponse {
+  /** At most 20, compatible uses first. */
+  datasets: UseCaseDatasetSuggestion[];
+  tasks: UseCaseTaskSuggestion[];
+  /** Published model cards matching the words or the country; none when neither is given. */
+  models: UseCaseModelSummary[];
+}
 
 /** One submission's public result. NEVER carries predictions or GT. */
 export const EvaluationSubmissionResultSchema = z

@@ -1,0 +1,83 @@
+{
+  "metaTitle": "Start from a use case — OCI Platform",
+  "metaDescription": "Describe what you want to do. The platform suggests the datasets, the evaluation tasks and the models that fit, and says what an access request for this use would be told.",
+  "eyebrow": "Discover",
+  "heading": "Start from a use case",
+  "lead": "Describe what you want to do. You get the datasets, the evaluation tasks and the models that fit, and what an access request for this use would be told.",
+  "form": {
+    "legend": "Your use case",
+    "q": {
+      "label": "Condition or body site",
+      "hint": "A few words, for example pneumonia, retina, skin lesion."
+    },
+    "modality": {
+      "label": "Kind of data",
+      "hint": "As datasets declare it, for example CT, X-ray, Fundus photography."
+    },
+    "taskKind": {
+      "label": "Task to evaluate",
+      "any": "Any task"
+    },
+    "intendedUse": {
+      "label": "Kind of use"
+    },
+    "irbApproved": {
+      "label": "An ethics committee has approved the project",
+      "hint": "Some datasets require it."
+    },
+    "country": {
+      "label": "Country or region of use",
+      "hint": "A code, for example CH or EU. Finds models trained or approved there."
+    },
+    "submit": "Show suggestions",
+    "reset": "Start again"
+  },
+  "invalid": {
+    "title": "Check the use case",
+    "body": "One of the answers cannot be read:"
+  },
+  "unavailable": {
+    "title": "Suggestions unavailable",
+    "fallback": "Unable to reach the API"
+  },
+  "intro": {
+    "title": "How it works",
+    "datasets": "Datasets are found from your words and the kind of data, among those you may see.",
+    "check": "Each one is checked against its terms of use for the kind of use you give: the same check an access request goes through.",
+    "tasks": "Evaluation tasks are those that measure a model on these datasets.",
+    "models": "Models are the published cards that match your words or your country."
+  },
+  "datasets": {
+    "heading": "Datasets",
+    "count": "{count, plural, =0 {None found} one {# dataset} other {# datasets}}",
+    "note": "The outcome is what the access check says for this kind of use. “Compatible” is not an approval: the holder decides each request.",
+    "empty": "No dataset matches these words and this kind of data. Try fewer words, or leave the kind of data empty.",
+    "restricted": "Access on request",
+    "open": "Open the dataset",
+    "request": "Request access",
+    "requestAria": "Request access to {name}",
+    "openAria": "Open the dataset {name}"
+  },
+  "match": {
+    "MATCHED": "Compatible with this use",
+    "UNCLEAR": "The holder would review",
+    "CONFLICT": "Conflicts with the terms"
+  },
+  "tasks": {
+    "heading": "Evaluation tasks",
+    "empty": "No evaluation task on these datasets or with these words.",
+    "onDataset": "On {dataset}",
+    "suggested": "on a suggested dataset"
+  },
+  "models": {
+    "heading": "Models",
+    "empty": "No published model matches.",
+    "needWords": "Give a condition or a country to find models.",
+    "riskTier": "Risk tier {tier}"
+  },
+  "keep": {
+    "title": "Keep this use case",
+    "body": "The address of this page holds your answers. Bookmark it or send it to a colleague; a request for access started from here carries the kind of use and the ethics approval.",
+    "link": "Link to this use case"
+  }
+}

@@ -13,6 +13,7 @@ import {
   modelCardRequestFromValues,
   readModelCardForm,
   riskTierFromValues,
+  unknownDatasetRows,
   type ModelCardFormValues,
 } from './model-card-form';
 
@@ -205,5 +206,157 @@ describe('editing (#651)', () => {
     expect(body).not.toHaveProperty('materialChange');
     expect(body).not.toHaveProperty('securityPosture');
     expect(body.intendedUse).toEqual(card.intendedUse);
+  });
+});
+
+describe('dataset rows (#820)', () => {
+  function rows(...list: Array<[role: string, target: string, name: string, note: string]>) {
+    const fd = new FormData();
+    for (const [role, target, name, note] of list) {
+      fd.append('datasetRefRole', role);
+      fd.append('datasetRefTarget', target);
+      fd.append('datasetRefName', name);
+      fd.append('datasetRefNote', note);
+    }
+    return fd;
+  }
+
+  it('reads the rows in order and drops one left empty', () => {
+    const values = readModelCardForm(
+      rows(
+        ['TRAINING', 'idrid-grading', '', 'Training split'],
+        ['TUNING', '', '', ''],
+        ['EVALUATION', 'https://doi.org/10.5555/example', 'Messidor-2', ''],
+      ),
+    );
+
+    expect(values.datasetRefs).toEqual([
+      { role: 'TRAINING', target: 'idrid-grading', name: '', note: 'Training split' },
+      {
+        role: 'EVALUATION',
+        target: 'https://doi.org/10.5555/example',
+        name: 'Messidor-2',
+        note: '',
+      },
+    ]);
+  });
+
+  it('sends an identifier as a catalogue dataset and a web address as an external one', () => {
+    const request = modelCardRequestFromValues(
+      filled({
+        datasetRefs: [
+          {
+            role: 'TRAINING',
+            target: ' idrid-grading ',
+            name: 'ignored',
+            note: ' Training split ',
+          },
+          {
+            role: 'EVALUATION',
+            target: 'HTTPS://doi.org/10.5555/x',
+            name: ' Messidor-2 ',
+            note: '',
+          },
+        ],
+      }),
+    );
+
+    expect(request.datasetRefs).toEqual([
+      { role: 'TRAINING', datasetSlug: 'idrid-grading', note: 'Training split' },
+      { role: 'EVALUATION', externalUrl: 'HTTPS://doi.org/10.5555/x', externalName: 'Messidor-2' },
+    ]);
+    expect(CreateModelCardRequestSchema.safeParse(request).success).toBe(true);
+  });
+
+  it('puts a refused row on its own line and opens the evidence step', () => {
+    const result = CreateModelCardRequestSchema.safeParse(
+      modelCardRequestFromValues(
+        filled({
+          datasetRefs: [
+            { role: 'TRAINING', target: 'idrid-grading', name: '', note: '' },
+            { role: 'EVALUATION', target: 'https://example.org/set', name: '', note: '' },
+            { role: 'TUNING', target: '', name: '', note: 'a note with no dataset' },
+          ],
+        }),
+      ),
+    );
+    if (result.success) throw new Error('expected the rows to be refused');
+
+    const { fieldErrors, datasetRefErrors } = fieldErrorsFromIssues(result.error.issues);
+
+    expect([...datasetRefErrors.keys()]).toEqual([1, 2]);
+    expect(fieldErrors.has('datasetRefs')).toBe(true);
+    expect(firstStepWithError(fieldErrors.keys())).toBe('evidence');
+  });
+
+  it('finds the rows the API refused as unknown datasets', () => {
+    const values = filled({
+      datasetRefs: [
+        { role: 'TRAINING', target: 'idrid-grading', name: '', note: '' },
+        { role: 'TUNING', target: 'hospital-private-ct', name: '', note: '' },
+        { role: 'EVALUATION', target: 'hospital-private-ct', name: '', note: '' },
+      ],
+    });
+
+    expect(unknownDatasetRows(values, { unknownDatasets: ['hospital-private-ct'] })).toEqual([
+      1, 2,
+    ]);
+    expect(unknownDatasetRows(values, { message: 'something else' })).toEqual([]);
+    expect(unknownDatasetRows(values, null)).toEqual([]);
+  });
+
+  it('shows a saved card’s datasets as rows and sends them back on an edit', () => {
+    const card = {
+      ...CreateModelCardRequestSchema.parse(modelCardRequestFromValues(filled())),
+      trainingDataLineage: {},
+      datasetRefs: [
+        {
+          role: 'TRAINING',
+          kind: 'CATALOGUE',
+          datasetSlug: 'idrid-grading',
+          externalUrl: null,
+          externalName: null,
+          note: 'Training split',
+          manifestVersion: '1.0.0',
+          manifestSha256: null,
+          dataset: null,
+        },
+        {
+          role: 'EVALUATION',
+          kind: 'EXTERNAL',
+          datasetSlug: null,
+          externalUrl: 'https://doi.org/10.5555/example',
+          externalName: 'Messidor-2',
+          note: null,
+          manifestVersion: null,
+          manifestSha256: null,
+          dataset: null,
+        },
+      ],
+      evaluatedOn: [],
+    } as unknown as ModelCardResponse;
+
+    const values = formValuesFromCard(card);
+    expect(values.datasetRefs).toEqual([
+      { role: 'TRAINING', target: 'idrid-grading', name: '', note: 'Training split' },
+      {
+        role: 'EVALUATION',
+        target: 'https://doi.org/10.5555/example',
+        name: 'Messidor-2',
+        note: '',
+      },
+    ]);
+
+    const body = UpdateModelCardRequestSchema.parse(
+      editBodyFrom(CreateModelCardRequestSchema.parse(modelCardRequestFromValues(values))),
+    );
+    expect(body.datasetRefs).toEqual([
+      { role: 'TRAINING', datasetSlug: 'idrid-grading', note: 'Training split' },
+      {
+        role: 'EVALUATION',
+        externalUrl: 'https://doi.org/10.5555/example',
+        externalName: 'Messidor-2',
+      },
+    ]);
   });
 });

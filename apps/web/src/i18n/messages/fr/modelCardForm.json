@@ -138,6 +138,30 @@
       "label": "Juridictions des données d’entraînement",
       "hint": "Codes de pays ou de région, séparés par des virgules, par exemple EU, CH."
     },
+    "datasetRefs": {
+      "label": "Jeux de données",
+      "hint": "Les jeux de données sur lesquels le modèle a été entraîné, ajusté, validé ou testé. Affichés sur la page publique, avec un lien lorsqu’ils figurent dans ce catalogue.",
+      "none": "Aucun jeu de données déclaré.",
+      "row": "Jeu de données {n}",
+      "add": "Ajouter un jeu de données",
+      "remove": "Retirer le jeu de données {n}",
+      "limit": "Une fiche cite au plus {max} jeux de données.",
+      "role": {
+        "label": "Utilisé pour"
+      },
+      "target": {
+        "label": "Jeu de données",
+        "hint": "L’identifiant d’un jeu de données de ce catalogue, ou l’adresse web (https://…) d’un jeu conservé ailleurs."
+      },
+      "name": {
+        "label": "Nom du jeu de données",
+        "hint": "Affiché comme texte du lien vers cette adresse web."
+      },
+      "note": {
+        "label": "Note",
+        "hint": "Ce que l’entrée du catalogue ne dit pas : le sous-ensemble utilisé, la population. 500 caractères au plus."
+      }
+    },
     "regulatory": {
       "legend": "Statut réglementaire"
     },
@@ -250,6 +274,7 @@
     "slugTaken": "Une fiche de modèle avec l’identifiant « {slug} » existe déjà.",
     "slugTakenField": "Déjà utilisé ; choisissez un autre identifiant.",
     "notFound": "Cette fiche de modèle n’existe pas, ou vous ne pouvez pas la voir.",
-    "notEditable": "Cette fiche ne peut plus être modifiée : seul un brouillon peut l’être, par la personne qui l’a déclaré."
+    "notEditable": "Cette fiche ne peut plus être modifiée : seul un brouillon peut l’être, par la personne qui l’a déclaré.",
+    "datasetUnknown": "Absent de ce catalogue, ou vous n’y avez pas accès. Pour un jeu conservé ailleurs, donnez son adresse web."
   }
 }

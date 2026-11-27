@@ -35,6 +35,7 @@ import provenance from './en/provenance.json';
 import publish from './en/publish.json';
 import settings from './en/settings.json';
 import signIn from './en/signIn.json';
+import useCase from './en/useCase.json';
 
 const en = {
   AccessRequest: accessRequest,
@@ -66,6 +67,7 @@ const en = {
   Publish: publish,
   Settings: settings,
   SignIn: signIn,
+  UseCase: useCase,
 };
 
 export type Messages = typeof en;

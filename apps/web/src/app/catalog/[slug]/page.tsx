@@ -22,13 +22,16 @@ import {
   Separator,
   ShieldIcon,
 } from '@oci/ui';
-import type {
-  AccessRequestSummary,
-  AccessTier,
-  CommercialUseTerms,
-  DatasetDetail,
-  DatasetVisibility,
-  DicomSeriesList,
+import {
+  isAccessGrantActive,
+  type AccessRequestSummary,
+  type AccessTier,
+  type CommercialUseTerms,
+  type DatasetDetail,
+  type DatasetVisibility,
+  type DicomSeriesList,
+  type ListModelCardsForDatasetResponse,
+  type ModelCardForDataset,
 } from '@oci/shared-types';
 import { lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../../auth';
@@ -47,6 +50,7 @@ import { isHostOfDataset } from '../../../lib/identity';
 import { AccessCta } from './access-cta';
 import { BulkDownload } from './bulk-download';
 import { CreateCampaignCta } from './create-campaign-cta';
+import { DatasetModelsCard } from './dataset-models-card';
 import { ImagePreviewButton } from './image-preview';
 import { JsonTree } from './json-tree';
 import { ManifestFullView } from './manifest-full-view';
@@ -124,10 +128,26 @@ export default async function DatasetDetailPage({
   let detail: DatasetDetail | null = null;
   let error: string | null = null;
   let ownRequests: AccessRequestSummary[] = [];
+  let models: ModelCardForDataset[] = [];
   try {
+    // Never cached: the files listed depend on who asks (ADR-0026), and
+    // a host landing here from the publish page must see the files of
+    // the version just published; the 30 s fetch cache kept the old
+    // list even after the publish action's revalidatePath.
     detail = await apiFetch<DatasetDetail>(`/v2/catalog/datasets/${encodeURIComponent(slug)}`, {
       session,
+      revalidate: 0,
     });
+    if (detail) {
+      // Published model cards that declare this dataset (#820). Best-effort:
+      // the page is about the dataset, and stands without this list.
+      models = await apiFetch<ListModelCardsForDatasetResponse>(
+        `/v2/prediction/datasets/${encodeURIComponent(slug)}/model-cards`,
+        { session },
+      )
+        .then((res) => res?.items ?? [])
+        .catch(() => []);
+    }
     if (session) {
       // Pull the caller's own access requests so the CTA can render
       // status-aware (PENDING / APPROVED / DENIED). Best-effort —
@@ -664,6 +684,8 @@ export default async function DatasetDetailPage({
             </Card>
           ) : null}
 
+          {models.length > 0 ? <DatasetModelsCard models={models} /> : null}
+
           {detail.versions.length > 1 ? (
             <Card>
               <CardHeader>
@@ -768,6 +790,6 @@ function canLaunchCampaignFromHere(
   if (!session) return false;
   if (isAdmin(session) || isHostOfDataset(session, detail.hostId)) return true;
   if (detail.visibility === 'PUBLIC') return true;
-  // For RESTRICTED / PRIVATE: must have an APPROVED row.
-  return ownRequests.some((r) => r.status === 'APPROVED');
+  // For RESTRICTED / PRIVATE: an approval in force, not one past its end date (#819).
+  return ownRequests.some((r) => isAccessGrantActive(r));
 }

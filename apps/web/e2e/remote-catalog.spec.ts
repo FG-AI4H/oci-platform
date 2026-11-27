@@ -36,8 +36,9 @@ test.describe('remote catalog admin', () => {
     const slug = `peer-${Date.now()}`;
     await signInAs(page, 'admin', 'admin');
 
-    // Header shows the admin nav
-    const remotesLink = page.getByRole('link', { name: 'Remotes' });
+    // Reached from the admin index: the "Remotes" header link is gone.
+    await page.goto('/admin');
+    const remotesLink = page.getByRole('link', { name: /Federation peers/ });
     await expect(remotesLink).toBeVisible();
     await remotesLink.click();
     await expect(page).toHaveURL(/\/catalog\/remotes$/);
