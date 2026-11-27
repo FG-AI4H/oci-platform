@@ -145,8 +145,10 @@ Aborts an in-flight upload.
 Gated download. Returns `302` to a 15-minute presigned S3 GET. Authz:
 
 - PUBLIC + `requiresAccess: false`: any authenticated caller.
-- RESTRICTED **or** `requiresAccess: true`: caller must have an APPROVED `AccessRequest` for the dataset.
+- RESTRICTED **or** `requiresAccess: true`: caller must have an APPROVED `AccessRequest` for the dataset that has not reached its end date (`expiresAt`, a year after approval unless the deployment sets `OCI_ACCESS_GRANT_VALIDITY_DAYS`).
 - PRIVATE: host or admin only.
+
+The end date is checked on every read, by `isAccessGrantActive` in `@oci/shared-types`: the bulk download, the DICOM routes and the annotation images go through the same check. When the caller's approval has ended, the `403` body carries `reason: "ACCESS_ENDED"` and `endedAt`, apart from the plain `403` of a caller who was never approved. `GET /v2/me/access-requests` returns `expiresAt` on each request.
 
 A DICOM file that is held is a `404` for everyone but its host and admins.
 

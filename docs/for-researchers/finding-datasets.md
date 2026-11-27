@@ -60,13 +60,13 @@ Click through to the detail page for:
 
 ## Where the search index lives
 
-The catalogue is also indexed by:
+The catalogue is built to be read from outside as well:
 
-- **Google Dataset Search** (via JSON-LD on each detail page).
-- **Peer Croissant catalogues** that harvest `https://oci.ai4h.net/v2/catalog/.well-known/croissant-catalog.json`.
+- **Dataset search engines**, Google Dataset Search among them, read the JSON-LD on each public detail page and the sitemap. Whether and when an engine lists a dataset is its own decision; nothing has to be registered with it.
+- **Peer Croissant catalogues** harvest `https://oci.ai4h.net/v2/catalog/.well-known/croissant-catalog.json`.
 - The OCI's own federation worker reciprocally consumes peer indexes.
 
-A dataset published on the OCI is therefore findable from inside the OCI, from Google, and from any peer that federates with us. You don't have to choose one entry point.
+A dataset published on the OCI is therefore findable from inside the OCI and from any peer that federates with us, and is offered to search engines in the form they read.
 
 ## Finding models
 
