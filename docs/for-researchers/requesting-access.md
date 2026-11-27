@@ -65,6 +65,7 @@ The full table is in [for-governance/duo-and-dua.md](../for-governance/duo-and-d
 
 - Open the dataset's detail page. Distributions show a `download` button for platform-hosted files; click and the browser is redirected to a short-lived presigned URL.
 - The download is logged in the audit trail. Approval doesn't grant unlimited downloads — re-download as needed; the platform doesn't impose hard quotas, but excessive traffic may be reviewed.
+- An approval has an end date, one year after the decision unless the platform is set otherwise. The dataset page shows it ("Your access ends on …"). From that date the files are refused and the page reads "ended": file a new request to go on.
 - Honour the terms you declared. If your project changes (e.g. now you want to publish weights but you'd declared internal use), file a **new** access request with the updated declarations rather than working under stale ones.
 
 ## Troubleshooting

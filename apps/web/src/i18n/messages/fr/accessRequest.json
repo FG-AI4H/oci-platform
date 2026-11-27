@@ -140,6 +140,9 @@
     "emptyTitle": "Aucune demande pour l’instant",
     "emptyBody": "Parcourez le <link>catalogue</link> et déposez une demande depuis la page de n’importe quel jeu de données restreint.",
     "submitted": "Envoyée le <time>{date}</time>",
-    "hostNote": "Note de l’hôte :"
+    "hostNote": "Note de l’hôte :",
+    "endedStatus": "terminé",
+    "accessEnded": "Accès terminé le <time>{date}</time>.",
+    "accessUntil": "Accès jusqu’au <time>{date}</time>."
   }
 }

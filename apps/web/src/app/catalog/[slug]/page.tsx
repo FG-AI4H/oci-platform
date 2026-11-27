@@ -22,13 +22,14 @@ import {
   Separator,
   ShieldIcon,
 } from '@oci/ui';
-import type {
-  AccessRequestSummary,
-  AccessTier,
-  CommercialUseTerms,
-  DatasetDetail,
-  DatasetVisibility,
-  DicomSeriesList,
+import {
+  isAccessGrantActive,
+  type AccessRequestSummary,
+  type AccessTier,
+  type CommercialUseTerms,
+  type DatasetDetail,
+  type DatasetVisibility,
+  type DicomSeriesList,
 } from '@oci/shared-types';
 import { lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../../auth';
@@ -773,6 +774,6 @@ function canLaunchCampaignFromHere(
   if (!session) return false;
   if (isAdmin(session) || isHostOfDataset(session, detail.hostId)) return true;
   if (detail.visibility === 'PUBLIC') return true;
-  // For RESTRICTED / PRIVATE: must have an APPROVED row.
-  return ownRequests.some((r) => r.status === 'APPROVED');
+  // For RESTRICTED / PRIVATE: an approval in force, not one past its end date (#819).
+  return ownRequests.some((r) => isAccessGrantActive(r));
 }

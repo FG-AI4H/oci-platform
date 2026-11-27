@@ -191,6 +191,103 @@ describe('StorageService.getDownloadUrl', () => {
     expect(url).toMatch(/^https?:\/\//);
   });
 
+  describe('an approval ends on its end date, with no job needed (#819)', () => {
+    const PAST = '2020-01-01T00:00:00.000Z';
+    const FUTURE = '2999-01-01T00:00:00.000Z';
+    const own = (expiresAt: string | null, status = 'APPROVED') => ({
+      dataset: { id: DATASET_ID, slug: 'demo', name: 'demo' },
+      status,
+      expiresAt,
+    });
+    const download = () =>
+      svc.getDownloadUrl({
+        slug: 'demo',
+        distributionId: DISTRIBUTION_ID,
+        user: user(REQUESTER_SUB, 'participant'),
+      });
+
+    beforeEach(() => {
+      catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB });
+      prisma.client.distribution.findFirst.mockResolvedValue(readyDist());
+      prisma.client.dataset.findUnique.mockResolvedValue(dataset('RESTRICTED'));
+    });
+
+    it('refuses a download once the end date has passed, and says access ended', async () => {
+      accessReq.listOwn.mockResolvedValue([own(PAST)]);
+
+      const refusal = await download().then(
+        () => null,
+        (err: unknown) => err,
+      );
+
+      expect(refusal).toBeInstanceOf(ForbiddenException);
+      expect((refusal as ForbiddenException).getResponse()).toEqual({
+        message: 'access ended on 2020-01-01; file a new request to continue',
+        reason: 'ACCESS_ENDED',
+        endedAt: PAST,
+      });
+    });
+
+    it('lets a download through before the end date', async () => {
+      accessReq.listOwn.mockResolvedValue([own(FUTURE)]);
+
+      await expect(download()).resolves.toMatch(/^https?:\/\//);
+    });
+
+    it('a newer approval in force outweighs an older one that ended', async () => {
+      accessReq.listOwn.mockResolvedValue([own(PAST), own(FUTURE)]);
+
+      await expect(download()).resolves.toMatch(/^https?:\/\//);
+    });
+
+    it('names the latest end date when several approvals have ended', async () => {
+      accessReq.listOwn.mockResolvedValue([own('2021-06-01T00:00:00.000Z'), own(PAST)]);
+
+      await expect(download()).rejects.toMatchObject({
+        response: { reason: 'ACCESS_ENDED', endedAt: '2021-06-01T00:00:00.000Z' },
+      });
+    });
+
+    it('an ended approval on another dataset is not this dataset\u2019s business', async () => {
+      accessReq.listOwn.mockResolvedValue([
+        { ...own(PAST), dataset: { id: 'OTHER-ID', slug: 'other', name: 'other' } },
+      ]);
+
+      await expect(download()).rejects.toMatchObject({ message: 'access not approved' });
+    });
+
+    it('a revoked request stays "not approved", whatever its dates', async () => {
+      accessReq.listOwn.mockResolvedValue([own(PAST, 'REVOKED')]);
+
+      await expect(download()).rejects.toMatchObject({ message: 'access not approved' });
+    });
+
+    it('the bulk download and DICOM paths get the same refusal from the shared check', async () => {
+      accessReq.listOwn.mockResolvedValue([own(PAST)]);
+
+      await expect(
+        svc.authoriseDatasetBytes({
+          datasetId: DATASET_ID,
+          requiresAccess: false,
+          user: user(REQUESTER_SUB, 'participant'),
+        }),
+      ).rejects.toMatchObject({ response: { reason: 'ACCESS_ENDED' } });
+    });
+
+    it('the host and an admin are not subject to a requester\u2019s end date', async () => {
+      accessReq.listOwn.mockResolvedValue([own(PAST)]);
+
+      await expect(
+        svc.authoriseDatasetBytes({
+          datasetId: DATASET_ID,
+          requiresAccess: false,
+          user: user(HOST_SUB, 'host'),
+        }),
+      ).resolves.toMatchObject({ visibility: 'RESTRICTED' });
+      expect(accessReq.listOwn).not.toHaveBeenCalled();
+    });
+  });
+
   it('forbids an APPROVED requester whose request is for a DIFFERENT dataset', async () => {
     catalog.findOwnerBySlug.mockResolvedValue({ id: DATASET_ID, hostId: HOST_SUB });
     prisma.client.distribution.findFirst.mockResolvedValue(readyDist());
