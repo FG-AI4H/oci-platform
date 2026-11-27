@@ -112,6 +112,21 @@ export const CAPABILITY_GROUPS: OciCapabilitiesDocument['capabilities'] = {
           'Datasets, evaluation tasks and models that fit a described use case; each dataset with what the access check says for that kind of use.',
       },
       {
+        id: 'toolset.search',
+        method: 'GET',
+        path: '/v2/toolsets',
+        auth: 'none',
+        description:
+          'Search published toolsets (notebooks, simulators, libraries, pipelines) by text, kind, dataset or model. Listed by reference.',
+      },
+      {
+        id: 'toolset.detail',
+        method: 'GET',
+        path: '/v2/toolsets/{slug}',
+        auth: 'none',
+        description: 'One published toolset: where it lives, its licence and what it works with.',
+      },
+      {
         id: 'evaluation.task-list',
         method: 'GET',
         path: '/v2/evaluation/tasks',

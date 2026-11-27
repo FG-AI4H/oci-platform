@@ -1,0 +1,64 @@
+{
+  "metaTitle": "Outils — Plateforme OCI",
+  "metaDescription": "Carnets, simulateurs, bibliothèques et chaînes de traitement qui fonctionnent avec les jeux de données et les modèles de cette plateforme. Référencés par un lien : chaque entrée renvoie à l’endroit où l’outil est conservé.",
+  "kind": {
+    "NOTEBOOK": "Carnet",
+    "SIMULATOR": "Simulateur",
+    "LIBRARY": "Bibliothèque",
+    "PIPELINE": "Chaîne de traitement",
+    "OTHER": "Autre"
+  },
+  "status": {
+    "DRAFT": "Brouillon",
+    "PUBLISHED": "Publié",
+    "WITHDRAWN": "Retiré"
+  },
+  "list": {
+    "eyebrow": "Découvrir",
+    "heading": "Outils",
+    "intro": "Carnets, simulateurs, bibliothèques et chaînes de traitement qui fonctionnent avec les jeux de données et les modèles référencés ici. La plateforme conserve une description et un lien ; l’outil lui-même reste là où son mainteneur le conserve.",
+    "declare": "Déclarer un outil",
+    "count": "{count, plural, =0 {Aucun outil publié} one {# outil publié} other {# outils publiés}}",
+    "countMatching": "{count, plural, =0 {Aucun outil ne correspond} one {# outil correspond} other {# outils correspondent}}",
+    "empty": "Aucun outil n’a encore été publié.",
+    "emptyFiltered": "Aucun outil publié ne correspond. Essayez moins de mots ou un autre type.",
+    "by": "Par {maintainer}",
+    "licence": "Licence : {licence}",
+    "mine": "Vos outils",
+    "mineHint": "Tous les outils que vous avez déclarés, brouillons compris. Un brouillon n’est vu que par vous et par les opérateurs.",
+    "previous": "Précédente",
+    "next": "Suivante",
+    "page": "Page {page} sur {total}",
+    "pagination": "Pages d’outils"
+  },
+  "search": {
+    "label": "Rechercher des outils",
+    "placeholder": "Nom, résumé ou mainteneur",
+    "kind": "Type",
+    "anyKind": "Tout type",
+    "submit": "Rechercher"
+  },
+  "unavailable": {
+    "title": "Outils indisponibles",
+    "fallback": "Impossible de joindre l’API"
+  },
+  "detail": {
+    "metaTitle": "{name} — Outils OCI",
+    "back": "Outils",
+    "open": "Ouvrir l’outil",
+    "opensElsewhere": "ouvre un autre site",
+    "byReference": "Référencé par un lien. La plateforme n’héberge ni n’exécute cet outil ; le lien mène là où son mainteneur le conserve.",
+    "about": "À propos de cet outil",
+    "maintainer": "Mainteneur",
+    "contact": "Contact",
+    "licence": "Licence",
+    "version": "Version",
+    "address": "Adresse",
+    "notDeclared": "Non déclaré",
+    "licenceNote": "Telle que déclarée par le mainteneur ; non vérifiée par la plateforme.",
+    "worksWith": "Fonctionne avec",
+    "datasets": "Jeux de données",
+    "models": "Modèles",
+    "noLinks": "Aucun jeu de données ni modèle de cette plateforme n’est cité."
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "metaTitle": "Toolsets — OCI Platform",
+  "metaDescription": "Notebooks, simulators, libraries and pipelines that work with the datasets and models of this platform. Listed by reference: each entry links to where the toolset lives.",
+  "kind": {
+    "NOTEBOOK": "Notebook",
+    "SIMULATOR": "Simulator",
+    "LIBRARY": "Library",
+    "PIPELINE": "Pipeline",
+    "OTHER": "Other"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "PUBLISHED": "Published",
+    "WITHDRAWN": "Withdrawn"
+  },
+  "list": {
+    "eyebrow": "Discover",
+    "heading": "Toolsets",
+    "intro": "Notebooks, simulators, libraries and pipelines that work with the datasets and models listed here. The platform holds a description and a link; the toolset itself lives where its maintainer keeps it.",
+    "declare": "Declare a toolset",
+    "count": "{count, plural, =0 {No published toolset} one {# published toolset} other {# published toolsets}}",
+    "countMatching": "{count, plural, =0 {No toolset matches} one {# toolset matches} other {# toolsets match}}",
+    "empty": "No toolset has been published yet.",
+    "emptyFiltered": "No published toolset matches. Try fewer words or another kind.",
+    "by": "By {maintainer}",
+    "licence": "Licence: {licence}",
+    "mine": "Your toolsets",
+    "mineHint": "Every toolset you declared, drafts included. A draft is seen by you and the operators only.",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page} of {total}",
+    "pagination": "Pages of toolsets"
+  },
+  "search": {
+    "label": "Search toolsets",
+    "placeholder": "Name, summary or maintainer",
+    "kind": "Kind",
+    "anyKind": "Any kind",
+    "submit": "Search"
+  },
+  "unavailable": {
+    "title": "Toolsets unavailable",
+    "fallback": "Unable to reach the API"
+  },
+  "detail": {
+    "metaTitle": "{name} — OCI Toolsets",
+    "back": "Toolsets",
+    "open": "Open the toolset",
+    "opensElsewhere": "opens another site",
+    "byReference": "Listed by reference. The platform does not host or run this toolset; the link leads to where its maintainer keeps it.",
+    "about": "About this toolset",
+    "maintainer": "Maintainer",
+    "contact": "Contact",
+    "licence": "Licence",
+    "version": "Version",
+    "address": "Address",
+    "notDeclared": "Not declared",
+    "licenceNote": "As declared by the maintainer; not verified by the platform.",
+    "worksWith": "Works with",
+    "datasets": "Datasets",
+    "models": "Models",
+    "noLinks": "No dataset or model of this platform is named."
+  }
+}

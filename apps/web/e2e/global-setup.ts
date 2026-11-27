@@ -49,6 +49,7 @@ export function resetTestRows(): void {
     DELETE FROM annotation.annotation_campaigns WHERE id IN (${testCampaignIds});
     DELETE FROM catalog.datasets WHERE id IN (${testDatasetIds});
     DELETE FROM prediction.model_cards WHERE slug LIKE 'e2e-model-%';
+    DELETE FROM catalog.toolsets WHERE slug LIKE 'e2e-toolset-%';
     DELETE FROM evaluation.evaluation_tasks WHERE slug LIKE 'e2e-eval-%';
     DELETE FROM evaluation.evaluation_routes WHERE slug LIKE 'e2e-route-%';
   `.trim();

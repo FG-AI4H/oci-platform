@@ -23,6 +23,7 @@ export const CLIENT_NAMESPACES = [
   'Publish',
   'Settings',
   'SignIn',
+  'ToolsetForm',
 ] as const satisfies readonly (keyof Messages)[];
 
 export function clientMessages(messages: Messages): Partial<Messages> {
