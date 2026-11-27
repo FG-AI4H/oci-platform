@@ -434,6 +434,31 @@ Who sees which shape: the submitter, `evaluation-reviewer` and `admin` get the f
 
 The WHO Fig. 7 Model Facts Label, structured or as Markdown. Anonymous: PUBLISHED cards only, else `404`. Signed in: any non-DRAFT card; DRAFT is a `409`.
 
+## From a use case to suggestions (#829)
+
+### `GET /v2/use-case/suggestions`
+
+Datasets, evaluation tasks and models that fit a described use case. Anonymous, like the catalogue; a bearer token widens the datasets to those the caller may see. Advertised in the capability document as `use-case.suggestions`.
+
+Query, every field optional:
+
+- `q`: condition, body site or other words (2 to 200 characters).
+- `modality`: a modality label as datasets declare it.
+- `taskKind`: an evaluation task kind.
+- `intendedUse`: `NON_COMMERCIAL_RESEARCH` (default), `COMMERCIAL_RESEARCH`, `CLINICAL_CARE` or `EDUCATION`.
+- `irbApproved`: `true` or `false` (default).
+- `country`: a country or region code, matched against where a model's training data came from or where it is approved.
+
+An empty value (`?q=`) counts as left out. A value that cannot be read is a `400`.
+
+Response: `UseCaseSuggestionsResponse`.
+
+- `datasets`: at most 20 published datasets from the catalogue search on `q` and `modality`. Each has `match`, what the access matcher says for this kind of use and ethics approval against the dataset's terms: `MATCHED`, `UNCLEAR` (a holder would have to review) or `CONFLICT`. It is the matcher an access request goes through, minus the check of who is asking. `MATCHED` is not an approval. Compatible datasets come first. `requiresRequest` is true when the files are behind an access request.
+- `tasks`: evaluation tasks on a suggested dataset (`onSuggestedDataset`), then those whose name carries the words of `q`; filtered by `taskKind` when given.
+- `models`: at most 10 published model cards matching `q` or `country`; empty when neither is given.
+
+Rules on metadata only: no model and no agent takes part.
+
 ## Evaluation submissions (#645)
 
 The task list and task detail (`GET /v2/evaluation/tasks`, `GET /v2/evaluation/tasks/:slug`) are public and never return the reference labels. The task detail, and the `task` object of a submission, carry `positiveClassName`: for a `BINARY_DIAGNOSTIC` task, what label 1 means in words; `null` for the other kinds. `POST /v2/evaluation/tasks` requires it, with `numClasses: 2` and `referableThreshold: 1`, when `taskKind` is `BINARY_DIAGNOSTIC`, and refuses it otherwise.

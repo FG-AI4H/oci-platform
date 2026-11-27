@@ -5,6 +5,7 @@
   "lede": "A unified platform for the Global Initiative on AI for Health — catalog, annotate, evaluate, and report on AI in clinical and public-health workflows, end to end.",
   "openDashboard": "Open dashboard",
   "browseCatalog": "Browse catalog",
+  "startFromUseCase": "Start from a use case",
   "signInLocal": "Sign in (local dev)",
   "signInCognito": "Sign in with Cognito",
   "stats": {

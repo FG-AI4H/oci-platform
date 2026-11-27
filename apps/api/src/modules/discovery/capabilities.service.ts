@@ -96,6 +96,14 @@ export const CAPABILITY_GROUPS: OciCapabilitiesDocument['capabilities'] = {
           'One published model card; its WHO Model Facts label is at {slug}/model-facts.',
       },
       {
+        id: 'use-case.suggestions',
+        method: 'GET',
+        path: '/v2/use-case/suggestions',
+        auth: 'none',
+        description:
+          'Datasets, evaluation tasks and models that fit a described use case; each dataset with what the access check says for that kind of use.',
+      },
+      {
         id: 'evaluation.task-list',
         method: 'GET',
         path: '/v2/evaluation/tasks',

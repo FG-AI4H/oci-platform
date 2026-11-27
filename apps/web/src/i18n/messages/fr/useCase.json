@@ -1,0 +1,83 @@
+{
+  "metaTitle": "Partir d’un cas d’usage — Plateforme OCI",
+  "metaDescription": "Décrivez ce que vous voulez faire. La plateforme propose les jeux de données, les tâches d’évaluation et les modèles qui conviennent, et indique ce qu’une demande d’accès pour cet usage se verrait répondre.",
+  "eyebrow": "Découvrir",
+  "heading": "Partir d’un cas d’usage",
+  "lead": "Décrivez ce que vous voulez faire. Vous obtenez les jeux de données, les tâches d’évaluation et les modèles qui conviennent, et ce qu’une demande d’accès pour cet usage se verrait répondre.",
+  "form": {
+    "legend": "Votre cas d’usage",
+    "q": {
+      "label": "Affection ou région anatomique",
+      "hint": "Quelques mots, par exemple pneumonie, rétine, lésion cutanée."
+    },
+    "modality": {
+      "label": "Type de données",
+      "hint": "Tel que les jeux de données le déclarent, par exemple CT, X-ray, Fundus photography."
+    },
+    "taskKind": {
+      "label": "Tâche à évaluer",
+      "any": "Toute tâche"
+    },
+    "intendedUse": {
+      "label": "Type d’usage"
+    },
+    "irbApproved": {
+      "label": "Un comité d’éthique a approuvé le projet",
+      "hint": "Certains jeux de données l’exigent."
+    },
+    "country": {
+      "label": "Pays ou région d’utilisation",
+      "hint": "Un code, par exemple CH ou EU. Trouve les modèles entraînés ou autorisés là."
+    },
+    "submit": "Afficher les propositions",
+    "reset": "Recommencer"
+  },
+  "invalid": {
+    "title": "Vérifiez le cas d’usage",
+    "body": "L’une des réponses ne peut pas être lue :"
+  },
+  "unavailable": {
+    "title": "Propositions indisponibles",
+    "fallback": "Impossible de joindre l’API"
+  },
+  "intro": {
+    "title": "Comment cela fonctionne",
+    "datasets": "Les jeux de données sont trouvés à partir de vos mots et du type de données, parmi ceux que vous pouvez voir.",
+    "check": "Chacun est vérifié au regard de ses conditions d’utilisation pour le type d’usage indiqué : la même vérification que pour une demande d’accès.",
+    "tasks": "Les tâches d’évaluation sont celles qui mesurent un modèle sur ces jeux de données.",
+    "models": "Les modèles sont les fiches publiées qui correspondent à vos mots ou à votre pays."
+  },
+  "datasets": {
+    "heading": "Jeux de données",
+    "count": "{count, plural, =0 {Aucun trouvé} one {# jeu de données} other {# jeux de données}}",
+    "note": "Le résultat est ce que dit la vérification d’accès pour ce type d’usage. « Compatible » n’est pas une approbation : l’hôte décide de chaque demande.",
+    "empty": "Aucun jeu de données ne correspond à ces mots et à ce type de données. Essayez moins de mots, ou laissez le type de données vide.",
+    "restricted": "Accès sur demande",
+    "open": "Ouvrir le jeu de données",
+    "request": "Demander l’accès",
+    "requestAria": "Demander l’accès à {name}",
+    "openAria": "Ouvrir le jeu de données {name}"
+  },
+  "match": {
+    "MATCHED": "Compatible avec cet usage",
+    "UNCLEAR": "L’hôte examinerait la demande",
+    "CONFLICT": "Contraire aux conditions"
+  },
+  "tasks": {
+    "heading": "Tâches d’évaluation",
+    "empty": "Aucune tâche d’évaluation sur ces jeux de données ou avec ces mots.",
+    "onDataset": "Sur {dataset}",
+    "suggested": "sur un jeu de données proposé"
+  },
+  "models": {
+    "heading": "Modèles",
+    "empty": "Aucun modèle publié ne correspond.",
+    "needWords": "Indiquez une affection ou un pays pour trouver des modèles.",
+    "riskTier": "Niveau de risque {tier}"
+  },
+  "keep": {
+    "title": "Conserver ce cas d’usage",
+    "body": "L’adresse de cette page contient vos réponses. Ajoutez-la à vos favoris ou envoyez-la à un collègue ; une demande d’accès commencée ici reprend le type d’usage et l’approbation éthique.",
+    "link": "Lien vers ce cas d’usage"
+  }
+}
