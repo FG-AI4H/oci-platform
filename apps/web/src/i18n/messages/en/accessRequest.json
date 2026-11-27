@@ -140,6 +140,9 @@
     "emptyTitle": "No requests yet",
     "emptyBody": "Browse the <link>catalog</link> and submit a request from any RESTRICTED dataset’s detail page.",
     "submitted": "Submitted <time>{date}</time>",
-    "hostNote": "Host’s note:"
+    "hostNote": "Host’s note:",
+    "endedStatus": "ended",
+    "accessEnded": "Access ended on <time>{date}</time>.",
+    "accessUntil": "Access until <time>{date}</time>."
   }
 }

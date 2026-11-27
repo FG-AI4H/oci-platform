@@ -24,6 +24,7 @@ import type {
   PartUrlResponse,
   UploadedDistribution,
 } from '@oci/shared-types';
+import { accessGrantEndedAt, isAccessGrantActive } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { CatalogService } from '../catalog/catalog.service.js';
 import { PrismaService } from '../../prisma.service.js';
@@ -356,6 +357,8 @@ export class StorageService {
    *   - PRIVATE                      → host or admin only
    *   - RESTRICTED OR requiresAccess → host, admin, or an APPROVED
    *                                    AccessRequest for the dataset
+   *                                    that has not reached its end
+   *                                    date (#819)
    *   - PUBLIC + !requiresAccess     → anyone (including anonymous)
    *
    * Throws ForbiddenException on failure; returns the dataset row the
@@ -402,8 +405,17 @@ export class StorageService {
         if (!args.user) {
           throw new ForbiddenException('sign in and request access first');
         }
-        const approved = await this.hasApprovedRequest(args.datasetId, args.user);
-        if (!approved) {
+        const grant = await this.accessGrant(args.datasetId, args.user);
+        if (grant.endedAt !== null) {
+          // Said apart from "never approved", so the web app can tell the
+          // requester what happened and how to go on (#819).
+          throw new ForbiddenException({
+            message: `access ended on ${grant.endedAt.slice(0, 10)}; file a new request to continue`,
+            reason: 'ACCESS_ENDED',
+            endedAt: grant.endedAt,
+          });
+        }
+        if (!grant.active) {
           throw new ForbiddenException('access not approved');
         }
       }
@@ -499,12 +511,27 @@ export class StorageService {
     return v?.id ?? null;
   }
 
-  private async hasApprovedRequest(
+  /**
+   * The caller's access to a dataset through their own requests (#819).
+   * `active` when one approval is in force now: approved and not past its
+   * end date. The end date is checked here, on every read, and not left to
+   * the renewal job that revokes ended approvals: that job may not have run
+   * yet, or not run at all on an environment without a scheduler (#657).
+   * `endedAt` is the latest end date among ended approvals when none is in
+   * force, so the refusal can say that access ended, and when.
+   */
+  private async accessGrant(
     datasetId: string,
     user: CognitoAccessTokenPayload,
-  ): Promise<boolean> {
-    const reqs = await this.accessRequests.listOwn(user);
-    return reqs.some((r) => r.dataset.id === datasetId && r.status === 'APPROVED');
+  ): Promise<{ active: boolean; endedAt: string | null }> {
+    const now = new Date();
+    const own = (await this.accessRequests.listOwn(user)).filter((r) => r.dataset.id === datasetId);
+    if (own.some((r) => isAccessGrantActive(r, now))) return { active: true, endedAt: null };
+    const ended = own
+      .map((r) => accessGrantEndedAt(r, now))
+      .filter((end): end is string => end !== null)
+      .sort();
+    return { active: false, endedAt: ended.at(-1) ?? null };
   }
 
   private async presign(

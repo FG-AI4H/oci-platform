@@ -72,6 +72,10 @@ test.describe('audit trail reader', () => {
       page.getByRole('list', { name: 'Audit timeline' }).getByRole('listitem'),
     ).toHaveCount(1);
 
+    // The timeline is reached by a client-side navigation: wait for the
+    // document title it sets, or axe can run before it and report
+    // document-title.
+    await expect(page).toHaveTitle(/\S/);
     const axe = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     expect(axe.violations.map((v) => v.id)).toEqual([]);
   });

@@ -1,7 +1,13 @@
 import Link from 'next/link';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Badge } from '@oci/ui';
-import type { AccessRequestStatus, AccessRequestSummary, DatasetDetail } from '@oci/shared-types';
+import {
+  accessGrantEndedAt,
+  type AccessRequestStatus,
+  type AccessRequestSummary,
+  type DatasetDetail,
+} from '@oci/shared-types';
+import { formattersFor } from '../../../i18n/format';
 
 /**
  * Hero-grade access-control widget for the dataset detail page (PR L.3).
@@ -19,6 +25,10 @@ import type { AccessRequestStatus, AccessRequestSummary, DatasetDetail } from '@
  *     a request already exists, with a link back to the requester's
  *     dashboard. APPROVED prompts to "browse distributions" (the
  *     download buttons further down the page).
+ *   - **"Ended"** when the latest request is an approval past its end
+ *     date (#819): the API refuses the files from that date, so the
+ *     panel says so, with the date and the way to ask again, instead of
+ *     "approved".
  *   - **Anonymous "Sign in to request access"** with a callbackUrl
  *     back to this page so the requester lands on the form straight
  *     after signing in.
@@ -72,6 +82,7 @@ export function AccessCta({
   justRequested = false,
 }: Props) {
   const t = useTranslations('Dataset');
+  const f = formattersFor(useLocale());
   if (detail.status !== 'PUBLISHED') return null;
   if (!needsAccessGate(detail)) return null;
   if (isPrivilegedForDataset) return null;
@@ -114,7 +125,12 @@ export function AccessCta({
     );
   }
 
-  // The caller has a prior request. Surface its state inline.
+  // The caller has a prior request. Surface its state inline. An approval
+  // past its end date reads as ended, not approved: the same rule the API
+  // applies when it hands out the files (`isAccessGrantActive`).
+  const endedAt = accessGrantEndedAt(latest);
+  const ended = endedAt !== null;
+  const long = { dateStyle: 'long' } as const;
   return (
     <div className="space-y-3">
       {justRequested && latest.status === 'PENDING' ? (
@@ -128,16 +144,26 @@ export function AccessCta({
       <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-card)] p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium">{t('access.yourRequest')}</p>
-          <Badge tone={STATUS_TONE[latest.status]}>{t(`access.status.${latest.status}`)}</Badge>
+          {ended ? (
+            <Badge tone="neutral">{t('access.endedStatus')}</Badge>
+          ) : (
+            <Badge tone={STATUS_TONE[latest.status]}>{t(`access.status.${latest.status}`)}</Badge>
+          )}
         </div>
         {latest.status === 'PENDING' ? (
           <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
             {t('access.pendingBody')}
           </p>
         ) : null}
-        {latest.status === 'APPROVED' ? (
+        {ended ? (
           <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
-            {t('access.approvedBody')}
+            {t('access.endedBody', { date: f.date(endedAt, long) })}
+          </p>
+        ) : latest.status === 'APPROVED' ? (
+          <p className="mt-1 text-xs text-[var(--color-muted-foreground)]">
+            {latest.expiresAt
+              ? t('access.approvedUntil', { date: f.date(latest.expiresAt, long) })
+              : t('access.approvedBody')}
           </p>
         ) : null}
         {latest.status === 'DENIED' ? (
@@ -164,7 +190,7 @@ export function AccessCta({
           >
             {t('access.seeRequests')}
           </Link>
-          {latest.status === 'DENIED' || latest.status === 'REVOKED' ? (
+          {ended || latest.status === 'DENIED' || latest.status === 'REVOKED' ? (
             <Link
               href={`/catalog/${detail.slug}/request-access`}
               className="font-medium text-[var(--color-primary)] underline underline-offset-2"

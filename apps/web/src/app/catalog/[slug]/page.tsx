@@ -22,13 +22,14 @@ import {
   Separator,
   ShieldIcon,
 } from '@oci/ui';
-import type {
-  AccessRequestSummary,
-  AccessTier,
-  CommercialUseTerms,
-  DatasetDetail,
-  DatasetVisibility,
-  DicomSeriesList,
+import {
+  isAccessGrantActive,
+  type AccessRequestSummary,
+  type AccessTier,
+  type CommercialUseTerms,
+  type DatasetDetail,
+  type DatasetVisibility,
+  type DicomSeriesList,
 } from '@oci/shared-types';
 import { lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../../auth';
@@ -125,8 +126,13 @@ export default async function DatasetDetailPage({
   let error: string | null = null;
   let ownRequests: AccessRequestSummary[] = [];
   try {
+    // Never cached: the files listed depend on who asks (ADR-0026), and
+    // a host landing here from the publish page must see the files of
+    // the version just published; the 30 s fetch cache kept the old
+    // list even after the publish action's revalidatePath.
     detail = await apiFetch<DatasetDetail>(`/v2/catalog/datasets/${encodeURIComponent(slug)}`, {
       session,
+      revalidate: 0,
     });
     if (session) {
       // Pull the caller's own access requests so the CTA can render
@@ -768,6 +774,6 @@ function canLaunchCampaignFromHere(
   if (!session) return false;
   if (isAdmin(session) || isHostOfDataset(session, detail.hostId)) return true;
   if (detail.visibility === 'PUBLIC') return true;
-  // For RESTRICTED / PRIVATE: must have an APPROVED row.
-  return ownRequests.some((r) => r.status === 'APPROVED');
+  // For RESTRICTED / PRIVATE: an approval in force, not one past its end date (#819).
+  return ownRequests.some((r) => isAccessGrantActive(r));
 }

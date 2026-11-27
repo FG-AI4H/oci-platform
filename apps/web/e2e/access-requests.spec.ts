@@ -178,7 +178,11 @@ test.describe('access requests lifecycle (PR F + PR J.1)', () => {
     await expect(page.getByText(/DUO consent code/i).first()).toBeVisible();
   });
 
-  test('conflict: commercial intent on a NCU dataset → CONFLICT badge', async ({ page }) => {
+  // A dataset made in the browser is always CASE_BY_CASE: the create form
+  // has no commercial-use field (#119 left it for later), and explicit
+  // terms win over the NCU DUO code, so the match is UNCLEAR, never
+  // CONFLICT. Back on once a host can set the terms in the UI (see #615).
+  test.fixme('conflict: commercial intent on a NCU dataset → CONFLICT badge', async ({ page }) => {
     const slug = `restricted-ncu-${Date.now()}`;
     await signInAs(page, HOST, 'host');
     await page.goto('/catalog/new');
