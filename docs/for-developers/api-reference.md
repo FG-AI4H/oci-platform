@@ -430,6 +430,22 @@ One model card. Anonymous: PUBLISHED cards only; any other status is a `404`, th
 
 Who sees which shape: the submitter, `evaluation-reviewer` and `admin` get the full `ModelCardResponse`. Everyone else, signed in or not, gets `PublicModelCard`, an allowlist that leaves out `submitterUserId`, `securityPosture`, `trainingDataLineage`, `parentModelCardId` and `changeJustification`. A field added to the card later stays private until it is added to the allowlist.
 
+### Datasets of a model card (#820)
+
+A card names the datasets the model was trained, tuned, validated or evaluated on. On `POST /v2/prediction/model-cards` and `PATCH /v2/prediction/model-cards/:slug`, `datasetRefs` is a list of at most 20 entries; on `PATCH` it replaces the whole list, and leaving it out keeps the list as it is. Each entry has a `role` (`TRAINING`, `TUNING`, `VALIDATION`, `EVALUATION`), an optional `note` of up to 500 characters, and exactly one target:
+
+- `datasetSlug`: a dataset of this catalogue. It must be one the submitter can see; otherwise the answer is a `400` that lists the identifiers under `unknownDatasets`, the same for a slug that does not exist. The catalogue version and manifest hash current at that moment are stored with the reference and kept when the card is edited later.
+- `externalUrl` with `externalName`: a dataset held elsewhere. Only `http` and `https` addresses are accepted.
+
+Both card shapes, `ModelCardResponse` and `PublicModelCard`, carry two lists:
+
+- `datasetRefs`, in the order declared. `kind` is `CATALOGUE`, `EXTERNAL` or `WITHHELD`. A `CATALOGUE` entry has `dataset` (name, modalities, file formats, licence, latest version) when the reader may see the dataset. A dataset of the catalogue the reader may not see is served as `WITHHELD`, with its role and nothing else: no slug, no note. The submitter and the reviewers always get the slug back.
+- `evaluatedOn`: one entry per evaluation task with a published result linked to the card (#587), with the task and its dataset. Derived, never declared.
+
+### `GET /v2/prediction/datasets/:slug/model-cards`
+
+The **PUBLISHED** model cards that declare a dataset, newest change first: `{ items: ModelCardForDataset[] }`, each with the card's slug, developer, version, medical purpose, risk tier and the `roles` it declares the dataset in. Anonymous for a public dataset. A dataset the caller may not see is a `404`, the same as an unknown slug. Advertised in the capability document as `model.by-dataset`.
+
 ### `GET /v2/prediction/model-cards/:slug/model-facts` and `/model-facts.md`
 
 The WHO Fig. 7 Model Facts Label, structured or as Markdown. Anonymous: PUBLISHED cards only, else `404`. Signed in: any non-DRAFT card; DRAFT is a `409`.

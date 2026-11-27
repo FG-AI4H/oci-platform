@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   CreateModelCardRequestSchema,
   ListModelCardsQuerySchema,
+  MAX_MODEL_CARD_DATASET_REFS,
+  ModelCardDatasetRefInputSchema,
   ModelCardSlugSchema,
   UpdateModelCardRequestSchema,
   LinkSubmissionModelCardRequestSchema,
@@ -174,4 +176,99 @@ describe('LinkSubmissionModelCardRequestSchema (#587)', () => {
       expect(LinkSubmissionModelCardRequestSchema.safeParse(body).success).toBe(false);
     },
   );
+});
+
+describe('ModelCardDatasetRefInputSchema (#820)', () => {
+  const ok = (ref: unknown) => ModelCardDatasetRefInputSchema.safeParse(ref).success;
+
+  it('accepts a dataset of the catalogue', () => {
+    expect(ok({ role: 'TRAINING', datasetSlug: 'idrid-grading', note: 'Training split' })).toBe(
+      true,
+    );
+  });
+
+  it('accepts a dataset held elsewhere, by address and name', () => {
+    expect(
+      ok({
+        role: 'EVALUATION',
+        externalUrl: 'https://doi.org/10.5555/example',
+        externalName: 'Messidor-2',
+      }),
+    ).toBe(true);
+  });
+
+  it.each([
+    ['no target', { role: 'TRAINING' }],
+    [
+      'two targets',
+      {
+        role: 'TRAINING',
+        datasetSlug: 'idrid-grading',
+        externalUrl: 'https://example.org/d',
+        externalName: 'D',
+      },
+    ],
+    ['an address with no name', { role: 'TRAINING', externalUrl: 'https://example.org/d' }],
+    [
+      'a name on a catalogue dataset',
+      { role: 'TRAINING', datasetSlug: 'idrid-grading', externalName: 'IDRiD' },
+    ],
+    ['an unknown key', { role: 'TRAINING', datasetSlug: 'idrid-grading', split: 'train' }],
+  ])('refuses %s', (_what, ref) => {
+    expect(ok(ref)).toBe(false);
+  });
+
+  it.each([
+    'javascript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'ftp://example.org/d',
+    'https://',
+    'https:///path-without-host',
+    'https://example.org/a b',
+    'https://example.org/"><script>',
+    'example.org/d',
+  ])('refuses the address %s', (externalUrl) => {
+    expect(ok({ role: 'TRAINING', externalUrl, externalName: 'D' })).toBe(false);
+  });
+
+  it.each(['https://example.org', 'http://example.org/d?x=1#frag', 'HTTPS://Example.org/D'])(
+    'accepts the address %s',
+    (externalUrl) => {
+      expect(ok({ role: 'TRAINING', externalUrl, externalName: 'D' })).toBe(true);
+    },
+  );
+});
+
+describe('datasetRefs on the card requests (#820)', () => {
+  const ref = (n: number) => ({ role: 'TRAINING', datasetSlug: `dataset-${n}` });
+
+  it('defaults to none on create and adds nothing on update', () => {
+    expect(UpdateModelCardRequestSchema.parse({ clinicalSummary: 'x' })).not.toHaveProperty(
+      'datasetRefs',
+    );
+    expect(CreateModelCardRequestSchema.shape.datasetRefs.parse(undefined)).toEqual([]);
+  });
+
+  it('accepts an empty list on update: that is how the list is cleared', () => {
+    expect(UpdateModelCardRequestSchema.safeParse({ datasetRefs: [] }).success).toBe(true);
+  });
+
+  it('refuses more than the limit', () => {
+    const many = Array.from({ length: MAX_MODEL_CARD_DATASET_REFS + 1 }, (_, n) => ref(n));
+    expect(UpdateModelCardRequestSchema.safeParse({ datasetRefs: many }).success).toBe(false);
+    expect(UpdateModelCardRequestSchema.safeParse({ datasetRefs: many.slice(1) }).success).toBe(
+      true,
+    );
+  });
+
+  it('refuses the same dataset twice in one role, and allows it in two roles', () => {
+    expect(UpdateModelCardRequestSchema.safeParse({ datasetRefs: [ref(1), ref(1)] }).success).toBe(
+      false,
+    );
+    expect(
+      UpdateModelCardRequestSchema.safeParse({
+        datasetRefs: [ref(1), { ...ref(1), role: 'VALIDATION' }],
+      }).success,
+    ).toBe(true);
+  });
 });

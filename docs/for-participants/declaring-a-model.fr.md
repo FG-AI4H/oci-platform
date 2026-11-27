@@ -71,6 +71,7 @@ Tout y est facultatif, mais chaque réponse aide le relecteur :
 
 - « Données d’entraînement » : d’où viennent les données et comment elles ont été annotées. Visible par les relecteurs, pas sur la page publique ;
 - « Juridictions des données d’entraînement » : des codes de pays ou de région ;
+- « Jeux de données » : les jeux de données sur lesquels le modèle a été entraîné, ajusté, validé ou testé. Appuyez sur « Ajouter un jeu de données », choisissez à quoi il a servi, puis donnez l’identifiant d’un jeu de données de ce catalogue (le formulaire propose ceux que vous pouvez voir) ou l’adresse web d’un jeu conservé ailleurs, avec son nom. La « Note » dit ce que l’entrée du catalogue ne dit pas : le sous-ensemble utilisé, la population. Ils sont affichés sur la page publique, chaque jeu du catalogue avec un lien, et votre modèle figure sur la page de ce jeu de données une fois la fiche publiée ;
 - « Statut réglementaire » : la « Voie réglementaire », le « Statut de l’autorisation » et le numéro de certificat, si votre modèle en a un ;
 - « Limites et biais connus » et « Atténuation des biais » ;
 - « Surveillance après déploiement » : comment les performances sont suivies une fois le modèle en service.

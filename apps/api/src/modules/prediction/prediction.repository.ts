@@ -1,7 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Prisma, type ModelCard } from '@oci/database';
+import { Prisma, type ModelCard, type ModelCardDatasetRef as DatasetRefRow } from '@oci/database';
 import type {
   IntendedUseStatement,
+  ModelCardDatasetRef,
+  ModelCardDatasetRole,
+  ModelCardEvaluatedOn,
+  ModelCardForDataset,
   ModelCardResponse,
   ModelCardSummary,
   ModelCardStatus,
@@ -16,9 +20,47 @@ import {
   type SearchPublishedModelCardsArgs,
 } from './repositories/model-card-search.raw.js';
 
+/** A card with its declared datasets (#820), in display order. */
+export type ModelCardWithRefs = ModelCard & { datasetRefs: DatasetRefRow[] };
+
+const WITH_REFS = {
+  datasetRefs: { orderBy: { position: 'asc' } },
+} satisfies Prisma.ModelCardInclude;
+
+/** A declared dataset as stored: the target, and the catalogue version pinned when saved. */
+export interface DatasetRefArgs {
+  role: ModelCardDatasetRole;
+  datasetSlug: string | null;
+  manifestVersion: string | null;
+  manifestSha256: string | null;
+  externalUrl: string | null;
+  externalName: string | null;
+  note: string | null;
+}
+
+function refRows(refs: ReadonlyArray<DatasetRefArgs>) {
+  return refs.map((ref, position) => ({ ...ref, position }));
+}
+
+/**
+ * What a card response carries beyond its own row (#820): the declared
+ * datasets as the caller may see them, and the datasets of its published
+ * results. Resolved by `PredictionService`; empty where a caller only needs
+ * the card's own fields (the Model Facts label).
+ */
+export interface ModelCardDatasets {
+  datasetRefs: ModelCardDatasetRef[];
+  evaluatedOn: ModelCardEvaluatedOn[];
+}
+
+const NO_DATASETS: ModelCardDatasets = { datasetRefs: [], evaluatedOn: [] };
+
 /** Map a DB row to the API response. Json columns are cast back to their
  * validated shapes (the write path guarantees they parsed on the way in). */
-export function toModelCardResponse(row: ModelCard): ModelCardResponse {
+export function toModelCardResponse(
+  row: ModelCard,
+  datasets: ModelCardDatasets = NO_DATASETS,
+): ModelCardResponse {
   return {
     id: row.id,
     slug: row.slug,
@@ -32,6 +74,8 @@ export function toModelCardResponse(row: ModelCard): ModelCardResponse {
     changeJustification: row.changeJustification,
     materialChange: row.materialChange,
     trainingDataJurisdictions: row.trainingDataJurisdictions,
+    datasetRefs: datasets.datasetRefs,
+    evaluatedOn: datasets.evaluatedOn,
     generativeAi: row.generativeAi,
     lmmSpecificLimitations: (row.lmmSpecificLimitations ?? null) as Record<string, unknown> | null,
     status: row.status as ModelCardStatus,
@@ -64,6 +108,8 @@ export function toPublicModelCard(card: ModelCardResponse): PublicModelCard {
     versionMajorMinorPatch: card.versionMajorMinorPatch,
     materialChange: card.materialChange,
     trainingDataJurisdictions: card.trainingDataJurisdictions,
+    datasetRefs: card.datasetRefs,
+    evaluatedOn: card.evaluatedOn,
     generativeAi: card.generativeAi,
     lmmSpecificLimitations: card.lmmSpecificLimitations,
     status: card.status,
@@ -91,6 +137,7 @@ export interface CreateModelCardArgs {
   changeJustification: string | null;
   materialChange: boolean;
   trainingDataJurisdictions: string[];
+  datasetRefs: DatasetRefArgs[];
   generativeAi: boolean;
   lmmSpecificLimitations: Record<string, unknown> | null;
   modelDeveloper: string;
@@ -127,8 +174,9 @@ export function toMyModelCardSummary(row: ModelCard): MyModelCardSummary {
 export class PredictionRepository {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async create(args: CreateModelCardArgs): Promise<ModelCard> {
+  async create(args: CreateModelCardArgs): Promise<ModelCardWithRefs> {
     return this.prisma.client.modelCard.create({
+      include: WITH_REFS,
       data: {
         slug: args.slug,
         submitterUserId: args.submitterUserId,
@@ -143,6 +191,7 @@ export class PredictionRepository {
         changeJustification: args.changeJustification,
         materialChange: args.materialChange,
         trainingDataJurisdictions: args.trainingDataJurisdictions,
+        datasetRefs: { create: refRows(args.datasetRefs) },
         generativeAi: args.generativeAi,
         // Nullable Json: omit when null so the column stays SQL NULL.
         lmmSpecificLimitations:
@@ -164,8 +213,8 @@ export class PredictionRepository {
     });
   }
 
-  async findBySlug(slug: string): Promise<ModelCard | null> {
-    return this.prisma.client.modelCard.findUnique({ where: { slug } });
+  async findBySlug(slug: string): Promise<ModelCardWithRefs | null> {
+    return this.prisma.client.modelCard.findUnique({ where: { slug }, include: WITH_REFS });
   }
 
   async findById(id: string): Promise<ModelCard | null> {
@@ -183,8 +232,14 @@ export class PredictionRepository {
    * Edit a card's content (#651). Only the fields present in `args` change;
    * `null` clears a nullable column (SQL NULL for the Json ones).
    */
-  async update(id: string, args: UpdateModelCardArgs): Promise<ModelCard> {
+  async update(id: string, args: UpdateModelCardArgs): Promise<ModelCardWithRefs> {
     const data: Prisma.ModelCardUpdateInput = {};
+    // The declared datasets are replaced as a whole (#820), in the same
+    // statement as the rest of the edit: Prisma runs nested writes in one
+    // transaction, so a reader never sees a card with half a list.
+    if (args.datasetRefs !== undefined) {
+      data.datasetRefs = { deleteMany: {}, create: refRows(args.datasetRefs) };
+    }
     if (args.intendedUse !== undefined) {
       data.intendedUse = args.intendedUse as unknown as Prisma.InputJsonValue;
     }
@@ -229,7 +284,7 @@ export class PredictionRepository {
     }
     if (args.ongoingMaintenance !== undefined) data.ongoingMaintenance = args.ongoingMaintenance;
     if (args.securityPosture !== undefined) data.securityPosture = args.securityPosture;
-    return this.prisma.client.modelCard.update({ where: { id }, data });
+    return this.prisma.client.modelCard.update({ where: { id }, data, include: WITH_REFS });
   }
 
   /** The submitter's own cards, every status, most recently changed first (#651). */
@@ -241,10 +296,37 @@ export class PredictionRepository {
     });
   }
 
-  async updateStatus(id: string, status: ModelCardStatus): Promise<ModelCard> {
+  async updateStatus(id: string, status: ModelCardStatus): Promise<ModelCardWithRefs> {
     return this.prisma.client.modelCard.update({
       where: { id },
       data: { status },
+      include: WITH_REFS,
+    });
+  }
+
+  /**
+   * PUBLISHED cards that declare `datasetSlug` (#820), newest change first,
+   * each with the roles it declares the dataset in. For the dataset page.
+   */
+  async findPublishedByDatasetSlug(datasetSlug: string): Promise<ModelCardForDataset[]> {
+    const rows = await this.prisma.client.modelCard.findMany({
+      where: { status: 'PUBLISHED', datasetRefs: { some: { datasetSlug } } },
+      include: {
+        datasetRefs: { where: { datasetSlug }, orderBy: { position: 'asc' } },
+      },
+      orderBy: [{ updatedAt: 'desc' }, { slug: 'asc' }],
+      take: 100,
+    });
+    return rows.map((row) => {
+      const ius = row.intendedUse as IntendedUseStatement;
+      return {
+        slug: row.slug,
+        modelDeveloper: row.modelDeveloper,
+        versionMajorMinorPatch: row.versionMajorMinorPatch,
+        medicalPurpose: ius.medicalPurpose,
+        riskTier: ius.riskTier,
+        roles: [...new Set(row.datasetRefs.map((r) => r.role as ModelCardDatasetRole))],
+      };
     });
   }
 }

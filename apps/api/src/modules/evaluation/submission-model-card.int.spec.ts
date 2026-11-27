@@ -20,6 +20,8 @@ import {
   startMigratedPostgres,
 } from '../../test-support/migrated-postgres.js';
 import { AUDIT_EMITTER } from '../audit/audit.tokens.js';
+import { CatalogRepository } from '../catalog/catalog.repository.js';
+import { CatalogService } from '../catalog/catalog.service.js';
 import { IntendedUseService } from '../intended-use/intended-use.service.js';
 import { PredictionController } from '../prediction/prediction.controller.js';
 import { PredictionRepository } from '../prediction/prediction.repository.js';
@@ -99,6 +101,9 @@ describe.skipIf(!dockerAvailable)('Submission to model card link against Postgre
         ModelCardEvidenceService,
         PredictionService,
         PredictionRepository,
+        // The card names the datasets of its published results (#820).
+        CatalogService,
+        CatalogRepository,
         IntendedUseService,
         SubmissionBodyPipe,
         RolesGuard,

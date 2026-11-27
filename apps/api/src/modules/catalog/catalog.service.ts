@@ -21,6 +21,7 @@ import type {
   ListDatasetsResponse,
   PublishDatasetVersionRequest,
 } from '@oci/shared-types';
+import { DatasetSlugSchema } from '@oci/shared-types';
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { CatalogRepository } from './catalog.repository.js';
@@ -214,6 +215,42 @@ export class CatalogService {
       croissant: withoutHeldDistributions(ds.croissant, held) as typeof ds.croissant,
       distributions: ds.distributions.filter((d) => !held.has(d.id)),
     };
+  }
+
+  /**
+   * What sibling modules may say about datasets they name by slug (#820: a
+   * model card's declared datasets). One entry per slug `user` may see, read
+   * through `detail`, so the rule for who sees a dataset stays in this module.
+   * A slug that does not exist and a slug the caller may not see are both
+   * simply absent: the caller cannot tell them apart.
+   */
+  async referenceFacts(
+    slugs: ReadonlyArray<string>,
+    user?: CognitoAccessTokenPayload,
+  ): Promise<Map<string, DatasetReferenceFacts>> {
+    const facts = new Map<string, DatasetReferenceFacts>();
+    for (const raw of new Set(slugs)) {
+      const slug = DatasetSlugSchema.safeParse(raw);
+      if (!slug.success) continue;
+      let ds: DatasetDetail;
+      try {
+        ds = await this.detail(slug.data, user);
+      } catch (err) {
+        if (err instanceof NotFoundException) continue;
+        throw err;
+      }
+      facts.set(raw, {
+        slug: ds.slug,
+        name: ds.name,
+        modalities: [...ds.modalities],
+        formats: byFrequency(ds.distributions.map((d) => d.contentType)),
+        licence: licenceText((ds.croissant as { license?: unknown } | null)?.license),
+        latestVersion: ds.latestVersion,
+        // `versions` is newest first (see `findBySlug`).
+        latestManifestSha256: ds.versions[0]?.croissantHash ?? null,
+      });
+    }
+    return facts;
   }
 
   /**
@@ -471,6 +508,43 @@ export class CatalogService {
 }
 
 // ----- helpers -------------------------------------------------------------
+
+/** A dataset as another module may describe it; see `referenceFacts`. */
+export interface DatasetReferenceFacts {
+  slug: string;
+  name: string;
+  modalities: string[];
+  /** Media types of the files, most frequent first, each once. */
+  formats: string[];
+  licence: string | null;
+  latestVersion: string | null;
+  latestManifestSha256: string | null;
+}
+
+/** Distinct values, most frequent first; ties keep first-seen order. */
+function byFrequency(values: ReadonlyArray<string>): string[] {
+  const counts = new Map<string, number>();
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([v]) => v);
+}
+
+/** Croissant `license` as one line: a string, an object or a list of either. */
+function licenceText(license: unknown): string | null {
+  if (typeof license === 'string') return license.length > 0 ? license : null;
+  if (Array.isArray(license)) {
+    for (const entry of license) {
+      const text = licenceText(entry);
+      if (text) return text;
+    }
+    return null;
+  }
+  if (license !== null && typeof license === 'object') {
+    const { name, url } = license as { name?: unknown; url?: unknown };
+    if (typeof name === 'string' && name.length > 0) return name;
+    if (typeof url === 'string' && url.length > 0) return url;
+  }
+  return null;
+}
 
 function visibilitiesFor(groups: string[]): Array<'PRIVATE' | 'RESTRICTED' | 'PUBLIC'> {
   if (groups.includes('admin') || groups.includes('regulator') || groups.includes('supervisor')) {

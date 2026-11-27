@@ -55,6 +55,7 @@ Click through to the detail page for:
 - The **manifest summary** — license, homepage, citation, modality, anonymisation level, and (PR J.1+) **DUO permitted-use terms** with codes + plain-English summaries.
 - **Distributions** — the actual files. Each shows whether it's `hosted` (downloadable through the platform), `upstream` (link to the original host), or `requires access` (gated).
 - **Version history** — a timeline of immutable versions; each carries a SHA-256 hash you can cite.
+- **Models that use this dataset** — the published model cards whose developer declares this dataset, with what each used it for (training, tuning, validation, evaluation). Shown when there is at least one.
 - **Request access** button (when the dataset is RESTRICTED + PUBLISHED). Anonymous visitors get bounced through `/signin` first.
 
 ## Where the search index lives
@@ -72,6 +73,8 @@ A dataset published on the OCI is therefore findable from inside the OCI, from G
 Published models have their own list at `/models` ("Models" in the top navigation). No sign-in needed. Search by name, developer or intended use, then narrow by model class or jurisdiction. Jurisdiction matches either where the training data came from or where the model holds regulatory approval.
 
 Each model page shows the card's public fields and its **Model Facts label**, the WHO one-page summary of what the model is for, how it was validated and when to stop relying on it. Read the label's "Known gaps" box: it says what the label couldn't fill in yet (measured performance, for example), so a blank isn't mistaken for a good result. Drafts and submissions under review are not listed.
+
+The **Data** section of a model page lists the datasets the developer declares, each with what it was used for. A dataset of this catalogue is a link to its page, with its modality, file format and licence; a dataset held elsewhere is a link to its own site. Below, "Evaluated on this platform" lists the datasets of the published results linked to the model: these are measured here, not declared. A dataset you may not see appears as a line with its role only.
 
 ## Troubleshooting
 

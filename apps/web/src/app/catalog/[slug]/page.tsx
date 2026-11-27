@@ -29,6 +29,8 @@ import type {
   DatasetDetail,
   DatasetVisibility,
   DicomSeriesList,
+  ListModelCardsForDatasetResponse,
+  ModelCardForDataset,
 } from '@oci/shared-types';
 import { lookupDuoTerm } from '@oci/croissant';
 import { auth } from '../../../auth';
@@ -47,6 +49,7 @@ import { isHostOfDataset } from '../../../lib/identity';
 import { AccessCta } from './access-cta';
 import { BulkDownload } from './bulk-download';
 import { CreateCampaignCta } from './create-campaign-cta';
+import { DatasetModelsCard } from './dataset-models-card';
 import { ImagePreviewButton } from './image-preview';
 import { JsonTree } from './json-tree';
 import { ManifestFullView } from './manifest-full-view';
@@ -124,10 +127,21 @@ export default async function DatasetDetailPage({
   let detail: DatasetDetail | null = null;
   let error: string | null = null;
   let ownRequests: AccessRequestSummary[] = [];
+  let models: ModelCardForDataset[] = [];
   try {
     detail = await apiFetch<DatasetDetail>(`/v2/catalog/datasets/${encodeURIComponent(slug)}`, {
       session,
     });
+    if (detail) {
+      // Published model cards that declare this dataset (#820). Best-effort:
+      // the page is about the dataset, and stands without this list.
+      models = await apiFetch<ListModelCardsForDatasetResponse>(
+        `/v2/prediction/datasets/${encodeURIComponent(slug)}/model-cards`,
+        { session },
+      )
+        .then((res) => res?.items ?? [])
+        .catch(() => []);
+    }
     if (session) {
       // Pull the caller's own access requests so the CTA can render
       // status-aware (PENDING / APPROVED / DENIED). Best-effort —
@@ -663,6 +677,8 @@ export default async function DatasetDetailPage({
               </CardContent>
             </Card>
           ) : null}
+
+          {models.length > 0 ? <DatasetModelsCard models={models} /> : null}
 
           {detail.versions.length > 1 ? (
             <Card>
