@@ -145,8 +145,10 @@ Aborts an in-flight upload.
 Gated download. Returns `302` to a 15-minute presigned S3 GET. Authz:
 
 - PUBLIC + `requiresAccess: false`: any authenticated caller.
-- RESTRICTED **or** `requiresAccess: true`: caller must have an APPROVED `AccessRequest` for the dataset.
+- RESTRICTED **or** `requiresAccess: true`: caller must have an APPROVED `AccessRequest` for the dataset that has not reached its end date (`expiresAt`, a year after approval unless the deployment sets `OCI_ACCESS_GRANT_VALIDITY_DAYS`).
 - PRIVATE: host or admin only.
+
+The end date is checked on every read, by `isAccessGrantActive` in `@oci/shared-types`: the bulk download, the DICOM routes and the annotation images go through the same check. When the caller's approval has ended, the `403` body carries `reason: "ACCESS_ENDED"` and `endedAt`, apart from the plain `403` of a caller who was never approved. `GET /v2/me/access-requests` returns `expiresAt` on each request.
 
 A DICOM file that is held is a `404` for everyone but its host and admins.
 
@@ -239,6 +241,25 @@ The events the filters match, oldest first, as a download (`Content-Disposition:
 
 - **JSON** (`oci-audit-events/v1`): `{ format, exportId, exportedAt, actorView, filters, count, rules, events }`; `rules` states both hash rules.
 - **CSV**: columns `sequenceNumber, occurredAt, eventType, subjectType, subjectId, actorKind, actor, actorRoles, payload, pseudonymised, payloadHash, previousHash, recordHash, retentionClass, id`, CRLF line ends. `payload` is its RFC 8785 form. A cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'` so a spreadsheet does not run it.
+
+## Activity report (#828)
+
+### `GET /v2/reports/activity`
+
+One calendar month of what the deployment recorded. `admin`, `regulator` or `supervisor`; `Cache-Control: no-store`.
+
+Query: `month`, as `YYYY-MM`, in UTC. Without it: the last complete month. A month that is not over is served with `partial: true`.
+
+Response: `ActivityReport`.
+
+- `datasets`: public datasets published at the end of the period, the versions published in it (the 50 most recent listed).
+- `accessRequests`: filed in the period; approved and denied in the period, counted at the outcome they stand at today; waiting at its end.
+- `evaluation`: tasks, submissions received, scored and failed; per task, the best published result as it stands today and the number of published results. What is published is decided by the evaluation module (an approved method version, not retracted).
+- `models`: cards published today, and published in the period (read from the audit trail).
+- `annotation`: running and completed campaigns with the tasks read, the share sent to arbitration and the agreement the annotation module computes, over all tasks read so far.
+- `audit`: events in the period and the state of the hash chain over them: `intact`, `broken`, `empty`, or `unverified` when the period holds more events than one check covers.
+
+Counts and public entries only: no person is named. Nothing is stored; the report is assembled from the database on each request.
 
 ## Certification (#117)
 
@@ -430,6 +451,22 @@ One model card. Anonymous: PUBLISHED cards only; any other status is a `404`, th
 
 Who sees which shape: the submitter, `evaluation-reviewer` and `admin` get the full `ModelCardResponse`. Everyone else, signed in or not, gets `PublicModelCard`, an allowlist that leaves out `submitterUserId`, `securityPosture`, `trainingDataLineage`, `parentModelCardId` and `changeJustification`. A field added to the card later stays private until it is added to the allowlist.
 
+### Datasets of a model card (#820)
+
+A card names the datasets the model was trained, tuned, validated or evaluated on. On `POST /v2/prediction/model-cards` and `PATCH /v2/prediction/model-cards/:slug`, `datasetRefs` is a list of at most 20 entries; on `PATCH` it replaces the whole list, and leaving it out keeps the list as it is. Each entry has a `role` (`TRAINING`, `TUNING`, `VALIDATION`, `EVALUATION`), an optional `note` of up to 500 characters, and exactly one target:
+
+- `datasetSlug`: a dataset of this catalogue. It must be one the submitter can see; otherwise the answer is a `400` that lists the identifiers under `unknownDatasets`, the same for a slug that does not exist. The catalogue version and manifest hash current at that moment are stored with the reference and kept when the card is edited later.
+- `externalUrl` with `externalName`: a dataset held elsewhere. Only `http` and `https` addresses are accepted.
+
+Both card shapes, `ModelCardResponse` and `PublicModelCard`, carry two lists:
+
+- `datasetRefs`, in the order declared. `kind` is `CATALOGUE`, `EXTERNAL` or `WITHHELD`. A `CATALOGUE` entry has `dataset` (name, modalities, file formats, licence, latest version) when the reader may see the dataset. A dataset of the catalogue the reader may not see is served as `WITHHELD`, with its role and nothing else: no slug, no note. The submitter and the reviewers always get the slug back.
+- `evaluatedOn`: one entry per evaluation task with a published result linked to the card (#587), with the task and its dataset. Derived, never declared.
+
+### `GET /v2/prediction/datasets/:slug/model-cards`
+
+The **PUBLISHED** model cards that declare a dataset, newest change first: `{ items: ModelCardForDataset[] }`, each with the card's slug, developer, version, medical purpose, risk tier and the `roles` it declares the dataset in. Anonymous for a public dataset. A dataset the caller may not see is a `404`, the same as an unknown slug. Advertised in the capability document as `model.by-dataset`.
+
 ### `GET /v2/prediction/model-cards/:slug/model-facts` and `/model-facts.md`
 
 The WHO Fig. 7 Model Facts Label, structured or as Markdown. Anonymous: PUBLISHED cards only, else `404`. Signed in: any non-DRAFT card; DRAFT is a `409`.
@@ -461,6 +498,31 @@ Edit a `DRAFT`, its declarer only. Every field optional; a list, when sent, repl
 ### `POST /v2/toolsets/:slug/status`
 
 Body `{ "status": "PUBLISHED" | "WITHDRAWN" }`. An `admin` publishes a draft. Its declarer or an `admin` withdraws a draft or a published toolset. `WITHDRAWN` is terminal. Each change is written to the audit trail.
+
+## From a use case to suggestions (#829)
+
+### `GET /v2/use-case/suggestions`
+
+Datasets, evaluation tasks and models that fit a described use case. Anonymous, like the catalogue; a bearer token widens the datasets to those the caller may see. Advertised in the capability document as `use-case.suggestions`.
+
+Query, every field optional:
+
+- `q`: condition, body site or other words (2 to 200 characters).
+- `modality`: a modality label as datasets declare it.
+- `taskKind`: an evaluation task kind.
+- `intendedUse`: `NON_COMMERCIAL_RESEARCH` (default), `COMMERCIAL_RESEARCH`, `CLINICAL_CARE` or `EDUCATION`.
+- `irbApproved`: `true` or `false` (default).
+- `country`: a country or region code, matched against where a model's training data came from or where it is approved.
+
+An empty value (`?q=`) counts as left out. A value that cannot be read is a `400`.
+
+Response: `UseCaseSuggestionsResponse`.
+
+- `datasets`: at most 20 published datasets from the catalogue search on `q` and `modality`. Each has `match`, what the access matcher says for this kind of use and ethics approval against the dataset's terms: `MATCHED`, `UNCLEAR` (a holder would have to review) or `CONFLICT`. It is the matcher an access request goes through, minus the check of who is asking. `MATCHED` is not an approval. Compatible datasets come first. `requiresRequest` is true when the files are behind an access request.
+- `tasks`: evaluation tasks on a suggested dataset (`onSuggestedDataset`), then those whose name carries the words of `q`; filtered by `taskKind` when given.
+- `models`: at most 10 published model cards matching `q` or `country`; empty when neither is given.
+
+Rules on metadata only: no model and no agent takes part.
 
 ## Evaluation submissions (#645)
 

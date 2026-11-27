@@ -7,6 +7,7 @@
  * (`next-intl.d.ts`), and the shape the French catalogue must match.
  */
 import accessRequest from './en/accessRequest.json';
+import activityReport from './en/activityReport.json';
 import annotate from './en/annotate.json';
 import campaign from './en/campaign.json';
 import catalog from './en/catalog.json';
@@ -36,9 +37,11 @@ import settings from './en/settings.json';
 import signIn from './en/signIn.json';
 import toolsetForm from './en/toolsetForm.json';
 import toolsets from './en/toolsets.json';
+import useCase from './en/useCase.json';
 
 const en = {
   AccessRequest: accessRequest,
+  ActivityReport: activityReport,
   Annotate: annotate,
   Campaign: campaign,
   Catalog: catalog,
@@ -68,6 +71,7 @@ const en = {
   SignIn: signIn,
   ToolsetForm: toolsetForm,
   Toolsets: toolsets,
+  UseCase: useCase,
 };
 
 export type Messages = typeof en;

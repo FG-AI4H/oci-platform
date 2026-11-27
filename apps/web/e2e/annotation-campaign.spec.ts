@@ -290,14 +290,17 @@ test.describe('annotation campaign — cost estimate when N > 5 (#311)', () => {
     // `cm` user the other tests format as en-GB.
     await signInAs(page, `cm-locale-${Date.now()}`, 'campaign-manager');
     await page.goto('/settings');
-    await page.getByLabel('Language').fill('fr-CH');
+    // The Settings language is a select of the interface languages (#654);
+    // the header's language switch carries the same name, hence the id.
+    await page.locator('#locale').selectOption('fr');
     await page.getByRole('button', { name: /save preferences/i }).click();
     await expect(page).toHaveURL(/\/settings\?saved=1/);
 
+    // The form is in French now, so its fields are found by id.
     await page.goto('/annotation/campaigns/new');
-    await page.getByLabel('Annotators per data point').fill('7');
-    await page.getByLabel('Expected number of samples').fill('1000');
-    // fr-CH groups thousands with a (narrow) no-break space, not a comma.
+    await page.locator('#field-n-annotators').fill('7');
+    await page.locator('#field-expected-samples').fill('1000');
+    // French groups thousands with a (narrow) no-break space, not a comma.
     await expect(page.getByTestId('cost-estimate-gate1')).toHaveText(/^7\s000$/);
     await expect(page.getByTestId('cost-estimate-total')).toHaveText(/^9\s000$/);
   });

@@ -26,6 +26,12 @@ interface Props {
    * before they pick their own DUO terms.
    */
   datasetDuoTerms: string[];
+  /**
+   * Answers carried over from a use case (#829, `/use-case`): the kind of
+   * use and the ethics approval the visitor already gave there. Initial
+   * values only; what the form echoes after an error takes precedence.
+   */
+  prefill?: { intendedUseCategory?: string; irbApproved?: boolean };
 }
 
 /**
@@ -88,7 +94,7 @@ const REQUESTER_DUO_OPTIONS = DUO_REGISTRY.filter((t) =>
  * (#654); the DUO terms' own labels and summaries come from the ontology
  * (`@oci/croissant`) and stay in English, as published.
  */
-export function RequestAccessForm({ slug, datasetDuoTerms }: Props) {
+export function RequestAccessForm({ slug, datasetDuoTerms, prefill }: Props) {
   const t = useTranslations('AccessRequest');
   const tCommon = useTranslations('Common');
   const boundAction = requestAccessAction.bind(null, slug);
@@ -102,7 +108,9 @@ export function RequestAccessForm({ slug, datasetDuoTerms }: Props) {
   const initialIntent =
     typeof echoed?.intendedUseCategory === 'string' && echoed.intendedUseCategory.length > 0
       ? echoed.intendedUseCategory
-      : '';
+      : echoed
+        ? ''
+        : (prefill?.intendedUseCategory ?? '');
   const [intent, setIntent] = useState<string>(initialIntent);
   const isBuilder =
     intent === 'COMMERCIAL_RESEARCH' ||
@@ -241,7 +249,7 @@ export function RequestAccessForm({ slug, datasetDuoTerms }: Props) {
                 type="radio"
                 name="intendedUseCategory"
                 value={id}
-                defaultChecked={echoed?.intendedUseCategory === id}
+                defaultChecked={initialIntent === id}
                 required
                 onChange={(e) => setIntent(e.currentTarget.value)}
                 className="mt-0.5 accent-[var(--color-primary)]"
@@ -298,7 +306,11 @@ export function RequestAccessForm({ slug, datasetDuoTerms }: Props) {
             type="checkbox"
             name="irbApproved"
             value="true"
-            defaultChecked={echoed?.irbApproved === 'true' || echoed?.irbApproved === 'on'}
+            defaultChecked={
+              echoed
+                ? echoed.irbApproved === 'true' || echoed.irbApproved === 'on'
+                : prefill?.irbApproved === true
+            }
             className="mt-0.5 accent-[var(--color-primary)]"
           />
           <span>

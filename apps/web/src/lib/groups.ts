@@ -125,6 +125,27 @@ export function canReadEvidenceSummary(
   return ['admin', 'evaluation-reviewer', 'regulator'].some((g) => groups.includes(g));
 }
 
+/**
+ * True when the caller may read the activity report (#828): `admin`,
+ * `regulator` or `supervisor`. Mirrors `@Roles` on `/v2/reports`; the API's
+ * 403 stays authoritative.
+ */
+export function canReadActivityReport(session: Session | null | undefined): boolean {
+  const groups = userGroups(session);
+  return ['admin', 'regulator', 'supervisor'].some((g) => groups.includes(g));
+}
+
+/** Server-side guard for /admin/reports. */
+export function requireActivityReportReader(session: Session | null | undefined): Session {
+  if (!session?.user) {
+    redirect('/');
+  }
+  if (!canReadActivityReport(session)) {
+    redirect('/dashboard');
+  }
+  return session;
+}
+
 /** Server-side guard for /admin/audit (admin or regulator). */
 export function requireAuditReader(session: Session | null | undefined): Session {
   if (!session?.user) {

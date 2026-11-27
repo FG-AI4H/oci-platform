@@ -13,7 +13,7 @@ import {
   Container,
   Section,
 } from '@oci/ui';
-import type { DatasetDetail } from '@oci/shared-types';
+import { IntendedUseCategorySchema, type DatasetDetail } from '@oci/shared-types';
 import { auth } from '../../../../auth';
 import { apiFetch } from '../../../../lib/api';
 import { RequestAccessForm } from './request-access-form';
@@ -29,16 +29,29 @@ export async function generateMetadata() {
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+  /** Answers carried over from `/use-case` (#829); anything else is ignored. */
+  searchParams: Promise<{ intendedUse?: string | string[]; irbApproved?: string | string[] }>;
 }
 
-export default async function RequestAccessPage({ params }: PageProps) {
+export default async function RequestAccessPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
+  const carried = await searchParams;
+  const carriedUse = IntendedUseCategorySchema.safeParse(carried.intendedUse);
+  const prefill = {
+    ...(carriedUse.success ? { intendedUseCategory: carriedUse.data } : {}),
+    irbApproved: carried.irbApproved === 'true',
+  };
   const [session, t] = await Promise.all([auth(), getTranslations('AccessRequest')]);
 
   // Anonymous → bounce to /signin with a callback back here so the
   // user lands on the form straight after authentication.
   if (!session?.user) {
-    redirect(`/signin?callbackUrl=${encodeURIComponent(`/catalog/${slug}/request-access`)}`);
+    // The answers carried from a use case come back after sign-in.
+    const carriedQs = new URLSearchParams();
+    if (prefill.intendedUseCategory) carriedQs.set('intendedUse', prefill.intendedUseCategory);
+    if (prefill.irbApproved) carriedQs.set('irbApproved', 'true');
+    const back = `/catalog/${slug}/request-access${carriedQs.size > 0 ? `?${carriedQs.toString()}` : ''}`;
+    redirect(`/signin?callbackUrl=${encodeURIComponent(back)}`);
   }
 
   let detail: DatasetDetail | null = null;
@@ -107,7 +120,11 @@ export default async function RequestAccessPage({ params }: PageProps) {
             <CardTitle>{t('page.detailsTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
-            <RequestAccessForm slug={detail.slug} datasetDuoTerms={detail.duoTerms ?? []} />
+            <RequestAccessForm
+              slug={detail.slug}
+              datasetDuoTerms={detail.duoTerms ?? []}
+              prefill={prefill}
+            />
           </CardContent>
         </Card>
       </Section>

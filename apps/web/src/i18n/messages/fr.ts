@@ -9,6 +9,7 @@
  */
 import type { Messages } from './en';
 import accessRequest from './fr/accessRequest.json';
+import activityReport from './fr/activityReport.json';
 import annotate from './fr/annotate.json';
 import campaign from './fr/campaign.json';
 import catalog from './fr/catalog.json';
@@ -38,9 +39,11 @@ import settings from './fr/settings.json';
 import signIn from './fr/signIn.json';
 import toolsetForm from './fr/toolsetForm.json';
 import toolsets from './fr/toolsets.json';
+import useCase from './fr/useCase.json';
 
 const fr = {
   AccessRequest: accessRequest,
+  ActivityReport: activityReport,
   Annotate: annotate,
   Campaign: campaign,
   Catalog: catalog,
@@ -70,6 +73,7 @@ const fr = {
   SignIn: signIn,
   ToolsetForm: toolsetForm,
   Toolsets: toolsets,
+  UseCase: useCase,
 } satisfies Messages;
 
 export default fr;

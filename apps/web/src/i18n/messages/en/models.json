@@ -80,6 +80,23 @@
     "factsUnavailableTitle": "Model Facts label unavailable",
     "factsUnavailableBody": "The label for this model could not be generated right now. The card details are still accurate."
   },
+  "data": {
+    "title": "Data",
+    "declared": "Declared by the developer",
+    "declaredEmpty": "The developer has not declared any dataset.",
+    "measured": "Evaluated on this platform",
+    "measuredHint": "From the published results linked to this model.",
+    "task": "Task: {name}",
+    "withheld": "A dataset of this catalogue that is not public",
+    "external": "Held elsewhere",
+    "versionPinned": "Version {version} when declared",
+    "versionEvaluated": "Version {version}",
+    "modality": "Modality",
+    "format": "Format",
+    "licence": "Licence",
+    "note": "Note",
+    "opensElsewhere": "opens another site"
+  },
   "facts": {
     "title": "Model Facts",
     "generatedOn": "WHO model facts label, generated from this card on {date}.",
@@ -167,6 +184,12 @@
     "pending": "Approval pending",
     "granted": "Approval granted",
     "withdrawn": "Approval withdrawn"
+  },
+  "datasetRole": {
+    "TRAINING": "Training",
+    "TUNING": "Tuning",
+    "VALIDATION": "Validation",
+    "EVALUATION": "Evaluation"
   },
   "jurisdiction": {
     "EU": "European Union",

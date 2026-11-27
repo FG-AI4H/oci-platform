@@ -75,6 +75,8 @@ import { ToolIntegrationService } from './tool-integration.service.js';
   ],
   exports: [
     CalibrationService,
+    // The activity report reads each campaign's agreement (#828).
+    CampaignAnnotationsService,
     CampaignService,
     InstructionsService,
     MetadataVisibilityService,

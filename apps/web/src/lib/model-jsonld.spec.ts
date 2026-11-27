@@ -18,6 +18,8 @@ const card: PublicModelCard = {
   versionMajorMinorPatch: '2.0.1',
   materialChange: false,
   trainingDataJurisdictions: ['US'],
+  datasetRefs: [],
+  evaluatedOn: [],
   generativeAi: false,
   lmmSpecificLimitations: null,
   status: 'PUBLISHED',

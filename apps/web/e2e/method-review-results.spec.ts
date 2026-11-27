@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { test, expect as baseExpect, type Browser, type Page } from '@playwright/test';
+import { ensureLatestVersionDeclared } from './support/declared-method-version';
 
 /**
  * A result moves from provisional to published when the method version it
@@ -36,7 +37,6 @@ const METHOD = 'oci-predictions-scoring';
 const stamp = Date.now();
 const RESULT = `e2e-pinned-${stamp}`;
 const PARTICIPANT = { Authorization: `Bearer dev:e2e-pinned-participant-${stamp}:researcher` };
-const OPERATOR = { Authorization: `Bearer dev:e2e-pinned-operator-${stamp}:admin` };
 const REVIEWER = `e2e-pinned-reviewer-${stamp}`;
 const RATIONALE =
   'Scoring is a pure function of the predictions and the held-back labels; no participant code runs.';
@@ -45,14 +45,6 @@ const MODEL_A = resolvePath(
   process.cwd(),
   '../../packages/database/seed/profiles/radiology-workshop/fixtures/nih-chestxray14-workshop/model-a.csv',
 );
-
-interface Version {
-  version: string;
-  reviewStatus: string;
-  threatModel: unknown;
-  disclosureProfile: unknown;
-  operationalEnvelope: unknown;
-}
 
 function predictionsOf(csv: string) {
   return csv
@@ -63,16 +55,6 @@ function predictionsOf(csv: string) {
       const [imageId = '', grade = ''] = line.split(',');
       return { imageId, grade: Number(grade) };
     });
-}
-
-/** The next free patch number after every version the method has. */
-function nextPatch(versions: readonly Version[]): string {
-  const parts = versions.map((v) => v.version.split('.').map(Number));
-  const [major = 1, minor = 0] = parts.at(-1) ?? [];
-  const patch = Math.max(
-    ...parts.filter(([a, b]) => a === major && b === minor).map(([, , p = 0]) => p),
-  );
-  return `${major}.${minor}.${patch + 1}`;
 }
 
 async function signInAs(page: Page, user: string, roles: string, callback: string) {
@@ -104,25 +86,7 @@ test.describe('a pinned result moves from provisional to published (#583, #649)'
   let version = '';
 
   test.beforeAll(async ({ request }) => {
-    const route = (await (await request.get(`${API}/v2/evaluation/routes/${METHOD}`)).json()) as {
-      versions: Version[];
-    };
-    const latest = route.versions.at(-1);
-    if (!latest) throw new Error(`${METHOD} has no version: are the migrations applied?`);
-    version = latest.version;
-    if (latest.reviewStatus !== 'DECLARED') {
-      version = nextPatch(route.versions);
-      const declared = await request.post(`${API}/v2/evaluation/routes/${METHOD}/versions`, {
-        headers: OPERATOR,
-        data: {
-          version,
-          threatModel: latest.threatModel,
-          disclosureProfile: latest.disclosureProfile,
-          operationalEnvelope: latest.operationalEnvelope,
-        },
-      });
-      expect(declared.ok(), `declare ${version}: ${declared.status()}`).toBe(true);
-    }
+    version = await ensureLatestVersionDeclared(request, METHOD, `e2e-pinned-operator-${stamp}`);
 
     const submitted = await request.post(`${API}/v2/evaluation/tasks/${TASK}/submissions`, {
       headers: PARTICIPANT,

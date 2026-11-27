@@ -2113,10 +2113,59 @@ model ModelCard {
   /// Evaluation submissions linked to this card as validation evidence (#587).
   submissions Submission[]
 
+  /// The datasets the model declares it was trained, tuned, validated or
+  /// evaluated on (#820), in the order the developer listed them.
+  datasetRefs ModelCardDatasetRef[]
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("model_cards")
+  @@schema("prediction")
+}
+
+/// One dataset a model card declares (#820).
+///
+/// Exactly one target, enforced by a CHECK constraint: `datasetSlug` for a
+/// dataset of this catalogue, or `externalUrl` + `externalName` for one held
+/// elsewhere. `datasetSlug` is a soft reference (catalog.datasets.slug, no
+/// foreign key), like `EvaluationTask.datasetSlug`: a card must survive the
+/// dataset being retired. A table and not a Json column on the card, because
+/// the dataset page reads it the other way round (which cards name me).
+///
+/// `manifestVersion` / `manifestSha256` are the catalogue version current
+/// when the reference was saved, so the signed package (#586) can cite it.
+model ModelCardDatasetRef {
+  id          String    @id @default(uuid()) @db.Uuid
+  modelCardId String    @map("model_card_id") @db.Uuid
+  modelCard   ModelCard @relation(fields: [modelCardId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  /// Order on the card, from 0.
+  position    Int
+
+  role            ModelCardDatasetRole
+  datasetSlug     String?              @map("dataset_slug")
+  manifestVersion String?              @map("manifest_version")
+  manifestSha256  String?              @map("manifest_sha256")
+  externalUrl     String?              @map("external_url")
+  externalName    String?              @map("external_name")
+  /// What the catalogue entry does not say: subset used, population.
+  note            String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([modelCardId, position])
+  @@index([datasetSlug])
+  @@map("model_card_dataset_refs")
+  @@schema("prediction")
+}
+
+/// The part a dataset played for a model (#820).
+enum ModelCardDatasetRole {
+  TRAINING
+  TUNING
+  VALIDATION
+  EVALUATION
+
   @@schema("prediction")
 }
 

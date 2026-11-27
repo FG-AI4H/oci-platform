@@ -8,6 +8,7 @@ import {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
+import type { CatalogService, DatasetReferenceFacts } from '../catalog/catalog.service.js';
 import type { ModelCardEvidenceService } from '../evaluation/model-card-evidence.service.js';
 import type { ModelCardPerformance } from '../evaluation/model-card-evidence.js';
 import { IntendedUseService } from '../intended-use/intended-use.service.js';
@@ -34,6 +35,7 @@ function body(overrides: Partial<CreateModelCardRequest> = {}): CreateModelCardR
     changeJustification: null,
     materialChange: false,
     trainingDataJurisdictions: ['CH', 'EU'],
+    datasetRefs: [],
     generativeAi: true,
     lmmSpecificLimitations: null,
     modelDeveloper: 'Acme Health AI GmbH',
@@ -66,6 +68,7 @@ function dbRow(over: Record<string, unknown> = {}) {
     changeJustification: null,
     materialChange: false,
     trainingDataJurisdictions: ['CH', 'EU'],
+    datasetRefs: [],
     generativeAi: true,
     lmmSpecificLimitations: null,
     status: 'DRAFT',
@@ -87,14 +90,17 @@ interface RepoMock {
   create: ReturnType<typeof vi.fn>;
   findBySlug: ReturnType<typeof vi.fn>;
   findById: ReturnType<typeof vi.fn>;
+  update: ReturnType<typeof vi.fn>;
   updateStatus: ReturnType<typeof vi.fn>;
   searchPublished: ReturnType<typeof vi.fn>;
+  findPublishedByDatasetSlug: ReturnType<typeof vi.fn>;
 }
 
 let repo: RepoMock;
 let intendedUse: { validate: ReturnType<typeof vi.fn> };
 let audit: { emit: ReturnType<typeof vi.fn>; emitSync: ReturnType<typeof vi.fn> };
 let evidence: { performanceFor: ReturnType<typeof vi.fn> };
+let catalog: { referenceFacts: ReturnType<typeof vi.fn> };
 let service: PredictionService;
 
 const NO_EVIDENCE: ModelCardPerformance = { entries: [], retracted: 0, notEstimable: 0 };
@@ -104,17 +110,22 @@ beforeEach(() => {
     create: vi.fn(),
     findBySlug: vi.fn(),
     findById: vi.fn(),
+    update: vi.fn(),
     updateStatus: vi.fn(),
     searchPublished: vi.fn(),
+    findPublishedByDatasetSlug: vi.fn(),
   };
   intendedUse = { validate: vi.fn().mockReturnValue(IUS) };
   audit = { emit: vi.fn().mockResolvedValue(undefined), emitSync: vi.fn().mockResolvedValue({}) };
   evidence = { performanceFor: vi.fn().mockResolvedValue(NO_EVIDENCE) };
+  // By default the caller sees no dataset at all.
+  catalog = { referenceFacts: vi.fn().mockResolvedValue(new Map()) };
   service = new PredictionService(
     repo as unknown as PredictionRepository,
     intendedUse as unknown as IntendedUseService,
     audit as unknown as AuditEmitter,
     evidence as unknown as ModelCardEvidenceService,
+    catalog as unknown as CatalogService,
   );
 });
 
@@ -428,5 +439,297 @@ describe('PredictionService.listPublished (#591)', () => {
     const out = await service.listPublished({ sort: 'recent', page: 1, limit: 25 });
 
     expect(out.totalPages).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Declared datasets (#820)
+// ---------------------------------------------------------------------------
+
+const IDRID: DatasetReferenceFacts = {
+  slug: 'idrid-grading',
+  name: 'IDRiD disease grading',
+  modalities: ['Fundus photography'],
+  formats: ['image/jpeg', 'text/csv'],
+  licence: 'CC-BY-4.0',
+  latestVersion: '1.2.0',
+  latestManifestSha256: 'a'.repeat(64),
+};
+
+function seenBy(...facts: DatasetReferenceFacts[]) {
+  return new Map(facts.map((f) => [f.slug, f]));
+}
+
+function refRow(over: Record<string, unknown> = {}) {
+  return {
+    id: '22222222-2222-2222-2222-222222222222',
+    modelCardId: '11111111-1111-1111-1111-111111111111',
+    position: 0,
+    role: 'TRAINING',
+    datasetSlug: 'idrid-grading',
+    manifestVersion: '1.0.0',
+    manifestSha256: 'b'.repeat(64),
+    externalUrl: null,
+    externalName: null,
+    note: 'Training split only',
+    createdAt: new Date('2026-11-27T00:00:00.000Z'),
+    ...over,
+  };
+}
+
+function publishedResult(over: Record<string, unknown> = {}) {
+  return {
+    submissionId: '33333333-3333-3333-3333-333333333333',
+    taskSlug: 'idrid-dr-grading',
+    taskName: 'Diabetic retinopathy grading',
+    datasetSlug: 'idrid-grading',
+    datasetVersion: '1.2.0',
+    standing: 'PUBLISHED',
+    ...over,
+  };
+}
+
+describe('PredictionService: declared datasets (#820)', () => {
+  it('pins the catalogue version current when the reference is saved', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+    repo.create.mockResolvedValue(dbRow());
+    catalog.referenceFacts.mockResolvedValue(seenBy(IDRID));
+
+    await service.submit(
+      body({
+        datasetRefs: [
+          { role: 'TRAINING', datasetSlug: 'idrid-grading', note: 'Training split only' },
+          {
+            role: 'EVALUATION',
+            externalUrl: 'https://doi.org/10.5555/example',
+            externalName: 'Messidor-2',
+          },
+        ],
+      }),
+      actor(),
+    );
+
+    expect(catalog.referenceFacts).toHaveBeenCalledWith(['idrid-grading'], actor());
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        datasetRefs: [
+          {
+            role: 'TRAINING',
+            datasetSlug: 'idrid-grading',
+            manifestVersion: '1.2.0',
+            manifestSha256: 'a'.repeat(64),
+            externalUrl: null,
+            externalName: null,
+            note: 'Training split only',
+          },
+          {
+            role: 'EVALUATION',
+            datasetSlug: null,
+            manifestVersion: null,
+            manifestSha256: null,
+            externalUrl: 'https://doi.org/10.5555/example',
+            externalName: 'Messidor-2',
+            note: null,
+          },
+        ],
+      }),
+    );
+  });
+
+  it('refuses a dataset the submitter cannot see, the same way as one that does not exist', async () => {
+    repo.findBySlug.mockResolvedValue(null);
+
+    await expect(
+      service.submit(
+        body({ datasetRefs: [{ role: 'TRAINING', datasetSlug: 'hospital-private-ct' }] }),
+        actor(),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(repo.create).not.toHaveBeenCalled();
+    expect(audit.emitSync).not.toHaveBeenCalled();
+  });
+
+  it('keeps the pin of a dataset the card already declared when it is edited', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ datasetRefs: [refRow()] }));
+    repo.update.mockResolvedValue(dbRow({ datasetRefs: [refRow({ note: 'Reworded' })] }));
+    // The catalogue has moved on to 1.2.0 since the reference was saved at 1.0.0.
+    catalog.referenceFacts.mockResolvedValue(seenBy(IDRID));
+
+    await service.update(
+      'acme-triage-v1',
+      { datasetRefs: [{ role: 'TRAINING', datasetSlug: 'idrid-grading', note: 'Reworded' }] },
+      actor(),
+    );
+
+    expect(repo.update).toHaveBeenCalledWith(
+      '11111111-1111-1111-1111-111111111111',
+      expect.objectContaining({
+        datasetRefs: [
+          expect.objectContaining({
+            datasetSlug: 'idrid-grading',
+            manifestVersion: '1.0.0',
+            manifestSha256: 'b'.repeat(64),
+            note: 'Reworded',
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('leaves the declared datasets alone when an edit does not send them', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ datasetRefs: [refRow()] }));
+    repo.update.mockResolvedValue(dbRow({ datasetRefs: [refRow()] }));
+
+    await service.update('acme-triage-v1', { clinicalSummary: 'Reworded' }, actor());
+
+    expect(repo.update.mock.calls[0]?.[1]).toHaveProperty('datasetRefs', undefined);
+  });
+
+  it('serves the public a dataset they may see with its catalogue facts', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED', datasetRefs: [refRow()] }));
+    catalog.referenceFacts.mockResolvedValue(seenBy(IDRID));
+
+    const out = await service.getBySlug('acme-triage-v1');
+
+    expect(out.datasetRefs).toEqual([
+      {
+        role: 'TRAINING',
+        kind: 'CATALOGUE',
+        datasetSlug: 'idrid-grading',
+        externalUrl: null,
+        externalName: null,
+        note: 'Training split only',
+        manifestVersion: '1.0.0',
+        manifestSha256: 'b'.repeat(64),
+        dataset: {
+          name: 'IDRiD disease grading',
+          modalities: ['Fundus photography'],
+          formats: ['image/jpeg', 'text/csv'],
+          licence: 'CC-BY-4.0',
+          latestVersion: '1.2.0',
+        },
+      },
+    ]);
+  });
+
+  it('serves the public only the role of a dataset they may not see', async () => {
+    repo.findBySlug.mockResolvedValue(
+      dbRow({
+        status: 'PUBLISHED',
+        datasetRefs: [refRow({ datasetSlug: 'hospital-private-ct', note: 'Site A, 2024' })],
+      }),
+    );
+
+    const out = await service.getBySlug('acme-triage-v1', stranger());
+
+    expect(out.datasetRefs).toEqual([
+      {
+        role: 'TRAINING',
+        kind: 'WITHHELD',
+        datasetSlug: null,
+        externalUrl: null,
+        externalName: null,
+        note: null,
+        manifestVersion: null,
+        manifestSha256: null,
+        dataset: null,
+      },
+    ]);
+    expect(JSON.stringify(out)).not.toContain('hospital-private-ct');
+    expect(JSON.stringify(out)).not.toContain('Site A');
+  });
+
+  it('keeps the slug for the submitter, who typed it, even without catalogue facts', async () => {
+    repo.findBySlug.mockResolvedValue(
+      dbRow({ datasetRefs: [refRow({ datasetSlug: 'hospital-private-ct' })] }),
+    );
+
+    const out = await service.getBySlug('acme-triage-v1', actor());
+
+    expect(out.datasetRefs[0]).toMatchObject({
+      kind: 'CATALOGUE',
+      datasetSlug: 'hospital-private-ct',
+      dataset: null,
+    });
+  });
+
+  it('lists an external dataset with its address and name', async () => {
+    repo.findBySlug.mockResolvedValue(
+      dbRow({
+        status: 'PUBLISHED',
+        datasetRefs: [
+          refRow({
+            datasetSlug: null,
+            manifestVersion: null,
+            manifestSha256: null,
+            externalUrl: 'https://doi.org/10.5555/example',
+            externalName: 'Messidor-2',
+            note: null,
+          }),
+        ],
+      }),
+    );
+
+    const out = await service.getBySlug('acme-triage-v1');
+
+    expect(out.datasetRefs[0]).toMatchObject({
+      kind: 'EXTERNAL',
+      externalUrl: 'https://doi.org/10.5555/example',
+      externalName: 'Messidor-2',
+    });
+    expect(catalog.referenceFacts).not.toHaveBeenCalled();
+  });
+
+  it('derives "evaluated on" from published results only, one line per task', async () => {
+    repo.findBySlug.mockResolvedValue(dbRow({ status: 'PUBLISHED' }));
+    evidence.performanceFor.mockResolvedValue({
+      entries: [
+        publishedResult(),
+        publishedResult({ submissionId: '44444444-4444-4444-4444-444444444444' }),
+        publishedResult({ taskSlug: 'other-task', standing: 'PROVISIONAL' }),
+      ],
+      retracted: 0,
+      notEstimable: 0,
+    });
+    catalog.referenceFacts.mockResolvedValue(seenBy(IDRID));
+
+    const out = await service.getBySlug('acme-triage-v1');
+
+    expect(out.evaluatedOn).toEqual([
+      {
+        taskSlug: 'idrid-dr-grading',
+        taskName: 'Diabetic retinopathy grading',
+        datasetSlug: 'idrid-grading',
+        datasetVersion: '1.2.0',
+        dataset: expect.objectContaining({ name: 'IDRiD disease grading' }),
+      },
+    ]);
+  });
+});
+
+describe('PredictionService.listForDataset (#820)', () => {
+  it('lists the published cards that declare a dataset the caller may see', async () => {
+    catalog.referenceFacts.mockResolvedValue(seenBy(IDRID));
+    const items = [
+      {
+        slug: 'acme-triage-v1',
+        modelDeveloper: 'Acme Health AI GmbH',
+        versionMajorMinorPatch: '1.0.0',
+        medicalPurpose: 'triage',
+        riskTier: 'III',
+        roles: ['TRAINING'],
+      },
+    ];
+    repo.findPublishedByDatasetSlug.mockResolvedValue(items);
+
+    await expect(service.listForDataset('idrid-grading')).resolves.toEqual({ items });
+  });
+
+  it('404s for a dataset the caller may not see, without reading any card', async () => {
+    await expect(service.listForDataset('hospital-private-ct', stranger())).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect(repo.findPublishedByDatasetSlug).not.toHaveBeenCalled();
   });
 });

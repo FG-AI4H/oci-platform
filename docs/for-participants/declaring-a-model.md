@@ -71,6 +71,7 @@ Everything here is optional, but each answer helps the reviewer:
 
 - **Training data**: where the data came from and how they were labelled. Visible to reviewers, not on the public page;
 - **Training data jurisdictions**: country or region codes;
+- **Datasets**: the datasets the model was trained, tuned, validated or tested on. Press **Add a dataset**, choose what it was used for, then give the identifier of a dataset of this catalogue (the form suggests those you can see) or the web address of one held elsewhere, with its name. The **Note** says what the catalogue entry does not: the subset used, the population. These are shown on the public page, each catalogue dataset with a link, and your model is listed on that dataset's page once the card is published;
 - **Regulatory status**: the **Regulatory pathway**, the **Approval status** and the certificate number, if your model has one;
 - **Known limits and biases** and **Bias mitigation**;
 - **Monitoring after deployment**: how performance is followed once the model is in use.

@@ -108,6 +108,9 @@
     },
     "pendingBody": "L’hôte examine votre demande. Vous verrez la décision sur votre tableau de bord.",
     "approvedBody": "Vous pouvez télécharger les distributions ci-dessous.",
+    "endedStatus": "terminé",
+    "endedBody": "Votre accès a pris fin le {date}. Déposez une nouvelle demande pour continuer à utiliser ce jeu de données.",
+    "approvedUntil": "Vous pouvez télécharger les distributions ci-dessous. Votre accès prend fin le {date}.",
     "deniedBody": "Votre demande a été refusée. Vous pouvez déposer une nouvelle demande avec des attestations corrigées.",
     "hostNote": "Note de l’hôte :",
     "revokedBody": "Une demande précédemment approuvée a été révoquée. Déposez une nouvelle demande si votre projet remplit désormais la condition à l’origine de la révocation.",
@@ -178,5 +181,12 @@
       "SYNTHETIC": "Données synthétiques",
       "NONE": "Aucune"
     }
+  },
+  "models": {
+    "title": "Modèles qui utilisent ce jeu de données",
+    "intro": "Fiches de modèle publiées dont le développeur déclare ce jeu de données.",
+    "roles": "Utilisé pour : {roles}",
+    "riskTier": "Niveau de risque {tier}",
+    "version": "v{version}"
   }
 }

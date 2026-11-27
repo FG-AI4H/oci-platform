@@ -83,7 +83,7 @@ export default async function EditModelCardPage({ params }: { params: Promise<{ 
             mode="edit"
             action={updateModelCardAction.bind(null, card.slug)}
             initialValues={formValuesFromCard(card)}
-            options={await modelCardFormOptions()}
+            options={await modelCardFormOptions(session)}
           />
         ) : (
           <Alert tone="warning" className="max-w-3xl">

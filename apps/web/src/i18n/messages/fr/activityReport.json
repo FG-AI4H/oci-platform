@@ -1,0 +1,96 @@
+{
+  "metaTitle": "Rapport d’activité — Plateforme OCI",
+  "eyebrow": "Espace opérateur",
+  "heading": "Rapport d’activité",
+  "lead": "Ce que ce déploiement a enregistré en un mois civil : jeux de données, demandes d’accès, évaluations, modèles, annotation et journal d’audit. Des décomptes et des entrées publiques uniquement ; aucune personne n’est nommée.",
+  "month": {
+    "label": "Mois",
+    "show": "Afficher",
+    "current": "{month} (en cours)"
+  },
+  "actions": {
+    "json": "Télécharger en JSON",
+    "printHint": "Pour garder une copie sur papier ou en PDF, utilisez la commande d’impression de votre navigateur."
+  },
+  "unavailable": {
+    "title": "Rapport indisponible",
+    "fallback": "Impossible de joindre l’API"
+  },
+  "meta": {
+    "title": "Rapport d’activité, {month}",
+    "deployment": "Déploiement",
+    "period": "Période",
+    "periodValue": "du {from} au {to} (UTC)",
+    "generated": "Généré le",
+    "partial": "Ce mois n’est pas terminé : les chiffres vont encore évoluer."
+  },
+  "datasets": {
+    "heading": "Jeux de données",
+    "publishedAtEnd": "Jeux de données publics publiés à la fin de la période",
+    "versionsPublished": "Versions publiées pendant la période",
+    "listHeading": "Versions publiées",
+    "colDataset": "Jeu de données",
+    "colVersion": "Version",
+    "colPublished": "Publiée le",
+    "none": "Aucune version n’a été publiée pendant la période.",
+    "more": "Les 50 plus récentes sont listées."
+  },
+  "accessRequests": {
+    "heading": "Demandes d’accès",
+    "submitted": "Déposées pendant la période",
+    "approved": "Approuvées pendant la période",
+    "denied": "Refusées pendant la période",
+    "pendingAtEnd": "En attente de décision à la fin de la période",
+    "note": "Les demandes approuvées et refusées sont celles qui ont encore ce statut aujourd’hui : une approbation révoquée depuis n’est pas comptée."
+  },
+  "evaluation": {
+    "heading": "Évaluation",
+    "tasks": "Tâches d’évaluation",
+    "received": "Soumissions reçues pendant la période",
+    "scored": "Notées",
+    "failed": "En échec",
+    "colTask": "Tâche",
+    "colReceived": "Reçues",
+    "colScored": "Notées",
+    "colFailed": "En échec",
+    "colPublished": "Résultats publiés",
+    "colBest": "Meilleur résultat publié",
+    "best": "{value} ({metric}), {method}",
+    "noBest": "Aucun résultat publié",
+    "none": "Aucune tâche n’a reçu de soumission pendant la période ni ne porte de résultat publié.",
+    "note": "Un résultat est publié lorsque la version de sa méthode d’évaluation est approuvée et qu’il n’a pas été retiré. Le meilleur résultat est le meilleur de la tâche à ce jour, quelle que soit sa date de soumission."
+  },
+  "models": {
+    "heading": "Modèles",
+    "published": "Fiches de modèle publiées à ce jour",
+    "publishedInPeriod": "Publiées pendant la période"
+  },
+  "annotation": {
+    "heading": "Annotation",
+    "colCampaign": "Campagne",
+    "colStatus": "Statut",
+    "colCounted": "Tâches lues",
+    "colOpen": "Encore ouvertes",
+    "colArbitration": "Envoyées en arbitrage",
+    "colKappa": "Kappa de Fleiss",
+    "colAgreement": "Accord",
+    "none": "Aucune campagne n’est en cours ou terminée.",
+    "note": "L’accord est calculé sur toutes les tâches lues à ce jour, et non sur la seule période. Un tiret signifie que la campagne n’a pas atteint le nombre de tâches requis pour un coefficient.",
+    "status": {
+      "RUNNING": "En cours",
+      "COMPLETED": "Terminée"
+    }
+  },
+  "audit": {
+    "heading": "Journal d’audit",
+    "events": "Événements enregistrés pendant la période",
+    "chain": "Chaîne de hachage sur la période",
+    "status": {
+      "intact": "Intacte ({checked, plural, one {# événement vérifié} other {# événements vérifiés}})",
+      "broken": "Rompue : vérifiez l’intervalle dans le lecteur du journal d’audit",
+      "empty": "Aucun événement pendant la période",
+      "unverified": "Non vérifiée ici : la période contient plus d’événements qu’une vérification n’en couvre. Vérifiez l’intervalle dans le lecteur du journal d’audit."
+    }
+  },
+  "dash": "—"
+}
