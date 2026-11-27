@@ -8,7 +8,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { AuditEmitter } from '@oci/audit';
-import type { ModelCard } from '@oci/database';
 import type { ModelFactsLabel } from '@oci/shared-types';
 import {
   allowedTransitionsFrom,
@@ -21,7 +20,13 @@ import {
   type CreateModelCardRequest,
   type ListModelCardsQuery,
   type ListModelCardsResponse,
+  type ListModelCardsForDatasetResponse,
   type ListMyModelCardsResponse,
+  type ModelCardDatasetFacts,
+  type ModelCardDatasetRef,
+  type ModelCardDatasetRefInput,
+  type ModelCardDatasetRole,
+  type ModelCardEvaluatedOn,
   type ModelCardResponse,
   type PublicModelCard,
   type UpdateModelCardRequest,
@@ -29,6 +34,7 @@ import {
 import type { CognitoAccessTokenPayload } from 'aws-jwt-verify/jwt-model';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
+import { CatalogService, type DatasetReferenceFacts } from '../catalog/catalog.service.js';
 import { ModelCardEvidenceService } from '../evaluation/model-card-evidence.service.js';
 import { IntendedUseService } from '../intended-use/intended-use.service.js';
 import {
@@ -36,6 +42,8 @@ import {
   toModelCardResponse,
   toMyModelCardSummary,
   toPublicModelCard,
+  type DatasetRefArgs,
+  type ModelCardWithRefs,
 } from './prediction.repository.js';
 import { buildModelFactsLabel } from './renderers/model-facts-label.js';
 import { renderModelFactsMarkdown } from './renderers/render-model-facts-markdown.js';
@@ -59,6 +67,7 @@ export class PredictionService {
     @Inject(IntendedUseService) private readonly intendedUse: IntendedUseService,
     @Inject(AUDIT_EMITTER) private readonly audit: AuditEmitter,
     @Inject(ModelCardEvidenceService) private readonly evidence: ModelCardEvidenceService,
+    @Inject(CatalogService) private readonly catalog: CatalogService,
   ) {}
 
   async submit(
@@ -80,6 +89,8 @@ export class PredictionService {
     const clash = await this.repo.findBySlug(body.slug);
     if (clash) throw new ConflictException(`Model card slug '${body.slug}' already exists`);
 
+    const datasetRefs = await this.datasetRefArgs(body.datasetRefs, user, []);
+
     const actorUserId = cognitoSubAsUuid(user.sub);
     const created = await this.repo.create({
       slug: body.slug,
@@ -93,6 +104,7 @@ export class PredictionService {
       changeJustification: body.changeJustification ?? null,
       materialChange: body.materialChange,
       trainingDataJurisdictions: body.trainingDataJurisdictions,
+      datasetRefs,
       generativeAi: body.generativeAi,
       lmmSpecificLimitations: body.lmmSpecificLimitations ?? null,
       modelDeveloper: body.modelDeveloper,
@@ -122,7 +134,7 @@ export class PredictionService {
     this.logger.log(
       `prediction.modelcard.created slug=${created.slug} class=${created.modelClass} tier=${ius.riskTier}`,
     );
-    return toModelCardResponse(created);
+    return this.present(created, user, true);
   }
 
   /**
@@ -156,7 +168,15 @@ export class PredictionService {
     }
 
     const ius = body.intendedUse ? this.intendedUse.validate(body.intendedUse) : undefined;
-    const updated = await this.repo.update(existing.id, { ...body, intendedUse: ius });
+    const datasetRefs =
+      body.datasetRefs === undefined
+        ? undefined
+        : await this.datasetRefArgs(body.datasetRefs, user, existing.datasetRefs);
+    const updated = await this.repo.update(existing.id, {
+      ...body,
+      intendedUse: ius,
+      datasetRefs,
+    });
 
     await this.audit.emitSync({
       module: 'prediction',
@@ -172,7 +192,7 @@ export class PredictionService {
     });
 
     this.logger.log(`prediction.modelcard.updated slug=${slug}`);
-    return toModelCardResponse(updated);
+    return this.present(updated, user, true);
   }
 
   /** The caller's own cards, every status (#651). */
@@ -238,7 +258,8 @@ export class PredictionService {
     });
 
     this.logger.log(`prediction.modelcard.status.changed slug=${slug} ${from}->${to}`);
-    return toModelCardResponse(updated);
+    // Whoever may move a card is its submitter or a reviewer.
+    return this.present(updated, user, true);
   }
 
   /**
@@ -284,11 +305,166 @@ export class PredictionService {
     user?: CognitoAccessTokenPayload,
   ): Promise<ModelCardResponse | PublicModelCard> {
     const row = await this.findVisible(slug, user);
-    const card = toModelCardResponse(row);
     const privileged =
       user !== undefined &&
       (row.submitterUserId === cognitoSubAsUuid(user.sub) || isModelCardReviewer(user));
+    const card = await this.present(row, user, privileged);
     return privileged ? card : toPublicModelCard(card);
+  }
+
+  /**
+   * The published cards that declare a dataset (#820), for the dataset page.
+   * A dataset the caller may not see answers 404, like the dataset itself:
+   * otherwise the list would confirm that a private slug exists.
+   */
+  async listForDataset(
+    datasetSlug: string,
+    user?: CognitoAccessTokenPayload,
+  ): Promise<ListModelCardsForDatasetResponse> {
+    const facts = await this.catalog.referenceFacts([datasetSlug], user);
+    if (!facts.has(datasetSlug)) {
+      throw new NotFoundException(`dataset "${datasetSlug}" not found`);
+    }
+    return { items: await this.repo.findPublishedByDatasetSlug(datasetSlug) };
+  }
+
+  /**
+   * The card with its datasets (#820): the declared ones as this caller may
+   * see them, and those of its published results.
+   *
+   * A declared catalogue dataset the caller may not see is `WITHHELD` for the
+   * public: role only. The submitter and the reviewers (`privileged`) keep
+   * the slug they or the submitter typed, with no facts beside it.
+   */
+  private async present(
+    row: ModelCardWithRefs,
+    user: CognitoAccessTokenPayload | undefined,
+    privileged: boolean,
+  ): Promise<ModelCardResponse> {
+    const performance = await this.evidence.performanceFor(row.id);
+    const published = performance.entries.filter((e) => e.standing === 'PUBLISHED');
+    const slugs = [
+      ...row.datasetRefs.flatMap((r) => (r.datasetSlug ? [r.datasetSlug] : [])),
+      ...published.map((e) => e.datasetSlug),
+    ];
+    const facts = slugs.length > 0 ? await this.catalog.referenceFacts(slugs, user) : new Map();
+
+    const datasetRefs: ModelCardDatasetRef[] = row.datasetRefs.map((ref) => {
+      const role = ref.role as ModelCardDatasetRole;
+      if (ref.datasetSlug === null) {
+        return {
+          role,
+          kind: 'EXTERNAL',
+          datasetSlug: null,
+          externalUrl: ref.externalUrl,
+          externalName: ref.externalName,
+          note: ref.note,
+          manifestVersion: null,
+          manifestSha256: null,
+          dataset: null,
+        };
+      }
+      const known = facts.get(ref.datasetSlug);
+      if (!known && !privileged) {
+        return {
+          role,
+          kind: 'WITHHELD',
+          datasetSlug: null,
+          externalUrl: null,
+          externalName: null,
+          note: null,
+          manifestVersion: null,
+          manifestSha256: null,
+          dataset: null,
+        };
+      }
+      return {
+        role,
+        kind: 'CATALOGUE',
+        datasetSlug: ref.datasetSlug,
+        externalUrl: null,
+        externalName: null,
+        note: ref.note,
+        manifestVersion: ref.manifestVersion,
+        manifestSha256: ref.manifestSha256,
+        dataset: known ? publicFacts(known) : null,
+      };
+    });
+
+    // One line per task: the newest published result speaks for it.
+    const evaluatedOn: ModelCardEvaluatedOn[] = [];
+    const seenTasks = new Set<string>();
+    for (const entry of published) {
+      if (seenTasks.has(entry.taskSlug)) continue;
+      seenTasks.add(entry.taskSlug);
+      const known = facts.get(entry.datasetSlug);
+      evaluatedOn.push({
+        taskSlug: entry.taskSlug,
+        taskName: entry.taskName,
+        datasetSlug: entry.datasetSlug,
+        datasetVersion: entry.datasetVersion,
+        dataset: known ? publicFacts(known) : null,
+      });
+    }
+
+    return toModelCardResponse(row, { datasetRefs, evaluatedOn });
+  }
+
+  /**
+   * The rows to store for the declared datasets (#820).
+   *
+   * A catalogue dataset must be one the submitter can see: a slug that does
+   * not exist and one they may not see get the same refusal, so the form
+   * cannot be used to find out which private slugs exist. Its current version
+   * and manifest hash are pinned, unless the card already named this dataset,
+   * in which case the pin taken then is kept: editing a note must not move
+   * the version the model was declared against.
+   */
+  private async datasetRefArgs(
+    refs: ReadonlyArray<ModelCardDatasetRefInput>,
+    user: CognitoAccessTokenPayload,
+    existing: ModelCardWithRefs['datasetRefs'],
+  ): Promise<DatasetRefArgs[]> {
+    const slugs = refs.flatMap((r) => (r.datasetSlug ? [r.datasetSlug] : []));
+    const facts = slugs.length > 0 ? await this.catalog.referenceFacts(slugs, user) : new Map();
+    const pinned = new Map(
+      existing.flatMap((r) => (r.datasetSlug ? [[r.datasetSlug, r] as const] : [])),
+    );
+    const missing = slugs.filter((s) => !facts.has(s) && !pinned.has(s));
+    if (missing.length > 0) {
+      const unknownDatasets = [...new Set(missing)];
+      throw new BadRequestException({
+        message:
+          `Not in the catalogue, or not visible to you: ${unknownDatasets.join(', ')}. ` +
+          'For a dataset held elsewhere, give its web address and its name.',
+        // For the form, which points at the rows concerned (#820).
+        unknownDatasets,
+      });
+    }
+    return refs.map((ref) => {
+      if (ref.datasetSlug === undefined) {
+        return {
+          role: ref.role,
+          datasetSlug: null,
+          manifestVersion: null,
+          manifestSha256: null,
+          externalUrl: ref.externalUrl ?? null,
+          externalName: ref.externalName ?? null,
+          note: ref.note ?? null,
+        };
+      }
+      const before = pinned.get(ref.datasetSlug);
+      const now: DatasetReferenceFacts | undefined = facts.get(ref.datasetSlug);
+      return {
+        role: ref.role,
+        datasetSlug: ref.datasetSlug,
+        manifestVersion: before ? before.manifestVersion : (now?.latestVersion ?? null),
+        manifestSha256: before ? before.manifestSha256 : (now?.latestManifestSha256 ?? null),
+        externalUrl: null,
+        externalName: null,
+        note: ref.note ?? null,
+      };
+    });
   }
 
   /**
@@ -321,7 +497,10 @@ export class PredictionService {
    * reviewers. Everyone else gets the same 404 as a missing slug, so an
    * unpublished card's existence doesn't leak.
    */
-  private async findVisible(slug: string, user?: CognitoAccessTokenPayload): Promise<ModelCard> {
+  private async findVisible(
+    slug: string,
+    user?: CognitoAccessTokenPayload,
+  ): Promise<ModelCardWithRefs> {
     const row = await this.repo.findBySlug(slug);
     // The rule is `modelCardVisibleTo` in @oci/shared-types, which the
     // evaluation module also applies before naming a linked card (#587).
@@ -335,6 +514,17 @@ export class PredictionService {
     if (!row || !visible) throw new NotFoundException(`Model card '${slug}' not found`);
     return row;
   }
+}
+
+/** The catalogue's facts without the manifest hash, which only the pin needs. */
+function publicFacts(facts: DatasetReferenceFacts): ModelCardDatasetFacts {
+  return {
+    name: facts.name,
+    modalities: facts.modalities,
+    formats: facts.formats,
+    licence: facts.licence,
+    latestVersion: facts.latestVersion,
+  };
 }
 
 function isModelCardReviewer(user: CognitoAccessTokenPayload): boolean {

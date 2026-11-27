@@ -270,6 +270,7 @@ interface DbRow {
   decidedAt: Date | null;
   decidedById: string | null;
   decisionNote: string | null;
+  expiresAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   dataset: { id: string; slug: string; name: string; duoTerms: string[]; accessTier: AccessTier };
@@ -302,6 +303,7 @@ function toSummary(row: DbRow): AccessRequestSummary {
     decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
     decidedById: row.decidedById,
     decisionNote: row.decisionNote,
+    expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

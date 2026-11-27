@@ -79,6 +79,23 @@
     "factsUnavailableTitle": "Étiquette « Model Facts » indisponible",
     "factsUnavailableBody": "L’étiquette de ce modèle n’a pas pu être générée pour le moment. Les détails de la fiche restent exacts."
   },
+  "data": {
+    "title": "Données",
+    "declared": "Déclaré par le développeur",
+    "declaredEmpty": "Le développeur n’a déclaré aucun jeu de données.",
+    "measured": "Évalué sur cette plateforme",
+    "measuredHint": "D’après les résultats publiés liés à ce modèle.",
+    "task": "Tâche : {name}",
+    "withheld": "Un jeu de données de ce catalogue qui n’est pas public",
+    "external": "Conservé ailleurs",
+    "versionPinned": "Version {version} lors de la déclaration",
+    "versionEvaluated": "Version {version}",
+    "modality": "Modalité",
+    "format": "Format",
+    "licence": "Licence",
+    "note": "Note",
+    "opensElsewhere": "ouvre un autre site"
+  },
   "facts": {
     "title": "Model Facts",
     "generatedOn": "Étiquette « Model Facts » de l’OMS, générée à partir de cette fiche le {date}.",
@@ -166,6 +183,12 @@
     "pending": "Autorisation en attente",
     "granted": "Autorisation accordée",
     "withdrawn": "Autorisation retirée"
+  },
+  "datasetRole": {
+    "TRAINING": "Entraînement",
+    "TUNING": "Ajustement",
+    "VALIDATION": "Validation",
+    "EVALUATION": "Évaluation"
   },
   "jurisdiction": {
     "EU": "Union européenne",

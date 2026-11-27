@@ -63,6 +63,7 @@ export const MODEL_CARD_FORM_FIELDS = {
   regulatoryStatus: 'evidence',
   regulatoryJurisdictions: 'evidence',
   regulatoryIdentifier: 'evidence',
+  datasetRefs: 'evidence',
   knownBiases: 'evidence',
   biasMitigation: 'evidence',
   ongoingMaintenance: 'evidence',
@@ -71,11 +72,69 @@ export type ModelCardFormField = keyof typeof MODEL_CARD_FORM_FIELDS;
 
 const MULTI_FIELDS = ['intendedUserRole', 'operatingEnvironment'] as const;
 type MultiField = (typeof MULTI_FIELDS)[number];
-type TextField = Exclude<ModelCardFormField, MultiField | 'generativeAi'>;
+type TextField = Exclude<ModelCardFormField, MultiField | 'generativeAi' | 'datasetRefs'>;
+
+/**
+ * One dataset row of the form (#820). `target` is what the user typed in the
+ * single "dataset" box: the identifier of a dataset of the catalogue, or a web
+ * address for one held elsewhere, in which case `name` says what to call it.
+ */
+export interface DatasetRefFormRow {
+  role: string;
+  target: string;
+  name: string;
+  note: string;
+}
+
+/** The four inputs of a dataset row; each name repeats once per row, in order. */
+export const DATASET_REF_INPUTS = {
+  role: 'datasetRefRole',
+  target: 'datasetRefTarget',
+  name: 'datasetRefName',
+  note: 'datasetRefNote',
+} as const;
 
 /** What the user typed, as typed: echoed back into the form after an error. */
 export type ModelCardFormValues = Record<TextField, string> &
-  Record<MultiField, string[]> & { generativeAi: boolean };
+  Record<MultiField, string[]> & { generativeAi: boolean; datasetRefs: DatasetRefFormRow[] };
+
+/** A web address, as opposed to a catalogue identifier. */
+export function isWebAddress(target: string): boolean {
+  return /^https?:\/\//i.test(target.trim());
+}
+
+/**
+ * The dataset rows of a submitted form. The four inputs repeat once per row;
+ * a row the user left empty (the role select always has a value) is dropped,
+ * so the rows kept are, in order, the entries of the request's `datasetRefs`.
+ */
+function readDatasetRefRows(formData: FormData): DatasetRefFormRow[] {
+  const column = (name: string) =>
+    formData.getAll(name).map((v) => (typeof v === 'string' ? v : ''));
+  const roles = column(DATASET_REF_INPUTS.role);
+  const targets = column(DATASET_REF_INPUTS.target);
+  const names = column(DATASET_REF_INPUTS.name);
+  const notes = column(DATASET_REF_INPUTS.note);
+  return roles
+    .map((role, i) => ({
+      role,
+      target: targets.at(i) ?? '',
+      name: names.at(i) ?? '',
+      note: notes.at(i) ?? '',
+    }))
+    .filter((row) => [row.target, row.name, row.note].some((v) => v.trim().length > 0));
+}
+
+/** A form row as an entry of the request's `datasetRefs`. Not validated. */
+function datasetRefFromRow(row: DatasetRefFormRow): Record<string, unknown> {
+  const target = row.target.trim();
+  const note = row.note.trim();
+  const base = { role: row.role, ...(note.length > 0 ? { note } : {}) };
+  if (target.length === 0) return base;
+  if (!isWebAddress(target)) return { ...base, datasetSlug: target };
+  const name = row.name.trim();
+  return { ...base, externalUrl: target, ...(name.length > 0 ? { externalName: name } : {}) };
+}
 
 function isMultiField(field: string): field is MultiField {
   return (MULTI_FIELDS as readonly string[]).includes(field);
@@ -83,7 +142,7 @@ function isMultiField(field: string): field is MultiField {
 
 /** Every field, read through `read`; built with `fromEntries`, no dynamic writes. */
 function valuesFrom(
-  read: (field: ModelCardFormField) => string | string[] | boolean,
+  read: (field: ModelCardFormField) => string | string[] | boolean | DatasetRefFormRow[],
 ): ModelCardFormValues {
   const fields = Object.keys(MODEL_CARD_FORM_FIELDS) as ModelCardFormField[];
   return Object.fromEntries(fields.map((f) => [f, read(f)])) as ModelCardFormValues;
@@ -92,6 +151,7 @@ function valuesFrom(
 export function emptyModelCardFormValues(): ModelCardFormValues {
   return valuesFrom((field) => {
     if (field === 'generativeAi') return false;
+    if (field === 'datasetRefs') return [];
     if (isMultiField(field)) return [];
     if (field === 'version') return '1.0.0';
     if (field === 'regulatoryStatus') return 'none';
@@ -103,6 +163,7 @@ export function emptyModelCardFormValues(): ModelCardFormValues {
 export function readModelCardForm(formData: FormData): ModelCardFormValues {
   return valuesFrom((field) => {
     if (field === 'generativeAi') return formData.get('generativeAi') === 'on';
+    if (field === 'datasetRefs') return readDatasetRefRows(formData);
     if (isMultiField(field)) return formData.getAll(field).map(String);
     const raw = formData.get(field);
     return typeof raw === 'string' ? raw : '';
@@ -231,6 +292,7 @@ export function modelCardRequestFromValues(
     intendedUse,
     trainingDataLineage,
     trainingDataJurisdictions: codeList(values.trainingDataJurisdictions),
+    datasetRefs: values.datasetRefs.map(datasetRefFromRow),
     regulatoryApproval,
     knownBiasesOrEthicalConsiderations: blankToNull(values.knownBiases),
     biasMitigationApproaches: blankToNull(values.biasMitigation),
@@ -254,6 +316,7 @@ export const FORM_OWNED_REQUEST_KEYS = [
   'intendedUse',
   'trainingDataLineage',
   'trainingDataJurisdictions',
+  'datasetRefs',
   'regulatoryApproval',
   'knownBiasesOrEthicalConsiderations',
   'biasMitigationApproaches',
@@ -292,6 +355,7 @@ const PATH_TO_FIELD: ReadonlyArray<[string, ModelCardFormField]> = [
   ['intendedUse.contraindications', 'contraindications'],
   ['trainingDataLineage', 'trainingDataSummary'],
   ['trainingDataJurisdictions', 'trainingDataJurisdictions'],
+  ['datasetRefs', 'datasetRefs'],
   ['regulatoryApproval.pathway', 'regulatoryPathway'],
   ['regulatoryApproval.status', 'regulatoryStatus'],
   ['regulatoryApproval.jurisdictions', 'regulatoryJurisdictions'],
@@ -313,18 +377,50 @@ export function fieldForIssuePath(path: ReadonlyArray<PropertyKey>): ModelCardFo
 /**
  * Field-level messages from a failed parse: the first message per field. A
  * message no field owns is returned in `other`, so it is not lost.
+ *
+ * A message about one dataset row (`datasetRefs.<n>…`) is also returned in
+ * `datasetRefErrors`, by row, so the form can show it under that row (#820).
  */
 export function fieldErrorsFromIssues(
   issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; message: string }>,
-): { fieldErrors: Map<ModelCardFormField, string>; other: string[] } {
+): {
+  fieldErrors: Map<ModelCardFormField, string>;
+  datasetRefErrors: Map<number, string>;
+  other: string[];
+} {
   const fieldErrors = new Map<ModelCardFormField, string>();
+  const datasetRefErrors = new Map<number, string>();
   const other: string[] = [];
   for (const issue of issues) {
     const field = fieldForIssuePath(issue.path);
     if (field === null) other.push(issue.message);
     else if (!fieldErrors.has(field)) fieldErrors.set(field, issue.message);
+    const row = issue.path[1];
+    if (field === 'datasetRefs' && typeof row === 'number' && !datasetRefErrors.has(row)) {
+      datasetRefErrors.set(row, issue.message);
+    }
   }
-  return { fieldErrors, other };
+  return { fieldErrors, datasetRefErrors, other };
+}
+
+/**
+ * The rows that name a dataset the API refused (#820): not in the catalogue,
+ * or not visible to the submitter. `body` is the API's 400 answer, which lists
+ * the identifiers under `unknownDatasets`; anything else gives no row.
+ */
+export function unknownDatasetRows(
+  values: Pick<ModelCardFormValues, 'datasetRefs'>,
+  body: unknown,
+): number[] {
+  const listed =
+    body !== null && typeof body === 'object'
+      ? (body as { unknownDatasets?: unknown }).unknownDatasets
+      : undefined;
+  if (!Array.isArray(listed)) return [];
+  const unknown = new Set(listed.filter((s): s is string => typeof s === 'string'));
+  return values.datasetRefs.flatMap((row, index) =>
+    unknown.has(row.target.trim()) ? [index] : [],
+  );
 }
 
 const STEP_OF_FIELD = new Map<string, ModelCardFormStep>(Object.entries(MODEL_CARD_FORM_FIELDS));
@@ -370,6 +466,13 @@ export function formValuesFromCard(card: ModelCardResponse): ModelCardFormValues
     contraindications: ius.contraindications,
     trainingDataSummary: typeof lineageSummary === 'string' ? lineageSummary : '',
     trainingDataJurisdictions: card.trainingDataJurisdictions.join(', '),
+    // The submitter gets every declared dataset back as typed (never WITHHELD).
+    datasetRefs: card.datasetRefs.map((ref) => ({
+      role: ref.role,
+      target: ref.datasetSlug ?? ref.externalUrl ?? '',
+      name: ref.externalName ?? '',
+      note: ref.note ?? '',
+    })),
     regulatoryPathway: approval?.pathway ?? '',
     regulatoryStatus: approval?.status ?? 'none',
     regulatoryJurisdictions: approval?.jurisdictions.join(', ') ?? '',

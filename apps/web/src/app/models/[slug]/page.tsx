@@ -36,6 +36,7 @@ import { modelCardViewer } from '../../../lib/model-card-viewer';
 import { modelCardJsonLd } from '../../../lib/model-jsonld';
 import { siteUrl } from '../../../lib/site-url';
 import { ModelCardLifecyclePanel } from './lifecycle-panel';
+import { ModelDataCard } from './model-data-card';
 import { ModelFactsLabelCard } from './model-facts-label';
 
 /**
@@ -190,65 +191,68 @@ export default async function ModelCardPage({ params }: { params: Promise<{ slug
 
       <Container size="xl">
         <Section spacing="md" className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-          <Card className="h-fit">
-            <CardHeader>
-              <CardTitle as="h2">{t('detail.about')}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <DefinitionList>
-                <DefinitionItem term={t('detail.developer')}>
-                  {card.modelDeveloper ?? '—'}
-                </DefinitionItem>
-                <DefinitionItem term={t('detail.contact')}>
-                  {card.developerContact ?? '—'}
-                </DefinitionItem>
-                <DefinitionItem term={t('detail.modelClass')}>
-                  {modelClassText(t, card.modelClass)}
-                </DefinitionItem>
-                <DefinitionItem term={t('detail.version')} mono>
-                  {card.versionMajorMinorPatch}
-                </DefinitionItem>
-                <DefinitionItem term={t('detail.medicalPurpose')}>
-                  {ius.medicalPurpose === 'other' && ius.medicalPurposeOther
-                    ? ius.medicalPurposeOther
-                    : medicalPurposeText(t, ius.medicalPurpose)}
-                </DefinitionItem>
-                {ius.bodySystemOrSite ? (
-                  <DefinitionItem term={t('detail.bodySystem')}>
-                    {ius.bodySystemOrSite}
+          <div className="min-w-0 space-y-8">
+            <Card className="h-fit">
+              <CardHeader>
+                <CardTitle as="h2">{t('detail.about')}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DefinitionList>
+                  <DefinitionItem term={t('detail.developer')}>
+                    {card.modelDeveloper ?? '—'}
                   </DefinitionItem>
-                ) : null}
-                <DefinitionItem term={t('detail.trainingDataFrom')}>
-                  {card.trainingDataJurisdictions.length > 0
-                    ? card.trainingDataJurisdictions.join(', ')
-                    : '—'}
-                </DefinitionItem>
-                <DefinitionItem term={t('detail.regulatoryApproval')}>
-                  {approval ? (
-                    <>
-                      {regulatoryStatusText(t, approval.status)} · {approval.pathway}
-                      {approval.jurisdictions.length > 0
-                        ? ` · ${approval.jurisdictions.join(', ')}`
-                        : null}
-                      {approval.identifier ? (
-                        <span className="block font-mono text-xs">{approval.identifier}</span>
-                      ) : null}
-                    </>
-                  ) : (
-                    t('detail.notDeclared')
-                  )}
-                </DefinitionItem>
-                <DefinitionItem term={t('detail.architecture')}>
-                  {card.architectureSummary}
-                </DefinitionItem>
-                {card.biasMitigationApproaches ? (
-                  <DefinitionItem term={t('detail.biasMitigation')}>
-                    {card.biasMitigationApproaches}
+                  <DefinitionItem term={t('detail.contact')}>
+                    {card.developerContact ?? '—'}
                   </DefinitionItem>
-                ) : null}
-              </DefinitionList>
-            </CardContent>
-          </Card>
+                  <DefinitionItem term={t('detail.modelClass')}>
+                    {modelClassText(t, card.modelClass)}
+                  </DefinitionItem>
+                  <DefinitionItem term={t('detail.version')} mono>
+                    {card.versionMajorMinorPatch}
+                  </DefinitionItem>
+                  <DefinitionItem term={t('detail.medicalPurpose')}>
+                    {ius.medicalPurpose === 'other' && ius.medicalPurposeOther
+                      ? ius.medicalPurposeOther
+                      : medicalPurposeText(t, ius.medicalPurpose)}
+                  </DefinitionItem>
+                  {ius.bodySystemOrSite ? (
+                    <DefinitionItem term={t('detail.bodySystem')}>
+                      {ius.bodySystemOrSite}
+                    </DefinitionItem>
+                  ) : null}
+                  <DefinitionItem term={t('detail.trainingDataFrom')}>
+                    {card.trainingDataJurisdictions.length > 0
+                      ? card.trainingDataJurisdictions.join(', ')
+                      : '—'}
+                  </DefinitionItem>
+                  <DefinitionItem term={t('detail.regulatoryApproval')}>
+                    {approval ? (
+                      <>
+                        {regulatoryStatusText(t, approval.status)} · {approval.pathway}
+                        {approval.jurisdictions.length > 0
+                          ? ` · ${approval.jurisdictions.join(', ')}`
+                          : null}
+                        {approval.identifier ? (
+                          <span className="block font-mono text-xs">{approval.identifier}</span>
+                        ) : null}
+                      </>
+                    ) : (
+                      t('detail.notDeclared')
+                    )}
+                  </DefinitionItem>
+                  <DefinitionItem term={t('detail.architecture')}>
+                    {card.architectureSummary}
+                  </DefinitionItem>
+                  {card.biasMitigationApproaches ? (
+                    <DefinitionItem term={t('detail.biasMitigation')}>
+                      {card.biasMitigationApproaches}
+                    </DefinitionItem>
+                  ) : null}
+                </DefinitionList>
+              </CardContent>
+            </Card>
+            <ModelDataCard declared={card.datasetRefs} measured={card.evaluatedOn} />
+          </div>
 
           {label ? (
             <ModelFactsLabelCard label={label} />

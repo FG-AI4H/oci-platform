@@ -126,6 +126,8 @@ export type {
   ConsentType,
   ConsentStatus,
   ModelCard,
+  ModelCardDatasetRef,
+  ModelCardDatasetRole,
   ModelCardStatus,
   EvaluationRoute,
   RouteVersion,

@@ -93,7 +93,15 @@ export const CAPABILITY_GROUPS: OciCapabilitiesDocument['capabilities'] = {
         path: '/v2/prediction/model-cards/{slug}',
         auth: 'none',
         description:
-          'One published model card; its WHO Model Facts label is at {slug}/model-facts.',
+          'One published model card, with the datasets it declares and those it was evaluated on; its WHO Model Facts label is at {slug}/model-facts.',
+      },
+      {
+        id: 'model.by-dataset',
+        method: 'GET',
+        path: '/v2/prediction/datasets/{slug}/model-cards',
+        auth: 'none',
+        description:
+          'Published model cards that declare a dataset, each with the roles it declares it in.',
       },
       {
         id: 'use-case.suggestions',

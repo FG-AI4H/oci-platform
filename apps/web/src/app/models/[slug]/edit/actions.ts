@@ -15,6 +15,7 @@ import {
   fieldErrorsFromIssues,
   modelCardRequestFromValues,
   readModelCardForm,
+  unknownDatasetRows,
 } from '../../../../lib/model-card-form';
 import { sessionForAction } from '../../../../lib/session-recovery';
 import type { ModelCardFormState } from '../../model-card-action-state';
@@ -74,11 +75,12 @@ export async function updateModelCardAction(
     zodParseParams(locale),
   );
   if (!parsed.success) {
-    const { fieldErrors, other } = fieldErrorsFromIssues(parsed.error.issues);
+    const { fieldErrors, datasetRefErrors, other } = fieldErrorsFromIssues(parsed.error.issues);
     return {
       status: 'error',
       message: tCommon('correctErrors'),
       fieldErrors,
+      datasetRefErrors,
       otherErrors: other,
       values,
       attempt,
@@ -101,6 +103,27 @@ export async function updateModelCardAction(
   }
   if (res.status === 404) {
     return { status: 'error', message: t('errors.notFound'), values, attempt };
+  }
+  if (res.status === 400) {
+    // A dataset row names something the catalogue does not show this user (#820).
+    const rows = unknownDatasetRows(
+      values,
+      await res
+        .clone()
+        .json()
+        .catch(() => null),
+    );
+    if (rows.length > 0) {
+      const text = t('errors.datasetUnknown');
+      return {
+        status: 'error',
+        message: tCommon('correctErrors'),
+        fieldErrors: new Map([['datasetRefs', text]]),
+        datasetRefErrors: new Map(rows.map((row) => [row, text])),
+        values,
+        attempt,
+      };
+    }
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => '');

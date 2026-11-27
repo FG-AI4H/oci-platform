@@ -14,7 +14,11 @@ import {
   Container,
   Section,
 } from '@oci/ui';
-import type { AccessRequestStatus, AccessRequestSummary } from '@oci/shared-types';
+import {
+  accessGrantEndedAt,
+  type AccessRequestStatus,
+  type AccessRequestSummary,
+} from '@oci/shared-types';
 import { auth } from '../../../auth';
 import { getFormatters } from '../../../i18n/server';
 import { apiFetch } from '../../../lib/api';
@@ -108,6 +112,8 @@ export default async function MyAccessRequestsPage() {
 
 async function RequestRow({ req }: { req: AccessRequestSummary }) {
   const [t, f] = await Promise.all([getTranslations('AccessRequest'), getFormatters()]);
+  // An approval past its end date no longer gives access (#819).
+  const endedAt = accessGrantEndedAt(req);
   return (
     <Card>
       <CardHeader>
@@ -130,9 +136,23 @@ async function RequestRow({ req }: { req: AccessRequestSummary }) {
               })}
             </CardDescription>
           </div>
-          <Badge tone={statusTone[req.status]}>{t(`status.${req.status}`)}</Badge>
+          {endedAt ? (
+            <Badge tone="neutral">{t('dashboard.endedStatus')}</Badge>
+          ) : (
+            <Badge tone={statusTone[req.status]}>{t(`status.${req.status}`)}</Badge>
+          )}
         </div>
       </CardHeader>
+      {req.status === 'APPROVED' && req.expiresAt ? (
+        <CardContent>
+          <p className="text-sm text-[var(--color-muted-foreground)]">
+            {t.rich(endedAt ? 'dashboard.accessEnded' : 'dashboard.accessUntil', {
+              date: f.date(req.expiresAt, { dateStyle: 'long' }),
+              time: (chunks) => <time dateTime={req.expiresAt ?? undefined}>{chunks}</time>,
+            })}
+          </p>
+        </CardContent>
+      ) : null}
       {req.status !== 'PENDING' && req.decisionNote ? (
         <CardContent>
           <p className="text-sm">

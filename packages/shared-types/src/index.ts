@@ -233,6 +233,12 @@ export {
   ListModelCardsSortSchema,
   RegulatoryApprovalSchema,
   UpdateModelCardRequestSchema,
+  ModelCardDatasetRoleSchema,
+  ModelCardDatasetRefInputSchema,
+  ModelCardDatasetRefSchema,
+  ModelCardDatasetFactsSchema,
+  ModelCardEvaluatedOnSchema,
+  MAX_MODEL_CARD_DATASET_REFS,
   MODEL_CARD_REVIEWER_GROUPS,
   RESERVED_MODEL_CARD_SLUGS,
   allowedTransitionsFrom,
@@ -260,6 +266,13 @@ export type {
   ModelCardSummary,
   ListModelCardsResponse,
   UpdateModelCardRequest,
+  ModelCardDatasetRole,
+  ModelCardDatasetRefInput,
+  ModelCardDatasetRef,
+  ModelCardDatasetFacts,
+  ModelCardEvaluatedOn,
+  ModelCardForDataset,
+  ListModelCardsForDatasetResponse,
   ModelCardActor,
   MyModelCardSummary,
   ListMyModelCardsResponse,
@@ -1540,8 +1553,48 @@ export interface AccessRequestSummary {
   /** Cognito sub of the host/admin who decided. */
   decidedById: string | null;
   decisionNote: string | null;
+  /**
+   * When an approval ends (#130, #819). Set on approval; `null` on a request
+   * that is not approved, and on approvals older than the end-date rule.
+   * Access is read through `isAccessGrantActive`, never from `status` alone.
+   */
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** What `isAccessGrantActive` and `accessGrantEndedAt` read of a request. */
+export interface AccessGrantView {
+  status: AccessRequestStatus;
+  expiresAt?: string | null;
+}
+
+/**
+ * Whether an access request gives access at `now` (#819): approved, and not
+ * past its end date. An approval with no end date does not end.
+ *
+ * The one rule for every read of dataset bytes and for every page that says
+ * "you have access". The renewal job also revokes ended approvals, but access
+ * must not depend on that job having run.
+ */
+export function isAccessGrantActive(request: AccessGrantView, now: Date = new Date()): boolean {
+  return request.status === 'APPROVED' && accessGrantEndedAt(request, now) === null;
+}
+
+/**
+ * The end date of an approval that has ended at `now`, or `null`: for a
+ * request that is not approved, has no end date, or has not reached it. An
+ * end date that cannot be read counts as reached: a grant must not outlive a
+ * date nobody can interpret.
+ */
+export function accessGrantEndedAt(
+  request: AccessGrantView,
+  now: Date = new Date(),
+): string | null {
+  if (request.status !== 'APPROVED') return null;
+  if (request.expiresAt === null || request.expiresAt === undefined) return null;
+  const end = Date.parse(request.expiresAt);
+  return Number.isNaN(end) || end <= now.getTime() ? request.expiresAt : null;
 }
 
 /** `POST /v2/catalog/datasets/:slug/access-requests` */

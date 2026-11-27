@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next';
+import { connection } from 'next/server';
 import type { ListDatasetsResponse, ListModelCardsResponse } from '@oci/shared-types';
 import { apiFetch } from '../lib/api';
 import { siteUrl } from '../lib/site-url';
@@ -14,12 +15,17 @@ import { siteUrl } from '../lib/site-url';
  * keyset cursors. We loop until `nextCursor` is null. There's a hard
  * page cap to bound runtime — Google rejects sitemaps over 50 000
  * URLs anyway, and we'd want a sitemap-index well before then.
+ *
+ * Rendered per request (`connection()`), not at build time: every entry
+ * starts with the site's own address, which exists only where the image
+ * runs (#831). The catalogue reads below keep their own one-hour cache, so
+ * a crawler's request does not become a walk of the API each time.
  */
-export const revalidate = 3600;
 
 const MAX_PAGES = 500; // 500 × 100 = 50 000 URLs, the sitemap.org limit
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  await connection();
   const base = siteUrl();
   const entries: MetadataRoute.Sitemap = [
     { url: `${base}/`, changeFrequency: 'weekly', priority: 1 },

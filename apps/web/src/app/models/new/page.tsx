@@ -25,7 +25,7 @@ export default async function NewModelCardPage() {
 
   const [t, options] = await Promise.all([
     getTranslations('ModelCardForm'),
-    modelCardFormOptions(),
+    modelCardFormOptions(session),
   ]);
 
   return (

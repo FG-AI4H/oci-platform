@@ -880,3 +880,44 @@ VALUES
      ARRAY['CH'], false, 'DRAFT', 'Demo Sepsis AG', 'dev@sepsis.example',
      NULL, NULL, NULL, NULL, now())
 ON CONFLICT (slug) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- Section 7b — Datasets the demo model cards declare (#820).
+--
+-- So the model page has a "Data" section to show and a dataset page lists the
+-- models that use it: the retina grader names a training set held elsewhere
+-- and the IDRiD slice of this catalogue as its independent test; the chest
+-- X-ray model names the RSNA set of this catalogue as its training data.
+-- Demonstration entries, like the cards themselves.
+--
+-- The catalogue version current at seed time is pinned, as the API does.
+-- No natural key to conflict on, so: only for a card that declares nothing
+-- yet. A replay changes no row, and a list edited through the API is kept.
+-- ----------------------------------------------------------------------------
+
+INSERT INTO "prediction"."model_card_dataset_refs"
+    (id, model_card_id, position, role, dataset_slug, manifest_version, manifest_sha256,
+     external_url, external_name, note)
+SELECT gen_random_uuid(), mc.id, v.position, v.role::"prediction"."ModelCardDatasetRole",
+       v.dataset_slug,
+       (SELECT dv.version FROM "catalog"."dataset_versions" dv
+          JOIN "catalog"."datasets" d ON d.id = dv.dataset_id
+         WHERE d.slug = v.dataset_slug ORDER BY dv.published_at DESC LIMIT 1),
+       (SELECT dv.croissant_hash FROM "catalog"."dataset_versions" dv
+          JOIN "catalog"."datasets" d ON d.id = dv.dataset_id
+         WHERE d.slug = v.dataset_slug ORDER BY dv.published_at DESC LIMIT 1),
+       v.external_url, v.external_name, v.note
+FROM (VALUES
+    ('demo-retina-dr-grader', 0, 'TRAINING', NULL,
+     'https://www.kaggle.com/c/diabetic-retinopathy-detection',
+     'EyePACS diabetic retinopathy images (Kaggle, 2015)',
+     'Demonstration entry: a training set held outside this catalogue.'),
+    ('demo-retina-dr-grader', 1, 'EVALUATION', 'idrid-grading-demo', NULL, NULL,
+     'Independent test on the images hosted in this catalogue.'),
+    ('demo-chest-xray-triage', 0, 'TRAINING', 'rsna-pneumonia-2018', NULL, NULL,
+     'Demonstration entry.')
+) AS v(card_slug, position, role, dataset_slug, external_url, external_name, note)
+JOIN "prediction"."model_cards" mc ON mc.slug = v.card_slug
+WHERE NOT EXISTS (
+    SELECT 1 FROM "prediction"."model_card_dataset_refs" r WHERE r.model_card_id = mc.id
+);

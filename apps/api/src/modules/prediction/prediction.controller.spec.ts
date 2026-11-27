@@ -6,8 +6,9 @@ import { CognitoJwtGuard } from '../../auth/cognito-jwt.guard.js';
 import { OptionalCognitoJwtGuard } from '../../auth/optional-cognito-jwt.guard.js';
 import { cognitoSubAsUuid } from '../../auth/cognito-sub.js';
 import { AUDIT_EMITTER } from '../audit/audit.module.js';
+import { CatalogService } from '../catalog/catalog.service.js';
 import { IntendedUseService } from '../intended-use/intended-use.service.js';
-import { PredictionController } from './prediction.controller.js';
+import { PredictionController, PredictionDatasetsController } from './prediction.controller.js';
 import { PredictionRepository } from './prediction.repository.js';
 import { PredictionService } from './prediction.service.js';
 import { ModelCardEvidenceService } from '../evaluation/model-card-evidence.service.js';
@@ -68,6 +69,7 @@ function cardRow(status: string) {
     changeJustification: null,
     materialChange: false,
     trainingDataJurisdictions: ['CH'],
+    datasetRefs: [],
     generativeAi: true,
     lmmSpecificLimitations: null,
     status,
@@ -89,6 +91,7 @@ const repo = {
   updateStatus: vi.fn(),
   update: vi.fn(),
   listBySubmitter: vi.fn(),
+  findPublishedByDatasetSlug: vi.fn(),
 };
 const audit = { emitSync: vi.fn() };
 // No linked results (#587): this spec is about who may read what.
@@ -96,19 +99,22 @@ const evidence = {
   performanceFor: vi.fn(async () => ({ entries: [], retracted: 0, notEstimable: 0 })),
 };
 const intendedUse = { validate: vi.fn((ius: unknown) => ius) };
+// The datasets the caller may see (#820): none, unless a test says otherwise.
+const catalog = { referenceFacts: vi.fn() };
 
 describe('/v2/prediction/model-cards authorization', () => {
   let app: NestFastifyApplication;
 
   beforeAll(async () => {
     const mod = await Test.createTestingModule({
-      controllers: [PredictionController],
+      controllers: [PredictionController, PredictionDatasetsController],
       providers: [
         PredictionService,
         { provide: PredictionRepository, useValue: repo },
         { provide: IntendedUseService, useValue: intendedUse },
         { provide: AUDIT_EMITTER, useValue: audit },
         { provide: ModelCardEvidenceService, useValue: evidence },
+        { provide: CatalogService, useValue: catalog },
       ],
     })
       .overrideGuard(CognitoJwtGuard)
@@ -132,6 +138,7 @@ describe('/v2/prediction/model-cards authorization', () => {
     repo.update.mockImplementation(async () => cardRow('DRAFT'));
     intendedUse.validate.mockImplementation((ius: unknown) => ius);
     audit.emitSync.mockResolvedValue({});
+    catalog.referenceFacts.mockResolvedValue(new Map());
   });
 
   const get = (path: string, headers: Record<string, string>) =>
@@ -372,6 +379,101 @@ describe('/v2/prediction/model-cards authorization', () => {
       const res = await app.inject({ method: 'GET', url: '/v2/prediction/model-cards/mine' });
       expect(res.statusCode).toBe(401);
       expect(repo.findBySlug).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('declared datasets (#820)', () => {
+    const patch = (payload: unknown) =>
+      app.inject({
+        method: 'PATCH',
+        url: '/v2/prediction/model-cards/acme-triage-v1',
+        headers: SUBMITTER,
+        payload: payload as Record<string, unknown>,
+      });
+
+    it.each([
+      [
+        'both a catalogue dataset and a web address',
+        { role: 'TRAINING', datasetSlug: 'idrid-grading', externalUrl: 'https://example.org/d' },
+      ],
+      ['neither', { role: 'TRAINING' }],
+      ['a web address with no name', { role: 'TRAINING', externalUrl: 'https://example.org/d' }],
+      [
+        'an address that is not http or https',
+        { role: 'TRAINING', externalUrl: 'javascript:alert(1)', externalName: 'x' },
+      ],
+      ['an unknown role', { role: 'PRETRAINING', datasetSlug: 'idrid-grading' }],
+    ])('refuses a reference with %s', async (_what, ref) => {
+      repo.findBySlug.mockResolvedValue(cardRow('DRAFT'));
+
+      const res = await patch({ datasetRefs: [ref] });
+
+      expect(res.statusCode).toBe(400);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses the same dataset twice in the same role', async () => {
+      repo.findBySlug.mockResolvedValue(cardRow('DRAFT'));
+      const ref = { role: 'TRAINING', datasetSlug: 'idrid-grading' };
+
+      expect((await patch({ datasetRefs: [ref, ref] })).statusCode).toBe(400);
+    });
+
+    it('refuses a catalogue dataset the submitter cannot see', async () => {
+      repo.findBySlug.mockResolvedValue(cardRow('DRAFT'));
+
+      const res = await patch({ datasetRefs: [{ role: 'TRAINING', datasetSlug: 'private-ct' }] });
+
+      expect(res.statusCode).toBe(400);
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it('an empty list clears the declared datasets', async () => {
+      repo.findBySlug.mockResolvedValue(cardRow('DRAFT'));
+
+      const res = await patch({ datasetRefs: [] });
+
+      expect(res.statusCode).toBe(200);
+      expect(repo.update).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ datasetRefs: [] }),
+      );
+    });
+
+    const forDataset = (slug: string, headers: Record<string, string> = {}) =>
+      app.inject({ method: 'GET', url: `/v2/prediction/datasets/${slug}/model-cards`, headers });
+
+    it('lists the cards of a dataset without a token when the dataset is public', async () => {
+      catalog.referenceFacts.mockResolvedValue(
+        new Map([['idrid-grading', { slug: 'idrid-grading' }]]),
+      );
+      repo.findPublishedByDatasetSlug.mockResolvedValue([
+        {
+          slug: 'acme-triage-v1',
+          modelDeveloper: 'Acme Health AI GmbH',
+          versionMajorMinorPatch: '1.0.0',
+          medicalPurpose: 'triage',
+          riskTier: 'III',
+          roles: ['TRAINING', 'EVALUATION'],
+        },
+      ]);
+
+      const res = await forDataset('idrid-grading');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().items).toHaveLength(1);
+      expect(catalog.referenceFacts).toHaveBeenCalledWith(['idrid-grading'], undefined);
+    });
+
+    it('404s for a dataset the caller may not see', async () => {
+      const res = await forDataset('private-ct', STRANGER);
+
+      expect(res.statusCode).toBe(404);
+      expect(repo.findPublishedByDatasetSlug).not.toHaveBeenCalled();
+    });
+
+    it('400s on a slug that cannot be a dataset slug', async () => {
+      expect((await forDataset('Not_A_Slug')).statusCode).toBe(400);
     });
   });
 });
