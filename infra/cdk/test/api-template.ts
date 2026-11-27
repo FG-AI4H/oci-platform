@@ -6,14 +6,15 @@ import { EvalStack } from '../lib/eval-stack.js';
 import { resolveEnvironment, type EnvName } from '../lib/environments.js';
 import { NetworkStack } from '../lib/network-stack.js';
 import { ObservabilityStack } from '../lib/observability-stack.js';
+import { WebStack } from '../lib/web-stack.js';
 
 export const ENVIRONMENTS: readonly EnvName[] = ['dev', 'int', 'prod'];
 
 /**
- * The synthesized api stack of one environment, wired as `bin/oci.ts` wires
- * it. Offline: no context lookups, placeholder images.
+ * The api stack of one environment and what it was built from, wired as
+ * `bin/oci.ts` wires it. Offline: no context lookups, placeholder images.
  */
-function apiTemplateOf(envName: EnvName): Template {
+function apiStackOf(envName: EnvName) {
   const app = new cdk.App();
   const cfg = resolveEnvironment(envName, app);
   const tags = { Project: 'OCI', Environment: envName, ManagedBy: 'CDK' };
@@ -42,7 +43,29 @@ function apiTemplateOf(envName: EnvName): Template {
     hostedZoneId: 'Z09716362NE75KQEXM9N9',
     zoneName: 'ai4h.net',
   });
-  return Template.fromStack(api);
+  return { app, common, network, observability, api };
+}
+
+/** The synthesized api stack of one environment. */
+function apiTemplateOf(envName: EnvName): Template {
+  return Template.fromStack(apiStackOf(envName).api);
+}
+
+/**
+ * The synthesized web stack of one environment, on its own app so that
+ * synthesizing it leaves the cached api templates alone.
+ */
+export function webTemplateOf(envName: EnvName): Template {
+  const { app, common, network, observability, api } = apiStackOf(envName);
+  const web = new WebStack(app, `oci-${envName}-web`, {
+    ...common,
+    vpc: network.vpc,
+    cluster: api.cluster,
+    httpsListener: api.httpsListener,
+    logGroup: observability.apiLogGroup,
+    webImage: undefined,
+  });
+  return Template.fromStack(web);
 }
 
 // One synth per environment, shared by every test file in the same worker.

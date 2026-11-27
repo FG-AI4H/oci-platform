@@ -1,21 +1,37 @@
 /**
- * Returns the canonical public-facing URL of the web app, with no
- * trailing slash. Drives `metadataBase`, JSON-LD `@id` / `url`,
- * sitemap entries, and robots policy.
+ * The public address of the web app, with no trailing slash. Drives
+ * `metadataBase`, the JSON-LD `@id` / `url` of a dataset or a model, the
+ * sitemap entries and the robots policy: what search engines and Croissant
+ * harvesters follow to reach us.
  *
- * `NEXT_PUBLIC_SITE_URL` is set per environment (dev / int / prod) by
- * the CDK web-stack outputs and read by Server Components at runtime.
- * If it is missing — which only happens during `next build` in CI
- * before deploy — we fall back to a placeholder so the build doesn't
- * fail at page-data collection. The real value is read at runtime
- * inside the container, so the placeholder never reaches a real
- * response on dev/int/prod.
+ * Read when a request is served, never fixed when the image is built, so one
+ * image serves every environment (#831):
  *
- * Locally, `.env.local` sets it to `http://localhost:3001`.
+ *   1. `NEXT_PUBLIC_SITE_URL`, set per environment by the CDK web stack;
+ *   2. else `AUTH_URL`, which the same stack sets to the same address for the
+ *      sign-in callbacks;
+ *   3. else, on a deployed environment, an error. Publishing
+ *      `http://localhost:3001` as our own address sends every crawler and
+ *      harvester nowhere, and nothing on the page shows it;
+ *   4. else `http://localhost:3001`: a laptop, a test run, or `next build`,
+ *      which collects page data before any environment exists.
  */
-const BUILD_FALLBACK = 'http://localhost:3001';
+const LOCAL = 'http://localhost:3001';
+const DEPLOYED: ReadonlySet<string> = new Set(['dev', 'int', 'prod']);
 
-export function siteUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_SITE_URL ?? BUILD_FALLBACK;
-  return raw.replace(/\/+$/, '');
+type Env = Readonly<Record<string, string | undefined>>;
+
+export function siteUrl(env: Env = process.env): string {
+  const configured = [env.NEXT_PUBLIC_SITE_URL, env.AUTH_URL]
+    .map((value) => value?.trim() ?? '')
+    .find((value) => value.length > 0);
+  if (configured) return configured.replace(/\/+$/, '');
+
+  const building = env.NEXT_PHASE === 'phase-production-build';
+  if (!building && DEPLOYED.has(env.OCI_ENV ?? '')) {
+    throw new Error(
+      `The site address is not configured on "${env.OCI_ENV}": set NEXT_PUBLIC_SITE_URL (or AUTH_URL) on the web container`,
+    );
+  }
+  return LOCAL;
 }
