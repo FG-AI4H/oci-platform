@@ -13,6 +13,7 @@
     "countPublished": "<num>{total}</num> {count, plural, one {modèle publié} other {modèles publiés}}",
     "countMatching": "<num>{total}</num> {count, plural, one {modèle publié} other {modèles publiés}} correspondant à <quoted>« {query} »</quoted>",
     "intro": "Modèles d’IA en santé publiés, avec un usage prévu déclaré. Chaque fiche porte une étiquette « Model Facts » de l’OMS qui résume à quoi sert le modèle, comment il a été validé et quand cesser de s’y fier.",
+    "toolsets": "Les carnets, simulateurs et codes qui fonctionnent avec ces modèles sont référencés sous <link>Outils</link>.",
     "noSummary": "Aucun résumé clinique fourni.",
     "declare": "Déclarer un modèle"
   },

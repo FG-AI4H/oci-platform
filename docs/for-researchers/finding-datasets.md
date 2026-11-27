@@ -88,6 +88,14 @@ Each model page shows the card's public fields and its **Model Facts label**, th
 
 The **Data** section of a model page lists the datasets the developer declares, each with what it was used for. A dataset of this catalogue is a link to its page, with its modality, file format and licence; a dataset held elsewhere is a link to its own site. Below, "Evaluated on this platform" lists the datasets of the published results linked to the model: these are measured here, not declared. A dataset you may not see appears as a line with its role only.
 
+## Finding toolsets
+
+Notebooks, simulators, libraries and pipelines that work with the datasets and models listed here have their own list at `/toolsets` (linked from the models list and from the foot of every page). No sign-in needed. Search by name, summary or maintainer, and narrow by kind.
+
+A toolset's page says what it is, who maintains it, under which licence, and which datasets and models of this platform it works with. **Open the toolset** leads to where its maintainer keeps it: the platform lists toolsets, it does not host or run them. The licence shown is the one the maintainer declared.
+
+To list one of your own, sign in and use **Declare a toolset**. It is saved as a draft that only you and the operators see; an operator publishes it. You can name only datasets and models you can see yourself.
+
 ## Troubleshooting
 
 - **"I can't find a dataset I know is on the OCI."** Check the chip — if you're on `Local` and it's federated (or vice versa), it won't show. Try `All`.

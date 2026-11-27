@@ -49,6 +49,35 @@ export { RegulatoryPathwaySchema } from './regulatory-pathway.js';
 export { DatasetSlugSchema } from './slug.js';
 export type { DatasetSlug } from './slug.js';
 
+// Toolsets: a fourth catalogue, listed by reference (ADR-0031, #830).
+export {
+  ChangeToolsetStatusRequestSchema,
+  CreateToolsetRequestSchema,
+  ListToolsetsQuerySchema,
+  MAX_TOOLSET_LINKS,
+  RESERVED_TOOLSET_SLUGS,
+  ToolsetKindSchema,
+  ToolsetSlugSchema,
+  ToolsetStatusSchema,
+  UpdateToolsetRequestSchema,
+  canEditToolset,
+  toolsetMovesFor,
+  toolsetVisibleTo,
+} from './toolset.js';
+export type {
+  ChangeToolsetStatusRequest,
+  CreateToolsetRequest,
+  ListMyToolsetsResponse,
+  ListToolsetsQuery,
+  ListToolsetsResponse,
+  ToolsetActor,
+  ToolsetKind,
+  ToolsetResponse,
+  ToolsetSlug,
+  ToolsetStatus,
+  ToolsetSummary,
+  UpdateToolsetRequest,
+} from './toolset.js';
 // Periodic activity report of a deployment (#828).
 export {
   ActivityReportMonthSchema,

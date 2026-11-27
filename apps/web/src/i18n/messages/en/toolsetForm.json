@@ -1,0 +1,85 @@
+{
+  "metaTitleNew": "Declare a toolset — OCI Platform",
+  "metaTitleEdit": "Edit {slug} — OCI Toolsets",
+  "eyebrow": "Toolset",
+  "headingNew": "Declare a toolset",
+  "headingEdit": "Edit the toolset",
+  "introNew": "Describe a notebook, a simulator, a library or a pipeline and say where it lives. It is saved as a draft; an operator publishes it.",
+  "introEdit": "Only a draft can be edited. The identifier does not change.",
+  "back": "Toolsets",
+  "backToToolset": "Back to the toolset",
+  "notEditable": "This toolset can no longer be edited: only a draft can be, by the person who declared it.",
+  "sectionWhat": "What it is",
+  "sectionWhere": "Where it lives",
+  "sectionWho": "Who maintains it",
+  "sectionLinks": "What it works with",
+  "fields": {
+    "slug": {
+      "label": "Identifier",
+      "hint": "Lower-case letters, digits and hyphens. It becomes the address of the page and cannot be changed."
+    },
+    "name": {
+      "label": "Name"
+    },
+    "kind": {
+      "label": "Kind"
+    },
+    "summary": {
+      "label": "Summary",
+      "hint": "What it does and what it is for, in a few sentences."
+    },
+    "url": {
+      "label": "Web address",
+      "hint": "Where the toolset lives: a repository, a registry, a landing page. Starts with https://."
+    },
+    "version": {
+      "label": "Version",
+      "hint": "Optional. The version this description is about."
+    },
+    "licence": {
+      "label": "Licence",
+      "hint": "Optional. An SPDX identifier such as Apache-2.0, or the licence’s own name."
+    },
+    "maintainer": {
+      "label": "Maintainer",
+      "hint": "The person or organisation that maintains it, as it should be shown."
+    },
+    "contact": {
+      "label": "Contact",
+      "hint": "Optional. An address or a page where the maintainer can be reached. Shown publicly."
+    },
+    "datasetSlugs": {
+      "label": "Datasets",
+      "hint": "Optional. Identifiers of datasets of this catalogue, separated by commas."
+    },
+    "modelCardSlugs": {
+      "label": "Models",
+      "hint": "Optional. Identifiers of model cards of this platform, separated by commas."
+    }
+  },
+  "saveNew": "Save as draft",
+  "saveEdit": "Save changes",
+  "cancel": "Cancel",
+  "errorTitle": "The toolset was not saved",
+  "errors": {
+    "signInRequired": "Sign in to declare a toolset.",
+    "slugTaken": "Already in use; choose another identifier.",
+    "unknownDatasets": "Not in this catalogue, or you may not see it: {slugs}",
+    "unknownModelCards": "Not a model card of this platform, or you may not see it: {slugs}",
+    "notFound": "This toolset does not exist, or you cannot see it."
+  },
+  "lifecycle": {
+    "title": "Status",
+    "DRAFT": "A draft: only you and the operators see it. An operator publishes it.",
+    "DRAFTOperator": "A draft, waiting to be published.",
+    "PUBLISHED": "Published: anyone can find and open it.",
+    "WITHDRAWN": "Withdrawn: it is no longer listed. This cannot be undone.",
+    "edit": "Edit",
+    "publish": "Publish",
+    "withdraw": "Withdraw",
+    "confirmWithdraw": "Withdrawing cannot be undone. Withdraw this toolset?",
+    "invalid": "This action could not be read.",
+    "forbidden": "You may not make this change.",
+    "stale": "The toolset has changed in the meantime. Reload the page."
+  }
+}
