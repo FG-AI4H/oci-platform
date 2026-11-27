@@ -434,6 +434,34 @@ Who sees which shape: the submitter, `evaluation-reviewer` and `admin` get the f
 
 The WHO Fig. 7 Model Facts Label, structured or as Markdown. Anonymous: PUBLISHED cards only, else `404`. Signed in: any non-DRAFT card; DRAFT is a `409`.
 
+## Toolsets (#830, ADR-0031)
+
+A fourth catalogue, listed by reference: a toolset is a notebook, a simulator, a library or a pipeline that works with datasets or models of this platform. The platform stores a description and a web address. It hosts no code and executes nothing.
+
+### `GET /v2/toolsets`
+
+List and search **PUBLISHED** toolsets. Anonymous. Query: `q` (name, summary or maintainer, case-insensitive), `kind` (`NOTEBOOK`, `SIMULATOR`, `LIBRARY`, `PIPELINE`, `OTHER`), `datasetSlug` and `modelCardSlug` (toolsets that name this dataset or this model), `page`, `limit` (default 24, at most 100). Response: `ListToolsetsResponse`.
+
+### `POST /v2/toolsets`
+
+Declare a toolset. Any signed-in caller; it is saved as a `DRAFT`. Body: `CreateToolsetRequest`: `slug`, `name`, `kind`, `summary`, `url` (http or https only), `maintainer`, and optionally `licence`, `version`, `contact`, `datasetSlugs`, `modelCardSlugs` (at most 20 each). A dataset or a model the caller cannot see is refused with a `400` that lists the identifiers under `unknownDatasets` and `unknownModelCards`, the same as one that does not exist. An identifier already taken is a `409`.
+
+### `GET /v2/toolsets/mine`
+
+The caller's own toolsets, every status.
+
+### `GET /v2/toolsets/:slug`
+
+One toolset. Anonymous once `PUBLISHED`; a `DRAFT` or `WITHDRAWN` toolset is served to its declarer and to `admin` only, and is a `404` for anyone else. `datasets` and `modelCards` hold only the links the caller may see. `canEdit` and `moves` say what this caller may do.
+
+### `PATCH /v2/toolsets/:slug`
+
+Edit a `DRAFT`, its declarer only. Every field optional; a list, when sent, replaces the list. `403` for anyone else who can see it, `409` once it is no longer a draft.
+
+### `POST /v2/toolsets/:slug/status`
+
+Body `{ "status": "PUBLISHED" | "WITHDRAWN" }`. An `admin` publishes a draft. Its declarer or an `admin` withdraws a draft or a published toolset. `WITHDRAWN` is terminal. Each change is written to the audit trail.
+
 ## Evaluation submissions (#645)
 
 The task list and task detail (`GET /v2/evaluation/tasks`, `GET /v2/evaluation/tasks/:slug`) are public and never return the reference labels. The task detail, and the `task` object of a submission, carry `positiveClassName`: for a `BINARY_DIAGNOSTIC` task, what label 1 means in words; `null` for the other kinds. `POST /v2/evaluation/tasks` requires it, with `numClasses: 2` and `referableThreshold: 1`, when `taskKind` is `BINARY_DIAGNOSTIC`, and refuses it otherwise.

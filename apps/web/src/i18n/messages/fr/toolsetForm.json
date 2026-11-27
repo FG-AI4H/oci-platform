@@ -1,0 +1,85 @@
+{
+  "metaTitleNew": "Déclarer un outil — Plateforme OCI",
+  "metaTitleEdit": "Modifier {slug} — Outils OCI",
+  "eyebrow": "Outil",
+  "headingNew": "Déclarer un outil",
+  "headingEdit": "Modifier l’outil",
+  "introNew": "Décrivez un carnet, un simulateur, une bibliothèque ou une chaîne de traitement et indiquez où il se trouve. Il est enregistré comme brouillon ; un opérateur le publie.",
+  "introEdit": "Seul un brouillon peut être modifié. L’identifiant ne change pas.",
+  "back": "Outils",
+  "backToToolset": "Retour à l’outil",
+  "notEditable": "Cet outil ne peut plus être modifié : seul un brouillon peut l’être, par la personne qui l’a déclaré.",
+  "sectionWhat": "Ce que c’est",
+  "sectionWhere": "Où il se trouve",
+  "sectionWho": "Qui le maintient",
+  "sectionLinks": "Avec quoi il fonctionne",
+  "fields": {
+    "slug": {
+      "label": "Identifiant",
+      "hint": "Lettres minuscules, chiffres et traits d’union. Il devient l’adresse de la page et ne peut pas être modifié."
+    },
+    "name": {
+      "label": "Nom"
+    },
+    "kind": {
+      "label": "Type"
+    },
+    "summary": {
+      "label": "Résumé",
+      "hint": "Ce qu’il fait et à quoi il sert, en quelques phrases."
+    },
+    "url": {
+      "label": "Adresse web",
+      "hint": "Où se trouve l’outil : un dépôt, un registre, une page de présentation. Commence par https://."
+    },
+    "version": {
+      "label": "Version",
+      "hint": "Facultatif. La version décrite ici."
+    },
+    "licence": {
+      "label": "Licence",
+      "hint": "Facultatif. Un identifiant SPDX tel que Apache-2.0, ou le nom de la licence."
+    },
+    "maintainer": {
+      "label": "Mainteneur",
+      "hint": "La personne ou l’organisation qui le maintient, telle qu’elle doit être affichée."
+    },
+    "contact": {
+      "label": "Contact",
+      "hint": "Facultatif. Une adresse ou une page où joindre le mainteneur. Affiché publiquement."
+    },
+    "datasetSlugs": {
+      "label": "Jeux de données",
+      "hint": "Facultatif. Identifiants de jeux de données de ce catalogue, séparés par des virgules."
+    },
+    "modelCardSlugs": {
+      "label": "Modèles",
+      "hint": "Facultatif. Identifiants de fiches de modèle de cette plateforme, séparés par des virgules."
+    }
+  },
+  "saveNew": "Enregistrer le brouillon",
+  "saveEdit": "Enregistrer les modifications",
+  "cancel": "Annuler",
+  "errorTitle": "L’outil n’a pas été enregistré",
+  "errors": {
+    "signInRequired": "Connectez-vous pour déclarer un outil.",
+    "slugTaken": "Déjà utilisé ; choisissez un autre identifiant.",
+    "unknownDatasets": "Absent de ce catalogue, ou vous n’y avez pas accès : {slugs}",
+    "unknownModelCards": "Pas une fiche de modèle de cette plateforme, ou vous n’y avez pas accès : {slugs}",
+    "notFound": "Cet outil n’existe pas, ou vous ne pouvez pas le voir."
+  },
+  "lifecycle": {
+    "title": "Statut",
+    "DRAFT": "Un brouillon : seuls vous et les opérateurs le voyez. Un opérateur le publie.",
+    "DRAFTOperator": "Un brouillon, en attente de publication.",
+    "PUBLISHED": "Publié : tout le monde peut le trouver et l’ouvrir.",
+    "WITHDRAWN": "Retiré : il n’est plus listé. Cette action est définitive.",
+    "edit": "Modifier",
+    "publish": "Publier",
+    "withdraw": "Retirer",
+    "confirmWithdraw": "Le retrait est définitif. Retirer cet outil ?",
+    "invalid": "Cette action n’a pas pu être lue.",
+    "forbidden": "Vous ne pouvez pas effectuer ce changement.",
+    "stale": "L’outil a changé entre-temps. Rechargez la page."
+  }
+}

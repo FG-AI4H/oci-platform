@@ -36,6 +36,8 @@ import provenance from './fr/provenance.json';
 import publish from './fr/publish.json';
 import settings from './fr/settings.json';
 import signIn from './fr/signIn.json';
+import toolsetForm from './fr/toolsetForm.json';
+import toolsets from './fr/toolsets.json';
 
 const fr = {
   AccessRequest: accessRequest,
@@ -66,6 +68,8 @@ const fr = {
   Publish: publish,
   Settings: settings,
   SignIn: signIn,
+  ToolsetForm: toolsetForm,
+  Toolsets: toolsets,
 } satisfies Messages;
 
 export default fr;

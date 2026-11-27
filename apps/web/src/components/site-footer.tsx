@@ -44,6 +44,7 @@ export async function SiteFooter() {
         <FooterColumn title={t('platform')}>
           <FooterLink href="/catalog">{t('catalog')}</FooterLink>
           <FooterLink href="/models">{t('models')}</FooterLink>
+          <FooterLink href="/toolsets">{t('toolsets')}</FooterLink>
           <FooterLink href="/dashboard">{t('dashboard')}</FooterLink>
         </FooterColumn>
 

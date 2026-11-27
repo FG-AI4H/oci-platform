@@ -34,6 +34,8 @@ import provenance from './en/provenance.json';
 import publish from './en/publish.json';
 import settings from './en/settings.json';
 import signIn from './en/signIn.json';
+import toolsetForm from './en/toolsetForm.json';
+import toolsets from './en/toolsets.json';
 
 const en = {
   AccessRequest: accessRequest,
@@ -64,6 +66,8 @@ const en = {
   Publish: publish,
   Settings: settings,
   SignIn: signIn,
+  ToolsetForm: toolsetForm,
+  Toolsets: toolsets,
 };
 
 export type Messages = typeof en;

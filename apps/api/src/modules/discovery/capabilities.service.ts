@@ -96,6 +96,21 @@ export const CAPABILITY_GROUPS: OciCapabilitiesDocument['capabilities'] = {
           'One published model card; its WHO Model Facts label is at {slug}/model-facts.',
       },
       {
+        id: 'toolset.search',
+        method: 'GET',
+        path: '/v2/toolsets',
+        auth: 'none',
+        description:
+          'Search published toolsets (notebooks, simulators, libraries, pipelines) by text, kind, dataset or model. Listed by reference.',
+      },
+      {
+        id: 'toolset.detail',
+        method: 'GET',
+        path: '/v2/toolsets/{slug}',
+        auth: 'none',
+        description: 'One published toolset: where it lives, its licence and what it works with.',
+      },
+      {
         id: 'evaluation.task-list',
         method: 'GET',
         path: '/v2/evaluation/tasks',

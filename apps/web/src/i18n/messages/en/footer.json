@@ -5,6 +5,7 @@
   "platform": "Platform",
   "catalog": "Catalog",
   "models": "Models",
+  "toolsets": "Toolsets",
   "dashboard": "Dashboard",
   "resources": "Resources",
   "help": "Help",

@@ -163,7 +163,21 @@ export default async function ModelsPage({
             ) : null}
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <p className="max-w-2xl text-[var(--color-muted-foreground)]">{t('list.intro')}</p>
+            <div className="max-w-2xl space-y-2 text-[var(--color-muted-foreground)]">
+              <p>{t('list.intro')}</p>
+              <p className="text-sm">
+                {t.rich('list.toolsets', {
+                  link: (chunks) => (
+                    <Link
+                      href="/toolsets"
+                      className="font-medium text-[var(--color-primary)] underline underline-offset-2"
+                    >
+                      {chunks}
+                    </Link>
+                  ),
+                })}
+              </p>
+            </div>
             {session?.user ? (
               // Any signed-in user may declare a model (#651), as on the API.
               <Button asChild variant="primary" className="shrink-0 self-start">

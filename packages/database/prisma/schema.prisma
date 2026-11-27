@@ -920,6 +920,68 @@ enum AccessRequestMatchStatus {
   @@schema("catalog")
 }
 
+/// A toolset listed by reference (ADR-0031, #830): a notebook, a simulator,
+/// a library or a pipeline that works with datasets or models of this
+/// platform. A description and a web address; the platform hosts no code and
+/// executes nothing. Not to be confused with `AnnotationToolIntegration`
+/// (ADR-0007), the runtime contract with an annotation tool.
+///
+/// `datasetSlugs` and `modelCardSlugs` are soft references by identifier, like
+/// `EvaluationTask.datasetSlug`: a toolset survives a dataset or a model being
+/// retired. GIN indexes serve "which toolsets work with this dataset".
+model Toolset {
+  id         String      @id @default(uuid()) @db.Uuid
+  slug       String      @unique
+  name       String
+  kind       ToolsetKind
+  summary    String
+  /// Where it lives: a repository, a registry, a landing page. http or https.
+  url        String
+  /// As declared: an SPDX identifier or the licence's own name. Not verified.
+  licence    String?
+  version    String?
+  /// The person or organisation that maintains it, as it should be shown.
+  maintainer String
+  contact    String?
+
+  datasetSlugs   String[] @default([]) @map("dataset_slugs")
+  modelCardSlugs String[] @default([]) @map("model_card_slugs")
+
+  status          ToolsetStatus @default(DRAFT)
+  /// GA4GH `sub` (UUIDv5) of the declarer. Soft ref → identity.users.id.
+  submitterUserId String        @map("submitter_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, updatedAt])
+  @@index([submitterUserId])
+  @@index([datasetSlugs], type: Gin)
+  @@index([modelCardSlugs], type: Gin)
+  @@map("toolsets")
+  @@schema("catalog")
+}
+
+/// What a toolset is (ADR-0031).
+enum ToolsetKind {
+  NOTEBOOK
+  SIMULATOR
+  LIBRARY
+  PIPELINE
+  OTHER
+
+  @@schema("catalog")
+}
+
+/// DRAFT: its declarer and operators. PUBLISHED: public. WITHDRAWN: terminal.
+enum ToolsetStatus {
+  DRAFT
+  PUBLISHED
+  WITHDRAWN
+
+  @@schema("catalog")
+}
+
 model AccessRequest {
   id            String              @id @default(uuid()) @db.Uuid
   datasetId     String              @map("dataset_id") @db.Uuid

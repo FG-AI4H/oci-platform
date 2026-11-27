@@ -73,6 +73,14 @@ Published models have their own list at `/models` ("Models" in the top navigatio
 
 Each model page shows the card's public fields and its **Model Facts label**, the WHO one-page summary of what the model is for, how it was validated and when to stop relying on it. Read the label's "Known gaps" box: it says what the label couldn't fill in yet (measured performance, for example), so a blank isn't mistaken for a good result. Drafts and submissions under review are not listed.
 
+## Finding toolsets
+
+Notebooks, simulators, libraries and pipelines that work with the datasets and models listed here have their own list at `/toolsets` (linked from the models list and from the foot of every page). No sign-in needed. Search by name, summary or maintainer, and narrow by kind.
+
+A toolset's page says what it is, who maintains it, under which licence, and which datasets and models of this platform it works with. **Open the toolset** leads to where its maintainer keeps it: the platform lists toolsets, it does not host or run them. The licence shown is the one the maintainer declared.
+
+To list one of your own, sign in and use **Declare a toolset**. It is saved as a draft that only you and the operators see; an operator publishes it. You can name only datasets and models you can see yourself.
+
 ## Troubleshooting
 
 - **"I can't find a dataset I know is on the OCI."** Check the chip — if you're on `Local` and it's federated (or vice versa), it won't show. Try `All`.

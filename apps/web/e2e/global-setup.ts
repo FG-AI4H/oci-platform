@@ -37,6 +37,7 @@ export function resetTestRows(): void {
     DELETE FROM catalog.remote_catalogs WHERE slug LIKE 'fedtest-%' OR slug LIKE 'peer-%' OR slug = 'local-self';
     DELETE FROM catalog.datasets WHERE slug LIKE 'e2e-%' OR slug LIKE 'ux-%' OR slug LIKE 'restricted-%';
     DELETE FROM prediction.model_cards WHERE slug LIKE 'e2e-model-%';
+    DELETE FROM catalog.toolsets WHERE slug LIKE 'e2e-toolset-%';
     DELETE FROM evaluation.evaluation_tasks WHERE slug LIKE 'e2e-eval-%';
     DELETE FROM evaluation.evaluation_routes WHERE slug LIKE 'e2e-route-%';
   `.trim();
