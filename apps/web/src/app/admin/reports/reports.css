@@ -1,0 +1,72 @@
+/*
+ * The activity report on paper (#828). The browser's print-to-PDF is the PDF.
+ *
+ * Every rule is scoped to `.activity-report` (or to a page that holds one),
+ * so the stylesheet changes nothing on any other page even after a client
+ * navigation has loaded it. Same approach as the evidence summary (#652).
+ */
+
+@page activity-report {
+  size: A4;
+  margin: 12mm;
+}
+
+@media print {
+  /* Paper is light whatever the screen's theme. */
+  html:has(.activity-report) {
+    color-scheme: light;
+    font-size: 13px;
+    background: oklch(1 0 0) !important;
+  }
+  body:has(.activity-report) {
+    background: oklch(1 0 0) !important;
+  }
+
+  /* Only the report prints: not the site's banner, header or footer. */
+  body:has(.activity-report) > div > :not(main) {
+    display: none !important;
+  }
+
+  .activity-report {
+    page: activity-report;
+    /* The light theme's values (globals.css), with the stronger border so
+       table rules survive a printer. */
+    --color-background: oklch(1 0 0);
+    --color-foreground: oklch(0.22 0.02 240);
+    --color-card: oklch(1 0 0);
+    --color-muted: oklch(0.96 0.005 230);
+    --color-muted-foreground: oklch(0.5 0.02 240);
+    --color-border: oklch(0.85 0.01 230);
+    --color-primary: oklch(0.48 0.11 220);
+    --color-warning-soft: oklch(0.96 0.05 85);
+    --color-warning-foreground: oklch(0.2 0.04 75);
+    color: var(--color-foreground);
+    background: var(--color-background);
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* The month picker and the download link are for the screen. */
+  .activity-report .activity-report-screen-only {
+    display: none !important;
+  }
+
+  .activity-report h2 {
+    break-after: avoid;
+  }
+  .activity-report tr,
+  .activity-report dl > div {
+    break-inside: avoid;
+  }
+  .activity-report section {
+    margin-top: 1rem !important;
+  }
+  .activity-report th,
+  .activity-report td {
+    padding-top: 0.2rem !important;
+    padding-bottom: 0.2rem !important;
+  }
+}

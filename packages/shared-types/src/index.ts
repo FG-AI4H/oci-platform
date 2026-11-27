@@ -47,6 +47,24 @@ export type {
 export { RegulatoryPathwaySchema } from './regulatory-pathway.js';
 export { DatasetSlugSchema } from './slug.js';
 export type { DatasetSlug } from './slug.js';
+
+// Periodic activity report of a deployment (#828).
+export {
+  ActivityReportMonthSchema,
+  ActivityReportQuerySchema,
+  lastCompleteMonth,
+  monthBounds,
+  monthOf,
+  recentMonths,
+} from './activity-report.js';
+export type {
+  ActivityReport,
+  ActivityReportCampaign,
+  ActivityReportDatasetVersion,
+  ActivityReportMonth,
+  ActivityReportQuery,
+  ActivityReportTask,
+} from './activity-report.js';
 export {
   SubmissionModeSchema,
   EvaluationTaskSlugSchema,
