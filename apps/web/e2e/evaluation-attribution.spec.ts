@@ -1,6 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { EvaluationTaskDetailSchema } from '@oci/shared-types';
 
 /**
  * Task-page attribution (#486): a scored row shows the route version that
@@ -43,7 +44,9 @@ function grading(qwk: number) {
   };
 }
 
-const FIXTURE = {
+// Parsed with the API's own schema, so a field the contract gains later
+// fails here, by name, instead of as a crash of the page under test.
+const FIXTURE = EvaluationTaskDetailSchema.parse({
   id: '11111111-1111-4111-8111-111111111111',
   slug: TASK_SLUG,
   name: 'Attribution fixture task',
@@ -51,10 +54,12 @@ const FIXTURE = {
   taskKind: 'GRADING',
   numClasses: 5,
   referableThreshold: 2,
+  positiveClassName: null,
   createdAt: '2026-08-01T00:00:00.000Z',
   updatedAt: '2026-08-01T00:00:00.000Z',
   itemCount: ITEM_IDS.length,
   itemIds: ITEM_IDS,
+  subgroupFields: [],
   submissions: [
     {
       id: '22222222-2222-4222-8222-222222222201',
@@ -106,7 +111,7 @@ const FIXTURE = {
       createdAt: '2026-08-13T00:00:00.000Z',
     },
   ],
-};
+});
 
 let stub: Server | null = null;
 
