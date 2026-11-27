@@ -181,5 +181,12 @@
       "SYNTHETIC": "Données synthétiques",
       "NONE": "Aucune"
     }
+  },
+  "models": {
+    "title": "Modèles qui utilisent ce jeu de données",
+    "intro": "Fiches de modèle publiées dont le développeur déclare ce jeu de données.",
+    "roles": "Utilisé pour : {roles}",
+    "riskTier": "Niveau de risque {tier}",
+    "version": "v{version}"
   }
 }

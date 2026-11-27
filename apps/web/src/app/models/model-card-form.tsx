@@ -14,12 +14,15 @@ import {
   Input,
   Textarea,
 } from '@oci/ui';
-import { RegulatoryPathwaySchema } from '@oci/shared-types';
+import { MAX_MODEL_CARD_DATASET_REFS, RegulatoryPathwaySchema } from '@oci/shared-types';
 import {
+  DATASET_REF_INPUTS,
   MODEL_CARD_FORM_STEPS,
   firstStepWithError,
+  isWebAddress,
   readModelCardForm,
   riskTierFromValues,
+  type DatasetRefFormRow,
   type ModelCardFormField,
   type ModelCardFormStep,
   type ModelCardFormValues,
@@ -57,6 +60,10 @@ export interface ModelCardFormOptions {
   operatingEnvironment: ReadonlyArray<ModelCardFormOption>;
   intendedUser: ReadonlyArray<ModelCardFormOption>;
   regulatoryStatus: ReadonlyArray<ModelCardFormOption>;
+  /** The part a dataset played: training, tuning, validation, evaluation (#820). */
+  datasetRole: ReadonlyArray<ModelCardFormOption>;
+  /** Datasets of the catalogue the user may see, offered as suggestions (#820). */
+  datasets: ReadonlyArray<ModelCardFormOption>;
 }
 
 interface Props {
@@ -117,6 +124,12 @@ export function ModelCardForm({ mode, action, initialValues, options }: Props) {
   const [reached, setReached] = useState(mode === 'edit' ? lastIndex : 0);
   const [answers, setAnswers] = useState<TierAnswers>(() => tierAnswers(values));
   const [review, setReview] = useState<ModelCardFormValues>(values);
+  // Dataset rows are added and removed here, so they are held in state; every
+  // other field is an uncontrolled input read from the form on submit.
+  const [datasetRows, setDatasetRows] = useState<DatasetRefFormRow[]>(values.datasetRefs);
+  const datasetRowErrors = state.status === 'error' ? state.datasetRefErrors : undefined;
+  const focusDatasetRow = useRef<number | null>(null);
+  const addDatasetButton = useRef<HTMLButtonElement>(null);
 
   const stepIndex = MODEL_CARD_FORM_STEPS.indexOf(step);
   const tier = riskTierFromValues(answers);
@@ -129,6 +142,7 @@ export function ModelCardForm({ mode, action, initialValues, options }: Props) {
     const echoed = state.values ?? initialValues;
     setAnswers(tierAnswers(echoed));
     setReview(echoed);
+    setDatasetRows(echoed.datasetRefs);
     setReached(lastIndex);
     const first = state.fieldErrors ? firstStepWithError(state.fieldErrors.keys()) : null;
     focusHeading.current = true;
@@ -191,6 +205,32 @@ export function ModelCardForm({ mode, action, initialValues, options }: Props) {
       }
     }
   }
+
+  function addDatasetRow() {
+    focusDatasetRow.current = datasetRows.length;
+    setDatasetRows((rows) => [
+      ...rows,
+      { role: options.datasetRole[0]?.value ?? 'TRAINING', target: '', name: '', note: '' },
+    ]);
+  }
+
+  function removeDatasetRow(index: number) {
+    setDatasetRows((rows) => rows.filter((_, i) => i !== index));
+    // The row and its button are gone: put the focus on something that stays.
+    addDatasetButton.current?.focus();
+  }
+
+  function editDatasetRow(index: number, patch: Partial<DatasetRefFormRow>) {
+    setDatasetRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
+  // A row just added: its first control takes the focus.
+  useEffect(() => {
+    const index = focusDatasetRow.current;
+    if (index === null) return;
+    focusDatasetRow.current = null;
+    formRef.current?.querySelector<HTMLElement>(`#mc-datasetRef-${index}-role`)?.focus();
+  }, [datasetRows.length]);
 
   const stepLabel = (s: ModelCardFormStep) => t(`steps.${s}.label`);
   const nextStep = MODEL_CARD_FORM_STEPS[stepIndex + 1];
@@ -583,6 +623,153 @@ export function ModelCardForm({ mode, action, initialValues, options }: Props) {
           />
           <TextInput name="trainingDataJurisdictions" values={values} err={err} maxLength={400} />
 
+          {/* No frame of its own: each dataset row is framed, and a frame
+              around framed rows would only add weight. */}
+          <fieldset className="space-y-4">
+            <legend className="text-sm font-medium">{t('fields.datasetRefs.label')}</legend>
+            <p className="text-sm text-[var(--color-muted-foreground)]">
+              {t('fields.datasetRefs.hint')}
+            </p>
+            {err('datasetRefs') && !(datasetRowErrors && datasetRowErrors.size > 0) ? (
+              <p role="alert" className="text-sm text-[var(--color-danger)]">
+                {err('datasetRefs')}
+              </p>
+            ) : null}
+            {datasetRows.length === 0 ? (
+              <p className="text-sm text-[var(--color-muted-foreground)]">
+                {t('fields.datasetRefs.none')}
+              </p>
+            ) : (
+              <ol className="space-y-4">
+                {datasetRows.map((row, index) => {
+                  const id = `mc-datasetRef-${index}`;
+                  const rowError = datasetRowErrors?.get(index);
+                  const external = isWebAddress(row.target);
+                  return (
+                    <li key={index}>
+                      <fieldset
+                        aria-describedby={rowError ? `${id}-err` : undefined}
+                        className="space-y-4 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)]/30 p-4"
+                      >
+                        <legend className="px-1 text-sm font-medium">
+                          {t('fields.datasetRefs.row', { n: index + 1 })}
+                        </legend>
+                        {rowError ? (
+                          <p
+                            id={`${id}-err`}
+                            role="alert"
+                            className="text-sm text-[var(--color-danger)]"
+                          >
+                            {rowError}
+                          </p>
+                        ) : null}
+                        <div className="grid gap-4 sm:grid-cols-[12rem_minmax(0,1fr)]">
+                          <Field label={t('fields.datasetRefs.role.label')} htmlFor={`${id}-role`}>
+                            <select
+                              id={`${id}-role`}
+                              name={DATASET_REF_INPUTS.role}
+                              value={row.role}
+                              onChange={(e) => editDatasetRow(index, { role: e.target.value })}
+                              className={SELECT_CLASS}
+                            >
+                              {options.datasetRole.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field
+                            label={t('fields.datasetRefs.target.label')}
+                            htmlFor={`${id}-target`}
+                            required
+                            requiredLabel={tCommon('required')}
+                            hint={t('fields.datasetRefs.target.hint')}
+                          >
+                            <Input
+                              id={`${id}-target`}
+                              name={DATASET_REF_INPUTS.target}
+                              list="mc-datasetRef-catalogue"
+                              required
+                              maxLength={2000}
+                              autoComplete="off"
+                              value={row.target}
+                              onChange={(e) => editDatasetRow(index, { target: e.target.value })}
+                              invalid={!!rowError}
+                            />
+                          </Field>
+                        </div>
+                        {external ? (
+                          <Field
+                            label={t('fields.datasetRefs.name.label')}
+                            htmlFor={`${id}-name`}
+                            required
+                            requiredLabel={tCommon('required')}
+                            hint={t('fields.datasetRefs.name.hint')}
+                          >
+                            <Input
+                              id={`${id}-name`}
+                              name={DATASET_REF_INPUTS.name}
+                              required
+                              maxLength={200}
+                              value={row.name}
+                              onChange={(e) => editDatasetRow(index, { name: e.target.value })}
+                            />
+                          </Field>
+                        ) : (
+                          // Every row sends its four inputs, so the columns stay aligned.
+                          <input type="hidden" name={DATASET_REF_INPUTS.name} value="" />
+                        )}
+                        <Field
+                          label={t('fields.datasetRefs.note.label')}
+                          htmlFor={`${id}-note`}
+                          hint={t('fields.datasetRefs.note.hint')}
+                        >
+                          <Input
+                            id={`${id}-note`}
+                            name={DATASET_REF_INPUTS.note}
+                            maxLength={500}
+                            value={row.note}
+                            onChange={(e) => editDatasetRow(index, { note: e.target.value })}
+                          />
+                        </Field>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeDatasetRow(index)}
+                        >
+                          {t('fields.datasetRefs.remove', { n: index + 1 })}
+                        </Button>
+                      </fieldset>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+            <datalist id="mc-datasetRef-catalogue">
+              {options.datasets.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </datalist>
+            {datasetRows.length < MAX_MODEL_CARD_DATASET_REFS ? (
+              <Button
+                ref={addDatasetButton}
+                type="button"
+                variant="outline"
+                onClick={addDatasetRow}
+              >
+                {t('fields.datasetRefs.add')}
+              </Button>
+            ) : (
+              <p className="text-sm text-[var(--color-muted-foreground)]">
+                {t('fields.datasetRefs.limit', { max: MAX_MODEL_CARD_DATASET_REFS })}
+              </p>
+            )}
+          </fieldset>
+
           <fieldset className="space-y-4 rounded-md border border-[var(--color-border)] p-4">
             <legend className="px-1 text-sm font-medium">{t('fields.regulatory.legend')}</legend>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -684,6 +871,20 @@ export function ModelCardForm({ mode, action, initialValues, options }: Props) {
           >
             <DefinitionItem term={t('fields.trainingDataJurisdictions.label')}>
               {review.trainingDataJurisdictions || t('fields.notSpecified')}
+            </DefinitionItem>
+            <DefinitionItem term={t('fields.datasetRefs.label')}>
+              {review.datasetRefs.length === 0 ? (
+                t('fields.datasetRefs.none')
+              ) : (
+                <ul className="space-y-1">
+                  {review.datasetRefs.map((row, i) => (
+                    <li key={i} className="break-words">
+                      {labelOf(options.datasetRole, row.role)}:{' '}
+                      {isWebAddress(row.target) && row.name ? row.name : row.target}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </DefinitionItem>
             <DefinitionItem term={t('fields.regulatoryPathway.label')}>
               {review.regulatoryPathway

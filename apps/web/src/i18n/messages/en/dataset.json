@@ -181,5 +181,12 @@
       "SYNTHETIC": "Synthetic data",
       "NONE": "None"
     }
+  },
+  "models": {
+    "title": "Models that use this dataset",
+    "intro": "Published model cards whose developer declares this dataset.",
+    "roles": "Used for: {roles}",
+    "riskTier": "Risk tier {tier}",
+    "version": "v{version}"
   }
 }

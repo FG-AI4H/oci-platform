@@ -15,11 +15,13 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import {
   ChangeModelCardStatusRequestSchema,
   CreateModelCardRequestSchema,
+  DatasetSlugSchema,
   ListModelCardsQuerySchema,
   ModelCardSlugSchema,
   UpdateModelCardRequestSchema,
   type ChangeModelCardStatusRequest,
   type CreateModelCardRequest,
+  type DatasetSlug,
   type ListModelCardsQuery,
   type ModelCardSlug,
   type UpdateModelCardRequest,
@@ -147,5 +149,31 @@ export class PredictionController {
     @Req() req: RequestWithUser,
   ) {
     return this.prediction.getBySlug(slug, req.user);
+  }
+}
+
+/**
+ * `/v2/prediction/datasets/:slug/model-cards` (#820): the published model
+ * cards that declare a dataset, for the dataset page. Under its own prefix so
+ * that no card slug can collide with it.
+ */
+@ApiTags('prediction')
+@Controller({ path: 'prediction/datasets', version: '2' })
+export class PredictionDatasetsController {
+  constructor(@Inject(PredictionService) private readonly prediction: PredictionService) {}
+
+  @Get(':slug/model-cards')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Published model cards that declare this dataset (#820)' })
+  @ApiOkResponse({
+    description:
+      'The cards and the roles they declare the dataset in. 404 when the caller may not see the dataset.',
+  })
+  @UseGuards(OptionalCognitoJwtGuard)
+  forDataset(
+    @Param('slug', new ZodPipe(DatasetSlugSchema)) slug: DatasetSlug,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.prediction.listForDataset(slug, req.user);
   }
 }

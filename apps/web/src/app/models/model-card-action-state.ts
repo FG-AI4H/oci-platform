@@ -12,6 +12,8 @@ export type ModelCardFormState =
       status: 'error';
       message: string;
       fieldErrors?: ReadonlyMap<ModelCardFormField, string>;
+      /** Messages about one dataset row, by row (#820). */
+      datasetRefErrors?: ReadonlyMap<number, string>;
       /** Messages no single field owns. */
       otherErrors?: ReadonlyArray<string>;
       values?: ModelCardFormValues;
