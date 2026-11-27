@@ -126,8 +126,13 @@ export default async function DatasetDetailPage({
   let error: string | null = null;
   let ownRequests: AccessRequestSummary[] = [];
   try {
+    // Never cached: the files listed depend on who asks (ADR-0026), and
+    // a host landing here from the publish page must see the files of
+    // the version just published; the 30 s fetch cache kept the old
+    // list even after the publish action's revalidatePath.
     detail = await apiFetch<DatasetDetail>(`/v2/catalog/datasets/${encodeURIComponent(slug)}`, {
       session,
+      revalidate: 0,
     });
     if (session) {
       // Pull the caller's own access requests so the CTA can render
