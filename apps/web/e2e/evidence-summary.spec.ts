@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { test, expect, type Browser, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { ensureLatestVersionDeclared } from './support/declared-method-version';
 
 /**
  * The evidence summary of one evaluated submission (#652), end to end
@@ -27,6 +28,7 @@ import AxeBuilder from '@axe-core/playwright';
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
 const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 const TASK = 'nih-chestxray14-finding';
+const METHOD = 'oci-predictions-scoring';
 const SHOTS = process.env.PW_EVIDENCE_SHOTS;
 const stamp = Date.now();
 
@@ -101,6 +103,10 @@ test.describe('evidence summary (#652)', () => {
   let gapCodes: string[] = [];
 
   test.beforeAll(async ({ request }) => {
+    // The METHOD_NOT_APPROVED gap needs the version this submission is
+    // pinned to still unreviewed, also on a database an earlier run used.
+    await ensureLatestVersionDeclared(request, METHOD, `e2e-evidence-operator-${stamp}`);
+
     const res = await request.post(`${API}/v2/evaluation/tasks/${TASK}/submissions`, {
       headers: { Authorization: `Bearer dev:e2e-evidence-participant-${stamp}:participant` },
       data: {
@@ -113,14 +119,33 @@ test.describe('evidence summary (#652)', () => {
     submissionId = ((await res.json()) as { id: string }).id;
     path = `/evaluation/${TASK}/submissions/${submissionId}/evidence`;
 
-    const evidence = await request.get(
-      `${API}/v2/evaluation/submissions/${submissionId}/evidence`,
-      {
-        headers: { Authorization: `Bearer dev:e2e-evidence-api-${stamp}:regulator` },
-      },
-    );
-    expect(evidence.ok()).toBe(true);
-    const body = (await evidence.json()) as { gaps: { code: string }[]; modelCard: unknown };
+    // The result's audit event is written after the score is stored, not
+    // with it (`emit`, so a failed audit write does not undo the score).
+    // Read the gaps once both have landed, or AUDIT_RESULT_EVENT_MISSING is
+    // among them and the page, read later, lists one gap fewer.
+    let body: {
+      submission: { status: string };
+      trace: { events: { eventType: string }[] };
+      gaps: { code: string }[];
+      modelCard: unknown;
+    } = { submission: { status: '' }, trace: { events: [] }, gaps: [], modelCard: null };
+    await expect
+      .poll(
+        async () => {
+          const evidence = await request.get(
+            `${API}/v2/evaluation/submissions/${submissionId}/evidence`,
+            {
+              headers: { Authorization: `Bearer dev:e2e-evidence-api-${stamp}:regulator` },
+            },
+          );
+          expect(evidence.ok()).toBe(true);
+          body = (await evidence.json()) as typeof body;
+          const scored = body.trace.events.some((e) => e.eventType === 'evaluation.scored');
+          return `${body.submission.status}, scored event ${scored ? 'recorded' : 'not yet'}`;
+        },
+        { timeout: 30_000 },
+      )
+      .toBe('SCORED, scored event recorded');
     gapCodes = body.gaps.map((g) => g.code);
     // This submission is linked to no model card (#587), and it is pinned to
     // the reference method version, which nothing has approved here (#583).
