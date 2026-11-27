@@ -1,0 +1,96 @@
+{
+  "metaTitle": "Activity report — OCI Platform",
+  "eyebrow": "Operator workflow",
+  "heading": "Activity report",
+  "lead": "What this deployment recorded in one calendar month: datasets, access requests, evaluations, models, annotation and the audit trail. Counts and public entries only; no person is named.",
+  "month": {
+    "label": "Month",
+    "show": "Show",
+    "current": "{month} (in progress)"
+  },
+  "actions": {
+    "json": "Download as JSON",
+    "printHint": "To keep a copy on paper or as PDF, use your browser’s print command."
+  },
+  "unavailable": {
+    "title": "Report unavailable",
+    "fallback": "Unable to reach the API"
+  },
+  "meta": {
+    "title": "Activity report, {month}",
+    "deployment": "Deployment",
+    "period": "Period",
+    "periodValue": "{from} to {to} (UTC)",
+    "generated": "Generated",
+    "partial": "This month is not over: the figures will still move."
+  },
+  "datasets": {
+    "heading": "Datasets",
+    "publishedAtEnd": "Public datasets published at the end of the period",
+    "versionsPublished": "Versions published in the period",
+    "listHeading": "Versions published",
+    "colDataset": "Dataset",
+    "colVersion": "Version",
+    "colPublished": "Published",
+    "none": "No version was published in the period.",
+    "more": "The 50 most recent are listed."
+  },
+  "accessRequests": {
+    "heading": "Access requests",
+    "submitted": "Filed in the period",
+    "approved": "Approved in the period",
+    "denied": "Denied in the period",
+    "pendingAtEnd": "Waiting for a decision at the end of the period",
+    "note": "Approved and denied count requests that stand at that outcome today: an approval revoked since is not counted."
+  },
+  "evaluation": {
+    "heading": "Evaluation",
+    "tasks": "Evaluation tasks",
+    "received": "Submissions received in the period",
+    "scored": "Scored",
+    "failed": "Failed",
+    "colTask": "Task",
+    "colReceived": "Received",
+    "colScored": "Scored",
+    "colFailed": "Failed",
+    "colPublished": "Published results",
+    "colBest": "Best published result",
+    "best": "{value} ({metric}), {method}",
+    "noBest": "None published",
+    "none": "No task received a submission in the period or holds a published result.",
+    "note": "A result is published once its evaluation method version is approved and it has not been retracted. The best result is the task’s best today, whenever it was submitted."
+  },
+  "models": {
+    "heading": "Models",
+    "published": "Model cards published today",
+    "publishedInPeriod": "Published in the period"
+  },
+  "annotation": {
+    "heading": "Annotation",
+    "colCampaign": "Campaign",
+    "colStatus": "Status",
+    "colCounted": "Tasks read",
+    "colOpen": "Still open",
+    "colArbitration": "Sent to arbitration",
+    "colKappa": "Fleiss’ kappa",
+    "colAgreement": "Agreement",
+    "none": "No campaign is running or completed.",
+    "note": "Agreement is computed over all tasks read so far, not over the period alone. A dash means the campaign is below the number of tasks needed for a coefficient.",
+    "status": {
+      "RUNNING": "Running",
+      "COMPLETED": "Completed"
+    }
+  },
+  "audit": {
+    "heading": "Audit trail",
+    "events": "Events recorded in the period",
+    "chain": "Hash chain over the period",
+    "status": {
+      "intact": "Intact ({checked, plural, one {# event} other {# events}} checked)",
+      "broken": "Broken: verify the range in the audit trail reader",
+      "empty": "No event in the period",
+      "unverified": "Not verified here: the period holds more events than one check covers. Verify the range in the audit trail reader."
+    }
+  },
+  "dash": "—"
+}

@@ -25,6 +25,7 @@ import { PreferencesModule } from './modules/preferences/preferences.module.js';
 import { RenewalModule } from './modules/renewal/renewal.module.js';
 import { StorageModule } from './modules/storage/storage.module.js';
 import { PredictionModule } from './modules/prediction/prediction.module.js';
+import { ReportingModule } from './modules/reporting/reporting.module.js';
 import { UseCaseModule } from './modules/use-case/use-case.module.js';
 import { HealthController } from './health.controller.js';
 import { MeController } from './me/me.controller.js';
@@ -65,6 +66,7 @@ import { MeController } from './me/me.controller.js';
     // Phase C: both halves now exist — prediction (model cards + IUS on
     // submission, #260) and evaluation (scoring, ADR-0017).
     PredictionModule,
+    ReportingModule,
     UseCaseModule,
     EvaluationModule,
     // Phase D: ReportingModule

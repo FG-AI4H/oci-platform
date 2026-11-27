@@ -9,6 +9,7 @@
  */
 import type { Messages } from './en';
 import accessRequest from './fr/accessRequest.json';
+import activityReport from './fr/activityReport.json';
 import annotate from './fr/annotate.json';
 import campaign from './fr/campaign.json';
 import catalog from './fr/catalog.json';
@@ -40,6 +41,7 @@ import useCase from './fr/useCase.json';
 
 const fr = {
   AccessRequest: accessRequest,
+  ActivityReport: activityReport,
   Annotate: annotate,
   Campaign: campaign,
   Catalog: catalog,

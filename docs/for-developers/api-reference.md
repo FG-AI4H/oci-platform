@@ -242,6 +242,25 @@ The events the filters match, oldest first, as a download (`Content-Disposition:
 - **JSON** (`oci-audit-events/v1`): `{ format, exportId, exportedAt, actorView, filters, count, rules, events }`; `rules` states both hash rules.
 - **CSV**: columns `sequenceNumber, occurredAt, eventType, subjectType, subjectId, actorKind, actor, actorRoles, payload, pseudonymised, payloadHash, previousHash, recordHash, retentionClass, id`, CRLF line ends. `payload` is its RFC 8785 form. A cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'` so a spreadsheet does not run it.
 
+## Activity report (#828)
+
+### `GET /v2/reports/activity`
+
+One calendar month of what the deployment recorded. `admin`, `regulator` or `supervisor`; `Cache-Control: no-store`.
+
+Query: `month`, as `YYYY-MM`, in UTC. Without it: the last complete month. A month that is not over is served with `partial: true`.
+
+Response: `ActivityReport`.
+
+- `datasets`: public datasets published at the end of the period, the versions published in it (the 50 most recent listed).
+- `accessRequests`: filed in the period; approved and denied in the period, counted at the outcome they stand at today; waiting at its end.
+- `evaluation`: tasks, submissions received, scored and failed; per task, the best published result as it stands today and the number of published results. What is published is decided by the evaluation module (an approved method version, not retracted).
+- `models`: cards published today, and published in the period (read from the audit trail).
+- `annotation`: running and completed campaigns with the tasks read, the share sent to arbitration and the agreement the annotation module computes, over all tasks read so far.
+- `audit`: events in the period and the state of the hash chain over them: `intact`, `broken`, `empty`, or `unverified` when the period holds more events than one check covers.
+
+Counts and public entries only: no person is named. Nothing is stored; the report is assembled from the database on each request.
+
 ## Certification (#117)
 
 ### `GET /v2/certification/quizzes/:type`

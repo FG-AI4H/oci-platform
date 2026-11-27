@@ -126,7 +126,9 @@ class AuditQueueBridge implements OnModuleInit, OnApplicationShutdown {
     AuditReaderRepository,
     AuditReaderService,
   ],
-  exports: [AUDIT_EMITTER],
+  // `AuditReaderService`: the activity report asks it whether the chain
+  // holds over a month (#828).
+  exports: [AUDIT_EMITTER, AuditReaderService],
 })
 export class AuditModule {}
 

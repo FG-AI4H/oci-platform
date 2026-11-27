@@ -74,6 +74,14 @@ export default async function AdminIndexPage() {
           </li>
           <li>
             <AdminTile
+              href="/admin/reports"
+              title="Activity report"
+              description="One calendar month of this deployment: datasets, access requests, evaluations, models, annotation and the audit chain. Prints on A4."
+              icon={<CheckIcon size={20} />}
+            />
+          </li>
+          <li>
+            <AdminTile
               href="/evaluation/routes/reviews"
               title="Review queue"
               description="Evaluation-method versions waiting for a review decision. Approve or reject, with a published rationale."
