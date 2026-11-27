@@ -8,6 +8,18 @@ The OCI catalogue at [`oci.ai4h.net/catalog`](https://oci.ai4h.net/catalog) list
 
 The default view is `Local`. Switch sources with the chip group at the top of the catalogue page.
 
+## Start from a use case
+
+If you know what you want to do but not what the platform holds, start at `/use-case` ("Start from a use case" on the home page). Give a condition or body site, the kind of data, the task, the kind of use (non-commercial research, commercial research, clinical care, education), whether an ethics committee has approved the project, and a country. No sign-in is needed.
+
+You get three lists:
+
+- **Datasets** that match, each with what the access check says for your kind of use: compatible, the holder would review, or conflicts with the terms. It is the check an access request goes through, so the page does not promise what a request would then be refused. "Compatible" is not an approval: the holder decides each request.
+- **Evaluation tasks** that measure a model on these datasets.
+- **Models** whose published card matches your words or your country.
+
+The address of the page holds your answers: bookmark it or send it. "Request access" on a dataset opens the request form with the kind of use and the ethics approval already filled in.
+
 ## Search
 
 The search box at the top runs a full-text query against name, description, and curated keywords. It also matches Croissant biomedical fields when present:

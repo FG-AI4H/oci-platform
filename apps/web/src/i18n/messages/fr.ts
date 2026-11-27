@@ -36,6 +36,7 @@ import provenance from './fr/provenance.json';
 import publish from './fr/publish.json';
 import settings from './fr/settings.json';
 import signIn from './fr/signIn.json';
+import useCase from './fr/useCase.json';
 
 const fr = {
   AccessRequest: accessRequest,
@@ -66,6 +67,7 @@ const fr = {
   Publish: publish,
   Settings: settings,
   SignIn: signIn,
+  UseCase: useCase,
 } satisfies Messages;
 
 export default fr;
